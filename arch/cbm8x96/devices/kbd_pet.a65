@@ -287,7 +287,7 @@ ktab      .asc TC_CRGT,TC_HOME,"~(&%#!",TC_BS,TC_CDWN,"^@)\'$":.byt $22
           .asc "97^^outeq/8^@piyrw"
           .asc "64^@ljgda*5^@:khfs"
           .asc "31",TC_CR,";mbcz+2^@?,nvx"
-          .asc "-0^@>^@]@^@=.^@",3,"< [^@"
+          .asc "-0^@>^@]@^@=.^@",3,"< [",1
 
 stab      .asc TC_CLFT,TC_CLR,"|(&%#!",TC_INS,TC_CUP,"^@)\'$":.byt $22
           .asc "97^^OUTEQ/8^@PIYRW"

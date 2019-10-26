@@ -45,6 +45,10 @@
 #include "lib6502/libnet.a65" 
 #include "lib6502/libenv.a65" 
 
+notimp  lda #E_NOTIMP
+        sec
+        rts
+
 #define	LIB6502BIN
 
 #ifdef STDIOADDR

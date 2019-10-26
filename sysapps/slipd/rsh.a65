@@ -684,6 +684,7 @@ openw
 	jmp error
 go
 	ldx stdi+1
+#echo flib2osa_w
 	jsr flib2osa_w
 	txa
 	ldy #TCB_RRSTR

@@ -589,7 +589,7 @@ errtxt	.byt 13,10,"stderr from ",0
 	.)
 
 /* 
- * readline reads a line from shin and puts it into buf. It returns a
+ * readline reads a line from stdin and puts it into buf. It returns a
  * pointer to the command line in a/y.
  * Later command line history / command line editing will go here
  * For now we ignore codes > 127, and most control codes <32
@@ -730,36 +730,19 @@ ok	ldx #STDERR
 	.)
 /*
  * This interprets the command line options for the shell.
- * Currently only the debug print "-d" is supported. 
- * More important is the "-c" option to read the input from 
- * another file.
+ * Currently only the debug print "-v" and "-d <drive>" to
+ * start in a different drive is supported. 
+ * A "--" ends the options list
+ * 
  */
-#define	NUMOPTS	2
+#define	NUMOPTS	3
 
 parse_myopts .(
 	sta argp
 	sty argp+1
 	; ignore the filename
-	ldy #0
-l0	lda (argp),y
-	beq arg1
-	iny
-	bne l0
-	beq error
-arg1	iny
-	tya
-	clc
-	adc argp
-	pha
-	lda #0
-	adc argp+1
-	tay
-	pla
-
 parse_loop
-	sta argp
-	sty argp+1
-
+	jsr next
 	ldy #0
 	lda (argp),y
 	bne noend
@@ -805,28 +788,27 @@ unknown	lda #2
 
 	.data
 
-optlist	.byt "d-"
-optaddr	.word opt_debug-1, opt_end-1
+optlist	.byt "vd-"
+optaddr	.word opt_debug-1, opt_drive-1, opt_end-1
 
 	.text
 
 /* 
- * This routine increments the argp pointer to the next argument -> a/y
+ * This routine increments the argp pointer to the next argument -> argp
  */
-next	lda (argp),y
+next	ldy #0
+n0	lda (argp),y
 	beq n1
 	iny
-	bne next
+	bne n0
 n1	iny
 	tya
 	clc
 	adc argp
-	pha
-	lda #0
-	adc argp+1
-	tay
-	pla
-	rts
+	sta argp
+	bcc n2
+	inc argp+1
+n2	rts
 
 /*
  * Here are the command line options 
@@ -834,14 +816,25 @@ n1	iny
 opt_debug .(
 	lda #<-1
 	sta debug
+	jmp parse_loop
+	.)
+
+opt_drive .(
+	lda #<-1
+	sta debug
 	jsr next
+	ldy #0
+	lda (argp),y
+	beq error	; no drive
+	lda argp
+	ldy argp+1
+	jsr chdir
+	bcs n2
 	jmp parse_loop
 	.)
 
 opt_end	.(
 	jsr next
-	sta argp
-	sty argp+1
 
 &argfile
 	ldy #0
@@ -1004,8 +997,8 @@ doit	jmp (cp)
 	.)
 
 	.data
-bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname
-bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0
+bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
+bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
 	.byt 0
 	.text
 
@@ -1043,6 +1036,10 @@ bic_set	.(
 
 bic_exit .(
 	jmp term
+	.)
+
+bic_reset .(
+	jmp ($fffc)
 	.)
 
 bic_echo .(

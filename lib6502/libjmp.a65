@@ -175,6 +175,8 @@
 
 #echo lib6502 jump table
 
+; no more code goes here, as start and end addresses are computed from number of calls
+
 /* OS/A specific calls */
 
 jmp mon_forkto_i
@@ -240,8 +242,6 @@ jmp Putenv
 jmp Getenvp
 jmp Getos
 
-notimp	lda #E_NOTIMP
-	sec
-	rts
+; no more code goes here, as start and end addresses are computed from number of calls
 #endif
 

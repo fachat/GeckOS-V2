@@ -53,7 +53,6 @@ prg3      ldx #2
 prg2      ldx #1
           .byt $2c
 prg1      ldx #0
-
           .)
 
 	.data          
@@ -100,8 +99,8 @@ foo
 
           lda #0		; linein off ; DC_SW_MOD	; linein ein
           sta status,x
+          sta ctrlst,x
 
-;          lda #0
           sta outstr,x
           sta getstr,x
 
@@ -112,10 +111,9 @@ foo
 
           txa
           bne re		; only the first is hw-initialized
-
 	  jsr console_init	; init hardware (called with y=hardware byte)
-	  jsr inivscr
 &re
+	  jsr inivscr
           clc
           rts
 
@@ -450,8 +448,6 @@ vtab      .dsb MAX_SCREEN*12
 	.text
 
 &inivscr  .(
-	lda #0
-loop	jsr setscr
 
 	  lda screen
           jsr iniscr
@@ -459,12 +455,6 @@ loop	jsr setscr
           lda #TC_FF     ; form feed
           jsr printchar
 	  jsr setlin
-
-	lda screen
-	clc
-	adc #1
-	cmp MAX_ASCREEN
-	bcc loop
 
           clc
           rts
@@ -672,19 +662,20 @@ iniscr    .(		; screen number in AC
 	  cpx #MAX_SCREEN
 	  bcs nosave
           cmp screen
-          beq setmmu
+          beq setmmu	; same screen as current
           pha
+	  ; save screen
           lda screen
           asl
           asl
-          sta zei2+1          
+          sta zei2+1    ; screen# times 4     
           asl
           clc
           adc zei2+1
-          tax
+          tax		; screen# times 12
           ldy #0
-s1        lda spalte,y
-          sta vtab,x
+s1        lda spalte,y	; copy screen control struct
+          sta vtab,x	; to buffer
           inx
           iny
           cpy #is-spalte+1
@@ -695,6 +686,7 @@ s1        lda spalte,y
           sta vtab+1,x
           pla
 nosave	  sta screen
+	  ; restore screen
           asl
           asl
           sta zei2+1
@@ -703,8 +695,8 @@ nosave	  sta screen
           adc zei2+1
           tax
           ldy #0
-s2        lda vtab,x
-          sta spalte,y
+s2        lda vtab,x	; copy screen control struct from buffer
+          sta spalte,y	; to struct
           inx
           iny
           cpy #is-spalte+1

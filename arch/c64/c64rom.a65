@@ -106,6 +106,8 @@
 
 #define	BOOTDRV		"c"	/* where are the boot files */
 
+#define ROOTPATH        "c:"    /* where lsh chdirs into on boot */
+
 #define	WWWDRV		BOOTDRV
 
 #undef	INETSTART		/* start INET server from init - customization
@@ -259,7 +261,7 @@ end_slipd
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
 	.byt 0,0	; P_DEV
-	.byt BOOTDRV,":lsh",0,"-d",0,0
+	.byt BOOTDRV,":lsh",0,"-d",0,ROOTPATH, 0,0
 end_auto
 	.)
 
@@ -271,11 +273,19 @@ end_auto
 
 /************* lib6502 code				*/
 
+#echo "lib6502 starts at"
+#print *
+
 /* lib6502 jmp table is below STDIOADDR */
 
 #include  "lib6502/lib6502.a65"
 
 /************* fill not used area (I/O, screens)	*/
+
+#if $d000-* < 0
+#echo "Error after lib6502"
+#print *
+#endif
 
 .dsb $d000-*,<-1
 .dsb $2000, <-1			/* from d000 to f000 */

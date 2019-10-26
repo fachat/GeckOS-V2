@@ -1,4 +1,16 @@
 
+2.0.9 - 06oct2013 - A. Fachat
+
+- fixed an uninitialized variable bug in the console driver that only showed
+  on the real machine
+
+- fixed build problems for the c64 ("notimp" code in lib6502 jump table)
+
+- lsh got cmdline option where to CHDIR on start, ROMs set it to boot drive
+  Also got a new "reset" command
+
+- adapt new c1541 command syntax for formatting an x64 file
+
 
 2.0.8 - 20dec1998 - A. Fachat
 

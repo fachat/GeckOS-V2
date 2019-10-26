@@ -88,3 +88,5 @@ Here is a list of known bugs of version 2.0.0-pre1
 - fsiec, fsibm and fsdev ignore stream brk/push/pull flags, and don't set 
   stream error flags (only fsiec sets SCE_[RW]ERRM flags).
 
+- PET don't do shifted characters on keyboard
+

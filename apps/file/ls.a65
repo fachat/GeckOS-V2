@@ -44,9 +44,15 @@ first	iny
 	lda (argp),y
 	bne ok
 	
-usage	lda #<usagetxt
-	ldy #>usagetxt
-	jmp etxtout
+;usage	lda #<usagetxt
+;	ldy #>usagetxt
+;	jmp etxtout
+
+	lda #<joker
+	sta argp
+	lda #>joker
+	sta argp+1	; always not null
+	bne l1
 
 ok	tya
 	clc
@@ -111,8 +117,10 @@ t0	lda (tp),y
 	bne t0
 te	rts
 
-usagetxt
-	.byt 13,10,"Usage:",13,10," ls dir1", 13,10,0
+joker	.asc "*", 0
+
+;usagetxt
+;	.byt 13,10,"Usage:",13,10," ls dir1", 13,10,0
 
 	.)
 

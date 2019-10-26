@@ -1,6 +1,6 @@
 
 This is the OS/A65 source.
-(c) 1989-1998 A. Fachat (a.fachat@physik.tu-chemnitz.de)
+(c) 1989-2013 A. Fachat (afachat@gmx.de)
 
 This comes of course with no warranty in any form. See
 the file COPYING for the GNU public license.
@@ -24,5 +24,4 @@ that can be used for porting.
 Have fun!
 
 26jan1998 A. Fachat
-(a.fachat@physik.tu-chemnitz.de)
 

@@ -84,16 +84,16 @@ dendirq   clc
 &devcmd   jsr memsys
 	  php
           sei
-          cmp #DC_GNUM
+          cmp #DC_GNUM	; get number of devices
           beq devgnum
-          cmp #DC_REGDEV
+          cmp #DC_REGDEV ; register a new device
           bne x1
           jmp regdev
-x1        cpx ANZDEV
+x1        cpx ANZDEV	; check device number
           bcs idcex
-          cmp #DC_GNAM
-          beq devgnam
-          jsr exejmp
+          cmp #DC_GNAM	; get name of device
+          beq devgnam	
+          jsr exejmp	; execute all others
           bcs idce
 idcok     lda #E_OK
           .byt $2c
@@ -241,9 +241,8 @@ par       .byt 0
 /* TODO: in CS/A65, make non-ROM-started devices work! */
 
           lda DEVTAB+DVT_ADRL,x
+          ldy DEVTAB+DVT_ADRH,x
 	  pha
-          lda DEVTAB+DVT_ADRH,x
-	  tay
 	  lda DEVTAB+DVT_ENV,x
 	  tax
 	  pla

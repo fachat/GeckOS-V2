@@ -31,7 +31,8 @@
 
 #define	MAX_ASCREEN	#2		/* soft limit */
 
-#define	SWITCHKEY	23
+;#define	SWITCHKEY	23
+#define	SWITCHKEY	79
 
 #define	SET_MMU		
 
@@ -42,6 +43,7 @@
 #define	MAXSPAL		numcols
 
 #define	MAXZEIL		#25
+;#define	MAXZEIL		#23	/* debug */
 
 #define	KEY_START	16	/* when does key repetition start */
 
