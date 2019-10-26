@@ -1,0 +1,36 @@
+
+/*
+ * Definitions for using the partition interface
+ */
+
+#ifndef _PART_I65_
+#define _PART_I65_
+
+/* parameter for pread/pwrite */
+
+#define PRW_PART        0       /* 1 byte partition number */
+#define PRW_NSEC        1       /* 1 byte number of sectors to rd/wr */
+#define PRW_SECTOR      2       /* 4 byte 1st sector to rd/wr (Lo-hi) */
+#define PRW_BUF         6       /* 2 byte address of buffer */
+#define PRW_SLEN        8
+
+/* definition of the partition table entries */
+
+#define PT_ID           0
+#define PT_FLAG         1
+#define PT_DEV          2
+#define PT_RESERVED     3
+#define PT_BSIZE        4
+#define PT_START        8
+#define PT_LEN          12
+#define PT_SLEN         16
+
+/* partition type (ID) definitions */
+
+#define PI_NONE         0
+#define PI_FAT16        4       /* 16 bit FAT < 32M */
+#define PI_FAT16L       6       /* 16 bit FAT >= 32M */
+#define PI_EXTENDED     5
+
+#endif
+

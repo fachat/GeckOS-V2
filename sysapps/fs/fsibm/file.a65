@@ -1,0 +1,944 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+          .(
+	.zero
+rwzei     .word 0
+	.text
+
+&INIFPB   .(
+          ldx #0
+i1        jsr setfzei
+          ldy #F_FL
+          lda #FF_FRE
+          sta (fzei),y
+          inx
+          cpx #ANZFILE
+          bcc i1
+          clc
+          rts
+          .)
+
+&suchfile .(
+          ldx #0
+s1        jsr setfzei
+          ldy #F_FL
+          lda (fzei),y
+          bmi found
+          inx
+          cpx #ANZFILE
+          bcc s1
+          lda #E_FNOFIL
+          ;rts
+found     ;ldy fpuffer
+          ;jsr FRBUF
+          rts
+          .)
+
+&IDFIL    .(
+          stx ar1
+          ldx #0
+i1        jsr setfzei
+
+          ldy #F_DRV
+          lda (fzei),y
+          cmp ar1
+          bne i2
+          ldy #F_FL
+          lda (fzei),y
+          bmi i2
+          cmp #FF_RD
+          bne i3
+          jsr clsrd
+          jmp i2
+i3        cmp #FF_WR
+          bne i4
+          jsr clswrx
+          jmp i2
+i4        cmp #FF_DR
+          bne i2
+          jsr clsdr      ; das gleiche wie bei read
+          
+i2        ldx file
+          inx
+          cpx #ANZFILE
+          bcc i1
+          clc
+          rts
+          .)
+
+&tstlocked .(
+xfile     =ar1
+xdrv      =ar1+1
+cl        =ar2
+xfl2      =ar3
+
+          ldx #0         ; c=0 testet ob file zum schreiben offen ist
+          bcc tl1    
+          ldx #1         ; c=1 testet ob file ueberhaupt offen ist 
+tl1       stx xfl2
+          lda file       ; neues file merken
+          sta xfile
+
+          ldy #F_DRV
+          lda (fzei),y
+          sta xdrv       ; drive merken
+          ldy #F_FSCL
+          lda (fzei),y
+          sta cl         ; und startcluster
+          iny
+          lda (fzei),y
+          sta cl+1
+#ifdef SHOWL
+          lda #"t"
+          jsr SEROUT
+#endif
+          ldx #0         ; start test mit file = 0
+tll       stx file
+          cpx xfile      ; ist neues file
+          beq next       ; dann weiter
+          jsr setfzei    ; fzei setzen
+#ifdef SHOWL
+          lda #"x"
+          jsr SEROUT
+#endif
+          ldy #F_FL
+          lda (fzei),y
+          bmi next       ; file nicht offen dann weiter
+          ldy #F_DRV
+          lda xdrv
+          cmp (fzei),y
+          bne next       ; drive nicht gleich dann weiter
+          ldy #F_FSCL
+          lda cl
+          cmp (fzei),y
+          bne next       ; startcluster nicht gleich dann weiter
+          lda cl+1
+          iny
+          cmp (fzei),y
+          beq fnd        ; ist gleich dann gefunden
+next      
+#ifdef SHOWL
+          lda #"n"
+          jsr SEROUT
+#endif
+          ldx file
+          inx            ; naechstes file testen
+          cpx #ANZFILE
+          bcc tll        ; nicht zuende dann loop
+          ldx xfile      ; zeiger fuer neues file setzen
+          jsr setfzei
+          clc            ; alles ok
+          rts
+fnd       
+#ifdef SHOWL
+          lda #"f"
+          jsr SEROUT
+          lda file
+          jsr HEXOUT
+#endif
+          ldx xfl2        ; auf ueberhaupt offen testen
+          bne err        ; ja dann error
+          ldy #F_FL
+          lda (fzei),y
+          cmp #FF_RD     ; file ist nur zum lesen offen
+          beq next       ; dann doch weiter
+err
+#ifdef SHOWL
+          lda #"l"
+          jsr SEROUT
+          lda #"o"
+          jsr SEROUT
+#endif
+          ldx xfile
+          jsr setfzei
+          lda #E_FLOCKED
+          sec
+          rts
+          .)
+          
+&inidrv   .(
+          jsr suchfile
+          bcs oerr
+          lda PCBUF+FS_OPEN_DRV
+          ldy #F_DRV
+          sta (fzei),y
+          tax
+          jsr GETDPB
+oerr      rts
+          .)
+
+&openow   .(
+          jsr inidrv
+          bcs oerrx
+          lda PCBUF+FS_OPEN_STR
+          ldy #F_STR
+          sta (fzei),y
+          lda #ATTR_CLSD
+          ldy #FS_OPEN_NAME
+          jsr findfile
+          bcc x1
+          jmp openwr
+x1        sec
+          jsr tstlocked
+          bcs oerrx
+          jsr d2f
+          jsr cl2sec
+          bcs oerrx
+          ldy fpuffer
+          jsr RDBUF
+          bcs oerrx
+          jsr xadbufpos
+          sta rwzei
+          stx rwzei+1
+          ldy fpuffer
+          jsr MDBUF
+          ldy #DE_SIZE
+          lda #0
+          sta (rwzei),y
+          iny
+          sta (rwzei),y
+          iny
+          sta (rwzei),y
+          iny
+          sta (rwzei),y
+          ldy #DE_FCLUS+1
+          lda (rwzei),y
+          tax
+          lda #<-1
+          sta (rwzei),y
+          dey
+          lda (rwzei),y
+          pha
+          lda #<-1
+          sta (rwzei),y
+          pla
+          jsr dloop
+          bcs oerr1
+oerrx     bcs oerr
+          jsr sfclus
+          bcs oerr1
+          ldy #DE_FCLUS
+          sta (rwzei),y
+          ldy #F_FCL
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+          ldy #DE_FCLUS+1
+          sta (rwzei),y
+          jsr xfcl2fscl
+          jsr xclrfsp
+          ldy drive
+          jsr DWBUF
+oerr1     pha
+          php
+          ldy fpuffer
+          jsr WABUF
+          bcs xo
+          plp
+          pla
+          bcc opw
+          .byt $2c
+xo        plp
+          pla
+oerr      sec
+          jmp xfrebuf
+          .)
+              
+&openwr   .(
+          jsr inidrv
+          bcs oerr
+          lda PCBUF+FS_OPEN_STR
+          ldy #F_STR
+          sta (fzei),y
+          lda #ATTR_CLSD
+          ldy #FS_OPEN_NAME
+          jsr setfile
+          bcs oerr
+&opw      lda #FF_WR
+          ldy #F_FL
+          sta (fzei),y
+          clc
+          rts
+oerr      sec
+          jmp xfrebuf
+          .)
+                
+&opendr   .(
+          jsr inidrv
+          bcs oerr
+          lda PCBUF+FS_OPEN_STR
+          ldy #F_STR
+          sta (fzei),y
+
+          lda #0
+          sta rwzei          
+          ldy #FS_OPEN_NAME-1
+od1       iny
+          lda PCBUF,y
+          beq od2
+          cmp #DIRSIGN
+          bne od1
+          sty rwzei
+          beq od1
+od2       lda #0
+          ldy rwzei
+          beq nonam
+          sta PCBUF,y
+
+          lda #ATTR_DIR
+          ldy #FS_OPEN_NAME
+          ldx #0
+          jsr findfile
+          bcc ok
+          cmp #E_FNOFIL
+          bne oerr
+nonam     jsr xclrf
+          jsr f2d
+ok        
+          ldy rwzei
+          bne a2
+          ldy #FS_OPEN_NAME-1
+a2        iny
+          lda PCBUF,y
+          beq all
+          jsr xfil2nam
+          ldx #0
+          ldy #F_DMASK
+o1        lda fname,x
+          sta (fzei),y
+          iny
+          inx
+          cpx #NAME_A
+          bcc o1
+          bcs weiter
+all       ldy #F_DMASK
+a1        lda fall-F_DMASK,y
+          beq weiter
+          sta (fzei),y
+          iny
+          bne a1
+weiter
+          lda #0
+          ldy #F_DLEN
+          sta (fzei),y
+          ldy #F_DOUT
+          sta (fzei),y
+          lda #FS_DIR_MOD_FIL
+          ldy #F_FT+FS_DIR_MODE
+          sta (fzei),y
+          ldy #F_FL
+          lda #FF_DR
+          sta (fzei),y
+          clc
+          rts
+oerr      sec
+          jmp xfrebuf
+          
+fall      .asc "*       *  ",0
+          .)
+             
+&openrd   .(
+          jsr inidrv
+          bcs oerr
+          lda PCBUF+FS_OPEN_STR
+          ldy #F_STR
+          sta (fzei),y
+          lda #ATTR_CLSD
+          ldy #FS_OPEN_NAME
+          ldx #0
+          jsr findfile
+          bcs oerr
+          ;clc
+          jsr tstlocked
+          bcs oerr
+          jsr tstsize
+          bcc oset
+          ldx PCBUF+FS_OPEN_STR
+          lda #SC_EOF
+          jsr STRCMD
+          rts            ; E_OK bei L„nge = 0
+oset      lda #FF_RD
+          ldy #F_FL
+          sta (fzei),y
+          clc
+oerr      jmp xfrebuf
+          .)
+          
+&fileloop .(
+	.data
+cnt       .byt 0
+fcnt      .byt 0
+	.text
+
+          ldx #0
+          stx fcnt
+loop      stx cnt
+          jsr setfzei
+          ldy #F_FL
+          lda (fzei),y
+          bmi next
+          inc fcnt       ; count number of open files
+          cmp #FF_RD
+          bne l1
+          jsr xfread
+          jmp next
+l1        cmp #FF_WR
+          bne l2
+          jsr xfwrite
+          jmp next
+l2        cmp #FF_DR
+          bne next
+          jsr fdir
+next      ldx cnt
+          inx
+          cpx #ANZFILE
+          bcc loop
+          lda fcnt       ; und mit z-Flag bergeben
+          rts
+          .)
+
+xfread     .(
+          ldy #F_DRV
+          lda (fzei),y
+          tax
+          jsr GETDPB
+          bcs clsrd
+rdloop    jsr cl2sec
+          bcs clsrd
+          ldy fpuffer
+          jsr RDBUF
+          jsr xadbufpos
+          sta rwzei
+          stx rwzei+1
+
+bloop     ldy #F_STR
+          lda (fzei),y
+          tax
+          ldy #0
+          lda (rwzei),y
+          jsr PUTC
+          bcc nextb
+          cmp #E_NUL
+          beq clsrd
+          rts
+nextb     ldy #F_FZEI
+          lda #1
+          clc
+          adc (fzei),y
+          sta (fzei),y
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+
+          jsr tstsize
+          bcc n1
+          
+&clsrd    ldy fpuffer
+          jsr FRBUF
+          ldy #F_STR
+          lda (fzei),y
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldy #F_FL
+          lda #FF_FRE
+          sta (fzei),y
+          rts
+          
+n1        lda #1
+          jsr xadfpos         ; x=lo a=hi neue pos
+          bcs nextsec    
+          
+          inc rwzei
+          bne f2
+          inc rwzei+1
+f2        jmp bloop
+
+nextsec   jsr snext
+          bcs clsrd
+          jsr xclrfpos
+          jmp rdloop
+          .)
+          
+tstsize   .(
+          ldy #F_FZEI+3
+          lda (fzei),y
+          ldy #F_LEN+3
+          cmp (fzei),y
+          bcc n1
+          bne clsrdx
+          dey
+          lda (fzei),y
+          ldy #F_FZEI+2
+          cmp (fzei),y
+          bcc clsrdx
+          bne n1
+          dey
+          lda (fzei),y
+          ldy #F_LEN+1
+          cmp (fzei),y
+          bcc n1
+          bne clsrdx
+          dey
+          lda (fzei),y
+          ldy #F_FZEI
+          cmp (fzei),y
+          bcc clsrdx
+          bne n1
+clsrdx    sec
+          rts
+n1        clc
+          rts
+          .)
+          
+xfwrite    .(
+          ldy #F_DRV
+          lda (fzei),y
+          tax
+          jsr GETDPB
+          bcs clswrx
+sloop     jsr xadbufpos
+          sta rwzei
+          stx rwzei+1
+          
+bloop     ldy #F_STR
+          lda (fzei),y
+          tax
+          jsr GETC
+          bcc bytok
+          cmp #E_EOF
+          bne wrts
+clswr     jsr cl2sec
+          bcs clswrx
+          ldy fpuffer
+          jsr W1BUF
+          jsr d2f
+          jsr cl2sec
+          bcs clswrx
+          ldy fpuffer
+          jsr RDBUF
+          jsr xadbufpos
+          sta rwzei
+          stx rwzei+1
+          ldy #F_LEN+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #DE_SIZE
+          sta (rwzei),y
+          iny
+          txa
+          sta (rwzei),y
+          ldy #F_LEN+3
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #DE_SIZE+2
+          sta (rwzei),y
+          iny
+          txa
+          sta (rwzei),y
+          ldy fpuffer
+          jsr WABUF
+          ldy drive
+          jsr DWBUF
+&clswrx   ldy fpuffer
+          jsr FRBUF
+          ldy #F_FL
+          lda #FF_FRE
+          sta (fzei),y
+          ldy #F_STR
+          lda (fzei),y
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+wrts      clc
+          rts
+bytok     ldy #0         ; Byte empfangen
+          sta (rwzei),y
+          
+          lda #1         ; Dateil„nge um eins erh”hen
+          clc
+          ldy #F_LEN
+          adc (fzei),y
+          sta (fzei),y
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+          lda #1         ; FPOS+=1
+          jsr xadfpos
+          bcs nexsec     ; Ende des Sektors erreicht?
+         
+          inc rwzei
+          bne r1
+          inc rwzei+1
+r1        jmp bloop
+
+nexsec    jsr cl2sec     ; FCL,FSEC nach a/x
+          bcs clswry
+          ldy fpuffer
+          jsr W1BUF      ; Puffer schreiben
+          bcs clswry
+          jsr xclrfpos   ; FPOS l”schen
+          lda #1         ; FSEC +=1
+          ldy #F_FSEC
+          clc
+          adc (fzei),y
+          sta (fzei),y
+          tax
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+          ldy #D_SPC+1   ; Ende des Clusters erreicht?
+          cmp (dzei),y
+          bcc r2
+          bne fex
+          dey
+          txa
+          cmp (dzei),y
+          bcc r2         ; nein dann r2
+fex       jsr fextend    ; Datei erweitern
+          bcs clswry
+r2        jmp sloop
+clswry    jmp clswr
+          .)
+
+convert   .(
+          ldy #DE_NAME
+          lda (rwzei),y
+          beq cerr
+          cmp #$e5
+          bne cok
+cerr      sec
+          rts
+
+cok       ldy #DE_ATTR
+          lda (rwzei),y
+          tax
+          and #$10
+          bne cdir
+          txa
+          and #8
+          bne cnam
+          lda #FS_DIR_MOD_FIL
+          .byt $2c
+cnam      lda #FS_DIR_MOD_NAM
+          .byt $2c
+cdir      lda #FS_DIR_MOD_DIR
+          ldy #F_FT+FS_DIR_MODE
+          sta (fzei),y
+          cmp #FS_DIR_MOD_NAM
+          beq ok
+
+          ldy #DE_NAME
+          sty ar1
+          ldy #F_DMASK
+          sty ar2
+          ldx #0
+tl        ldy ar2
+          lda (fzei),y
+          cmp #"*"
+          beq tnok
+          cmp #"?"
+          beq tnn
+          ldy ar1
+          cmp (rwzei),y
+          bne ende1
+tnn       inc ar1
+          inc ar2
+          inx
+          cpx #8
+          bcc tl
+tnok      ldy #DE_EXT
+          sty ar1
+          ldy #F_DMASK+8
+          sty ar2
+          ldx #0
+tel       ldy ar2
+          lda (fzei),y
+          cmp #"*"
+          beq ok
+          cmp #"?"
+          beq ten
+          ldy ar1
+          cmp (rwzei),y
+          bne ende1
+ten       inc ar1
+          inc ar2
+          inx
+          cpx #3
+          bcc tel
+          bcs ok
+ende1     lda #<-1
+          sec
+          rts
+          
+ok        ldy #DE_NAME
+          sty ar1
+          ldy #F_FT+FS_DIR_NAME
+          sty ar2
+          ldx #0
+          stx ar3
+cnl       ldy ar1
+          lda (rwzei),y
+          inc ar1
+          ldy ar2
+          sta (fzei),y
+          inc ar2
+          cmp #0
+          beq cnle
+          cmp #"."
+          bne cnl2
+          sta ar3
+cnl2      inx
+          cpx #8
+          bne cnl1
+          lda #"."
+          cmp ar3
+          bne cnl3
+          lda #" "
+cnl3      iny
+          sta (fzei),y
+          inc ar2
+cnl1      cpx #11
+          bcc cnl
+          lda #0
+          iny
+          sta (fzei),y
+cnle      iny
+          tya
+
+          ldy #F_DLEN
+          sta (fzei),y
+
+          ldy #DE_SIZE+1
+          lda (rwzei),y
+          tax
+          dey
+          lda (rwzei),y
+          ldy #F_FT+FS_DIR_LEN
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+          ldy #DE_SIZE+3
+          lda (rwzei),y
+          tax
+          dey
+          lda (rwzei),y
+          ldy #F_FT+FS_DIR_LEN+2
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+          
+          ldy #DE_TIME
+          lda (rwzei),y
+          sta ar1
+          and #%00011111
+          asl
+          ldy #F_FT+FS_DIR_SEC
+          sta (fzei),y
+          ldy #DE_TIME+1
+          lda (rwzei),y
+          sta ar1+1
+          asl ar1
+          rol
+          asl ar1
+          rol
+          asl ar1
+          rol
+          and #%00111111
+          ldy #F_FT+FS_DIR_MIN
+          sta (fzei),y
+          lda ar1+1
+          lsr
+          lsr
+          lsr
+          ldy #F_FT+FS_DIR_HOUR
+          sta (fzei),y
+
+          ldy #DE_DATE
+          lda (rwzei),y
+          sta ar1
+          and #%00011111
+          ldy #F_FT+FS_DIR_DAY
+          sta (fzei),y
+          ldy #DE_DATE+1
+          lda (rwzei),y
+          sta ar1+1
+          asl ar1
+          rol
+          asl ar1
+          rol
+          asl ar1
+          rol
+          and #%00001111
+          ldy #F_FT+FS_DIR_MONTH
+          sta (fzei),y
+          lda ar1+1
+          lsr
+          clc
+          adc #80
+          ldy #F_FT+FS_DIR_YEAR
+          sta (fzei),y
+           
+&setout   lda #F_FT
+          ldy #F_DOUT
+          sta (fzei),y
+          clc
+          rts
+          .)
+          
+fdir      .(
+          ldy #F_DRV
+          lda (fzei),y
+          tax
+          jsr GETDPB
+          bcs clsdr
+   
+bloop     ldy #F_STR
+          lda (fzei),y
+          tax
+          ldy #F_DOUT
+          lda (fzei),y
+          beq first
+          ldy #F_DLEN
+          cmp (fzei),y
+          bcs nextentry
+          tay
+          lda (fzei),y
+          jsr PUTC
+          bcc nextb
+          cmp #E_NUL
+          beq clsdr
+          rts
+nextb     lda #1
+          clc
+          ldy #F_DOUT
+          adc (fzei),y
+          sta (fzei),y
+          jmp bloop 
+
+&clsdr    ldy fpuffer
+          jsr FRBUF
+          ldy #F_STR
+          lda (fzei),y
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldy #F_FL
+          lda #FF_FRE
+          sta (fzei),y
+          rts
+          
+nextentry ldy #F_FT+FS_DIR_MODE
+          lda (fzei),y
+          cmp #FS_DIR_MOD_FRE
+          beq clsdr           ; dann war freebyte als letztes
+          lda #DE_SLEN
+          jsr xadfpos         ; x=lo a=hi neue pos
+          bcc fok
+         
+          jsr snext
+          bcc first
+          cmp #E_NOCLUS
+          bne clsdr
+          beq clsdrx
+first     jsr xclrfpos
+          jsr cl2sec
+          bcs clsdr
+          ldy fpuffer
+          jsr RDBUF
+          bcs clsdr
+          
+fok       jsr xadbufpos
+          sta rwzei
+          stx rwzei+1
+          jsr convert
+          bcc xl
+          cmp #0
+          bne nextentry
+          beq clsdrx
+xl        jmp bloop
+clsdrx    
+/*#ifdef SHOW
+          lda #"g"
+          jsr SEROUT
+#endif*/
+          jsr gfrebyt
+/*#ifdef SHOW
+          php
+          pha
+          jsr HEXOUT
+          pla
+          plp
+#endif*/
+          bcs clsdr
+          ldy #F_FT+FS_DIR_LEN
+          ldx #0
+c1        lda ar1,x
+          sta (fzei),y
+          iny
+          inx
+          cpx #4
+          bne c1
+          ldy #F_FT+FS_DIR_MODE
+          lda #FS_DIR_MOD_FRE
+          sta (fzei),y
+          ldy #F_FT+FS_DIR_NAME
+          lda #0
+          sta (fzei),y
+          iny
+          tya
+          ldy #F_DLEN
+          sta (fzei),y
+          jsr setout
+          jmp bloop
+          .)
+          .)
+

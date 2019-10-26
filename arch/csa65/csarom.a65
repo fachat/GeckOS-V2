@@ -33,16 +33,22 @@
 
 /* These are changeable ****************************************************/
 
-#define	FSIEC_PARALLEL
+#define	DEBUGFS 	/* FSIBM debug */
+#define	FSIBM_SECTOR24BIT
+
+#define	CSA_CONSOLE	0	/* device to output debug/log messages */
+
+#undef	FSIEC_PARALLEL
 #undef	FSIEC_SERIAL
-#undef	FSIBM
+#define	FSIBM
+#undef	MONSH
 #define	USE_LIB6502
 
 #define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
 				   lib6502 */
 #define	NEED_GETINFO
 
-/* #define   ROMTEST */		/* debug option */
+#undef   ROMTEST		/* debug option */
 /* #define   EMUTEST */		/* debug option */
 /* #define   SYSPAGE	$12 */	/* debug option */
 
@@ -55,6 +61,11 @@
 #undef	NOSYSPORT
 
 #define	RAMEND		$80	/* 32k in bank 0 */
+
+#define	CLK2MHZ
+
+#undef	BOOTDRV	"c"
+
 
 /***************************************************************************
  * 
@@ -98,6 +109,13 @@
   Therefore they all get their own zero, data and bss addresses.
 
 */
+
+
+#echo ############ magic
+
+/* so that init recognizes a ROM */
+#include "sysapps/magic/magic.a65"
+
 /************* devices                                  */
 
 #echo ############ devices
@@ -127,10 +145,18 @@
 
 /************* init process                             */
 
-.data:*=$300:.zero:*=$10:.bss:*=$400:.text
+.data:*=$3c0:.zero:*=$20:.bss:*=$400:.text
 #define	INIT_VERBOSE
+#define	INIT_OUTDEV 	CSA_CONSOLE
 #define	INIT_MERGE
 #define	INIT_RESTART
+#define INIT_LIB6502
+#define	INIT_MMU
+#define	INIT_MMU_BANK 	3
+#ifdef ROMTEST
+#define	INIT_ROM2TEST		/* $0-$7 instead of $8-$f in INIT_MMU_BANK */
+#endif
+
 #echo ############ init:
 #include  "sysapps/init/init.a65"
 .data
@@ -163,7 +189,7 @@
 #undef	NOCMD
 
 .data:*=$300:.zero:*=$10:.bss:*=$500:.text
-#echo ############ fsiec:
+#echo ############ fsiec (parallel):
 
 #undef FSIEC_AS_INIT
 #define	FSIEC_DEVICE	"devices/piec_csa.a65"
@@ -189,7 +215,7 @@
 #undef	NOCMD
 
 .data:*=$300:.zero:*=$10:.bss:*=$400:.text
-#echo ############ fsiec:
+#echo ############ fsiec (serial):
 
 #undef FSIEC_AS_INIT
 #define	FSIEC_DEVICE	"devices/siec_csa.a65"
@@ -213,6 +239,10 @@
 .data:*=$300:.zero:*=$10:.bss:*=$500:.text
 #echo ############ fsibm:
 
+#define	FSIBM_OUTDEV	CSA_CONSOLE
+/* #define	FSIBM_DEVICE_DRV "arch/csa65/devices/drv_wd1770.a65" */
+#define	FSIBM_DEVICE_DRV "devices/scsi.a65"  
+/* #define	FSIBM_DEVICE_DRV "sysapps/fs/fsibm/drv_ramd1.a65" */
 #include  "sysapps/fs/fsibm.a65"
 
 .data
@@ -227,7 +257,9 @@
 
 /************* mon - OS/A 1 old style monitor/shell     */
 
-.data:*=$500:.zero:*=$30:.bss:*=$400:.text
+#ifdef MONSH
+
+.data:*=$3c0:.zero:*=$20:.bss:*=$400:.text
 #echo ############ shell:
 
 #ifdef CLK1MHZ
@@ -236,15 +268,13 @@
 #undef	  SHORTMON
 #endif
 
-/*
-#define   NOSH
-#define   NOSYSFKT
-*/
+#undef   NOSH
+#undef   NOSYSFKT
 
 #define MON_SHDEV	0 
 #define	MON_MONDEV	7
 #define	MON_SHEXE	$c0
-#define	MON_MONEXE	$80
+#define	MON_MONEXE	$c0
 #include  "sysapps/mon/mon.a65"
 
 .zero
@@ -257,6 +287,30 @@
 #echo bss:
 #print *
 .text
+
+#endif
+
+/************* boot lsh from BOOTDRV                    */
+
+#ifdef BOOTDRV
+
+#echo ************ lsh
+
+        /* add autostart of lib6502 program 'lsh' */
+
+        .(
+        .word end_auto
+        .byt PK_LIB+PK_AUTOEXEC+PK_RESTART      ; is lib6502 program
+        .word 0         ; P_ADDR ignored
+        .byt 16         ; P_RAM
+        .byt 128        ; P_SHARED
+        .byt 0          ; P_PRIORITY
+        .byt 1,1        ; P_DEV
+        .byt BOOTDRV,":lsh",0,"-d",0,0
+end_auto
+	.)
+
+#endif
 
 /************* end of ROM executables                   */
 
@@ -277,17 +331,21 @@
 .zero
 #echo zero:
 #print *
-Zerostart =*	; only lib6502 and prg - that's it
+/* Zerostart must keep save the sh/mon and init variables */
+Zerostart =$40	; *	; only lib6502 and prg - that's it
+#print Zerostart
 .data
 #echo data:
 #print *
 .bss 
 #echo bss:
 #print *
-Memstart =*	; only lib6502 and prg
+/* Memstart must keep save the sh/mon and init variables */
+Memstart =$500	;	*	; only lib6502 and prg
+#print Memstart
 .text
 
-Memend = $1000
+Memend = $3000
 
 #endif
 

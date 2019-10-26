@@ -1,0 +1,80 @@
+
+/*
+ * read/write block on partitions partition 
+ *
+ * pread	<- a/y address of PRW struct
+ * pwrite	<- a/y address of PRW struct
+ *		
+ * $Log$
+ *
+ */
+
+#include "devices/scsi/part.i65"
+
+	.(
+
+/***************************************************************************
+ * read/write sector on partitions
+ */
+
+&pwrite	jsr ptrans
+	jmp writeblock
+
+&pread	jsr ptrans
+	jmp readblock
+	
+ptrans	sta pp
+	sty pp+1
+	ldy #PRW_PART
+	lda (pp),y
+	asl
+	asl
+	asl
+	asl
+	sta apart
+
+	tax
+	lda parts+PT_ID,x
+	bne ptrok
+	sec
+	rts
+ptrok
+	ldx #3
+	ldy #PRW_SECTOR
+	clc
+ptr1	lda (pp),y
+	sta lba,x
+	iny
+	dex
+	bpl ptr1
+
+	ldy apart
+	ldx #3
+	clc
+ptr2	lda lba,x
+	adc parts+PT_START,y
+	sta lba,x
+	iny
+	dex
+	bpl ptr2
+
+	ldy #PRW_NSEC
+	lda (pp),y
+	sta nsec+1
+	lda #0
+	sta nsec
+
+	ldx apart
+	lda parts+PT_DEV,x
+	tax
+	ldy #PRW_BUF
+	lda (pp),y
+	pha
+	iny
+	lda (pp),y
+	tay
+	pla
+	rts
+
+	.)
+

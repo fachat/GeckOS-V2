@@ -1,0 +1,288 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/* handles the internal Drive parameter block tables 
+ *
+ * Exports:
+ *  bootdpb	read the boot sector and fill in the DPB
+ */
+
+          .(
+	.zero
+zei       .word 0
+	.text
+
+&boot2dpb .(
+          ldy #D_ST
+          lda (dzei),y
+          bne get
+          clc
+          rts
+get       lda #DS_INV
+          sta (dzei),y
+#ifdef DEBUGFS
+lda #"g":jsr SEROUT
+lda drive:jsr HEXOUT
+#endif
+          ldy drive
+          lda #0
+	  sta ar2
+	  sta ar2+1
+	  sta ar2+2
+	  sta ar2+3
+          jsr RDBUF
+          bcc g1
+          rts
+g1        ldx drive
+          jsr setpadr
+          sta zei
+          stx zei+1
+         
+	  /* bytes per sector */ 
+          ldy #BS_BPS+1
+          lda (zei),y
+          tax
+          dey
+          lda (zei),y
+          ldy #D_BPS
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+          
+	  /* sectors per cluster */
+          ldy #BS_SPC
+          lda (zei),y
+          ldy #D_SPC
+          sta (dzei),y
+          iny
+          lda #0
+          sta (dzei),y
+
+	  /* reserved blocks -> start of FAT */          
+          ldy #BS_RES+1
+          lda (zei),y
+          tax
+          dey
+          lda (zei),y
+          ldy #D_STF
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+         
+	  /* sectors per track */ 
+          ldy #BS_SPT+1
+          lda (zei),y
+          sta ar1+1
+          tax
+          dey
+          lda (zei),y
+          sta ar1
+          ldy #D_SPT
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+         
+	  /* sec/tr * sieds -> sectors per cylinder */
+          ldy #BS_SIDE+1
+          lda (zei),y
+          tax
+          dey
+          lda (zei),y
+          jsr mult
+          bcs gerr2
+          ldy #D_SPTS
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+
+	  /* total numbers of sector */          
+          ldy #BS_SEC+1
+          lda (zei),y
+          tax
+          dey
+          lda (zei),y
+          ldy #D_SECS
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+
+#ifdef FSIBM_SECTOR24BIT
+	  ldy #BS_SEC+2		/* "misuse" MEDIA byte */
+	  lda (zei),y
+#else
+	  lda #0
+#endif
+	  ldy #D_SECS+2
+	  sta (dzei),y
+	  iny
+	  lda #0
+	  sta (dzei),y
+         
+	  /* number of FATs -> FAT/disk */ 
+          ldy #BS_FAT
+          lda (zei),y
+          ldy #D_FPD
+          sta (dzei),y
+          iny
+          lda #0
+          sta (dzei),y
+
+	  /* sec / fat */          
+          ldy #BS_SPF+1
+          lda (zei),y
+          tax
+          dey
+          lda (zei),y
+          ldy #D_SPF
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+         
+	  /* number of dir entries in main dir * 32 / BPS -> sectors for dir */
+          ldy #BS_DIR+1
+          lda (zei),y
+          sta ar1+1
+          dey
+          lda (zei),y
+          sta ar1
+          lda #32
+          ldx #0
+          jsr mult
+          bcs gerrx
+          sta ar1
+          stx ar1+1
+          ldy #D_BPS+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr div
+gerr2     bcs gerrx
+          ldy #D_SPD
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+
+	  /* sec/fat * fat/disk + start of FAT + sec/dir -> first data cl. */
+          ldy #D_SPF
+          lda (dzei),y
+          sta ar1
+          iny
+          lda (dzei),y
+          sta ar1+1
+          ldy #D_FPD+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr mult
+gerrx     bcs gerry
+          ldy #D_STF
+          adc (dzei),y
+          pha
+          iny
+          txa
+          adc (dzei),y
+          tax
+          ldy #D_STD+1
+          sta (dzei),y
+          dey
+          pla
+          sta (dzei),y
+          clc
+          ldy #D_SPD
+          adc (dzei),y
+          pha
+          iny
+          txa
+          adc (dzei),y
+          ldy #D_STC+1
+          sta (dzei),y
+          dey
+          pla
+          sta (dzei),y
+
+	  /* (#sectors - first sector) / sec/cluster + 2 -> #clusters */
+          ldy #D_SECS+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          ldy #D_STC
+          sec
+          sbc (dzei),y
+          sta ar1
+          txa
+          iny
+          sbc (dzei),y
+          sta ar1+1
+	  ldy #D_SECS+2
+	  lda (dzei),y
+	  sbc #0
+	  sta ar1+2
+	  iny
+	  lda (dzei),y
+	  sbc #0
+	  sta ar1+3
+
+          ldy #D_SPC+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr div32
+gerry     bcs gerr
+	  tay
+	  lda ar3+2
+	  ora ar3+3
+	  bne gerr	/* number of clusters must be 2 byte */
+	  tya
+          clc
+          adc #2
+          bcc g2
+          inx
+	  beq gerr	/* number of clusters must be 2 byte */
+g2        ldy #D_CLUS
+          sta (dzei),y
+          iny
+          txa
+          sta (dzei),y
+
+          clc
+          rts
+gerr      lda #E_ILLPAR
+          sec
+          rts
+          .)
+
+          .)
+          
+

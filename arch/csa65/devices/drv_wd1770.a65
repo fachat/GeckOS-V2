@@ -1,0 +1,1296 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/*
+ * Driver for a memory-mapped WD1770
+ *
+ * Exports 
+ *
+ *  GETDPB
+ *  DLOOP
+ *  DINIT
+ *  RWSEC
+ *  DFORMAT
+ *
+ * Imports (calls):
+ *
+ *  dchanged
+ */
+
+	.(
+
+#include "chips/wd1770.i65"
+#include "chips/via6522.i65"
+
+#define   WD1770  $e8e0
+#define   WDVIA $e8f0
+
+#define   ERRCNT    4
+
+	.zero
+zei       .word 0
+zeid      .word 0
+ddzei     .word 0
+divers    .byt 0
+sect      .byt 0
+tr        .byt 0
+errcnt    .byt 0
+actdrv    .byt 0
+side      .byt 0
+cmd       .byt 0
+data      .dsb 6
+drvst     .dsb ANZDRV           ; drivestatus z.b. Step-Zeit
+tracks    .dsb ANZDRV           ; Track, auf dem jeweiliges Laufwerk steht
+hd        .dsb ANZDRV           ; High-Density-Flag =bit7 , 6= motor an flag
+                                ; bit0=1 disk changed, bit1=1 double stepping
+mcnt      .dsb ANZDRV           ; motor-aus-zaehler
+blen      .dsb ANZDRV           ; Anzahl 256-Byte-Bloecke in einem Sektor
+
+	.text
+
+/*
+          jmp DINIT
+          jmp exit
+          jmp seldrv     ; a=drv
+          jmp desel
+          jmp selside    ; a=side
+          jmp go2track   ; a=track
+          jmp setadr     ; a/y=adr
+          jmp read       ; a=sect 
+          jmp write      ;  "
+          jmp verify     ;  "
+          jmp DREAD      ; a/y=*Struct
+          jmp DWRITE     ;  "
+          ;jmp DVERIFY    ;  "
+          jmp ftrack     ; a=virgin, zeid=*seclist
+          jmp DFORMAT    ; a/y=*Struct    
+*/
+
+#if D_SLEN=32
+setddzei            /* AC=Drv-Nr    */
+          asl
+          asl
+          asl
+          asl
+          asl
+          clc 
+          adc #<dpb
+          sta ddzei
+          lda #0
+          adc #>dpb
+          sta ddzei+1
+          clc
+          rts
+#endif
+
+INVDPB    .(        ; x ist Drive
+	  txa
+	  jsr setddzei
+          ldy #D_ST
+          lda #DS_INV
+          sta (ddzei),y
+          clc
+          rts
+          .)
+
+INIDPB    .(
+          ldx #0
+il        stx zei
+          jsr INVDPB
+          ldx zei
+          inx
+          cpx #ANZDRV
+          bcc il
+          clc
+          rts
+          .)
+
+&GETDPB	.(		; x is drive number
+	jsr setdzei
+
+	jsr boot2dpb
+	bcs er
+
+	ldx drive
+	lda hd,x
+	and #255-2
+	sta hd,x
+	
+        ldy #D_SECS
+        lda (dzei),y
+        sta ar1
+        iny
+        lda (dzei),y
+        sta ar1+1
+        ldy #D_SPTS+1
+        lda (dzei),y
+        tax
+        dey
+        lda (dzei),y
+        jsr div
+        cmp #41
+        bcs ge
+        txa
+        bne ge
+#ifdef SHOWD
+        lda #"d"
+        jsr SEROUT
+        lda drive
+        jsr HEXOUT
+#endif
+        ldx drive
+	lda hd,x
+	ora #2
+	sta hd,x
+ge
+        ldy #D_ST
+        lda #DS_OK
+        sta (dzei),y
+        ldy #D_BFLAG
+        lda #0		; 0 -> 12 bit FAT
+        sta (dzei),y
+        clc
+er
+        rts
+	.)
+
+
+sec2rw    .(
+	  ldy #RW_DRV
+	  lda (zei),y
+	  jsr setddzei
+
+	  ldy #RW_TRCK+1
+	  lda (zei),y
+	  sta ar1+1
+	  dey
+	  lda (zei),y
+          sta ar1
+          ora ar1+1
+          bne notboot
+
+	  ;lda #0
+	  ldy #RW_SIDE
+s2rl 	  sta (zei),y
+	  iny
+	  cpy #RW_ADR
+	  bcc s2rl
+	  ldy #RW_SEC
+	  lda #1
+          sta (zei),y
+          clc
+          rts
+
+notboot   ldy #D_SECS+1
+          txa
+          cmp (ddzei),y
+          bcc sok
+          bne serr
+          dey
+          lda ar1
+          cmp (ddzei),y
+          bcs serr
+sok
+          ldy #D_SPTS+1
+          lda (ddzei),y
+          tax
+          dey
+          lda (ddzei),y
+          jsr div
+          bcs serr
+	  ldy #RW_TRCK
+	  sta (zei),y
+	  iny
+	  txa
+	  sta (zei),y
+          ldy #D_SPT+1
+          lda (ddzei),y
+          tax
+          dey
+          lda (ddzei),y
+          jsr div
+          bcs serr
+	  ldy #RW_SIDE
+          sta (zei),y
+          txa
+          bne serr
+          clc
+          lda ar1
+          adc #1
+	  ldy #RW_SEC
+          sta (zei),y
+	  iny
+          lda ar1+1
+          adc #0
+          sta (zei),y
+          rts
+serr      sec
+          rts
+          .)
+
+#ifndef SHOWD
+&RWSEC    bcs DWRITE
+#endif
+
+DREAD     ldx #1
+          .byt $2c
+DWRITE    ldx #2
+          stx cmd
+          .(
+          sta zei
+          sty zei+1
+
+	  jsr sec2rw	; change from sector number to track/side/sector
+
+          ldy #RW_ADR
+          lda (zei),y
+          pha
+          iny
+          lda (zei),y
+          tay
+          pla
+          jsr setadr
+          ldy #RW_DRV
+          lda (zei),y
+          jsr seldrv
+          bcs rx
+          ldy #RW_SIDE
+          lda (zei),y
+          jsr selside
+          ldy #RW_TRCK
+          lda (zei),y
+          jsr go2track
+          bcs rx
+          ldx actdrv
+          lda blen,x
+          tax            ; Anzahl 256-Byte-Blocks (wird bei seldrv gesetzt)
+          ldy #RW_SEC
+          lda (zei),y
+          dec cmd
+          bne r2
+          jmp read
+r2        dec cmd
+          bne r3
+          jmp write
+r3        sec
+          lda #E_CMD
+rx        rts
+          .)
+
+&DFORMAT  .(
+	.data
+fpar      .byt 0
+	.text
+
+          cmp #ANZFORM
+          bcc f1
+          lda #E_ILLPAR
+          sec
+          rts
+f1        sta fpar
+          asl
+          tay
+          lda fadr,y
+          sta zei
+          lda fadr+1,y
+          sta zei+1
+          txa       ; x= drive
+          pha
+          jsr desel
+          pla
+          sta actdrv
+
+          jsr setdrv     ; a=drive
+
+          ldy #FMT_HDFL
+          lda (zei),y
+          ldx actdrv
+          sta hd,x
+          jsr setdens
+
+          jsr motoron
+          
+          ldy #FMT_BLEN
+          lda (zei),y
+          sta data+5
+          tax
+          lda POT2-1,x
+          ldx actdrv
+          sta blen,x
+          
+          jsr restore
+          bcs fx
+
+          lda #0
+          sta tr
+          lda #FMT_SCLST
+          clc
+          adc zei
+          pha
+          lda zei+1
+          adc #0
+          tay
+          pla
+          jsr setadr          ; sektor-Liste setzen
+
+floop     lda #0
+          sta side
+
+sideloop  jsr selside
+
+          ldx data+5          ; Block-L„nge 0=128,1=256,2=512,3=1024
+          ldy #FMT_VIRG
+          lda (zei),y
+          jsr ftrack
+          bcs fx
+
+          inc side
+          lda side
+          ldy #FMT_SIDES
+          cmp (zei),y
+          bcc sideloop
+
+          inc tr
+          lda tr         
+          ldy #FMT_TRCKS
+          cmp (zei),y
+          bcs wrboot
+
+          ldx actdrv
+          lda hd,x
+          and #2
+          beq fnd
+          
+          jsr lowdens
+          
+          lda #$50
+          jsr setstep
+          bcs fx
+fnd
+          lda #$50       ; step-in ohne verify
+          jsr setstep
+          bcs fx
+          jsr highdens
+          jmp floop
+          
+fx        pha
+          jsr highdens
+          pla
+          ldx #<-1
+          stx actdrv
+          sec
+          rts
+          
+wrboot    lda #0
+          jsr selside
+          lda #0
+          jsr go2track
+          bcs fx
+          lda fpar                 ; Format mal 32 als Zeiger fr 
+          asl                      ; Boot-Sektor-Daten
+          asl
+          asl
+          asl
+          asl
+          clc
+          adc #<bootsektor
+          pha
+          lda #0
+          adc #>bootsektor
+          tay
+          pla
+          jsr setadr
+
+          ldx actdrv
+          lda blen,x
+          tax
+          lda #1
+          jsr write
+          ldx #<-1
+          stx actdrv
+          rts
+
+ANZFORM   =6
+fadr      .word ssdd,dsdd,dshd3,dshd5,dshh5,dsdd40
+
+          ; single sided double density
+ssdd      .byt $e5,1,80,$01,2,10, 1,3,5,7,9,2,4,6,8  
+          ; double sided double density
+dsdd      .byt $e5,2,80,$01,2,10, 1,3,5,7,9,2,4,6,8    
+          ; double sided high density 3 1/2 zoll
+dshd3     .byt $e5,2,80,$81,2,19, 1,3,5,7,9,11,13,15,17,2,4,6,8,10,12,14,16,18 
+          ; double sided high density 5.25"
+dshd5     .byt $e5,2,80,$81,2,16, 1,3,5,7,9,11,13,15,2,4,6,8,10,12,14
+          ; double sided higher density 5.25"
+dshh5     .byt $e5,2,80,$81,3,9,  1,3,5,7,2,4,6,8
+          ; double sided double density 40 Tracks (360k)
+dsdd40    .byt $e5,2,40,$03,2,10, 1,3,5,7,9,2,4,6,8
+
+bootsektor     ; single sided double density
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 2              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 720           ; SECs
+          .byt 248            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 1             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided double density
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 2              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 1440          ; SECs
+          .byt 249            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided high density 3.5 zoll
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 224           ; DIR
+          .word 2880          ; SECs
+          .byt 240            ; Media
+          .word 9             ; SPF
+          .word 18            ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided high density 5.25 zoll
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 224           ; DIR
+          .word 2400          ; SECs
+          .byt 249            ; Media
+          .word 7             ; SPF
+          .word 15            ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided higher density 5.25 zoll (BPS=1024)
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $400          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 128           ; DIR
+          .word 1280          ; SECs
+          .byt 255            ; Media
+          .word 2             ; SPF
+          .word 8             ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden 
+          .word 0             ; (Dummy)
+               ; double sided double density 5.25 zoll 40 Tracks (360k)
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 720           ; SECs
+          .byt 255            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden 
+          .word 0             ; (Dummy)
+          .)
+
+&DINIT    .(
+	  jsr INIDPB
+
+          lda #%00001111
+          sta WDVIA+VIA_DRA    ;
+
+          lda #0
+          sta WDVIA+VIA_DDRA   ;Ertmal testen ob IC da
+          cmp WDVIA+VIA_DDRA
+          bne xini
+          lda #%00101111
+          sta WDVIA+VIA_DDRA
+          cmp WDVIA+VIA_DDRA
+          bne xini
+          
+          lda WDVIA+VIA_ACR    
+          and #%11011110      ;t2 timed irq, pa latch disabled
+          sta WDVIA+VIA_ACR
+          lda WDVIA+VIA_PCR
+          and #%11110000      ;pa
+          ora #%00001110      ;ca2 hi (side), ca1 neg edge
+          sta WDVIA+VIA_PCR
+          lda #%00100011      ;ca1, ca2, t2 irq off
+          sta WDVIA+VIA_IER
+
+/*          lda #0       ; der Controller braucht zulange, um das Register
+          sta WD1770+WD_TRCK     ; upzudaten
+          cmp WD1770+WD_TRCK
+          bne xini
+*/          
+          ldx #0
+i1        lda #00000011       ; 6ms Step-Zeit
+          sta drvst,x
+          lda #<-1
+          sta tracks,x
+          inx
+          cpx #ANZDRV
+          bcc i1
+          sta actdrv
+          clc
+          rts
+xini      sec
+          rts
+          .)
+
+&DLOOP    .(
+	.data
+dcnt      .byt 0
+	.text
+
+          lda #0
+          sta dcnt
+          sta divers
+dl        jsr setdrv     ; a=drive
+
+          ldx divers
+          lda hd,x  
+          and #%01000000
+          beq dl1
+          inc dcnt       ; motor an 
+          dec mcnt,x
+          bne dl1
+          lda hd,x
+          and #%10111111
+          sta hd,x
+          lda #%00000100
+          dex
+          bmi dl1a
+          asl
+dl1a      ora WDVIA+VIA_DRA
+          sta WDVIA+VIA_DRA
+dl1       
+          ldx divers
+          lda WDVIA+VIA_DRA    ; test auf Disk Change
+          and #%00010000
+          bne dl2	      ; not changed -> dl2
+
+          lda hd,x	      /* FIXME: move head to track 0? */
+          and #1
+          bne dl2
+          lda hd,x
+          ora #1
+          and #255-2          ; double-stepping aus
+          sta hd,x
+          lda #<-1
+          sta tracks,x
+	  jsr INVDPB
+          jsr dchanged
+dl2
+          inc divers
+          lda divers
+          cmp #ANZDRV
+          bcc dl
+          jsr desel
+          
+          lda WDVIA+VIA_DRA
+          and #%00001100      ; motor-bits
+          eor #%00001100      ; sind beide aus
+          bne dlx             ; nein dann ende
+          jsr lowdens
+dlx       lda dcnt            ; mit z-flag bergeben
+          rts
+          .)
+
+                    
+forcend   .(
+          lda WD1770+WD_ST
+          and #1
+          beq fer
+          lda #%11010000      ; Force Interrupt
+          sta WD1770+WD_CMD
+          jsr wloop
+fer       rts
+          .)
+
+selside   .(
+          clc
+          and #1
+          sta side
+          bne side1
+          lda WDVIA+VIA_PCR
+          ora #%00000010
+          sta WDVIA+VIA_PCR
+          rts
+side1     lda #%11111101
+          and WDVIA+VIA_PCR
+          sta WDVIA+VIA_PCR
+          rts
+          .)
+
+wloop     .(
+          txa
+          ldx #13
+wl1       dex
+          bne wl1
+          tax
+          rts
+          .)
+
+wcmd      .(
+          pha
+#ifdef NMIDEV
+	lda #NMI_OFF
+	jsr CTRLNMI
+#endif
+	sei
+          jsr wloop
+          pla
+          sta WD1770+WD_CMD
+          lda #1
+wcl       bit WD1770+WD_ST
+          beq wcl
+          rts
+          .)
+
+setstep   .(
+          ldx actdrv
+          and #%11111100
+          ora #%00001000      ; ohne Motor-On-Time
+          sta divers
+          lda drvst,x
+          and #3
+          ora divers
+          php
+          ;sei
+          jsr wcmd
+          ldx #128
+wc2       jsr setti
+wc1       bit WDVIA+VIA_DRA
+          bmi wcok
+          jsr fragti
+          beq wc1
+          dex
+          bne wc2
+          plp
+          lda #E_CMD
+          sec
+          .byt $2c  ; plp,clc berspringen
+wcok      plp
+          clc
+          ldx WD1770+WD_ST
+          rts
+          .)
+
+setti     lda #255
+          sta WDVIA+VIA_T2CL
+          sta WDVIA+VIA_T2CH
+          rts
+
+fragti    lda WDVIA+VIA_IFR
+          and #%00100000
+          rts
+
+seldrv    .(
+          pha
+          ldx actdrv
+          bmi sd1
+          lda WD1770+WD_TRCK
+          sta tracks,x
+sd1       pla
+          sta actdrv
+
+          jsr setdrv     ; a=drv
+          jsr setdens
+          jsr motoron
+          
+          ldx actdrv
+          lda tracks,x
+          bpl sd2
+          jsr query
+          bcs sde
+sd2       sta WD1770+WD_TRCK
+          tay
+          ldx actdrv
+          lda hd,x
+          and #1
+          beq sd3
+          tya
+          eor #1         ; da track von 0-79 kann das nicht aus bereich raus
+          jsr go2track   ; um disk-change zu l”schen
+          bcs sder
+          ldx actdrv
+          lda hd,x
+          and #%11111110
+          sta hd,x
+sd3       clc
+sder      rts
+sde       sta actdrv
+          rts
+          .)
+
+motoron   .(
+          lda actdrv
+          and #1
+          beq drva
+          lda WDVIA+VIA_DRA
+          and #%11110111      ; Motor on
+          bne drvs
+drva      lda WDVIA+VIA_DRA
+          and #%11111011
+drvs      sta WDVIA+VIA_DRA
+          ldx actdrv
+          lda hd,x
+          and #%01000000
+          bne mok             ; motor war schon an
+          sta mcnt,x          ; motor-aus-z„hler auf null
+          lda hd,x
+          ora #%01000000
+          sta hd,x
+#ifdef SHOWD
+          lda #"m"
+          jsr SEROUT
+#endif
+
+&mdelay 
+          lda WDVIA+VIA_DRA
+          and #%00001100      ; beide Motoren
+          eor #%00001100      ; aus ?
+          beq mok             ; ja dann ende
+          
+#ifdef SHOWD
+          lda #"M"
+          jsr SEROUT
+#endif
+          ldx #40
+ml        jsr setti
+ml2       jsr YIELD
+          jsr fragti
+          beq ml2
+          dex
+          bne ml
+mok       rts
+          .)
+                    
+setdrv    .(
+          and #1
+          beq drva
+          lda WDVIA+VIA_DRA
+          and #%11111101      ; drive select
+          ora #%00000001
+          bne drvs
+drva      lda WDVIA+VIA_DRA
+          and #%11111110
+          ora #%00000010
+drvs      sta WDVIA+VIA_DRA
+&densok   rts
+          .)
+          
+setdens   .(
+          ldx actdrv
+          lda hd,x            ; high-Density-Bit
+          lsr                 ; auf Portbit schieben
+          lsr
+          eor WDVIA+VIA_DRA    ; vergleichen
+          and #%00100000      ; maskieren
+          beq densok          ; gleich dann fertig
+          
+          lda hd,x
+          bpl lodens
+          lda WDVIA+VIA_DRA
+          ora #%00100000
+          bne denset
+lodens    lda WDVIA+VIA_DRA
+          and #%11011111
+denset    sta WDVIA+VIA_DRA
+          jmp mdelay
+          .)
+          
+lowdens   lda WDVIA+VIA_DRA
+          and #%11011111
+          sta WDVIA+VIA_DRA
+          rts
+highdens  ldx actdrv
+          lda hd,x
+          bpl lowdens
+          lda WDVIA+VIA_DRA
+          ora #%00100000
+          sta WDVIA+VIA_DRA
+#ifdef SHOWD
+          lda #"H"
+          jsr SEROUT
+#endif
+          jmp mdelay
+          
+query     .(
+          jsr restore
+          bcs qx
+          lda #4         ; hd-count
+          sta divers
+
+          lda #0
+          jsr selside
+                    
+q         ldx #40        ; bis 5.25" auf Drehzahl nach Density-Wechsel
+          lda #ERRCNT*2
+          sta errcnt
+          .byt $2c
+qloop     ldx #16         ; 8*32ms=256ms <> 1 umdrehung bei 234 upm
+          lda #%11000000 ; Read Adress
+          ldy #5
+          ;sei
+          jsr wcmd
+q1        jsr setti
+          lda #%00100000
+q2        bit WDVIA+VIA_IFR
+          bne qn
+          bit WDVIA+VIA_DRA
+          bvc q2
+          ldx WD1770+WD_DATA
+          stx data,y
+          dey
+          bpl q2
+          lda WD1770+WD_ST
+          and #%00001100
+          bne q3
+          lda data+2     ; Sektor Length
+          and #3
+          beq q3         ; Sektoren mit 128 Byte gehen nicht
+          tax
+          lda POT2-1,x   ; dann Anzahl 256-Byte-Blocks im Sektor
+          ldx actdrv
+          sta blen,x
+          cli
+#ifdef NMIDEV
+	lda #NMI_ON
+	jsr CTRLNMI
+#endif
+          lda data+5
+          clc
+          rts
+
+qn        lda WD1770+WD_ST
+          dex
+          bne q1
+          
+q3        dec errcnt
+          bne qloop
+          cli
+#ifdef NMIDEV
+	lda #NMI_ON
+	jsr CTRLNMI
+#endif
+          dec divers
+          beq qe
+          
+          ldx actdrv
+          lda hd,x
+          eor #%10000000
+          sta hd,x
+          jsr setdens
+          
+          lda divers
+          pha
+          cmp #2
+          bcs q4
+          jsr restore
+q4        pla
+          sta divers
+          jmp q
+          
+qe        lda #E_Q
+qx        sec
+          rts
+          
+&POT2      .byt 1,2,4
+          .)
+
+desel     .(
+          ldx actdrv
+          bmi sd1
+          lda WD1770+WD_TRCK
+          sta tracks,x
+sd1       lda #<-1
+          sta actdrv
+          lda WDVIA+VIA_DRA
+          ora #%00000011
+          sta WDVIA+VIA_DRA
+          clc  
+          rts
+          .)
+
+go2track  .(
+          sta tr
+          cmp WD1770+WD_TRCK
+          beq gtr
+
+          jsr lowdens
+          
+          jsr findtr
+          bcc gtc
+          
+          lda #$04       ; restore mit verify
+          jsr setstep
+          bcs gts
+
+          jsr findtr
+          bcs gts
+gtc       and #%00011000
+          bne gts
+          
+          jsr highdens
+gtr       clc
+          rts
+          
+gts       jsr highdens
+          lda #E_GT
+          sec
+          rts
+          .)
+
+findtr    .(
+          lda tr
+          sta WD1770+WD_DATA
+          
+          ldx actdrv
+          lda hd,x
+          and #2
+          beq gnd
+
+          lda WD1770+WD_TRCK
+          pha
+          lda #$10       ; stepping ohne verify
+          jsr setstep
+          pla
+          sta WD1770+WD_TRCK     ; und das ganze nochmal mit verify
+          lda tr
+          sta WD1770+WD_DATA     ; das sind dann doppelt so viele steps
+
+gnd       lda #$14       ; seek track
+          jmp setstep
+          .)
+
+restore   .(
+          jsr forcend
+          jsr lowdens
+          lda #$00       ; restore
+          jsr setstep
+          pha
+          jsr highdens
+          lda #0
+          sta tr
+          pla
+          rts
+          .)
+
+setadr    sta zeid
+          sty zeid+1
+          clc
+          rts
+
+read      .(
+          sta sect
+          stx data
+#ifdef BSHOW
+          lda #"R"
+          jsr SEROUT
+          txa
+          jsr HEXOUT
+#endif
+          jsr forcend
+          lda #ERRCNT
+          sta errcnt
+rdloop    lda sect
+          sta WD1770+WD_SECT
+          ;sei
+          ldx data       ; Anzahl 256-Byte-Bl”cke
+          ldy #0
+          lda #%10001000
+          jsr wcmd
+          lda WD1770+WD_ST
+rd1       bit WDVIA+VIA_DRA
+          bmi rde
+          bvc rd1
+          lda WD1770+WD_DATA
+          sta (zeid),y
+          iny
+          bne rd1
+          inc zeid+1
+          dex
+          bne rd1
+          clc
+          ldx WD1770+WD_ST
+          ldy errcnt  
+          ;cli
+          ;rts
+	  bcc rdee	; always
+rde       dec errcnt
+          bne rdloop
+          lda #E_RD
+          sec
+          ldx WD1770+WD_ST
+rdee
+          cli
+#ifdef NMIDEV
+	php
+	pha
+	lda #NMI_ON
+	jsr CTRLNMI
+	pla
+	plp
+#endif
+          rts
+          .)
+
+write     .(
+          sta sect       ; ( x-reg die Anzahl 256-Byte-Bl”cke )
+          stx data
+#ifdef BSHOW
+          lda #"W"
+          jsr SEROUT
+          txa
+          jsr HEXOUT
+#endif
+          jsr forcend
+          lda #ERRCNT
+          sta errcnt
+wrloop    lda sect
+          sta WD1770+WD_SECT
+          ;sei
+          ldx data       ; Anzahl 256-Byte-Bl”cke
+          ldy #0
+          lda #%10101000
+          jsr wcmd
+          lda WD1770+WD_ST
+rd1       bit WDVIA+VIA_DRA
+          bmi rde
+          bvc rd1
+          lda (zeid),y
+          sta WD1770+WD_DATA
+          iny
+          bne rd1
+          inc zeid+1
+          dex
+          bne rd1
+          clc
+          lda WD1770+WD_ST
+          ;cli
+          ;rts
+	  bcc rdee	; always
+rde       dec errcnt
+          bne wrloop
+          lda #E_WR
+          sec
+          ldx WD1770+WD_ST
+rdee      cli
+#ifdef NMIDEV
+	php
+	pha
+	lda #NMI_ON
+	jsr CTRLNMI
+	pla
+	plp
+#endif
+          rts
+          .)
+
+ftrack    .(
+          sta divers          ; virgin
+          stx data+4          ; Sektor-L„nge
+          lda POT2-1,x
+          sta data            ; Anzahl 256-Byte-Bl”cke
+          lda #ERRCNT
+          sta errcnt
+errloop   ldy #0
+          lda (zeid),y
+          sta data+2          ; endsector
+          iny
+          sty sect
+          jsr forcend
+          ;sei
+          lda #%11110100
+          jsr wcmd
+          lda WD1770+WD_ST  ; intrq loeschen
+          ldy #80
+          ldx #$4e
+f1a       bit WDVIA+VIA_DRA
+          bmi fey
+          bvc f1a
+          stx WD1770+WD_DATA
+          dey
+          bne f1a
+sloop     lda data
+          sta data+1
+          ldx #0
+          ldy #12
+f2        bit WDVIA+VIA_DRA
+          bmi fey   
+          bvc f2
+          stx WD1770+WD_DATA
+          dey
+          bne f2
+          ldx #$f5
+          ldy #3
+f3        bit WDVIA+VIA_DRA
+          bmi fey
+          bvc f3
+          stx WD1770+WD_DATA
+          dey
+          bne f3
+          ldx #$fe
+f4        bit WDVIA+VIA_DRA
+fey       bmi fex
+          bvc f4
+          stx WD1770+WD_DATA
+          ldx tr
+f5        bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f5
+          stx WD1770+WD_DATA
+          ldx side
+f6        bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f6
+          stx WD1770+WD_DATA
+          ldy sect
+          lda (zeid),y
+          tax
+f7        bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f7
+          stx WD1770+WD_DATA
+          ldx data+4         ; l„nge des Sektors
+f8        bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f8
+          stx WD1770+WD_DATA
+          ldx #$f7
+f9        bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f9
+          stx WD1770+WD_DATA
+          ldy #22
+          ldx #$4e
+f10       bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f10
+          stx WD1770+WD_DATA
+          dey
+          bne f10
+          ldy #12
+          ldx #0
+f11       bit WDVIA+VIA_DRA
+          bmi fex
+          bvc f11
+          stx WD1770+WD_DATA
+          dey
+          bne f11
+          ldy #3
+          ldx #$f5
+f12       bit WDVIA+VIA_DRA
+fex       bmi fe
+          bvc f12
+          stx WD1770+WD_DATA
+          dey
+          bne f12
+          ldx #$fb
+f13       bit WDVIA+VIA_DRA
+          bmi fe
+          bvc f13
+          stx WD1770+WD_DATA
+          ldx divers          ; virgin
+f15       ldy #0
+f14       bit WDVIA+VIA_DRA    ; 256 Byte
+          bmi fe
+          bvc f14
+          stx WD1770+WD_DATA
+          dey
+          bne f14
+          dec data+1
+          bne f15
+          ldx #$f7            ; end of sektor
+f16       bit WDVIA+VIA_DRA
+          bmi fe
+          bvc f16
+          stx WD1770+WD_DATA
+          ldy #24
+          ldx #$4e            ; pause nach sektor
+f20       bit WDVIA+VIA_DRA
+          bmi fe
+          bvc f20
+          stx WD1770+WD_DATA
+          dey
+          bne f20
+          inc sect
+          dec data+2
+          beq f18a
+          jmp sloop
+f18a      ldx #$4e
+f18       bit WDVIA+VIA_DRA
+          bmi fr
+          bvc f18
+          stx WD1770+WD_DATA
+          jmp f18        ; absolut
+fe        dec errcnt
+          beq fee
+          jmp errloop
+fee       sec
+          lda #E_FT
+          ldx WD1770+WD_ST
+	.byt $24
+fr	sec
+	cli
+#ifdef NMIDEV
+	php
+	pha
+	lda #NMI_ON
+	jsr CTRLNMI
+	pla
+	plp
+#endif
+/*
+          cli
+          rts
+fr        cli
+          clc
+          rts
+*/
+          .)
+          .)
+
+

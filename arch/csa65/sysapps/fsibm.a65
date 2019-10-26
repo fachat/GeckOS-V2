@@ -1,0 +1,9 @@
+
+/* #define	FSIBM_DEVICE_DRV	"devices/drv_wd1770.a65" */
+/* #define	FSIBM_DEVICE_DRV	"sysapps/fs/fsibm/drv_ramd1.a65" */
+#define	FSIBM_DEVICE_DRV	"devices/scsi.a65" 
+
+#define	DEBUGFS
+
+#include "sysapps/fs/fsibm.a65"
+

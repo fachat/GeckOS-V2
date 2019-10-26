@@ -1,0 +1,887 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * exports "rename", "rmdir", "delete", "mkdir"
+ * "dloop", "setfile", "xclrfzei", "sfclus"
+ * "findfile", "fextend", "format"
+ */
+
+          .(
+	.data
+cluster   .word 0
+pcl       .word 0
+	.zero
+ezei      .word 0
+	.text
+
+&rename   .(
+          jsr inidrv
+          bcs re
+          ldy #FS_CMD_NAME
+          lda #ATTR_CLSD|ATTR_DIR
+          ldx #0
+          jsr findfile   ; bei gefunden sind ezei,DCL/DSEC/DPOS gesetzt
+          bcs re
+          stx fname+NAME_A
+          iny
+          jsr fil2nam
+          
+          ldy #F_FCL
+          lda pcl
+          sta (fzei),y
+          iny
+          lda pcl+1
+          sta (fzei),y
+          
+          ldx #<-1
+          jsr findentry
+          bcc fexist
+          cmp #E_NOCLUS
+          bne re
+          
+          jsr d2f
+          jsr cl2sec
+          bcs re
+          ldy fpuffer
+          jsr RDBUF
+          bcs re
+          jsr xadbufpos
+          sta ezei
+          stx ezei+1
+          
+          jsr ynam2ezei
+          bcs err
+          ldy fpuffer
+          jsr WABUF          
+re        jmp xfrebuf
+fexist    lda #E_FILEXIST
+err       sec
+          jmp xfrebuf
+          .)
+
+&rmdir    .(
+          jsr inidrv
+          bcs re
+          ldy #FS_CMD_NAME
+          lda #ATTR_DIR
+          ldx #0
+          jsr findfile
+          bcs re
+          lda #"*"
+          sta fname+NAME_N
+          sta fname+NAME_E
+          lda #ATTR_DIR|ATTR_CLSD|ATTR_HID|ATTR_SYS
+          sta fname+NAME_A
+          ldx #<-1
+          jsr findentry
+          bcc rtest
+          .byt $2c
+notempty  lda #E_FDNEMPTY
+          sec
+re        jmp xfrebuf
+rloop     jsr findnext
+          bcs rend
+rtest     ldy #DE_ATTR
+          lda (ezei),y
+          and #ATTR_DIR
+          beq notempty
+          ldy #DE_NAME
+          lda (ezei),y
+          cmp #"."
+          bne notempty
+          iny
+          lda (ezei),y
+          cmp #"."
+          bne r2
+          iny
+r2        lda (ezei),y
+          cmp #" "
+          bne notempty
+          iny
+          cpy #DE_ATTR
+          bcc r2
+          bcs rloop
+          
+rend      cmp #E_NOCLUS
+          bne re
+          jsr d2f
+          jsr xfcl2fscl
+          jsr cl2sec
+          bcs re
+          ldy fpuffer
+          jsr RDBUF
+          bcs re
+          jsr xadbufpos
+          sta ezei
+          stx ezei+1
+          jmp xdel
+          .)
+          
+&delete   .(
+	.data
+xfl       .byt 0
+	.text
+
+          jsr inidrv
+          bcs de
+          ldy #FS_CMD_NAME
+          lda #ATTR_CLSD
+          ldx #0
+          jsr findfile
+          bcs de
+          ldx #1
+          .byt $2c
+&xdel     ldx #0
+          stx xfl
+dl        sec
+          jsr tstlocked
+          bcs de
+          ldy #DE_NAME
+          lda #$e5            ; null ist auf dem PC Endekennzeichen fr dir
+          sta (ezei),y
+          ldy fpuffer
+          jsr MDBUF
+          ldy #DE_FCLUS+1
+          lda (ezei),y
+          tax
+          dey
+          lda (ezei),y
+          jsr dloop
+          bcs endex
+          ldx xfl
+          beq ende2
+          jsr d2f
+          jsr findnext
+          bcc dl
+          cmp #E_NOCLUS
+          bne de
+ende2     clc
+endex     php
+          pha
+          ldy fpuffer
+          jsr WABUF
+          bcs dexx
+          ldy drive
+          jsr DWBUF
+          bcs dexx
+          pla
+          plp
+          jmp xfrebuf
+dexx      tax
+          pla
+          txa
+          plp
+de        sec
+          jmp xfrebuf
+
+	.zero
+xzei      .word 0
+	.text
+
+&&dloop   sta cluster
+          stx cluster+1
+          ldy #0
+          sty xzei
+          sty xzei+1
+          jsr gnexcl
+          bcs dend
+          sta pcl
+          stx pcl+1
+          lda cluster
+          ldx cluster+1
+          ldy #xzei
+          jsr snexcl
+          bcs de
+          lda pcl
+          ldx pcl+1
+          jmp dloop
+dend      cmp #E_NOCLUS
+          bne de
+          lda cluster
+          ldx cluster+1
+          ldy #xzei
+          jmp snexcl
+          .)
+          
+&mkdir    .(
+          jsr inidrv
+          bcs err
+          ldy #FS_CMD_NAME
+          lda #ATTR_DIR
+          jsr setfile
+          bcs err
+          jsr clrclus
+          bcs err
+          jsr cl2sec
+          bcs err
+          ldy fpuffer
+          jsr RDBUF
+          bcs err
+          ldx fpuffer
+          jsr setpadr
+          sta ezei
+          stx ezei+1
+          lda #" "
+          ldy #1
+m1        sta fname,y
+          iny
+          cpy #NAME_A
+          bcc m1
+          lda #"."
+          sta fname+NAME_N
+          lda #ATTR_DIR
+          sta fname+NAME_A
+          jsr xnam2ezei
+          ldy #DE_FCLUS
+          lda cluster
+          sta (ezei),y
+          iny
+          lda cluster+1
+          sta (ezei),y
+          lda #"."
+          sta fname+NAME_N+1
+          lda #DE_SLEN
+          clc
+          adc ezei
+          sta ezei
+          bcc m2
+          inc ezei+1
+m2        jsr xnam2ezei
+          ldy #DE_FCLUS
+          lda pcl
+          sta (ezei),y
+          iny
+          lda pcl+1
+          sta (ezei),y
+          ldy fpuffer
+          jsr WABUF
+err       jmp xfrebuf
+          .)
+
+&setfile  .(      ; open new file, a=attr, y=pointer to Name in PCBUF-1
+          ldx #1
+          jsr findfile
+          bcs sok
+          lda #E_FILEXIST
+errx      sec
+          rts
+sok       cmp #E_OK
+          bne errx
+          jsr d2f        ; DCL,DSEC,DPOS nach FCL,FSEC,FPOS = Leerer Eintrag
+          jsr sfclus     ; freien Cluster suchen, belegen und nach a/x bzw cluster
+          bcs errx
+          jsr cl2sec     ; FCL,FSEC nach a/x=Sektor-Nummer umrechnen
+          bcs errx
+          ldy fpuffer
+          jsr RDBUF      ; und Sektor lesen
+          bcs errx
+          jsr xadbufpos  ; FPOS+Puffer-Adresse nach a/x
+          sta ezei
+          stx ezei+1
+          ldy #DE_FCLUS  ; Cluster speichern im Dir-Eintrag
+          lda cluster
+          sta (ezei),y
+          iny
+          lda cluster+1
+          sta (ezei),y
+          ldy #DE_SIZE   ; L„nge auf Null setzen im Dir-Eintrag
+          lda #0
+          sta (ezei),y
+          iny
+          sta (ezei),y
+          iny
+          sta (ezei),y
+          iny
+          sta (ezei),y
+          jsr nam2ezei   ; Name in Dir-Eintrag
+          bcs err
+
+          ldy fpuffer    ; Puffer speichern 
+          jsr WABUF
+          bcs err
+          ldy drive      ; frs Drive die FAT sichern 
+          jsr DWBUF
+          bcs err
+
+          ldy #F_FCL     ; Startcluster als File-Start setzen
+          lda cluster
+          sta (fzei),y
+          iny
+          lda cluster+1
+          sta (fzei),y
+
+          jsr xfcl2fscl  ; und als Startcluster des Files setzen (fr Lock)
+
+          jsr xclrfsp    ; FSEC,FPOS l”schen
+          lda #0
+          ldy #F_LEN     ; Dateil„nge im FPB auf Null setzen
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          iny
+          sta (fzei),y
+&&xclrfzei
+          ldy #F_FZEI    ; Set pointer for read/write to null
+          lda #0
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          clc
+err       rts
+
+;free      ldy #DE_NAME
+;          lda #0
+;          sta (ezei),y
+;          lda #E_DISKFULL
+;          sec
+;          rts
+          .)
+
+&sfclus   .(
+#ifdef SHOWC
+     lda #"+"
+     jsr SEROUT
+#endif
+          lda #2
+          ldx #0
+          clc
+          jsr gfrecl     ; ab Cluster 1 nach freiem Cluster suchen 
+          bcs errx
+          sta cluster
+          stx cluster+1
+          ldy #<EOFCLUS
+          sty ezei
+          ldy #>EOFCLUS
+          sty ezei+1
+          ldy #ezei
+          jsr snexcl     ; neuer Cluster kriegt End of File als Folgecluster
+          bcs errx
+#ifdef SHOWC
+     lda cluster+1
+     jsr HEXOUT
+     lda cluster 
+     jsr HEXOUT
+     clc
+#endif
+          lda cluster
+          ldx cluster+1
+errx      rts
+          .)
+
+          .(
+namend    lda #E_FILLNAM
+          sec
+          rts          
+&nam2ezei 
+          ldx #1
+          .byt $2c
+&xnam2ezei
+          ldx #0
+          .byt $2c
+&ynam2ezei
+          ldx #<-1
+          ldy #0
+md1       lda fname,y
+          sta (ezei),y
+          cmp #"*"
+          beq namend
+          cmp #"?"
+          beq namend
+          cmp #34
+          beq namend
+          cmp #"."
+          bne md1x
+          txa
+          bne namend
+md1x      iny
+          cpy #NAME_SLEN
+          bcc md1
+          txa
+          bpl cendx
+          clc
+          rts
+cendx     lda #0
+          ldy #DE_SIZE
+md2       sta (ezei),y
+          iny
+          cpy #DE_SIZE+4
+          bcc md2
+
+          lda #0
+          ldy #5
+c1        sta PCBUF,y
+          dey
+          bpl c1
+          ldy #1         ; minimale Anzahl Bytes
+          lda #TI_GET
+          ldx #SEND_TIME
+          jsr SEND
+          bcs cnd        ; x-reg ist noch vom Send gesetzt 
+          sec
+          jsr XRECEIVE
+cnd       
+          ; Umwandlung 6 Byte in 4 Byte und dann nach (ezei),DE_TIME/DATE   
+
+          lda PCBUF+TE_SG_YEAR
+          sec
+          sbc #80
+          and #%01111111
+          asl
+          sta ar1
+          lda PCBUF+TE_SG_MONTH
+          and #%00001000
+          lsr
+          lsr
+          lsr
+          ora ar1
+          ldy #DE_DATE+1
+          sta (ezei),y
+          lda PCBUF+TE_SG_MONTH
+          and #%00000111 
+          asl
+          asl
+          asl
+          asl
+          asl
+          sta ar1
+          lda PCBUF+TE_SG_DAY
+          and #%00011111
+          ora ar1
+          ldy #DE_DATE
+          sta (ezei),y
+          
+          lda PCBUF+TE_SG_HOUR
+          and #%00011111
+          asl
+          asl
+          asl
+          sta ar1
+          lda PCBUF+TE_SG_MIN
+          and #%00111000
+          lsr
+          lsr
+          lsr
+          ora ar1
+          ldy #DE_TIME+1
+          sta (ezei),y
+          lda PCBUF+TE_SG_MIN
+          and #%00000111 
+          asl
+          asl
+          asl
+          asl
+          asl
+          sta ar1
+          lda PCBUF+TE_SG_SEC
+          and #%00111110
+          lsr
+          ora ar1
+          ldy #DE_TIME
+          sta (ezei),y
+
+cend      clc
+          rts
+
+          .)
+
+&findfile .(
+	.data
+xflag     .byt 0
+attr      .byt 0
+npos      .byt 0
+	.text
+
+          sta attr  ; attribut, nach dem gesucht wird
+          stx xflag ; x=0 lesen, x=1 leeren Eintrag suchen test file exist
+          sty npos  ; y=position Name in PCBUF
+          
+          lda PCBUF,y
+          cmp #DIRSIGN  ; da eh immer bei clus=0 gestartet wird, backslash
+          bne l1    ; am Anfang ignorieren
+          inc npos
+l1
+          jsr xclrfcl
+          
+fl        ldy npos
+          lda PCBUF,y
+          beq fnoname
+          jsr xfil2nam
+          sty npos
+
+          ldy #F_FCL
+          lda (fzei),y   
+          sta pcl        ; pcl ist Startcluster des dirs
+          iny
+          lda (fzei),y
+          sta pcl+1
+
+          ldy npos
+          lda PCBUF,y
+          php
+          ldx xflag
+          lda attr
+          plp
+          beq f2
+          lda #ATTR_DIR
+          ldx #0
+f2        sta fname+NAME_A
+          jsr findentry
+          bcs fe
+          ldy #DE_ATTR
+          lda (ezei),y
+          tax
+          ldy npos
+          inc npos
+          lda PCBUF,y
+          bne fl
+          clc
+fe        rts 
+fnoname   lda #E_FNOFIL
+          sec
+          rts    
+          .)
+
+findentry .(
+	.data
+x2fl      .byt 0
+x3fl      .byt 0
+	.text
+
+          stx x2fl       ; x<0 dann nur auf exist testen, F_Dxx nicht „ndern
+          stx x3fl       ; x=1 ist freien Eintrag suchen, x=0 Datei finden
+          jsr xclrfsec
+fnew      jsr xclrfpos
+        
+          jsr cl2sec
+          bcs fe
+          ldy fpuffer
+          jsr RDBUF
+          bcc f0
+fe        rts
+    
+f0        ldx fpuffer
+          jsr setpadr
+          sta ezei
+          stx ezei+1
+          
+fl        ldy #DE_NAME
+          lda (ezei),y
+          beq frex
+          cmp #$e5
+          bne fl2
+          jmp fre
+frex      lda x3fl
+          bmi frey
+          beq frey
+          lda x2fl
+          beq frez
+          jsr f2d
+frez      lda #E_OK
+          .byt $2c
+frey      lda #E_NOCLUS
+          jmp nexend
+          
+fl2       lda fname+NAME_N-DE_NAME,y
+          cmp #"*"
+          beq namok
+          cmp #"?"
+          beq fl1
+          cmp (ezei),y
+          bne next
+fl1       iny
+          cpy #DE_EXT
+          bcc fl2
+namok     ldy #DE_EXT
+fl3       lda fname+NAME_E-DE_EXT,y
+          cmp #"*"
+          beq extok
+          cmp #"?"
+          beq fl4
+          cmp (ezei),y
+          bne next
+fl4       iny
+          cpy #DE_ATTR
+          bcc fl3
+extok     ldy #DE_ATTR
+          lda fname+NAME_A
+          tax
+          and (ezei),y
+          bne found
+          txa
+          and #ATTR_CLSD
+          beq next
+          lda (ezei),y
+          beq found
+&findnext          
+next      lda #DE_SLEN
+          clc
+          adc ezei
+          sta ezei
+          bcc n1
+          inc ezei+1
+n1        lda #DE_SLEN
+          jsr xadfpos
+          bcs nexsec
+          jmp fl
+nexsec    jsr snext           ; sucht bei FCL,FSEC
+          bcc f0a
+          cmp #E_NOCLUS
+          bne nexend
+          ldx x3fl            ; soll keinen leeren suchen
+          bmi nexend
+          beq nexend          ; dann E_NOCLUS
+          ldx x2fl            ; soll suchen und hat gefunden 
+          beq nexxend         ; dann OK und c=1
+          jsr fextend 
+          bcs nexend
+          jsr clrclus         ; l”scht Cluster
+          bcs nexend
+          jsr f2d
+nexxend   lda #E_OK
+nexend    sec
+          rts
+f0a       jmp fnew
+          
+fre       lda x2fl
+          bmi next
+          beq next
+          jsr f2d
+          lda #0
+          sta x2fl
+          beq next
+
+found     bit x2fl
+          bmi fend
+          jsr f2d
+
+          ldy #DE_FCLUS+1
+          lda (ezei),y
+          tax
+          dey
+          lda (ezei),y
+          ldy #F_FCL
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          jsr xfcl2fscl
+
+          ldy #DE_SIZE+1
+          lda (ezei),y
+          tax
+          dey
+          lda (ezei),y
+          ldy #F_LEN
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+          ldy #DE_SIZE+3
+          lda (ezei),y
+          tax
+          dey
+          lda (ezei),y
+          ldy #F_LEN+2
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          jsr xclrfzei
+          jsr xclrfpos
+fend      clc
+          rts
+          .)
+
+&fextend  .(             ; extend file when writing
+          ldy #F_FCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          bne f1
+          cpx #0         ; im Main-Dir nicht m”glich 
+          bne f1
+          lda #E_NOCLUS
+          sec
+          rts
+f1        jsr gnexcl     ; n„chsten Cluster der Datei suchen
+          bcc fok        ; 
+          cmp #E_NOCLUS
+          bne ferr       ; Lese- oder sonstwas-Fehler
+          ldy #F_FCL+1   
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          sec
+          jsr gfrecl     ; ab letztem Cluster der Datei freien Cluster suchen
+          bcs ferr       ; nicht gefunden 
+          sta ezei
+          stx ezei+1
+          ldy #F_FCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #ezei
+          jsr snexcl     ; und Folgecluster setzen
+          bcs ferr       ; war nix
+          ldy #F_FCL+1
+          lda ezei+1
+          sta (fzei),y
+          dey
+          tax
+          lda ezei
+          sta (fzei),y
+          ldy #<EOFCLUS
+          sty ezei
+          ldy #>EOFCLUS  
+          sty ezei+1
+          ldy #ezei
+          jsr snexcl     ; der neue Cluster kriegt ein End Of File als Folgecluster
+          bcs ferr
+          
+fok       jsr xclrfsp    ; FSEC=FPOS=0
+          clc
+          rts
+ferr      sec
+          rts
+          .)
+          
+&format   .(
+          ; ldx PCBUF+FS_CMD_DRV
+          ; jsr setdzei
+          ldx drive
+          jsr dchanged
+          lda PCBUF+FS_CMD_PFAD
+          ldx drive
+          jsr DFORMAT
+          bcs ferr3
+
+#ifdef DEBUGFS
+lda #"f":jsr SEROUT
+lda drive:jsr HEXOUT
+lda dzei+1:jsr HEXOUT:lda dzei:jsr HEXOUT
+#endif
+          ldx drive
+          jsr GETDPB
+          bcs ferr3
+;jmp ferr2
+          ldy drive
+;.byt 2
+          jsr CLBUF
+          bcs ferr3         
+          ldy #D_STC+1
+          lda (dzei),y
+          sta ezei+1
+          dey
+          lda (dzei),y
+          sta ezei
+
+#ifdef DEBUGFS
+.(
+lda #"c":jsr SEROUT
+lda dzei+1:jsr HEXOUT
+lda dzei:jsr HEXOUT
+lda ezei+1:jsr HEXOUT
+lda ezei:jsr HEXOUT
+.)
+#endif
+
+fwl       sec
+          lda ezei
+          sbc #1
+          sta ezei
+          lda ezei+1
+          sbc #0
+          sta ezei+1
+          ora ezei
+          beq ffat
+
+          lda ezei
+          ldx ezei+1
+	  sta ar2
+	  stx ar2+1
+	  lda #0
+	  sta ar2+2
+	  sta ar2+3
+          ldy drive
+          jsr W2BUF
+ferr3     bcs ferr2
+          bcc fwl
+
+ffat      lda #<-1
+          sta ezei
+          sta ezei+1
+          ldy #ezei
+          lda #0
+          tax
+          jsr snexcl
+          bcs ferr2
+          lda #1
+          ldx #0
+          ldy #ezei
+          jsr snexcl
+          bcs ferr2
+          ldy drive
+          jsr CLBUF
+          bcs ferr2
+          sta ezei
+          stx ezei+1
+          ldy #FS_CMD_NAME
+;.byt 2
+          jsr fil2nam
+          lda #ATTR_DSK
+          sta fname+NAME_A
+          jsr nam2ezei
+          ldy #D_STD+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+	  sta ar2
+	  stx ar2+1
+	  lda #0
+	  sta ar2+2
+	  sta ar2+3
+          ldy drive
+          jsr W2BUF
+;.byt 2
+          bcs ferr2
+          ldy drive
+          jsr DWBUF
+ferr2     rts
+          .)
+
+          .)
+
+

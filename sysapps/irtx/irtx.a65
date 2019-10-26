@@ -24,7 +24,7 @@
 #include  "kdefs.i65"
 #include  "kernel.i65"
 #include  "chips/via6522.i65"
-#include  "oldlib/stdio.a65"
+#include  "lib6502.i65"
 
 #ifdef NOPRG
 
@@ -486,7 +486,7 @@ univdat   .byt 6              ; number of bits
 Getc	.(
 	ldx #STDIN
 	sec
-	jmp getc
+	jmp fgetc
 	.)
 
 Txtout	.(
@@ -500,7 +500,7 @@ l0	lda (p),y
 	beq end
 	ldx #STDOUT
 	sec
-	jsr putc
+	jsr fputc
 	iny
 	jmp l0
 end	rts

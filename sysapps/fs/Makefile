@@ -1,20 +1,22 @@
 
 
-XAINPUT=../../include,../../arch
 XA=xa
 
-all: fsiec.o65 fsdev.o65
+all: fsibm.o65 # fsiec.o65 fsdev.o65
+
+fsibm.o65: fsibm.a65 $(wildcard fsibm/*.a65)
+	${XA} -R -I../.. -I../../include -LOSA2KERNEL \
+		-DFSIBM_DEVICE_DRV="sysapps/fs/fsibm/drv_ramd1.a65" \
+		$< -o $@
 
 fsiec.o65: fsiec.a65
-	(XAINPUT=${XAINPUT}; export XAINPUT;\
-	${XA} -DKERNEL=61440 -R -c fsiec.a65 -o fsiec.o65 ;\
-	if [ $$? -ne 0 ]; then rm -f fsiec.o65; fi; )
+	${XA} -R -I../.. -I../../include -LOSA2KERNEL $< -o $@
 
 fsdev.o65: fsdev.a65
-	(XAINPUT=${XAINPUT}; export XAINPUT;\
-	${XA} -DKERNEL=61440 -R -c fsdev.a65 -o fsdev.o65 ;\
-	if [ $$? -ne 0 ]; then rm -f fsdev.o65; fi; )
+	${XA} -R -I../.. -I../../include -LOSA2KERNEL $< -o $@
 
 clean:
-	rm -f fsdev.o65 fsiec.o65
+	rm -f *.o65
+	make -C fsibm clean
+
 

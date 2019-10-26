@@ -36,7 +36,8 @@ l1        =$0
           sta l1
 l2        ldx l1
           lda #DC_EXIT
-          jsr DEVCMD
+;          jsr DEVCMD
+;.byt 2
           inc l1
           lda l1
           cmp #16
@@ -49,7 +50,7 @@ l2        ldx l1
 
           sei			; remap MMU pages 8-15 with values from 
           ldx #7		; 4 to b
-l3        lda $eff1,x
+l3        lda $eff2,x
           sta $eff8,x
           dex
           bpl l3
@@ -66,6 +67,10 @@ l5        lda data,x
           sta $1000,x
           inx
           bne l5
+
+	lda SYSPORT
+	and #$ff-SYS_LED
+	sta SYSPORT
           
           jmp $1000		; and jump there
           

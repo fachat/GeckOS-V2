@@ -1131,7 +1131,7 @@ PC_BUF= PCBUF
           ldx #SEND_FM
           ldy dirlen
           jsr SEND
-          bcs dirf
+          bcs dire
           sec
           jsr RECEIVE
 #if 0 /*ndef NOMMU*/

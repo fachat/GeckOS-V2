@@ -1,0 +1,68 @@
+
+/*
+ * Print routines for Generic SCSI driver
+ *
+ * cout	
+ * crlfout
+ * txtout
+ * hexout
+ *
+ * $Log$
+ */
+
+#ifdef PRINT
+
+	.(
+
+/*************************************************************************
+ * Generic Subroutines
+ */
+
+	.zero
+p	.word 0
+	.text
+
+
+&crlfout
+	lda #13
+	jsr cout
+	lda #10
+
+&cout	jmp $ffd2
+
+&txtout	sta p
+	sty p+1
+	ldy #<-1
+to1	iny
+	clc
+	lda (p),y
+	beq toend
+	jsr cout
+	bcc to1
+toend	rts
+
+&hexout	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibout
+	pla
+	and #$0f
+nibout	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc ho
+	adc #"A"-"9"-1-1
+ho	jmp cout
+
+	.bss
+
+	.text
+	.)
+
+#endif	/* PRINT */
+
+
+
+

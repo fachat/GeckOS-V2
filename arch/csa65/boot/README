@@ -1,0 +1,5 @@
+
+When using the patched-up VICE xcsa emulator, use the commandline:
+
+    ~/vice/src/vice-0.12.0.16-csa-22/src/xcsa -kernal ./csaold -speed 200
+

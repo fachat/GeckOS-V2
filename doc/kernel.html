@@ -951,6 +951,12 @@ though...)
 #define   TC_EOL    $8b		put cursor to the end of line
 #define   TC_CLL    $8c		clear rest of line from cursor
 
+#define   TC_ECHO   $8d		switch on local (device) echo mode
+#define   TC_NOECHO $8e		device only sends, application has to echo
+
+#define   TC_CPOS   $8f         next two chars are row and column of new 
+                                cursor position
+
 </pre>
 FORK, SETIRQ and TRESET can <strong>NO MORE</strong> be called via a SEND 
 system call, when 

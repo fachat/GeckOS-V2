@@ -476,6 +476,13 @@ schedThread .byt 0	/* ??? current scheduled thread number */
 	  jsr anextthread
 	  bcc ok
 &&pstart			; the scheduler is started here
+	  ldy #<-1
+	  tya
+psi	  iny
+	  sta Xenv,y
+	  cpy #ANZXENV-1
+	  bcc psi
+	
 	  lda #0
 #ifdef NEED_SLOCK
 	  sta lockfl
@@ -1287,8 +1294,8 @@ te1       cpx #$fe-ANZXENV
           lda Xenv-($fe-ANZXENV),x
           tax
           pla
-te2       clc	;cpx #$fe-ANZXENV
-          rts            ; c=1 on error
+          cpx #$fe-ANZXENV
+te2       rts            ; c=1 on error
           .)
 
 &tdup     .(

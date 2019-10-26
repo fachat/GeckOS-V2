@@ -1,0 +1,372 @@
+
+/*
+ * PC-style partition scanner for Generic SCSI interface
+ *
+ *
+ * scanpart	<- a/y address of buffer
+ *		   x = length of buffer in 256-byte blocks, >=2
+ *		-> a/y address of partition table
+ *		   also available in "parts"
+ *		   x = max. number of entries in partition table
+ *
+ *		scandev calls initscsi
+ *
+ * $Log$
+ *
+ */
+
+
+#define	PE_ID		4
+#define	PE_START	8
+#define	PE_LEN		12
+
+#define	NPART		12	/* maximum number of useable partitions */
+
+#define	LASTPART	(NPART*PT_SLEN)
+
+#ifdef DEBUG
+#define	PRINT
+#endif
+
+#ifdef PRINT
+#define	log(a)	ldx #a:jsr slogout
+#define	hout(a)	lda a:jsr hexout
+#else
+#define	log(a)
+#define	hout(a)
+#endif
+
+#ifdef DEBUG
+#define	lc(a)	php:pha:lda #a:jsr cout:pla:plp
+#else
+#define	lc(a)
+#endif
+
+	.(
+
+/***************************************************************************
+ * Scan SCSI bus for partitions
+ */
+
+&scanpart
+	sta pp
+	sty pp+1
+	stx blen
+
+	; clear partition table (all ID becomes 0)
+	lda #0
+	sta apart
+cp	tax
+	lda #0
+	sta parts,x
+	txa
+	clc
+	adc #PT_SLEN
+	sec
+	cmp #LASTPART
+	bne cp
+
+	lda pp
+	ldy pp+1
+	jsr initscsi
+	stx ndev
+
+	log(0)
+
+	ldx #0
+	stx adev
+
+sl1	ldx adev
+	cpx ndev
+	bne scandev
+	clc
+sle	ldx ndev
+	lda #<parts
+	ldy #>parts
+	rts
+
+next2	jmp next
+
+scandev	lda devtype,x
+	cmp #<-1
+	beq next2
+
+	cmp #0		; direct access
+	bne next2
+
+	log(1)
+	hout(adev)
+	log(2)
+
+	lda #<devpar
+	ldy #>devpar
+	ldx adev
+	jsr getsize
+	bcs next2
+
+	lda devpar+4
+	ora devpar+5
+	bne next2	; byte/block >= 64k
+	lda devpar+6
+	cmp blen
+	bcc lenok
+	bne next2
+	lda devpar+7
+	bne next2
+lenok
+	ldy #3
+	lda #0
+sl2	sta offset,y
+	dey
+	bpl sl2
+
+slread	ldy #0
+	sty mbrfl
+	ldx #3
+slr1	lda offset,y
+	sta lba,x
+	ora mbrfl
+	sta mbrfl
+	iny
+	dex
+	bpl slr1
+
+	ldy #0
+	sty nsec
+	iny
+	sty nsec+1
+
+	lda pp
+	ldy pp+1
+	ldx adev
+	jsr readblock
+	bcs next
+
+	lda pp
+	clc
+	adc #$be
+	sta dp
+	lda pp+1
+	adc #1
+	sta dp+1
+eloop
+	jsr getentry
+	beq nextx
+
+	cmp #PI_EXTENDED
+	beq extended
+
+	pha
+	jsr compnext
+	pla
+
+	cmp #PI_FAT16
+	beq getit
+	cmp #PI_FAT16L
+	beq getit
+nextx
+	lda #0
+	sta parts+PT_ID,x
+	jmp nexte
+
+extended
+/* This has been used but the first block entry is not relieable!
+	ldy #PE_START
+	clc
+	php
+ex1	plp
+	lda (dp),y
+	adc offset-PE_START,y
+	sta offset-PE_START,y
+	php
+	iny
+	cpy #PE_START+4
+	bcc ex1
+	plp
+*/
+	ldy #0
+ex1	lda nextlba,y
+	sta offset,y
+	iny
+	cpy #4
+	bcc ex1
+	jmp slread
+
+nexte	lda dp
+	clc
+	adc #16
+	sta dp
+	bcs next
+	adc #16
+	bcc eloop
+
+next	inc adev
+	jmp sl1
+
+getit 	
+	lda apart
+	clc
+	adc #PT_SLEN
+	sta apart
+	cmp #LASTPART
+	beq pmemerr
+	jmp nexte
+pmemerr	log(7)
+	sec
+	jmp sle
+	
+getentry
+	ldy #PE_ID
+	lda (dp),y
+	ldx apart
+	sta parts+PT_ID,x
+	lda adev
+	sta parts+PT_DEV,x
+	lda #0
+	sta parts+PT_FLAG,x
+	ldy #PE_START
+	clc
+	php
+gi1	plp
+	lda (dp),y
+	adc offset-PE_START,y
+	sta parts+PT_START,x
+	php
+	iny
+	inx
+	cpy #PE_START+4
+	bcc gi1
+	plp
+gi2	lda (dp),y
+	sta parts+PT_START,x
+	inx
+	iny
+	cpy #PE_LEN+4
+	bcc gi2
+
+	ldy #7
+	ldx apart
+gi3	lda devpar,y
+	sta parts+PT_BSIZE,x
+	inx
+	dey
+	cpy #4
+	bcs gi3
+
+	ldx apart
+	lda parts+PT_ID,x
+
+#ifdef PRINT
+	beq noprint
+	pha
+	jsr printpt
+	pla
+noprint
+#endif
+	rts
+
+compnext	; compute lba of next partition block
+	ldy #$fc
+	ldx apart
+	clc
+cn1	lda parts+PT_START,x
+	adc parts+PT_LEN,x
+	sta nextlba-$fc,y
+	inx
+	iny
+	bne cn1
+	rts
+
+/***************************************************************************
+ * print stuff
+ */
+
+#ifdef PRINT
+
+printpt	
+	log(3)
+	ldx apart
+	lda parts+PT_ID,x
+	jsr hexout
+	log(4)
+	ldx apart
+	lda parts+PT_DEV,x
+	jsr hexout
+	ldx apart
+	lda parts+PT_ID,x
+	cmp #PI_EXTENDED
+	beq endpr
+	log(5)
+	ldy #4
+	lda apart
+	clc 
+	adc #PT_START+3
+	tax
+pt1	lda parts,x
+	jsr hexout
+	dex
+	dey
+	bne pt1
+	log(6)
+	ldy #4
+	lda apart
+	clc
+	adc #PT_LEN+3
+	tax
+pt2	lda parts,x
+	jsr hexout
+	dex
+	dey
+	bne pt2
+	log(2)
+	rts
+endpr	log(8)
+	rts
+
+slogout	txa
+	asl
+	tax
+	lda tadr+1,x
+	tay
+	lda tadr,x
+	jmp txtout
+
+tadr	.word slog0, slog1, slog2, slog3, slog4, slog5, slog6, slog7, slog8
+
+slog0	.asc 13,10,"Scanning for PC-type partitions",13,10,0
+slog1	.asc 13,10,"Found Direct Access Device ",0
+slog2	.asc 13,10,0
+slog3	.asc "Partition Type ",0
+slog4	.asc ", Device ",0
+slog5	.asc ", First ",0
+slog6	.asc ", Len ",0
+slog7	.asc "No more partition table entries!",13,10,0
+slog8	.asc " (extended)",13,10,0
+
+#endif
+
+/***************************************************************************
+ * data
+ */
+
+	.zero
+&pp	.word 0
+
+	.bss
+
+blen	.byt 0
+&apart	.byt 0
+ndev	.byt 0
+adev	.byt 0
+mbrfl	.byt 0
+
+offset	.dsb 4
+nextlba	.dsb 4
+
+devpar	.dsb 8			/* 8 bytes for GET_CPACITY */
+
+&parts	.dsb NPART * PT_SLEN	/* partition table */
+
+	.text
+	.)
+

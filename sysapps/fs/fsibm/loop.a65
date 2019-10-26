@@ -1,0 +1,183 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+
+PRG       .( 
+	.data
+owntask   .byt 0
+client    .byt 0
+lflag     .byt 0
+	.text
+
+          stx owntask
+          sec
+
+#ifdef FSIBM_AS_INIT
+	  clc
+	  ldx #SEM_SENDBUF
+	  jsr PSEM
+#endif
+
+;.byt 2
+lda #"A":jsr SEROUT
+
+          ldx #SEM_IBMDISK
+          jsr PSEM
+          bcs rel_term
+
+          jsr init
+;jmp pe
+          bcs pe
+
+lda #"I":jsr SEROUT
+          lda #ANZDRV
+          sta PCBUF+FM_REG_DRVS
+          lda owntask
+          sta PCBUF+FM_REG_ENV
+          lda #FM_REG
+          ldx #SEND_FM
+          ldy #2
+          jsr SEND
+          bcc gloop
+pe        
+	  pha
+	  ldx #SEM_IBMDISK
+	  jsr VSEM
+	  pla
+rel_term
+lda #"T":jsr SEROUT
+	  ldx #SEM_SENDBUF
+	  jsr VSEM
+;rts
+          jmp TERM
+
+gloop
+	  php
+	  ldx #SEM_SENDBUF
+	  jsr VSEM
+	  plp
+
+lda #"L":jsr SEROUT
+
+loop      jsr YIELD
+          clc
+          jsr RECEIVE
+          bcs l1
+l2        jsr rxmess
+
+l1        jsr DLOOP
+          sta lflag      ; Anzahl drives mit Motor on 
+          
+          jsr fileloop 
+          ora lflag      ; Anzahl offener files
+
+          bne loop       ; sind noch dateien offen dann bei RECEIVE no wait
+
+          sec            
+          jsr RECEIVE    ; ansonsten warten bis command oder open 
+          bcs l1
+          pha
+          stx client
+          jsr DLOOP      ; vor ausfÅhrung auf Disk-Change testen
+          ldx client
+          pla
+          jmp l2
+          
+rxmess    .(
+          stx client
+	pha
+	ldx PCBUF+FS_OPEN_DRV
+	jsr setdzei
+	pla
+          jsr rxjmp
+          bcs err
+          lda #E_OK
+err       sta PCBUF+FS_X_ERR
+#ifdef DEBUGFS
+     pha
+     lda #"E"
+     jsr SEROUT
+     pla
+     pha
+     jsr HEXOUT
+     jsr CRLFOUT
+     pla
+#endif
+          ldx owntask
+          stx PCBUF+FS_X_ENV
+          ldy file
+          sty PCBUF+FS_X_FIL
+          ldy #FS_X_SLEN
+          ldx client
+          jmp SEND
+
+notimp    lda #E_NOTIMP
+          sec
+          rts
+
+rxjmp     ldy #0
+rjl       cmp rcmd,y
+          beq rjok
+          iny
+          cpy #9
+          bcc rjl
+          bcs notimp
+
+rjok      tya
+          asl
+          tay
+          lda rtab+1,y
+          pha
+          lda rtab,y
+          pha
+          rts
+
+rcmd      .byt FS_OPEN_RD,FS_OPEN_WR,FS_OPEN_DR,FS_OPEN_OW
+          .byt FS_RENAME,FS_DELETE,FS_FORMAT,FS_MKDIR,FS_RMDIR
+          
+rtab      .word openrd-1,openwr-1,opendr-1,openow-1
+          .word rename-1,delete-1,format-1
+          .word mkdir-1 ,rmdir-1
+          .)
+          .)
+                                                                     
+
+init      .(
+          jsr DINIT
+          bcs endini
+          jsr INBUF
+          bcs endini
+          ; jsr INIDPB
+          ; bcs endini
+          jsr INIFPB
+endini    rts
+          .)
+
+dchanged  .(        ; xr = Drive
+          ; jsr INVDPB
+          jsr IDBUF           ; gibt auch Fehler !
+          jsr IDFIL
+          rts
+          .)
+

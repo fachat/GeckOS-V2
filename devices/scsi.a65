@@ -1,0 +1,304 @@
+
+
+#ifdef DEBUGFS
+#define	PRINT
+#define	PRINT2
+#echo "SCSI PRINT MODE"
+#endif
+#undef	DEBUG
+
+/*
+ * Sample SCSI + PC-style partition manager program
+ */
+
+;--------------------------------------------------------------
+; CS/A65 specific code
+
+#ifndef SCSIBASE
+#define	SCSIBASE	$e870
+#endif
+
+
+;--------------------------------------------------------------
+
+#include "devices/scsi/part.i65"
+
+	.(
+	.data
+prwpar	.dsb PRW_SLEN
+	.text
+
+INVDPB    .(        ; x ist Drive
+          txa
+          jsr setdzei
+          ldy #D_ST
+          lda #DS_INV
+          sta (dzei),y
+          clc
+          rts
+          .)
+
+&DINIT	.(
+;.byt 2
+  	  clc     ; oh, what shall we do....
+          ldx #0
+il        stx prwpar
+          jsr INVDPB
+          ldx prwpar
+          inx
+          cpx #ANZDRV
+          bcc il
+          clc
+
+	lda #<buffer
+	ldy #>buffer 
+	ldx #>BUFLEN
+	jsr scanpart
+	rts
+	.)
+
+&GETDPB	.(
+        jsr boot2dpb
+        ldy #D_ST
+        lda #DS_OK
+        sta (dzei),y
+        ldy #D_BFLAG
+        lda #1          ; 0 -> 12 bit FAT, 1 -> 16 bit FAT
+        sta (dzei),y
+        clc
+        rts
+illpar  lda #E_ILLPAR
+        sec
+        rts
+	.)
+
+&RWSEC	.(
+	php
+	sta dp
+	sty dp+1
+
+#ifdef DEBUGFS
+.(
+lda #":"
+jsr SEROUT
+lda dp+1
+jsr HEXOUT
+lda dp
+jsr HEXOUT
+lda #"."
+jsr SEROUT
+ldy #0
+ll lda (dp),y
+jsr HEXOUT
+iny
+cpy #RW_SLEN
+bcc ll
+jsr CRLFOUT
+.)
+#endif
+	ldy #RW_DRV
+	lda (dp),y
+	sta prwpar+PRW_PART
+	lda #1
+	sta prwpar+PRW_NSEC
+
+	ldy #RW_SECTOR
+	lda (dp),y
+	sta prwpar+PRW_SECTOR
+	iny
+	lda (dp),y
+	sta prwpar+PRW_SECTOR+1
+	iny
+	lda (dp),y
+	sta prwpar+PRW_SECTOR+2	
+	iny
+	lda (dp),y
+	sta prwpar+PRW_SECTOR+3	
+
+	ldy #RW_ADR
+	lda (dp),y
+	sta prwpar+PRW_BUF
+	iny
+	lda (dp),y
+	sta prwpar+PRW_BUF+1
+	
+	lda #<prwpar
+	ldy #>prwpar
+
+	plp
+	bcs pwr
+
+	jmp pread
+pwr
+	jmp pwrite
+	.)
+
+&DLOOP	rts
+
+&DFORMAT .(
+;	.data
+; dfa	.byt 0,0,0,0
+;	.text
+;dfa	=ar1
+
+	ldy drive
+	jsr CLBUF
+
+	ldy drive
+	lda #0
+	sta ar2
+	sta ar2+1
+	sta ar2+2
+	sta ar2+3
+	jsr RDBUF
+
+	ldx drive
+	jsr setpadr
+	sta dp
+	stx dp+1
+
+	ldy #D_ST
+	lda #DS_INV
+	sta (dzei),y
+
+	ldy #BS_SLEN
+df1	lda bootsector,y
+	sta (dp),y
+	dey
+	bpl df1
+
+	/* modify boot sector to fit partition size */
+	lda drive
+	asl
+	asl
+	asl
+	asl
+	tax
+
+	; BS_BPS	; bytes per sector
+	ldy #BS_BPS
+	lda parts+PT_BSIZE,x
+	sta (dp),y
+	iny
+	lda parts+PT_BSIZE+1,x
+	sta (dp),y
+
+	/* TODO: this is buggy - old bootsector only allows 2-byte # of sec 
+	 * but we misuse the MEDIA byte as third byte of the sector # */
+	; BS_SEC	; total number of sectors
+	ldy #BS_SEC
+	lda parts+PT_LEN,x
+	sta (dp),y
+	sta ar1-BS_SEC,y
+	iny
+	lda parts+PT_LEN+1,x
+	sta (dp),y
+	sta ar1-BS_SEC,y
+	iny
+	lda parts+PT_LEN+2,x
+	sta (dp),y
+	sta ar1-BS_SEC,y
+	iny
+	lda parts+PT_LEN+3,x
+	; sta (dp),y
+	sta ar1-BS_SEC,y
+
+	; BS_SPC	; 1 byte sectors per cluster
+	ldy #BS_SPC
+	lda #1
+	sta (dp),y
+spc1
+	lda ar1+2
+	ora ar1+3
+	beq spf
+
+	lsr ar1+3
+	ror ar1+2
+	ror ar1+1
+	ror ar1
+
+	lda (dp),y
+	asl
+	sta (dp),y
+	jmp spc1
+spf	
+#ifdef DEBUGFS
+lda #"+":jsr SEROUT
+ldy #0:sss1 lda ar1,y:jsr HEXOUT:iny:cpy #4:bcc sss1
+#endif
+	; BS_SPF	; sectors per FAT = (BS_SEC/BS_SPC * BS_BPS/2)
+	ldy #BS_BPS+1
+	lda (dp),y
+	lsr
+	tax
+	dey
+	lda (dp),y
+	ror
+	jsr div32
+	ldy #BS_SPF
+	clc
+	adc #1
+	sta (dp),y
+	iny
+	txa
+	adc #0
+	sta (dp),y
+#ifdef DEBUGFS
+dey:lda (dp),y:jsr HEXOUT:iny:lda (dp),y:jsr HEXOUT
+jsr CRLFOUT	
+#endif
+	; BS_SPT	; sectors per track ??? -> not needed
+
+	; BS_SIDE	; sides ??? -> not needed
+#ifdef DEBUGFS
+lda "*":jsr SEROUT
+ldy #0:ffoo1 lda (dp),y:jsr HEXOUT:lda #" ":jsr SEROUT:iny
+cpy #BS_SLEN:bcc ffoo1:jsr CRLFOUT
+#endif
+/*
+	txa
+	clc
+	adc #3
+	tay
+lda #"x":jsr SEROUT
+	ldx #3
+df2 	lda parts+PT_LEN,y
+	sta ar1,x
+jsr HEXOUT
+	dey
+	dex
+	bpl df2
+*/	
+	ldy drive
+	jsr WABUF
+
+	ldy drive
+	jsr FRBUF
+
+	clc
+	rts
+
+bootsector     ; is modified after having been copied to the buffer.
+          .byt $eb,$34,$90,"OS/A 2.1"
+          .word $200          ; BPS
+          .byt 2              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 720           ; SECs
+          .byt 248            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 1             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+	.)
+
+#include "devices/scsi/pcpart.a65"
+#include "devices/scsi/paccess.a65"
+/*#include "devices/scsi/csascsi1.a65"*/		/* needs SCSIBASE */
+#include "devices/scsi/ramdscsi.a65"
+#include "devices/scsi/printcsa.a65"
+
+	.)
+

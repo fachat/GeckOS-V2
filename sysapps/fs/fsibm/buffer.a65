@@ -1,0 +1,519 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ *
+ * FIXME: this is horribly complicated
+ *
+ * Buffer handling
+ * Buffer allocation is done elsewhere
+ *
+ * Exports:
+ *  CLBUF	Write buffer if dirty, set it to 0 and free it
+ *  DWBUF	Write buffer=YR back if buffer is dirty (Write Dirty)
+ *  IDBUF	Invalidate all buffers with drive=XR, without writing
+ *  RDBUF	Read sector ar2(24 bit) on drive `drive` into buffer=YR,
+ *    		saving dirty buffer if necessary
+ *  W1BUF	Flush buffer=YR to sector ar2, invalidate/free it on write error
+ *  WABUF	Write buffer=YR back (Write Always)
+ *  W2BUF	Flush buffer=YR back, and set buffer to sector ar2.
+ *		Set buffer to dirty (no further disk activity)
+ *		(handle FAT blocks as well)
+ *  INBUF	Set all buffers to free (Init)
+ *  FRBUF	Free buffer=YR (no disk activity)
+ *  MDBUF	Set buffer=YR to dirty (no disk activity)
+ *
+ * Imports (calls):
+ *  setpadr	XR=buffer-# => AC/XR=buffer address
+ *  drive	current drive ...
+ *  dzei	... and current Drive Parameter Block (DPB) address 
+ *  RWSEC	Drive routine for reading/writing blocks
+ *  ar1
+ *  div
+ *
+ */
+
+          .(
+	.data
+p         .byt 0
+
+abspar    .dsb ABS_SLEN
+
+rwpar     .dsb RW_SLEN
+
+#if B_SLEN=8		/* to much code depends on that */
+bpb       .dsb B_SLEN*ANZBUF
+#endif
+
+	.zero
+bzei      .word 0
+	.text
+
+&CLBUF    .(
+          sty p
+          jsr DWBUF
+          bcc clr
+          cmp #E_NOTIMP
+          beq clr
+          sec
+          rts
+clr       lda p
+          asl
+          asl
+          asl
+          tay
+          lda #BD_FRE
+          sta bpb+B_DIRT,y          
+          ldx p
+          jsr setpadr
+          sta bzei
+          stx bzei+1
+          lda #0
+          tay
+          ldx #BUFLEN/256
+ccl       sta (bzei),y
+          iny
+          bne ccl
+          inc bzei+1
+          dex
+          bne ccl
+          ldx p
+          jsr setpadr
+          clc
+          rts
+          .)
+
+&IDBUF    .(        ; free't alle Puffer mit Drive = xr
+	.data
+errfl     .byt 0
+	.text
+
+          ldy #0
+          sty errfl
+idl       sty p
+          tya
+          asl
+          asl
+          asl
+          tay
+          txa
+          cmp bpb+B_DRV,y
+          bne next
+          lda bpb+B_DIRT,y
+          bmi next
+          beq fre
+          inc errfl
+          lda #BD_IFRE
+          .byt $2c
+fre       lda #BD_FRE
+          sta bpb+B_DIRT,y
+next      ldy p
+          iny
+          cpy #ANZBUF
+          bcc idl
+          lda errfl
+          bne err
+          lda #E_OK
+          .byt $2c
+err       lda #E_FINTERNAL
+          cmp #1
+          rts
+          .)
+          
+&RDBUF    .(
+          sty p
+          cpy #ANZBUF
+          bcc l1
+lserr     
+#ifdef DEBUGFS
+lda #"x":jsr SEROUT
+#endif
+	  lda #E_ILLPAR
+          sec
+          rts
+l1        lda ar2
+	  sta abspar+ABS_SEC
+	  lda ar2+1
+          sta abspar+ABS_SEC+1
+	  lda ar2+2
+          sta abspar+ABS_SEC+2
+	  lda ar2+3
+          sta abspar+ABS_SEC+3
+
+#if 0 /*def DEBUGFS*/
+.(
+lda #"r"
+jsr SEROUT
+lda abspar+ABS_SEC+1
+jsr HEXOUT
+lda abspar+ABS_SEC
+jsr HEXOUT
+.)
+#endif
+          lda drive
+          sta abspar+ABS_DRV
+          tya
+          asl
+          asl
+          asl
+          tay
+          lda bpb+B_DIRT,y
+          bmi lsx             ; falls frei sofort laden
+
+          lda abspar+ABS_SEC
+          cmp bpb+B_SECTOR,y
+          bne lsx1
+          lda abspar+ABS_SEC+1
+          cmp bpb+B_SECTOR+1,y
+          bne lsx1
+	  lda abspar+ABS_SEC+2
+	  cmp bpb+B_SECTOR+2,y
+	  bne lsx1
+	  lda abspar+ABS_SEC+3
+	  cmp bpb+B_SECTOR+3,y
+	  bne lsx1
+          lda abspar+ABS_DRV
+          cmp bpb+B_DRV,y
+          beq lsend           ; falls alles gleich ende
+          
+lsx1      lda bpb+B_DIRT,y
+          beq lsx             ; falls nicht dirty laden
+          ldy p
+          jsr DWBUF           ; sonst Puffer speichern
+          bcs lerr 
+          lda p
+          asl
+          asl
+          asl
+          tay
+          
+lsx       lda #BD_FRE
+          sta bpb+B_DIRT,y
+          lda abspar+ABS_DRV
+          sta bpb+B_DRV,y
+          sta rwpar+RW_DRV
+          lda abspar+ABS_SEC+3
+          sta bpb+B_SECTOR+3,y
+	  sta rwpar+RW_SECTOR+3
+          lda abspar+ABS_SEC+2
+          sta bpb+B_SECTOR+2,y
+	  sta rwpar+RW_SECTOR+2
+          lda abspar+ABS_SEC+1
+          sta bpb+B_SECTOR+1,y
+	  sta rwpar+RW_SECTOR+1
+          lda abspar+ABS_SEC
+          sta bpb+B_SECTOR,y
+	  sta rwpar+RW_SECTOR
+          ;jsr sec2rw
+          ;bcs lserr
+          ldx p
+          jsr setpadr
+          sta rwpar+RW_ADR
+          stx rwpar+RW_ADR+1
+          lda #<rwpar
+          ldy #>rwpar
+          clc                 ; load
+          jsr RWSEC
+          bcs lerr
+          lda p
+          asl
+          asl
+          asl
+          tay
+          lda #BD_OK
+          sta bpb+B_DIRT,y
+          lda #E_OK
+lsend     clc
+lerr      rts
+          .)
+          
+&W1BUF    .(
+          sty p
+          cpy #ANZBUF
+          bcc l1
+lserr     lda #E_ILLPAR
+          sec
+          rts
+l1        
+          tya
+          asl
+          asl
+          asl
+          tay
+          lda #BD_FRE
+          sta bpb+B_DIRT,y
+          lda drive
+          sta bpb+B_DRV,y
+          sta rwpar+RW_DRV
+	  lda ar2
+          sta bpb+B_SECTOR,y
+	  sta rwpar+RW_SECTOR
+	  lda ar2+1
+          sta bpb+B_SECTOR+1,y
+	  sta rwpar+RW_SECTOR+1
+	  lda ar2+2
+          sta bpb+B_SECTOR+2,y
+	  sta rwpar+RW_SECTOR+2
+	  lda ar2+3
+          sta bpb+B_SECTOR+3,y
+	  sta rwpar+RW_SECTOR+3
+          ;jsr sec2rw
+          ;bcs lserr
+          ldx p
+          jsr setpadr
+          sta rwpar+RW_ADR
+          stx rwpar+RW_ADR+1
+          lda #<rwpar
+          ldy #>rwpar
+          sec            ; write
+          jsr RWSEC
+          bcs lerr
+          lda p
+          asl
+          asl
+          asl
+          tay
+          lda #BD_OK
+          sta bpb+B_DIRT,y
+          lda #E_OK
+          clc
+lerr      rts
+          .)
+
+&WABUF    .(
+	.data
+sector    .word 0,0
+xfl       .byt 0
+	.text
+
+          ldx #0
+          sty p                    ; write always (auch falls nur valid)
+          cpy #ANZBUF
+          bcs serr2x
+          tya
+          asl
+          asl
+          asl
+          tay
+          lda bpb+B_DIRT,y
+          bmi serr1x                ; falls nicht belegt dann ende
+          jmp l1
+          
+&&DWBUF   ldx #0
+          .byt $2c
+&DxBUF    ldx #1
+          sty p
+          cpy #ANZBUF
+          bcs serr2x
+          tya
+          asl
+          asl
+          asl
+          tay
+          lda bpb+B_DIRT,y         ; falls frei dann fehler
+serr1x    bpl xx
+          jmp serr1
+xx        bne l1
+	  jmp serr0                ; falls valid dann nicht schreiben
+          
+l1        stx xfl
+          lda #BD_FRE
+          sta bpb+B_DIRT,y
+          lda bpb+B_DRV,y          ; hier ist dirty
+          sta rwpar+RW_DRV
+          ldx p
+          jsr setpadr
+          sta rwpar+RW_ADR
+          stx rwpar+RW_ADR+1
+          lda bpb+B_SECTOR,y
+	  sta sector
+          lda bpb+B_SECTOR+1,y
+	  sta sector+1
+          lda bpb+B_SECTOR+2,y
+	  sta sector+2
+          lda bpb+B_SECTOR+3,y
+	  sta sector+3
+wrloop    lda sector
+	  sta rwpar+RW_SECTOR
+	  lda sector+1
+	  sta rwpar+RW_SECTOR+1
+	  lda sector+2
+	  sta rwpar+RW_SECTOR+2
+	  lda sector+3
+	  sta rwpar+RW_SECTOR+3
+	  ; sta sector
+          ; stx sector+1
+          ;jsr sec2rw
+	  clc
+serr2x    bcs serr2
+          sec
+          lda #<rwpar
+          ldy #>rwpar
+          jsr RWSEC
+          bcs serr
+          
+          lda sector
+          ora sector+1
+	  ora sector+2
+	  ora sector+3
+          beq wre
+          lda xfl
+          bne wre
+          
+          ldy #D_SPF          ; zu Sektor Sekt/FAT addieren 
+          lda (dzei),y
+          clc
+          adc sector
+          sta sector
+          iny
+          lda (dzei),y
+          adc sector+1
+          sta sector+1
+          tax
+	  bcc foo1
+	  inc sector+2
+	  bne foo1
+	  inc sector+3
+foo1
+	  lda sector+2	      ; compare sector with start of main dir
+	  ora sector+3	      ; if less, write again.
+	  bne wre
+
+	  lda sector+1
+          ldy #D_STD+1        ; mit Start Main-Dir vergleichen
+          cmp (dzei),y        ; grˆﬂer dann ende
+          bcc wrl
+          bne wre
+          dey
+          lda sector
+          cmp (dzei),y
+          bcs wre
+wrl    
+          jmp wrloop          ; sonst nochmal schreiben 
+          
+wre       lda p
+          asl
+          asl
+          asl
+          tay
+          lda #BD_OK
+          sta bpb+B_DIRT,y
+serr0     lda #E_OK
+          clc
+          rts
+serr1     lda #E_NOTIMP
+          .byt $2c
+serr2     lda #E_ILLPAR
+serr      sec
+          rts
+          .)
+
+&W2BUF    .(
+          sty p
+	  lda ar2
+          sta abspar+ABS_SEC
+	  lda ar2+1
+	  sta abspar+ABS_SEC+1
+	  lda ar2+2
+	  sta abspar+ABS_SEC+2
+	  lda ar2+3
+	  sta abspar+ABS_SEC+3
+          cpy #ANZBUF
+          bcs werr
+          tya
+          asl
+          asl
+          asl
+          tay
+          lda bpb+B_DIRT,y
+          bmi w2              ; Daten ungÅltig
+          beq w2              ; Daten nicht dirty
+          ldy p
+          jsr DxBUF        
+          bcs err
+         
+w2        lda p
+          asl
+          asl
+          asl
+          tay
+          lda drive
+          sta bpb+B_DRV,y
+          lda abspar+ABS_SEC+3 
+          sta bpb+B_SECTOR+3,y
+          lda abspar+ABS_SEC+2 
+          sta bpb+B_SECTOR+2,y
+          lda abspar+ABS_SEC+1 
+          sta bpb+B_SECTOR+1,y
+          lda abspar+ABS_SEC
+          sta bpb+B_SECTOR,y
+          lda #BD_DIRTY  ;lda #BD_OK
+          sta bpb+B_DIRT,y
+          clc
+err       rts
+werr      lda #E_ILLPAR
+          sec
+          rts
+          .)
+         
+&INBUF    .(
+          ldy #0
+inl       sty p
+          jsr FRBUF
+          ldy p
+          iny
+          cpy #ANZBUF
+          bcc inl
+          clc
+          rts
+          .)
+                    
+&FRBUF    ldx #BD_FRE
+          .byt $2c
+&MDBUF    ldx #BD_DIRTY
+          .(
+          cpy #ANZBUF
+          bcs cerr
+          tya
+          asl
+          asl
+          asl
+          tay
+          txa
+          sta bpb+B_DIRT,y
+          rts
+cerr      lda #E_ILLPAR
+          sec
+          rts
+          .)
+/*
+sec2rw	.(
+	sta rwpar+RW_TRCK
+	stx rwpar+RW_TRCK+1
+	clc
+	rts
+	.)
+*/
+          .)
+
+

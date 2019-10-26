@@ -89,15 +89,9 @@ start     .word ende            ; pointer to end of file in ROM
 
 #include  "fsdef.i65"
 
-#define	ANZDRV	4
-/*
-#undef ANZDRV          
-#define   ANZDRV    2
-#ifdef C64
-#undef ANZDRV
-#define	  ANZDRV    4
+#ifndef FSIEC_ANZDRV
+#define	FSIEC_ANZDRV	4
 #endif
-*/
 
 #define   MAXLEN    64
 
@@ -197,7 +191,7 @@ p1        jsr setzei
 	  ; ldx #SEM_SENDBUF
 	  ; jsr PSEM
 
-          lda #ANZDRV         ; 2 Drives
+          lda #FSIEC_ANZDRV         ; 2 Drives
           sta PCBUF+FM_REG_DRVS
           lda owntask
           sta PCBUF+FM_REG_ENV
@@ -1064,7 +1058,7 @@ getbuf    .(
           ;ldx #0
           ;.byt $2c
 &getfre  
-          ldx #ANZDRV
+          ldx #FSIEC_ANZDRV
           stx cnt
 gf1       jsr setzei
           ldx cnt
@@ -1139,7 +1133,7 @@ setfpar   ldy #F_DEV
           tax
           ldy #0
           lda actfil
-          cmp #ANZDRV
+          cmp #FSIEC_ANZDRV
           bcc sfp1
           clc
           adc #2
@@ -1454,7 +1448,7 @@ seterror .(
 #endif
 
 #undef FSIEC_DEVICE
-#undef ANZDRV
+#undef FSIEC_ANZDRV
 #undef MAXLEN 
 #undef MAXFILE 
 #undef BUFSIZE

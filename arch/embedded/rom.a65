@@ -39,14 +39,10 @@
 
 /* These are changeable ****************************************************/
 
-#define	RAMSIZE		$04	/* The size of the RAM we allow to be used.
-				   Size in pages (256 bytes). Must be below
-				   ROMSTART */
-
 #define	MIN_MEM		$04	/* minimum memory we need in system env. to 
 				   work ok, in pages */
 
-#undef	ROMSTART		/* where the ROM starts -> see below */
+#define	RAMEND		$20	/* where the ROM starts (in pages) */
 
 #define	MEMINIVAL	0	/* Clear memory to 0 on boot */
 
@@ -66,10 +62,12 @@
 
 #define	NO_SEND			/* no SEND/RECEIVE/XRECEIVE calls */
 
+#define	NO_DEVICE		/* no DEVICE handling */
+
 #define	EOK_SEPARATE		/* include kernel/end.a65 separately */
 
 #undef	EOK_NOFILL		/* don't fill ROM till $ffff */
-	
+
 /***************************************************************************/
 /* 			You should include your application files below    */
 /*									   */ 

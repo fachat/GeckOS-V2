@@ -1,0 +1,778 @@
+
+/*
+ * Generic SCSI driver for CS/A SCSI card
+ *
+ *  Modified SASI interface from german "Elektor Computing" magazin, 
+ *  special issue "Hardware", year unknown, probably around 1988-1989.
+ *
+ *  Modified hardware and rewritten driver by A. Fachat in may 1998.
+ *
+ * Hardware:
+ *
+ *   2 addresses, $e870-$e871
+ *
+ *   $e870 : read SCSI data bus; write data for SCSI data bus
+ *
+ *   $e871 : read status
+ *            bit 0:  I/O (SCSI in)
+ *                1:  -ACK (SCSI out, from latch)
+ *                2:  -RST (SCSI out, from latch)
+ *                3:  BSY (SCSI in)
+ *                4:  MSG (SCSI in)
+ *                5:  
+ *                6:  REQ (SCSI in)
+ *                7:  C/D (SCSI in)
+ *           write control
+ *            bit 0:  1 = -SEL active
+ *                1:  1 = activate ID bit for arbitration
+ *                2:  1 = -BSY active
+ *                3:  1 = -ATN active
+ *                4:
+ *                5:
+ *                6:
+ *                7:  1 = /RST active
+ *
+ *   $e872 : write any value -> pulse on /SEL (SCSI out)
+ *
+ * Software:
+ *
+ * This is a stateless SCSI driver with the following routines:
+ *
+ *   initscsi	<- a/y address of buffer (>=256 byte)
+ *		-> a/y address of (static) table with device type 
+ *		       of each device in it (0=disk, ff=none)
+ *		   also available as "devtype"
+ *		   x = number of table entries
+ *
+ *   inquiry	<- a/y address of buffer (>=256 byte)
+ *		   x = device SCSI ID
+ *		-> buffer contains SCSI return
+ *
+ *   getsize	<- a/y address of buffer (>=8 byte)
+ *		   x = device SCSI ID
+ *		-> buffer contains 4 byte # of blocks (hi-low format)
+ *		   and 4 byte byte/blocks (hi-lo)
+ *
+ *   readblock	<- a/y address of buffer (>= N * byte/block)
+ *		   x = SCSI device address
+ *		   lba (4 byte) LBA of first block to read (hi-lo)
+ *		   nsec (2 byte) # of blocks to read (consecutively)
+ *		-> buffer contains data
+ *   writeblock <- see readblock, buffer contains data
+ *
+ *
+ * $Log$
+ *
+ */
+
+#undef	DEBUG
+/* #undef	PRINT */
+/* #undef	STANDALONE */
+
+#ifndef SCSIBASE
+#define	SCSIBASE	$e870
+#endif
+
+#ifdef DEBUG
+#define	PRINT
+#endif
+
+#ifdef PRINT2
+#define	PRINT
+#endif
+
+/**********************************************************************
+ * system defines
+ */
+/*
+#define	DATA	$e870
+#define	CTRL	$e871
+#define	STATUS	$e871
+
+#define	DATA	$de70
+#define	CTRL	$de71
+#define	STATUS	$de71
+*/
+
+#define	DATA	0+SCSIBASE
+#define	CTRL	1+SCSIBASE
+#define	STATUS	1+SCSIBASE
+
+#define	S_IO	%00000001
+#define	S_ACK	%00000010
+#define	S_RST	%00000100
+#define	S_BSY	%00001000
+#define	S_MSG	%00010000
+#define	S_REQ	%01000000	/* check BVC/BVS */
+#define	S_CD	%10000000	/* check BMI/BPL */
+
+#define	S_PHASEMASK	S_IO+S_CD+S_MSG
+#define	S_DATAIN	S_IO
+#define	S_MSGIN		S_IO+S_CD+S_MSG
+#define	S_STATUS	S_IO+S_CD
+#define	S_COMMAND	S_CD
+
+#define	C_RST	%10000000
+#define	C_SEL	%00001000
+#define	C_BSY	%00000100
+#define	C_IDENT	%00000010
+#define	C_ATN	%00000001
+
+#define	MYID	7		/* hardcoded in controller */
+
+#ifdef PRINT
+#define	log(a)	ldx #a:jsr logout
+#define	hout(a) lda a:jsr hexout
+#define	crlf()	jsr crlfout
+#else
+#define	log(a)
+#define	hout(a)
+#define	crlf(a)
+#endif
+
+#ifdef DEBUG
+#define	lc(a)	php:pha:lda #a:jsr cout:pla:plp
+#else
+#define	lc(a)
+#endif
+
+/*************************************************************************
+ * load addr and Jump table
+ */
+
+#ifdef STANDALONE
+
+	lda #<buffer
+	ldy #>buffer
+	jsr initscsi
+
+	lda #0
+	sta task+2
+	sta task+3
+	sta task+4
+	sta task+5
+
+	sta task+7
+	lda #1
+	sta task+8
+	
+	lda #<buffer
+	ldy #>buffer
+	ldx #0
+	jsr readblock
+	rts
+
+#endif
+
+	.(
+
+/*************************************************************************
+ * globals
+ */
+
+	; powers of 2
+
+pow2	.byt 1, 2, 4, 8, 16, 32, 64, 128
+
+
+	.zero
+&dp	.word 0
+	.text
+
+/*************************************************************************
+ * SCSI Subroutines
+ */
+
+; reqwait waits for request from device
+
+reqwait	lda #S_BSY
+reqw	bit STATUS
+	beq reqend
+	bvc reqw
+reqend	rts
+
+; waitbsy waits until the device is busy
+
+waitbsy	lda STATUS
+	and #S_BSY
+	beq waitbsy
+	rts
+
+; waitrdy waits until the device is ready
+
+waitrdy	lda STATUS
+	and #S_BSY
+	bne waitrdy
+	rts
+
+; clrtask clears the command buffer
+
+clrtask	ldy #0
+	tya
+gs1	sta task,y
+	iny
+	cpy #10
+	bcc gs1
+	rts
+
+; selcntr selects the default controller
+
+selcntr	
+	lc("A")
+	sei
+	lda #0
+	sta CTRL
+	jsr waitrdy
+
+	ldy #MYID
+	lda pow2,y
+	sta DATA		; own ID
+	ldy #C_BSY | C_IDENT	; sets ID bit and disables normal bus driver
+	sty CTRL		; arbitrate
+	nop
+#if 0	/* if MYID != 7 */
+	cmp DATA	; TODO - must check against e.g. %00111111 for ID=5 
+	beq gotit
+lost	
+	lc("L")
+	lda #0
+	sta CTRL
+	sta DATA
+	jmp selcntr
+#endif
+gotit	
+	lc("S")
+	ldy #C_SEL | C_BSY | C_IDENT
+	sty CTRL
+	ldy actdev	; controller select code
+	ora pow2,y
+	sta DATA	; write to data latch
+	lda #C_SEL | C_BSY | C_ATN
+	sta CTRL
+	and #$ff-C_BSY
+	sta CTRL
+
+	; now wait for busy, but only a defined time
+	ldy #5
+sel1	lda STATUS
+	and #S_BSY
+	bne busyok
+	tya
+	jsr wait30us
+	tay
+	lc(".")
+	dey
+	bne sel1
+	lda #0
+	sta DATA
+	sta CTRL
+	sec
+	rts
+busyok	lc(":")
+	clc
+	lda #0
+	sta DATA
+	sta CTRL
+	rts
+
+error2	jmp error
+
+; taskout sends the command held in AC to the controller
+
+taskAout
+	ldy #10
+	.byt $2c
+taskout	ldy #6		; byte count
+	cmp #2		; check for illegal code
+	beq error
+	sta task	; store command in table
+	ldx #0
+t1	jsr reqwait	; wait for request from device
+	lda task,x
+	sta DATA
+	inx
+	dey
+	bne t1
+	rts
+
+; getstat retrieves the status byte and the null byte from the device
+; at the end of a command. AC is returned with a non-zero value if
+; an error has occured.
+
+getstat	jsr reqwait
+	lda STATUS
+	and #S_PHASEMASK
+	beq gsend
+#ifdef DEBUG
+	cmp #S_DATAIN
+	beq gsdatin
+	cmp #S_STATUS
+	beq gsst
+	cmp #S_MSGIN
+	beq gsmsgin
+	pha
+	lda #"*"
+	jsr cout
+	pla
+	jsr hexout
+	jmp gsget
+gsdatin	lda #"D"
+	.byt $2c
+gsst	lda #"S"
+	.byt $2c
+gsmsgin	lda #"M"
+	jsr cout
+gsget
+#endif
+;	jsr reqwait
+	lda DATA
+	tay
+#ifdef DEBUG
+	jsr hexout
+#endif
+	jmp getstat
+gsend	
+	cli
+#ifdef DEBUG
+	lda #"-"
+	jsr cout
+	jsr crlfout
+#endif
+	tya
+	and #2
+	cmp #2
+	rts
+
+error	cli
+	log(2)
+	pla
+	pla
+	sec
+	rts
+
+wait30us
+	ldy #$5d
+	.byt $2c
+wait75us
+	ldy #$ea
+	ldx #0
+w75a	dex
+	bne w75a
+	dey
+	bne w75a
+	rts
+
+/*************************************************************************
+ * Read a block from the device
+ * task+2/3/4/5 has block number (hi-lo), task+7/8 has number of blocks to rd
+ * a/y has memory address of buffer where to write block to
+ */
+
+&readblock
+	sta dp
+	sty dp+1
+	stx actdev
+
+#ifdef PRINT2
+	.(
+	log(10)
+	hout(actdev)
+	log(11)
+	ldy #0
+rdll	lda lba,y
+	jsr hexout
+	iny
+	cpy #4
+	bcc rdll
+	log(12)
+	hout(nsec)
+	hout(nsec+1)
+	log(13)
+	hout(dp+1)
+	hout(dp)
+	log(14)
+nopr2
+	.)
+#endif
+	lda #0
+	sta task+1
+	sta task+9
+
+	jsr selcntr
+	bcs selerr3
+	
+	lda #$28	; read extended (32 bit LBA)
+	jsr taskAout
+
+	ldy #0
+rdloop	jsr reqwait
+	bmi rddone
+	lda DATA
+	sta (dp),y
+	iny
+	bne rdloop
+	inc dp+1
+	jmp rdloop
+rddone	
+	jmp getstat
+
+selerr3	jmp selerr
+
+/*************************************************************************
+ * Read a block from the device
+ * task+2/3/4/5 has block number (hi-lo), task+7/8 has number of blocks to rd
+ * a/y has memory address of buffer where to write block to
+ */
+
+&writeblock
+	sta dp
+	sty dp+1
+	stx actdev
+
+#ifdef PRINT2
+	.(
+	log(15)
+	hout(actdev)
+	log(11)
+	ldy #0
+rdll	lda lba,y
+	jsr hexout
+	iny
+	cpy #4
+	bcc rdll
+	log(12)
+	hout(nsec)
+	hout(nsec+1)
+	log(13)
+	hout(dp+1)
+	hout(dp)
+	log(14)
+nopr2
+	.)
+#endif
+	lda #0
+	sta task+1
+	sta task+9
+
+	jsr selcntr
+	bcs selerr3
+	
+	lda #$2A	; write extended (32 bit LBA)
+	jsr taskAout
+
+	ldy #0
+wrloop	jsr reqwait
+	bmi wrdone
+	lda (dp),y
+	sta DATA
+	iny
+	bne wrloop
+	inc dp+1
+	jmp wrloop
+wrdone	jmp getstat
+
+/*************************************************************************
+ * Initialization (a/y = buffer)
+ */
+
+&initscsi
+	sta dp
+	sty dp+1
+
+	log(0)
+
+	sei
+
+	lda #C_RST	; send reset pulse
+	sta CTRL
+	jsr wait30us	; approx. 30us
+	lda #0
+	sta CTRL	; clear RST
+
+	lda #12		; wait approx. ? ms
+rd	jsr wait75us
+	sec
+	sbc #1
+	bne rd
+
+; scan SCSI bus for devices
+
+	jsr clrtask
+	lda #0
+	sta actdev	; start with first device
+iniloop
+	lda actdev
+	cmp #MYID
+	beq nodev
+
+	jsr selcntr
+	bcs iselerr
+	lda #0		; drive ready command
+	jsr taskout
+	jsr getstat
+	bcc iniok
+
+	log(1)
+	hout(actdev)
+	crlf()
+	jmp next
+
+iselerr	cli
+	log(4)
+	hout(actdev)
+	crlf()
+	jmp nodev
+
+iniok	log(3)
+	hout(actdev)
+	crlf()
+
+	lda dp
+	ldy dp+1
+	ldx actdev
+	jsr inquire
+#ifdef PRINT
+	pha
+	jsr loginquire
+	pla
+#endif
+	.byt $2c
+nodev	lda #$ff
+	cli
+	ldx actdev
+	sta devtype,x
+	
+#ifdef PRINT
+	cmp #5
+	beq print
+	cmp #0
+	bne next
+print	
+	lda dp
+	ldy dp+1
+	ldx actdev
+	jsr getsize
+	jsr printsize
+#endif
+next	
+	inc actdev
+	lda actdev
+	cmp #8
+	bcc iniloop
+
+	lda #<devtype
+	ldy #>devtype
+	ldx #8
+	clc
+	rts
+
+selerr	cli
+	log(4)
+	hout(actdev)
+	crlf()
+	sec
+	rts
+
+/*************************************************************************
+ * Inquire device status/info into buffer (addr=a/y)
+ */
+
+&inquire
+	sta dp
+	sty dp+1
+	stx actdev
+	lc("i")
+	jsr clrtask
+	jsr selcntr
+selerr2	bcs selerr
+	lda #<-1
+	sta task+4
+	lda #$12
+	jsr taskout
+
+	ldy #0
+inl	jsr reqwait
+	bmi indone
+	lda DATA
+	sta (dp),y
+	iny
+	bne inl
+indone	
+#ifdef DEBUG
+	lc("d")
+	tya
+	jsr hexout
+#endif
+	jsr getstat
+	bcc inrts
+	jmp error
+inrts	ldy #0
+	lda (dp),y	; 0 = disk, 1 = Tape, 5 = CDROM
+	rts
+
+
+/*************************************************************************
+ * Get Medium capacity, a/y = buffer
+ * returns 4 byte # of blocks (hi-low format) + 4 byte byte/block in 
+ * buffer
+ */
+
+&getsize
+	sta dp
+	sty dp+1
+	stx actdev
+	jsr clrtask
+	jsr selcntr
+	bcs selerr2
+	lda #$25
+	jsr taskAout
+	ldy #0
+gsl	jsr reqwait
+	bmi gsdone
+	lda DATA
+	sta (dp),y
+	iny
+	bne gsl
+gsdone	jsr getstat
+	bcc gsrts
+	jmp error
+gsrts	rts
+
+/*************************************************************************
+ * Print data subroutines
+ *************************************************************************/
+
+#ifdef PRINT
+
+/*************************************************************************
+ * Print inquiry data
+ */
+
+loginquire
+	ldy #8
+li1	lda (dp),y
+	jsr cout
+	iny
+	cpy #32
+	bcc li1
+	log(5)
+	ldy #0
+	lda (dp),y
+	and #%00011111
+	jsr hexout
+	log(6)
+	ldy #2
+	lda (dp),y
+	and #%00000111
+	jsr hexout
+liret 	log(7)
+	rts
+
+/*************************************************************************
+ * Print media size
+ */
+
+printsize
+	log(8)
+
+	ldy #0
+pl1	lda (dp),y
+	jsr hexout
+	iny
+	cpy #4
+	bcc pl1
+
+	log(9)
+
+	ldy #4
+pl2	lda (dp),y
+	jsr hexout
+	iny
+	cpy #8
+	bcc pl2
+
+	jmp liret
+	
+
+/*************************************************************************
+ * Generic Subroutines
+ */
+
+logout	txa
+	asl
+	tax
+	lda laddr+1,x
+	tay
+	lda laddr,x
+	jmp txtout
+
+laddr	.word logt0, logt1, logt2, logt3, logt4, int0, int1, int2, ps1, ps2
+#ifdef PRINT2
+	.word rd1, rd2, rd3, rd4, rd5, rd6
+#endif
+
+logt0	.asc 13,10,"CS/A65 SCSI driver",13,10
+	.asc 13,10,"Resetting SCSI bus",13,10,0
+logt1	.asc "Device not ready ",0
+logt2	.asc "Device error bit set",13,10,0
+logt3	.asc "Device found ",0
+logt4	.asc "Device select timeout ",0
+
+int0	.asc "[Type ",0
+int1	.asc ", SCSI Rev. ",0
+int2	.asc "]",13,10,0
+
+ps1	.asc "       [Blocks: ",0
+ps2	.asc ", Byte/Block: ",0
+
+#ifdef PRINT2
+
+rd1	.asc "Read Block Dev: ",0
+rd2	.asc ", Sect: ",0
+rd3	.asc ", nsec: ",0
+rd4	.asc " To: ",0
+rd5	.asc 13,10,0
+rd6	.asc "Write Block Dev: ",0
+
+#endif
+
+#endif	/* PRINT */
+
+/*************************************************************************
+ * Data structures (no extended read/writes)
+ */
+
+	.bss
+
+; active device number (0-7)
+
+actdev	.byt 0
+
+; contains the device type for each SCSI ID
+
+&devtype .dsb 8
+
+; this structure is sent as it is for one command
+
+task	.byt 0		; command code
+	.byt 0		; LUN 
+&lba	.byt 0		; 
+	.byt 0		; 
+	.byt 0		; 
+	.byt 0		;
+	.byt 0
+&nsec	.byt 0
+	.byt 0
+	.byt 0
+
+	.)
+
+#ifdef STANDALONE
+
+buffer	=*
+
+#endif
+	.text
+
+
+

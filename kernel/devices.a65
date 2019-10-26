@@ -21,7 +21,11 @@
 
 ****************************************************************************/
 
+#ifdef NO_DEVICE
 
+devcmd	=notimp
+
+#else
           .(
 	.zero
 devzei    .word 0
@@ -262,4 +266,4 @@ jmpzei    jmp (devzei)
           .)
 
           .)
-
+#endif

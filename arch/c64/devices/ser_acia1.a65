@@ -43,11 +43,13 @@
  * can be checked independently.
  */
 
-#ifdef C64ACIA
-#define	ACIA	C64ACIA
+#ifdef ACIABASE
+#define	ACIA	ACIABASE
 #else
 #define ACIA	$d600
 #endif
+
+#print ACIA
 
 #define	Anzdev	1
 

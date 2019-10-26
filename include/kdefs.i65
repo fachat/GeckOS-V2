@@ -267,6 +267,8 @@
 #define   TC_ECHO   $8d		/* device shall echo: terminal = full screen */
 #define   TC_NOECHO $8e		/* appl. echos: full appl. control */
 
+#define	  TC_CPOS   $8f		/* next chars are row and column */
+
 /*********************** System Semaphores *************************/
 /* System semaphores cannot be allocated and/or freed with 
  * GETSEM/FRESEM, but can be used with PSEM and VSEM.

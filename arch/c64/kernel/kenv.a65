@@ -270,10 +270,10 @@ mtask	.)
           sei
           dec Syscnt     ; wieder in Task 
           bne mtask      ; nein dann Ende
-
+#ifndef NO_DEVICE
           bit adev       ; Ruecksprung in Device
           bpl mtask      ; ja dann Ende
- 
+#endif 
           sty YR         ; sonst Task-Env setzen
           stx XR
           sta AC
@@ -307,9 +307,13 @@ mtask
           lda Syscnt
           inc Syscnt
           cmp #0
+#ifdef NO_DEVICE
+          beq msys
+#else
           bne mse
           bit adev       ; called by device
           bmi msys       ; no then save stack
+#endif
 mse       pla
           plp
           rts

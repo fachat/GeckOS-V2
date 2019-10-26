@@ -1,0 +1,35 @@
+
+Description for CS/A SCSI, version 1.0
+--------------------------------------
+
+whatsit : SCSI interface for CS/A bus
+I/O     : ports at $870-$e87f
+Mem     : --
+
+IC1 selects the I/O range $87*, and IC2 selects the right registers.
+IC6, 7 and 10 make up the SCSI data port at $870. IC11 and 12 compute the
+parity. IC8 reads the status lines of the SCSI bus.
+IC5 outputs SCSI control lines. The two parts of IC13 controlled
+by IC5 are used as pseudo Open Collector for arbitration purposes.
+The lower half of IC9 implements a hardware handshake to simplify
+data transfer: a simple read or write acknowledges a /REQ request
+from the bus.
+
+During arbitration the data bus outputs are decoupled from the
+data bus (D1 through IC5) and  also lowers data bus 7 to indicate
+SCSI ID 7 (highest priority - the ID is hardcoded). 
+
+For operation with another controller this controller must not drive
+the SCSI data bus. But this is not implemented. So only one controller
+is possible.
+
+Also I/O can not be driven by the controller so deselect/reselect
+can not be supported.
+
+The SCSI protocol can be seen from the SCSI(-II) standard.
+
+The usual rules for SCSI cable termination etc. apply.
+
+See also several SCSI FAQs on the internet.
+
+

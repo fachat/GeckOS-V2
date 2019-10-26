@@ -61,8 +61,10 @@
 
 
 				/* if you have a 16550A UART with FIFO */
-#define	UARTBASE	$d600
-#undef	ACIABASE	$d600
+#undef	UARTBASE	$d600
+#define ACIABASE	$d600
+/* #define ACIABASE	$df00 */
+
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
 
 #define	MEMINIVAL	0	/* Clear memory to 0 on boot */
@@ -138,20 +140,18 @@
 		   and a nullmodem cable between /dev/modem (VICE) and 
 		   a slip line */
 
-#define	PARALLEL
+#undef	PARALLEL
 #undef	OLDHACK
 
 #undef 	UARTBASE
-#define	ACIABASE	$d600
+#undef 	ACIABASE
 #undef 	UARTXTAL
 
 #undef BOOTDRV
-#define	BOOTDRV		"f"
 
 #undef WWWDRV
-#define	WWWDRV		"f"
 
-#endif	/* ANDRE */
+#endif	/* EMUSLIP */
 
 /***************************************************************************
  * 
@@ -247,7 +247,7 @@ end_slipd
 
 /************* boot lsh from BOOTDRV			*/
 
-#if 1
+#ifdef BOOTDRV
 
 	/* add autostart of lib6502 program 'lsh' */
 

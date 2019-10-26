@@ -90,10 +90,15 @@
 #include "kernel/zerotest.a65"
 
 /*
- * check system RAM up to ROMSTART, jump to he_ram if failure
+ * check system RAM up to RAMEND, jump to he_ram if failure
  * returns available RAM in 256 byte blocks in AC
  */
+	.(
+	.zero
+cnt	.byt 0
+	.text
 #include "kernel/ramtest.a65"
+	.)
 
 /*
  * originally SYSPORT specific, they have a value for the C64 also...

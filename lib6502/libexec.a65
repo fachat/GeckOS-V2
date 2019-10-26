@@ -127,7 +127,7 @@ l1	sta PCBUF,x
 				; is comm stream
 	pha
 
-	lda #16			; initial RAM size
+	lda #>Memend		; initial RAM size
 	sta PCBUF+FORK_SIZE
 	lda #0
 	sta PCBUF+FORK_PRIORITY
@@ -336,7 +336,7 @@ endenv
 	lda #<PCBUF+FORK_NAME+1
 	ldy #>PCBUF+FORK_NAME+1
 	jsr doload
-
+;.byt 2
 	tax
 
 	pla

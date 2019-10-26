@@ -1,0 +1,44 @@
+
+
+2.0.8 - 20dec1998 - A. Fachat
+
+- console device now implements TC_CPOS multibyte control code
+  to place cursor directly on screen.
+
+- init features MMU mode to scan second bank for the ROM link 
+  chain to execute. It uses the "magic" non-sysapp to determine 
+  if it found one.
+
+- break fsibm into parts, especially separate the hardware (WD1770)
+  driver from the rest. Implement a RAMdisk driver for fsibm.
+
+- moved computation of DPB and translation of linear address -> C/H/S
+  into hardware driver. Implemented "linear" ramdisk driver.
+
+- made fsibm loadable as o65 file. 
+  increase memory size for CS/A65 lib6502 files from 4 to 12k.
+  loading sometimes doesn't work...
+
+- fix kernel/init to make booting TESTROM image work
+
+- init now handles second ROM image in INIT_MMU_BANK
+  Started work on SCSI driver for FSIBM
+
+- continued working on SCSI driver for FSIBM. 
+  + Now formating hangs at the
+    _end_ of the sequence, probably disk name error? (test with emulator?)
+  + formating only sets to small disk size...
+
+- formating works for ramdisk device - leaving the old boot sector.
+
+- continued working on SCSI driver. Had to use div32 instead of div at
+  several places because cluster/sector >= 0x8000 bugged out!
+  Now computes right number of sectors when formating SCSI harddisk.
+  TODO: - copying a file to FSIEC stops after 128 byte - Stream problem?
+        - bytes free decrease by approx. double the used amount
+
+- FSIBM can now use FAT16 partitions above 32M, but boot sector is
+  not standard and FSIBM_SECTOR24BIT has to be defined.
+
+- The scsi/hd driver can now us the xcsa ramdisk
+

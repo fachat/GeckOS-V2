@@ -1,0 +1,90 @@
+
+/*
+ * Print routines for Generic SCSI driver
+ *
+ * cout	
+ * crlfout
+ * txtout
+ * hexout
+ *
+ * $Log$
+ */
+
+#ifdef PRINT
+
+#include "kdefs.i65"            /* error codes */
+#include "kernel.i65"       /* test system is OS/A 1.3... */
+/*
+#define PUTC    $f01b
+#define YIELD   $f03c
+*/
+	.(
+
+/*************************************************************************
+ * Generic Subroutines
+ */
+
+	.zero
+p	.word 0
+	.text
+
+
+&crlfout
+	lda #13
+	jsr cout
+	lda #10
+
+&cout
+	stx xr
+	ldx #STDERR
+cout1
+	pha
+	jsr PUTC
+	bcc ce
+	jsr YIELD	; give other tasks chance to run
+	cmp #E_NUL
+	beq ce
+	pla
+	jmp cout1
+ce	pla
+	ldx xr
+	rts
+
+&txtout	sta p
+	sty p+1
+	ldy #<-1
+to1	iny
+	clc
+	lda (p),y
+	beq toend
+	jsr cout
+	bcc to1
+toend	rts
+
+&hexout	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibout
+	pla
+	and #$0f
+nibout	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc ho
+	adc #"A"-"9"-1-1
+ho	jmp cout
+
+	.bss
+
+xr	.byt 0
+
+	.text
+	.)
+
+#endif	/* PRINT */
+
+
+
+

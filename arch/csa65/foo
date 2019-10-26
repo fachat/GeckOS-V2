@@ -1,0 +1,20 @@
+
+If "ROMTEST" is defined:
+
+p 02
+e 2 18
+e 3 19
+e 4 1a
+e 5 1b
+e 6 1c
+e 7 1d
+e 8 1e
+e 9 1f
+yc
+l"csarom" 2000
+l"inirom" 3fe
+
+or otherwise:
+
+~/vice/src/vice-0.12.0.16-csa-22/bin/xcsa -kernal ./csarom -basic ./csarom2
+

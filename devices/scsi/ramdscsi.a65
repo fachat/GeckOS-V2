@@ -1,0 +1,582 @@
+
+/*
+ * Generic SCSI driver for CS/A SCSI card
+ *
+ *  emulating a SCSI interface by using a disk image on the ramdisk 
+ *  emulation of the xcsa emulator 
+ *
+ * Hardware:
+ *
+ *   2 addresses, $e870-$e871
+ *
+ *   $e870 : read SCSI data bus; write data for SCSI data bus
+ *
+ *   $e871 : read status
+ *            bit 0:  I/O (SCSI in)
+ *                1:  -ACK (SCSI out, from latch)
+ *                2:  -RST (SCSI out, from latch)
+ *                3:  BSY (SCSI in)
+ *                4:  MSG (SCSI in)
+ *                5:  
+ *                6:  REQ (SCSI in)
+ *                7:  C/D (SCSI in)
+ *           write control
+ *            bit 0:  1 = -SEL active
+ *                1:  1 = activate ID bit for arbitration
+ *                2:  1 = -BSY active
+ *                3:  1 = -ATN active
+ *                4:
+ *                5:
+ *                6:
+ *                7:  1 = /RST active
+ *
+ *   $e872 : write any value -> pulse on /SEL (SCSI out)
+ *
+ * Software:
+ *
+ * This is a stateless SCSI driver with the following routines:
+ *
+ *   initscsi	<- a/y address of buffer (>=256 byte)
+ *		-> a/y address of (static) table with device type 
+ *		       of each device in it (0=disk, ff=none)
+ *		   also available as "devtype"
+ *		   x = number of table entries
+ *
+ *   inquiry	<- a/y address of buffer (>=256 byte)
+ *		   x = device SCSI ID
+ *		-> buffer contains SCSI return
+ *
+ *   getsize	<- a/y address of buffer (>=8 byte)
+ *		   x = device SCSI ID
+ *		-> buffer contains 4 byte # of blocks (hi-low format)
+ *		   and 4 byte byte/blocks (hi-lo)
+ *
+ *   readblock	<- a/y address of buffer (>= N * byte/block)
+ *		   x = SCSI device address
+ *		   lba (4 byte) LBA of first block to read (hi-lo)
+ *		   nsec (2 byte) # of blocks to read (consecutively)
+ *		-> buffer contains data
+ *   writeblock <- see readblock, buffer contains data
+ *
+ *
+ * $Log$
+ *
+ */
+
+#define	DEBUG
+/* #undef	PRINT */
+/* #undef	STANDALONE */
+
+#define RAMD_DRV        $e870
+#define RAMD_SECTOR     $e871
+
+#define RAMD_DATA       $ec00
+
+#ifdef DEBUG
+#define	PRINT
+#endif
+
+#ifdef PRINT2
+#define	PRINT
+#endif
+
+/**********************************************************************
+ * system defines
+ */
+/*
+#define	DATA	$e870
+#define	CTRL	$e871
+#define	STATUS	$e871
+
+#define	DATA	$de70
+#define	CTRL	$de71
+#define	STATUS	$de71
+*/
+
+#define	DATA	0+SCSIBASE
+#define	CTRL	1+SCSIBASE
+#define	STATUS	1+SCSIBASE
+
+#define	S_IO	%00000001
+#define	S_ACK	%00000010
+#define	S_RST	%00000100
+#define	S_BSY	%00001000
+#define	S_MSG	%00010000
+#define	S_REQ	%01000000	/* check BVC/BVS */
+#define	S_CD	%10000000	/* check BMI/BPL */
+
+#define	S_PHASEMASK	S_IO+S_CD+S_MSG
+#define	S_DATAIN	S_IO
+#define	S_MSGIN		S_IO+S_CD+S_MSG
+#define	S_STATUS	S_IO+S_CD
+#define	S_COMMAND	S_CD
+
+#define	C_RST	%10000000
+#define	C_SEL	%00001000
+#define	C_BSY	%00000100
+#define	C_IDENT	%00000010
+#define	C_ATN	%00000001
+
+#define	MYID	7		/* hardcoded in controller */
+
+#ifdef PRINT
+#define	log(a)	ldx #a:jsr logout
+#define	hout(a) lda a:jsr hexout
+#define	crlf()	jsr crlfout
+#else
+#define	log(a)
+#define	hout(a)
+#define	crlf(a)
+#endif
+
+#ifdef DEBUG
+#define	lc(a)	php:pha:lda #a:jsr cout:pla:plp
+#else
+#define	lc(a)
+#endif
+
+/*************************************************************************
+ * load addr and Jump table
+ */
+
+#ifdef STANDALONE
+
+	lda #<buffer
+	ldy #>buffer
+	jsr initscsi
+
+	lda #0
+	sta task+2
+	sta task+3
+	sta task+4
+	sta task+5
+
+	sta task+7
+	lda #1
+	sta task+8
+	
+	lda #<buffer
+	ldy #>buffer
+	ldx #0
+	jsr readblock
+	rts
+
+#endif
+
+	.(
+
+/*************************************************************************
+ * globals
+ */
+
+	; powers of 2
+
+pow2	.byt 1, 2, 4, 8, 16, 32, 64, 128
+
+
+	.zero
+&dp	.word 0
+	.text
+
+
+/*************************************************************************
+ * Read a block from the device
+ * task+2/3/4/5 has block number (hi-lo), task+7/8 has number of blocks to rd
+ * a/y has memory address of buffer where to write block to
+ */
+
+&readblock
+	sta dp
+	sty dp+1
+	stx actdev
+
+#ifdef PRINT2
+	.(
+	log(10)
+	hout(actdev)
+	log(11)
+	ldy #0
+rdll	lda lba,y
+	jsr hexout
+	iny
+	cpy #4
+	bcc rdll
+	log(12)
+	hout(nsec)
+	hout(nsec+1)
+	log(13)
+	hout(dp+1)
+	hout(dp)
+	log(14)
+nopr2
+	.)
+#endif
+	lda #0
+	sta task+1
+	sta task+9
+
+	lda #0
+	sta RAMD_DRV
+	lda lba+3
+	sta RAMD_SECTOR
+	lda lba+2
+	sta RAMD_SECTOR+1
+	lda lba+1
+	sta RAMD_SECTOR+2
+	lda lba
+	bne rderr
+	; sta RAMD_SECTOR+3
+	
+	ldy #0
+rdloop	lda RAMD_DATA,y
+	sta (dp),y
+	iny
+	bne rdloop
+	inc dp+1
+rdl2	lda RAMD_DATA+$100,y
+	sta (dp),y
+	iny
+	bne rdl2
+	clc
+	rts
+
+rderr	sec
+	rts
+
+/*************************************************************************
+ * Read a block from the device
+ * task+2/3/4/5 has block number (hi-lo), task+7/8 has number of blocks to rd
+ * a/y has memory address of buffer where to write block to
+ */
+
+&writeblock
+	sta dp
+	sty dp+1
+	stx actdev
+
+#ifdef PRINT2
+	.(
+	log(15)
+	hout(actdev)
+	log(11)
+	ldy #0
+rdll	lda lba,y
+	jsr hexout
+	iny
+	cpy #4
+	bcc rdll
+	log(12)
+	hout(nsec)
+	hout(nsec+1)
+	log(13)
+	hout(dp+1)
+	hout(dp)
+	log(14)
+nopr2
+	.)
+#endif
+	lda #0
+	sta task+1
+	sta task+9
+
+	lda #0
+	sta RAMD_DRV
+	lda lba+3
+	sta RAMD_SECTOR
+	lda lba+2
+	sta RAMD_SECTOR+1
+	lda lba+1
+	sta RAMD_SECTOR+2
+	lda lba
+	bne wrerr
+	; sta RAMD_SECTOR+3
+	
+	ldy #0
+wrloop	
+	lda (dp),y
+	sta RAMD_DATA,y
+	iny
+	bne wrloop
+	inc dp+1
+wrl2	
+	lda (dp),y
+	sta RAMD_DATA+$100,y
+	iny
+	bne wrl2
+	clc
+	rts
+
+wrerr	sec
+	rts
+
+/*************************************************************************
+ * Initialization (a/y = buffer)
+ */
+
+&initscsi
+	sta dp
+	sty dp+1
+
+	log(0)
+
+; scan SCSI bus for devices
+
+	lda #0
+	sta actdev	; start with first device
+iniloop
+	lda actdev
+	cmp #MYID
+	beq nodev
+
+	cmp #0
+	beq iniok
+
+	log(1)
+	hout(actdev)
+	crlf()
+	jmp next
+
+iselerr	cli
+	log(4)
+	hout(actdev)
+	crlf()
+	jmp nodev
+
+iniok	log(3)
+	hout(actdev)
+	crlf()
+
+	lda dp
+	ldy dp+1
+	ldx actdev
+	jsr inquire
+#ifdef PRINT
+	pha
+	jsr loginquire
+	pla
+#endif
+	.byt $2c
+nodev	lda #$ff
+	ldx actdev
+	sta devtype,x
+	
+#ifdef PRINT
+	cmp #5
+	beq print
+	cmp #0
+	bne next
+print	
+	lda dp
+	ldy dp+1
+	ldx actdev
+	jsr getsize
+	jsr printsize
+#endif
+next	
+	inc actdev
+	lda actdev
+	cmp #8
+	bcc iniloop
+
+	lda #<devtype
+	ldy #>devtype
+	ldx #8
+	clc
+	rts
+
+selerr	cli
+	log(4)
+	hout(actdev)
+	crlf()
+	sec
+	rts
+
+/*************************************************************************
+ * Inquire device status/info into buffer (addr=a/y)
+ */
+
+inqdata	.byt 0, 0, 1, 0, 0, 0, 0, 0
+	.byt "VICE XCSA EMU           "
+
+&inquire
+	sta dp
+	sty dp+1
+	stx actdev
+
+	ldy #0
+inl	lda inqdata,y
+	sta (dp),y
+	iny
+	cpy #32
+	bne inl
+indone	
+#ifdef DEBUG
+	lc("d")
+	tya
+	jsr hexout
+#endif
+inrts	ldy #0
+	lda (dp),y	; 0 = disk, 1 = Tape, 5 = CDROM
+	rts
+
+
+/*************************************************************************
+ * Get Medium capacity, a/y = buffer
+ * returns 4 byte # of blocks (hi-low format) + 4 byte byte/block in 
+ * buffer
+ */
+
+getsdata .byt $00, $01, $38, $80
+	.byt $00, $00, $02, $00
+
+&getsize
+	sta dp
+	sty dp+1
+	stx actdev
+	ldy #0
+gsl	lda getsdata,y
+	sta (dp),y
+	iny
+	cpy #8
+	bne gsl
+	clc
+	rts
+
+/*************************************************************************
+ * Print data subroutines
+ *************************************************************************/
+
+#ifdef PRINT
+
+/*************************************************************************
+ * Print inquiry data
+ */
+
+loginquire
+	ldy #8
+li1	lda (dp),y
+	jsr cout
+	iny
+	cpy #32
+	bcc li1
+	log(5)
+	ldy #0
+	lda (dp),y
+	and #%00011111
+	jsr hexout
+	log(6)
+	ldy #2
+	lda (dp),y
+	and #%00000111
+	jsr hexout
+liret 	log(7)
+	rts
+
+/*************************************************************************
+ * Print media size
+ */
+
+printsize
+	log(8)
+
+	ldy #0
+pl1	lda (dp),y
+	jsr hexout
+	iny
+	cpy #4
+	bcc pl1
+
+	log(9)
+
+	ldy #4
+pl2	lda (dp),y
+	jsr hexout
+	iny
+	cpy #8
+	bcc pl2
+
+	jmp liret
+	
+
+/*************************************************************************
+ * Generic Subroutines
+ */
+
+logout	txa
+	asl
+	tax
+	lda laddr+1,x
+	tay
+	lda laddr,x
+	jmp txtout
+
+laddr	.word logt0, logt1, logt2, logt3, logt4, int0, int1, int2, ps1, ps2
+#ifdef PRINT2
+	.word rd1, rd2, rd3, rd4, rd5, rd6
+#endif
+
+logt0	.asc 13,10,"CS/A65 SCSI driver",13,10
+	.asc 13,10,"Resetting SCSI bus",13,10,0
+logt1	.asc "Device not ready ",0
+logt2	.asc "Device error bit set",13,10,0
+logt3	.asc "Device found ",0
+logt4	.asc "Device select timeout ",0
+
+int0	.asc "[Type ",0
+int1	.asc ", SCSI Rev. ",0
+int2	.asc "]",13,10,0
+
+ps1	.asc "       [Blocks: ",0
+ps2	.asc ", Byte/Block: ",0
+
+#ifdef PRINT2
+
+rd1	.asc "Read Block Dev: ",0
+rd2	.asc ", Sect: ",0
+rd3	.asc ", nsec: ",0
+rd4	.asc " To: ",0
+rd5	.asc 13,10,0
+rd6	.asc "Write Block Dev: ",0
+
+#endif
+
+#endif	/* PRINT */
+
+/*************************************************************************
+ * Data structures (no extended read/writes)
+ */
+
+	.bss
+
+; active device number (0-7)
+
+actdev	.byt 0
+
+; contains the device type for each SCSI ID
+
+&devtype .dsb 8
+
+; this structure is sent as it is for one command
+
+task	.byt 0		; command code
+	.byt 0		; LUN 
+&lba	.byt 0		; 
+	.byt 0		; 
+	.byt 0		; 
+	.byt 0		;
+	.byt 0
+&nsec	.byt 0
+	.byt 0
+	.byt 0
+
+	.)
+
+#ifdef STANDALONE
+
+buffer	=*
+
+#endif
+	.text
+
+
+

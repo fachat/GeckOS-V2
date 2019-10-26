@@ -1,0 +1,648 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+        
+/* certain miscellanous subroutines */
+
+	.data
+ar1       .dsb 4        ; 4 Byte for 32Bit-Operations (Mult4)
+ar2       .dsb 4
+ar3       .dsb 4
+	.text
+
+          
+mult      .(        /* a/x * ar1 -> a/x , c=1 ist overflow */
+          clc
+          sta ar3
+          stx ar3+1
+          lda #0
+          sta ar2
+          sta ar2+1
+          txa
+          ora ar3
+          beq mend
+mloop     
+          lsr ar1+1
+          ror ar1
+          bcc mnext
+
+          clc          
+          lda ar3
+          adc ar2
+          sta ar2
+          lda ar3+1
+          adc ar2+1
+          sta ar2+1
+          bcs mend
+          
+mnext     lda ar1
+          ora ar1+1
+          beq mend
+
+          asl ar3
+          rol ar3+1
+          bcc mloop
+          
+mend      lda ar2
+          ldx ar2+1
+          rts
+          .)
+
+mult32    .(        /* a/x * ar1 -> a/x(16bit) or ar2 (32bit), c=1 is overflow */
+          clc
+          sta ar3
+          stx ar3+1
+          lda #0
+	  sta ar3+2
+	  sta ar3+3
+          sta ar2
+          sta ar2+1
+          sta ar2+2
+          sta ar2+3
+          txa
+          ora ar3
+          beq mend
+mloop     
+          lsr ar1+1
+          ror ar1
+          bcc mnext
+
+          clc          
+          lda ar3
+          adc ar2
+          sta ar2
+          lda ar3+1
+          adc ar2+1
+          sta ar2+1
+	  lda ar3+2
+	  adc ar2+2
+	  sta ar2+2
+	  lda ar3+3
+	  adc ar2+3
+	  sta ar2+3
+          bcs mend
+          
+mnext     lda ar1
+          ora ar1+1
+          beq mend
+
+          asl ar3
+          rol ar3+1
+	  rol ar3+2
+	  rol ar3+3
+          bcc mloop
+          
+mend      lda ar2
+          ldx ar2+1
+          rts
+          .)
+
+#if 1
+div32       .(        /* ar1(32) / a/x -> a/x(16) or ar3(32), ar1(32)      */
+          sec
+          sta ar2
+          stx ar2+1
+          ora ar2+1
+          beq derr
+          
+          lda #0
+	  sta ar2+2
+	  sta ar2+3
+
+          sta ar3
+          sta ar3+1
+	  sta ar3+2
+	  sta ar3+3
+
+          ldx #0
+dl        lda ar2+3
+	  cmp ar1+3
+	  bcc d1
+	  bne d2
+	  lda ar2+2
+	  cmp ar1+2
+	  bcc d1
+	  bne d2
+	  lda ar2+1
+          cmp ar1+1
+          bcc d1
+          bne d2
+          lda ar2
+          cmp ar1
+          beq ds
+          bcs d2
+
+d1        inx
+          asl ar2
+          rol ar2+1
+	  rol ar2+2
+	  rol ar2+3
+          bcc dl
+derr      rts
+
+d2        lsr ar2+3
+	  ror ar2+2
+	  ror ar2+1
+          ror ar2
+          dex
+          bmi dend
+          
+ds        sec
+          lda ar1
+          sbc ar2
+          pha
+          lda ar1+1
+          sbc ar2+1
+	  pha
+	  lda ar1+2
+	  sbc ar2+2
+	  pha
+	  lda ar1+3
+	  sbc ar2+3
+          bcc d3
+          
+          sta ar1+3
+	  pla
+	  sta ar1+2
+	  pla
+	  sta ar1+1
+          pla
+          sta ar1
+	  jmp d3a
+
+d3        pla
+	  pla
+	  pla
+d3a
+          rol ar3
+          rol ar3+1
+	  rol ar3+2
+	  rol ar3+3
+          jmp d2
+          
+dend      lda ar3
+          ldx ar3+1
+          clc
+          rts
+          .)
+#endif
+
+div       .(        /* ar1 / a/x -> a/x, ar1      */
+          sec
+          sta ar2
+          stx ar2+1
+          ora ar2+1
+          beq derr
+          
+          lda #0
+          sta ar3
+          sta ar3+1
+          
+          ldx #0
+dl        lda ar2+1
+          cmp ar1+1
+          bcc d1
+          bne d2
+          lda ar2
+          cmp ar1
+          beq ds
+          bcs d2
+
+d1        inx
+          asl ar2
+          rol ar2+1
+          bcc dl
+derr      rts
+
+d2        lsr ar2+1
+          ror ar2
+          dex
+          bmi dend
+          
+ds        sec
+          lda ar1
+          sbc ar2
+          pha
+          lda ar1+1
+          sbc ar2+1
+          bcc d3
+          
+          sta ar1+1
+          pla
+          sta ar1
+          .byt $24
+d3        pla
+          rol ar3
+          rol ar3+1
+          jmp d2
+          
+dend      lda ar3
+          ldx ar3+1
+          clc
+          rts
+          .)
+
+f2d      .(
+          ldy #F_FCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_DCL
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          ldy #F_FSEC+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_DSEC
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          ldy #F_FPOS+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_DPOS
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          jsr xclrfsec
+          rts
+          .)
+
+d2f      .(
+          ldy #F_DCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_FCL
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          ldy #F_DSEC+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_FSEC
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+
+          ldy #F_DPOS+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_FPOS
+          sta (fzei),y
+          txa
+          iny
+          sta (fzei),y
+          clc
+          rts
+          .)
+
+xfil2nam  .(             ; PCBUF+y ist Dateiname
+          ldx #1
+          lda PCBUF,y
+          cmp #"."
+          bne f0
+          lda PCBUF+1,y
+          beq dir1
+          cmp #DIRSIGN
+          beq dir1
+          cmp #"."
+          bne f0
+          lda PCBUF+2,y
+          beq dir2
+          cmp #DIRSIGN
+          bne f0
+dir2      lda #"."
+          sta fname+NAME_N+1
+          inx
+          iny
+dir1      iny
+          lda #"."
+          sta fname+NAME_N
+          bne fne
+
+&fil2nam
+f0        ldx #0
+f1        lda PCBUF,y
+          beq fne
+#ifdef SHOWN
+     jsr SEROUT
+#endif
+          jsr TOUPPER
+          cmp #DIRSIGN
+          beq fne
+          cmp #"."
+          beq fe1
+          cpx #NAME_E-NAME_N
+          bcs f2
+          sta fname+NAME_N,x
+          inx
+f2        iny
+          bne f1
+fe2       lda #" "
+          sta fname+NAME_N,x
+          inx
+fe1       cpx #NAME_E-NAME_N
+          bcc fe2
+          iny
+f3        lda PCBUF,y
+          beq fne
+#ifdef SHOWN
+     jsr SEROUT
+#endif
+          jsr TOUPPER
+          cmp #DIRSIGN
+          beq fne
+          cpx #NAME_A-NAME_N
+          bcs f4
+          sta fname+NAME_N,x
+          inx
+f4        iny
+          bne f3
+fe3       lda #" "
+          sta fname+NAME_N,x
+          inx
+fne       cpx #NAME_A-NAME_N
+          bcc fe3
+#ifdef SHOWN
+     jsr CRLFOUT
+#endif
+          clc
+          rts
+          .)
+
+
+xfrebuf   php
+          pha
+          ldy fpuffer
+          jsr FRBUF
+          pla
+          plp
+          rts
+
+TOUPPER   .(
+          cmp #"a"
+          bcc ok
+          cmp #"z"+1
+          bcs ok
+          and #%11011111
+ok        rts
+          .)
+
+xadfpos   .(
+          ldy #F_FPOS
+          clc
+          adc (fzei),y
+          sta (fzei),y
+          tax
+          iny
+          lda #0
+          adc (fzei),y
+          sta (fzei),y
+&xcmpfpos
+          ldy #D_BPS+1
+          cmp (dzei),y
+          bne xe
+          dey
+          txa
+          cmp (dzei),y
+xe        rts
+          .)
+
+xadbufpos ldx fpuffer
+          jsr setpadr
+          ldy #F_FPOS
+          clc
+          adc (fzei),y
+          pha
+          iny
+          txa
+          adc (fzei),y
+          tax
+          pla
+          rts
+
+xfcl2fscl ldy #F_FCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          ldy #F_FSCL
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+          rts
+
+xclrf     jsr xclrfcl
+xclrfsp   jsr xclrfsec
+xclrfpos  ldy #F_FPOS
+          lda #0
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          rts
+
+xclrfcl   ldy #F_FCL
+          lda #0
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          rts
+
+xclrfsec  ldy #F_FSEC
+          lda #0
+          sta (fzei),y
+          iny
+          sta (fzei),y
+          rts
+
+#if 1 /*def SHOW*/
+          .(
+        .data
+dxr       .byt 0
+;str       =sysmem+1
+        .byt 0 ; ???
+        .text
+
+&SEROUT   stx dxr
+          ldx #STDOUT
+          bne o0
+/*&OUT*/      stx dxr
+o0 s2     pha
+          jsr PUTC
+          pla
+          bcc s2a
+          jsr YIELD
+          jmp s2
+s2a       ldx dxr
+          cmp #0
+          rts
+	.)
+
+HEXOUT   .(
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr NIBOUT
+          pla
+          and #$0f
+NIBOUT    clc
+          adc #"0"
+          cmp #"9"+1
+          bcc nout
+          adc #6
+nout      jmp SEROUT
+          .)
+
+SPOUT    lda #32
+          jmp SEROUT
+CRLFOUT  lda #13
+          jsr SEROUT
+          lda #10
+          jmp SEROUT
+#endif
+
+/*************************************************************************/
+
+          .(
+        .data
+a         .byt 0
+        .text
+
+#if F_SLEN=64
+&setfzei            /* x=File-Nr (0-(ANZFILE-1)) */
+          stx file
+          txa
+          clc
+          adc #ANZDRV
+          sta fpuffer
+          txa
+          asl
+          asl
+          asl
+          asl
+          asl
+          asl
+          clc
+          adc #<fpb
+          sta fzei
+          lda #0
+          adc #>fpb
+          sta fzei+1
+          clc
+          rts
+#endif
+
+#if BUFLEN=1024
+&setpadr
+          txa
+          asl
+          asl
+          clc
+          adc #>buffer
+          tax
+          lda #<buffer
+          clc
+          rts
+#endif
+#if BUFLEN=512
+&setpadr
+          txa
+          asl
+          clc
+          adc #>buffer
+          tax
+          lda #<buffer
+          clc
+          rts
+#endif
+
+#if D_SLEN=32
+&setdzei            /* x=Drv-Nr    */
+          stx drive
+          txa
+          asl
+          asl
+          asl
+          asl
+          asl
+          clc
+          adc #<dpb
+          sta dzei
+          lda #0
+          adc #>dpb
+          sta dzei+1
+          clc
+          rts
+#endif
+#if D_SLEN=26
+&setdzei            /* x=Drv-Nr    */
+          stx drive
+          txa
+          asl
+          sta a
+          asl
+          asl
+          pha
+          clc
+          adc a
+          sta a
+          pla
+          asl
+          clc
+          adc a
+          clc
+          adc #<dpb
+          sta dzei
+          lda #0
+          adc #>dpb
+          sta dzei+1
+          clc
+          rts
+#endif
+          .)
+

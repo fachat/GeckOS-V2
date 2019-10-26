@@ -1,0 +1,193 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* additional error codes */
+
+#define	E_NOCLUS	E_LASTERR
+#define	E_ILLCLUS	E_LASTERR-1
+#define	E_Q		E_LASTERR-2
+#define	E_GT		E_LASTERR-3
+#define	E_RD		E_LASTERR-4
+#define	E_WR		E_LASTERR-5
+#define	E_CMD		E_LASTERR-6
+#define	E_FT		E_LASTERR-7
+
+  
+/*************************************************************************/
+
+#define   ANZFILE   4
+#define   ANZDRV    2
+#define   ANZBUF    (ANZDRV+ANZFILE)
+#define   BUFLEN    512		/* 1024 */
+
+/*   Data-structure on the IBM-diskette   */
+/*   Bootsector                           */
+
+#define   BS_SERIAL 8
+#define   BS_BPS    11        /* Byte per Sector  */
+#define   BS_SPC    13        /* Secs/Cluster     */
+#define   BS_RES    14        /* no of reserved blocks at disk start, incl. bootsector */
+#define   BS_FAT    16        /* no of FATs        */
+#define   BS_DIR    17        /* number of directory entries in root directory */
+#define   BS_SEC    19        /* total number of sectors */
+#define   BS_MEDIA  21        /* Media-Byte       */
+#define   BS_SPF    22        /* Secs/FAT         */
+#define   BS_SPT    24        /* Secs/Track       */
+#define   BS_SIDE   26        /* no of Sides       */
+#define   BS_HID    28        /* no of Hidden Blocks */
+
+#define   BS_SLEN   30
+
+/*   Last cluster of a file in the FAT */
+
+#define   EOFCLUS   $ffff
+
+/*   Directory-Entry                       */
+
+#define   DE_NAME   0
+#define   DE_EXT    8
+#define   DE_ATTR   11
+#define   DE_TIME   22
+#define   DE_DATE   24
+#define   DE_FCLUS  26
+#define   DE_SIZE   28
+#define   DE_SLEN   32
+
+/*   Attribut-values                          */
+
+#define   ATTR_WP   1
+#define   ATTR_HID  2
+#define   ATTR_SYS  4
+#define   ATTR_DSK  8
+#define   ATTR_DIR  16
+#define   ATTR_CLSD 32
+
+/*   Buffer-Parameter-Block for each buffer */
+
+#define   B_DRV     0		/* drive */
+#define   B_DIRT    1		/* dirty flag (see below) */
+#define   B_SECTOR  2		/* sector (four byte) */
+#define   B_SLEN    8		/* easier to compute than 6 */
+
+#define   BD_FRE    $ff		/* buffer is free */
+#define   BD_IFRE   $fe         /* dirty buffer that has not been saved */
+#define   BD_OK     0		/* buffer valid */
+#define   BD_DIRTY  1		/* buffer modified */
+
+/*   File-Parameter-Block for each file */
+
+#define   F_DRV     0         /* drive                      */
+#define   F_FL      1         /* Flag                       */
+#define   F_DCL     2         /* Cluster of Dir-Entry       */
+#define   F_DSEC    4         /* Dir-Sector in Cluster      */
+#define   F_DPOS    6         /* Position of Dir-Entry in sector */
+#define   F_FCL     8         /* Cluster of file            */
+#define   F_FSEC    10        /* Sektor in Cluster          */
+#define   F_FPOS    12        /* Position in Sektor         */
+#define   F_LEN     14        /* Datei-Length in Byte       */
+#define   F_FZEI    18        /* long-pointer in file       */
+#define   F_STR     22        /* OS Stream                  */
+#define   F_FSCL    23	      /* first cluster of file (used for locking) */
+#define   F_DLEN    25        /* length of saved filemask   */
+#define   F_DOUT    26        /* state of directory read    */
+#define   F_DMASK   27        /* mask for reading directory */
+#define   F_FT      27+11     /* OS FS_DIR_* struct to send */
+
+/* 27+11+FS_DIR_NAME+13=62 ; Name plus . and Nullbyte are 13 */
+#define   F_SLEN    64
+
+/* file parameter block flag values */
+#define   FF_FRE    $ff		/* file parameter block is free */
+#define   FF_RD     0		/* open for reading */
+#define   FF_WR     1		/* open for writing */
+#define   FF_DR     2		/* reading directory */
+
+/*   Drive-Parameter-Block    */
+
+#define   D_ST      0
+#define   D_BFLAG   1         /* 0=12 Bit-FAT, 1=16Bit-FAT  */
+#define   D_BPS     2         /* Byte per Sektor            */
+#define   D_SPC     4         /* Sektor per Cluster         */
+#define   D_CLUS    6         /* Clusters on Disk+2 (2 byte) */
+#define   D_FPD     8         /* FATs pro Diskette          */
+#define   D_SPF     10        /* Sektors per FAT            */
+#define   D_SPD     12        /* Sektors per Main-Dir       */
+#define   D_STD     14        /* Start of Main-Dir in Sekt. */
+#define   D_STC     16        /* Start of first Datacluster.*/
+#define   D_SPTS    18        /* (Sektoren/Track)*Seiten = sec/cyclinder */ 
+#define   D_SPT     20        /* Sektors per Track          */
+#define   D_STF     22        /* Start of first FAT         */
+#define   D_SECS    24        /* Sektors on the disk (4 byte) */
+
+#define   D_SLEN    32	      /* room for extensions... */
+
+#define   DS_INV    $ff
+#define   DS_OK     0
+
+/*
+     Sektor =Cluster*SPC+SektorInCluster+STC  
+     except if Cluster=0 then
+     Sektor =SektorInCluster+STD
+     
+     Zylinder=Sektor/SPTS
+     Side=(Sektor mod SPTS)/SPT
+     SektorInTrack=((Sektor mod SPTS) mod SPT)
+*/
+
+/* Struktur fname                       */
+
+#define	NAME_N		0
+#define	NAME_E		8
+#define	NAME_A		11
+#define	NAME_SLEN	12
+
+/*  Parameter for calling RWSEC         */
+
+#define   RW_DRV    0
+#define   RW_SIDE   1
+#define	  RW_SECTOR 2	/* 4 byte */
+/*
+#define   RW_TRCK   2
+#define   RW_SEC    4
+*/
+#define   RW_ADR    6
+#define   RW_SLEN   8 
+
+/*   Parameter for calling RWABS       */
+
+#define   ABS_DRV   0
+#define   ABS_FL    1
+#define   ABS_SEC   2
+#define   ABS_SLEN  6
+
+/*   Parameter for calling DFORMAT   */
+
+#define   FMT_VIRG  0
+#define   FMT_SIDES 1
+#define   FMT_TRCKS 2
+#define   FMT_HDFL  3
+#define   FMT_BLEN  4
+#define   FMT_SCLST 5    /* Anzahl Sektoren+1, sekt1, sekt2, sekt3... */
+
+
+

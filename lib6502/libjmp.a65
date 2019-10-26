@@ -240,5 +240,8 @@ jmp Putenv
 jmp Getenvp
 jmp Getos
 
+notimp	lda #E_NOTIMP
+	sec
+	rts
 #endif
 

@@ -69,6 +69,7 @@ status    .dsb MAX_SCREEN
 outstr    .dsb MAX_SCREEN
 getstr    .dsb MAX_SCREEN
 brkkey    .dsb MAX_SCREEN
+ctrlst    .dsb MAX_SCREEN
 
 	.zero
 zei2	.word 0
@@ -87,7 +88,6 @@ zei2	.word 0
 	  pla
           cmp #DC_RES
           bne p1
-
 	  sty freq
 
 	  txa
@@ -95,12 +95,13 @@ zei2	.word 0
 	  cmp #MAX_SCREEN
 	  bcs max_err
 foo 
-          lda #0		; linein off ; DC_SW_MOD	; linein ein
-          sta status,x
 	  lda #3		; ^C
 	  sta brkkey,x
 
-          lda #0
+          lda #0		; linein off ; DC_SW_MOD	; linein ein
+          sta status,x
+
+;          lda #0
           sta outstr,x
           sta getstr,x
 
@@ -328,6 +329,10 @@ p1b	rts
 p2        .(
           cmp #DC_TX_ON
           bne ox1q
+	ldy screen
+	lda #0
+	sta ctrlst,y
+	jsr towcl
           lda #DC_SW_TX
           bne ox1q1
 ox1q      cmp #DC_RX_ON
@@ -513,9 +518,42 @@ lie4      lda #TC_CR
 	  ldy #SCE_PUSH
 	  jmp STRCMD
           .)
-          
+
+	/* handle multi-byte sequences - pretty simple now. */
+extra	.(
+	dey
+	beq crsrrow
+
+crsrcol	clc
+	adc wx
+	cmp wr
+	bcc colok
+	lda wr
+	sbc #1
+colok   sta spalte
+
+clrctrl	lda #0
+	sta ctrlst,x
+	rts
+
+crsrrow	cmp wh
+	bcc rowok
+	lda wh
+	sbc #1
+rowok	sta zeile
+inccst	inc ctrlst,x
+	rts
+	
+	.)
+         
+	/* print all characters on screen */
 &printchar .(
 	  SET_MMU
+
+	ldx screen
+	ldy ctrlst,x
+	bne extra
+
           tay
           bmi x1
           cmp #32
@@ -746,12 +784,19 @@ xcode     .(
           pha
 xe        rts
 
-maxcode   =15
+maxcode   =16
 xadr      .word tocl-1,nextc-1,tocu-1,nextz-1
           .word tohome-1,toclr-1,todel-1,toins-1
           .word towlo-1,towru-1,towcl-1
           .word toeol-1,toclrl-1
-	  .word toecho-1, tonoecho-1
+	  .word toecho-1, tonoecho-1, tocpos-1
+
+tocpos	.(
+	ldx screen
+	lda #1
+	sta ctrlst,x
+	rts
+	.)
 
 toecho	.(
 	ldx screen
@@ -871,7 +916,7 @@ towru     .(
           jmp clrli
           .)
           
-towcl     .(
+&&towcl     .(
           lda zeile
           clc
           adc wy

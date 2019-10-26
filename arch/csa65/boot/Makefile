@@ -2,10 +2,13 @@
 XAINPUT=../../../include
 XA=xa
 
-all: inirom csarom
+all: inirom csarom csarom2
 
 csarom:
-	(cd ..; ${MAKE};)
+	(cd ..; ${MAKE} boot/csarom;)
+
+csarom2:
+	(cd ..; ${MAKE} boot/csarom2;)
 
 inirom: inirom.a65
 	(XAINPUT=${XAINPUT}; export XAINPUT;\
@@ -13,5 +16,5 @@ inirom: inirom.a65
 	if [ $$? -ne 0 ]; then rm -f inirom; fi)
 
 clean:
-	rm -f csarom inirom
+	rm -f csarom csarom2 inirom
 

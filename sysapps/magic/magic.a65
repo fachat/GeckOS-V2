@@ -1,0 +1,47 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.1
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This little magic string allows init to determine whether it found
+ * a valid ROM link chain, and whether it is at the right position 
+ */
+
+#include "kdefs.i65"
+
+	.(
+start     .word ende            ; pointer to end of file in ROM
+          .byt  PK_BIN          ; file type = binary, no executable
+          .word 0               ; execution start
+          .byt  0               ; RAM size needed, in 256-byte blocks
+          .byt  0               ; shared mem size in 256-byte blocks
+          .byt  0               ; priority
+          .word 0               ; stdin, stdout/stderr device number
+          .asc  "magic",0,0      ; command line
+
+	.asc "OSA2ROM"
+	.word ROMSTART
+
+ende	.)
+
+

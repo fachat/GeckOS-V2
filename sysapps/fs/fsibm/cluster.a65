@@ -1,0 +1,713 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * cluster handling
+ *
+ * exports:
+ *  clrclus
+ *  snext
+ *  cl2sec
+ *  gfrebyt
+ *  gfrecl
+ *  gnexcl  
+ *  snexcl  
+ */
+
+	.(
+
+&clrclus   .(
+          ldy fpuffer
+          jsr CLBUF
+          bcs cce
+          ldy #D_SPC+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          ldy #F_FSEC
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+wl        ldy #F_FSEC
+          sec
+          lda (fzei),y
+          sbc #1
+          tax
+          iny
+          lda (fzei),y
+          sbc #0
+          bcc cce
+          sta (fzei),y
+          dey
+          txa
+          sta (fzei),y
+          jsr cl2sec
+          bcs cce
+          ldy fpuffer
+          jsr W2BUF	; gets pars from ar2
+          bcc wl
+cce       rts
+          .)
+
+&snext     .(  
+          ldy #F_FSEC
+          lda (fzei),y
+          clc
+          adc #1
+          sta (fzei),y
+          iny
+          tax
+          sta ar1
+          lda (fzei),y
+          adc #0
+          sta (fzei),y
+          sta ar1+1
+          
+          ldy #F_FCL
+          lda (fzei),y
+          iny
+          ora (fzei),y
+          bne snok
+
+          lda ar1+1           ; bei Cluster =0
+          ldy #D_SPD+1        ; nicht ber Main-Dir lesen 
+          cmp (dzei),y
+          bcc nexend
+          bne nexerr
+          txa
+          dey
+          cmp (dzei),y
+          bcc nexend
+nexerr    lda #E_NOCLUS
+          rts
+                
+snok      lda ar1+1
+          ldy #D_SPC+1
+          cmp (dzei),y
+          bcc nexend
+          bne next
+          dey
+          txa
+          cmp (dzei),y
+          bcc nexend
+next      jsr xclrfsec
+          ldy #F_FCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          jsr gnexcl
+          bcs nexrts
+          ldy #F_FCL
+          sta (fzei),y
+          iny
+          txa
+          sta (fzei),y
+nexend    clc
+nexrts    rts
+          .)
+          
+&cl2sec   .(        /* berechnet Sektor aus fpb-Daten -> a/x     */
+          ldy #F_FCL+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          bne cd
+          cpx #0
+          bne cd
+                    /* hier bei Main-Directory    */
+          ldy #F_FSEC+1
+          lda (fzei),y
+          tax
+          dey
+          lda (fzei),y
+          clc          
+          ldy #D_STD
+          adc (dzei),y
+          pha
+          iny
+          txa
+          adc (dzei),y
+          txa
+          pla
+	  sta ar2
+	  stx ar2+1
+	  ldy #0
+	  sty ar2+2
+	  sty ar2+3
+          clc
+          rts
+          
+cd        sec       /* hier bei normalen Files    */
+          sbc #2
+          sta ar1
+          txa
+          sbc #0
+          sta ar1+1
+          bcs cdok
+cerr      sec
+          lda #E_ILLCLUS
+          rts
+cdok          
+	  lda #0
+	  sta ar1+2
+	  sta ar1+3
+          ldy #D_SPC+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr mult32
+          bcs cerr
+
+          ldy #F_FSEC		; sector in cluster
+          adc (fzei),y
+	  sta ar2
+          iny
+          txa
+          adc (fzei),y
+	  sta ar2+1
+	  bcc cdo1
+	  inc ar2+2
+	  bne cdo1
+	  inc ar2+3
+cdo1
+          clc
+          ldy #D_STC		; sector of first cluster
+          lda (dzei),y
+	  adc ar2
+	  sta ar2
+          iny
+          lda (dzei),y
+	  adc ar2+1
+	  sta ar2+1
+	  bcc cdo2
+	  inc ar2+2
+	  bne cdo2
+	  inc ar2+3
+cdo2
+	  lda ar2+3		; we only handle 24 bit sector numbers
+	  bne cerr
+	  clc
+          rts
+          .) 
+
+
+	.data
+fr1       .word 0        ; cluster
+fr2       .word 0        ; sektor
+fr3       .word 0        ; pos im sec
+fr4       .word 0        ; gesuchter Cluster
+fr5       .word 0        ; Startcluster bei suchschleife
+fr6       .word 0        ; Anzahl freier Cluster
+	.zero
+fatzei    .word 0
+	.text
+
+&gfrebyt  .(
+          lda #2
+          ldx #0
+          stx fr6        ; Zähler fr freie Cluster
+          stx fr6+1
+
+          sta fr5        ; Cluster, bis zu dem gesucht wird
+          stx fr5+1
+          sta fr1        ; Cluster, ab dem gesucht wird
+          stx fr1+1
+ 
+gfl       lda fr1
+          ldx fr1+1
+          jsr gld          ; sucht ab a/x bis fr5
+          bcs end
+          
+          inc fr6
+          bne gflx
+          inc fr6+1
+
+gflx      jsr incmp      ; mu erh”ht werden, um n„chsten Cluster zu testen
+          bne gfl        ; noch nicht zuende dann weitersuchen
+          beq gok        
+          
+end       cmp #E_FDISKFULL
+          beq gok
+          sec
+          rts
+gok
+          lda fr6
+          sta ar1
+          lda fr6+1
+          sta ar1+1
+          lda #0
+          sta ar1+2
+          sta ar1+3
+          
+          ldy #D_SPC+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr mult4
+          ldy #D_BPS+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr mult4
+          clc
+          rts
+          .)
+
+&gfrecl   .(        ; a/x =Cluster-1 ab dem gesucht wird 
+          sta fr5
+          stx fr5+1
+          sta fr1
+          stx fr1+1
+
+          bcc gld
+          jsr incmp
+          bne gld
+gle       lda #E_FDISKFULL
+          sec
+          rts
+
+&gld      jsr lfat
+          bcs grts
+
+          ldy #0
+gl        lda (fatzei),y
+          sta fr4
+          
+          jsr tstend
+          bcs grts
+          
+          lda (fatzei),y
+          sta fr4+1
+
+          ldy #D_BFLAG
+          lda (dzei),y
+          bne fat16
+          
+          lda fr1
+          lsr
+          bcc gerade
+          
+          lda fr4
+          and #$f0
+          ora fr4+1
+          beq found
+          bne next
+          
+gerade    lda fr4+1           ; bei geradem Cluster gleich drei byte
+          and #$0f            ; = 2 Cluster testen
+          ora fr4
+          beq found
+
+          jsr incmp
+          beq gle
+          
+          lda fr4+1
+          and #$f0
+          sta fr4
+          
+          jsr tstend
+          bcs grts
+
+          lda (fatzei),y
+          sta fr4+1
+          ora fr4
+          beq found
+          bne next
+          
+fat16     lda fr4
+          ora fr4+1
+          beq found
+          
+next      
+          jsr incmp
+          beq gle
+          jsr tstend
+          bcs grts
+          bcc gl
+   
+found     lda fr1
+          ldx fr1+1
+          clc
+grts      rts
+          .)
+
+#ifdef SHOWC
+clushow   .(
+          lda fr1+1
+          jsr HEXOUT
+          lda fr1
+          jsr HEXOUT
+          lda #":"
+          jsr SEROUT
+          lda fr4+1
+          jsr HEXOUT
+          lda fr4
+          jsr HEXOUT
+          lda #"@"
+          jsr SEROUT
+          lda fatzei+1
+          jsr HEXOUT
+          lda fatzei
+          jsr HEXOUT
+          lda #","
+          jsr SEROUT
+          txa
+          jsr HEXOUT
+          jsr CRLFOUT
+          rts
+          .)
+#endif
+                  
+incmp     .(
+          inc fr1
+          bne g1
+          inc fr1+1
+g1        lda fr1+1
+          ldy #D_CLUS+1
+          cmp (dzei),y
+          bcc gok
+          bne g0
+          dey
+          lda fr1
+          cmp (dzei),y
+          bcc gok
+g0        lda #0
+          sta fr1+1
+          lda #2
+          sta fr1
+gok       lda fr1
+          ldx fr1+1
+          cpx fr5+1
+          bne glr
+          cmp fr5
+glr       rts
+          .)
+                 
+&gnexcl   .(
+          jsr lfat
+          bcs fcerr
+          
+          ldy #0
+          lda (fatzei),y
+          sta fr4
+
+          jsr tstend
+          bcs fcerr
+          
+          lda (fatzei),y
+          sta fr4+1
+
+          ldy #D_BFLAG
+          lda (dzei),y
+          bne no12
+          lda fr1
+          lsr
+          bcc noshft
+          lda fr4+1
+          lsr
+          ror fr4
+          lsr
+          ror fr4
+          lsr
+          ror fr4
+          lsr 
+          ror fr4
+          sta fr4+1
+noshft    lda fr4+1
+          and #$0f
+          sta fr4+1
+          and #%00001000      ; Minus-Bit
+          beq no12
+          lda fr4+1
+          ora #$f0
+          sta fr4+1
+no12      ldy #D_CLUS+1
+          lda fr4+1
+          cmp (dzei),y
+          bcc test2
+          bne eof
+          lda fr4
+          dey
+          cmp (dzei),y
+          bcs eof
+test2     lda fr4
+          ldx fr4+1
+          bne ok
+          cmp #2
+          bcc illclus
+ok        clc
+fcerr     rts
+eof       lda fr4
+          cmp #$ff
+          bne illclus
+          cmp fr4+1
+          beq nocl
+illclus   lda #E_ILLCLUS
+          .byt $2c      
+nocl      lda #E_NOCLUS
+          sec
+          rts
+          .)
+
+&snexcl   .(        ; a/x=cluster-Nr, y=zeiger auf zu setzenden Wert in ZP
+          pha
+          lda 0,y
+          sta fr4
+          lda 1,y
+          sta fr4+1
+          pla
+          jsr lfat
+          bcs fcerr
+          
+          ldy #D_BFLAG
+          lda (dzei),y
+          bne s1
+          lda fr4+1
+          and #$0f
+          sta fr4+1
+          lda fr1
+          lsr
+          bcc s1
+          lda fr4
+          asl
+          rol fr4+1
+          asl
+          rol fr4+1
+          asl
+          rol fr4+1
+          asl
+          rol fr4+1
+          sta fr4
+          ldy #0
+          lda (fatzei),y
+          and #$0f
+          ora fr4
+          sta fr4
+s1        ldy #0
+          lda fr4
+          sta (fatzei),y
+          ldy drive
+          jsr MDBUF
+          
+          jsr tstend
+          bcs fcerr
+          
+          ldy #D_BFLAG
+          lda (dzei),y
+          bne s2
+          
+          lda fr1
+          lsr
+          bcs s2
+          ldy #0
+          lda (fatzei),y
+          and #$f0
+          ora fr4+1
+          sta fr4+1
+s2        ldy #0
+          lda fr4+1
+          sta (fatzei),y
+          ldy drive
+          jsr MDBUF
+          clc
+fcerr     rts
+          .)
+
+tstend    .(
+          inc fr3             ; increment Zeiger in FAT
+          bne t1
+          inc fr3+1
+t1        inc fatzei
+          bne t2
+          inc fatzei+1
+t2
+          lda fr3+1
+          ldx fr3
+          jsr xcmpfpos        ; ist Ende des Puffers ? 
+          bcc fok             ; nein 
+
+          inc fr2
+          bne f2
+          inc fr2+1
+f2        lda fr2
+          ldx fr2+1
+          jsr RDFAT
+          bcs fcerr
+          ldx drive
+          jsr setpadr
+          sta fatzei
+          stx fatzei+1
+          ldy #0
+          sty fr3
+          sty fr3+1
+fok       ldy #0
+          clc
+fcerr     rts
+          .)
+
+lfat      .(
+          sta fr1
+          stx fr1+1
+          ldy #D_CLUS+1
+          txa
+          cmp (dzei),y
+          bcc lok
+          bne lerr
+          lda fr1
+          dey
+          cmp (dzei),y
+          bcc lok
+lerr      lda #E_ILLPAR
+          rts
+lok       ldy #D_BFLAG
+          lda (dzei),y
+          and #1
+          beq fat12
+	  lda fr1
+          asl
+          sta ar1
+          txa
+          rol
+          jmp f1
+fat12     lda fr1
+          sta fr2
+          stx fr2+1
+          lsr fr2+1
+          ror fr2
+          clc
+          adc fr2
+          sta ar1
+          txa
+          adc fr2+1
+f1        sta ar1+1
+	  lda #0
+	  sta ar1+2
+	  sta ar1+3
+          ldy #D_BPS+1
+          lda (dzei),y
+          tax
+          dey
+          lda (dzei),y
+          jsr div32
+          bcc fx
+          lda #E_ILLPAR
+          sec
+          rts
+fx        sta fr2        ; Sektor in der FAT
+          stx fr2+1
+          ldy ar1        ; Position im Block
+          sty fr3
+          ldy ar1+1
+          sty fr3+1
+          jsr RDFAT      ; l„dt FAT-Block Nr a/x
+          bcs fcerrx
+          ldx drive
+          jsr setpadr
+          clc
+          adc fr3
+          sta fatzei
+          txa
+          adc fr3+1
+          sta fatzei+1
+          clc
+fcerrx    rts
+          .)
+         
+RDFAT     .(
+          ldy #D_STF
+          clc
+          adc (dzei),y
+	  sta ar2
+          iny
+          txa
+          adc (dzei),y
+	  sta ar2+1
+	  lda #0
+	  sta ar2+2
+	  sta ar2+3
+          ldy drive
+          jmp RDBUF
+          .)
+
+mult4     .(        /* a/x * ar1(4 Byte) -> ar1 (4 Byte) */
+          clc
+          sta ar3
+          stx ar3+1
+          lda #0
+          sta ar2
+          sta ar2+1
+          sta ar2+2
+          sta ar2+3
+          txa
+          ora ar3
+          beq mend
+mloop     
+          lsr ar3+1
+          ror ar3
+          bcc mnext
+
+          clc          
+          lda ar1
+          adc ar2
+          sta ar2
+          lda ar1+1
+          adc ar2+1
+          sta ar2+1
+          lda ar1+2
+          adc ar2+2
+          sta ar2+2
+          lda ar1+3
+          adc ar2+3
+          sta ar2+3
+          bcs mend
+          
+mnext     lda ar3
+          ora ar3+1
+          beq mend
+
+          asl ar1
+          rol ar1+1
+          rol ar1+2
+          rol ar1+3
+          bcc mloop
+          
+mend      lda ar2
+          sta ar1
+          lda ar2+1
+          sta ar1+1
+          lda ar2+2
+          sta ar1+2
+          lda ar2+3
+          sta ar1+3
+          rts
+          .)
+          .)
+
+

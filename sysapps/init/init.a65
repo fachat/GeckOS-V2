@@ -36,7 +36,7 @@
  * If you define INIT_OUTDEV with the device number, this device is used
  * to print the info, otherwise device 0 is used.
  * 
- * If INIT_USE_STDLIB is defined, init uses the STDIO library, otherwise
+ * If INIT_USE_STDLIB is defined, init uses the (old) STDIO library, otherwise
  * it will include its own printing routines if INIT_VERBOSE is defined.
  *
  * If INIT_MERGE is defined, then files can be started with their STDOUT/STDERR
@@ -47,10 +47,23 @@
  * derivate... (argh, horrible code...).
  */
 
+/* 
+ * In this exerimental version init also scans other 64k banks for
+ * for the standard ROM link chain to start in the upper half.
+ * It does not start PK_INIT/PK_DEV programs from other banks, though.
+ * The (currently _one_) other bank to scan is defined with INIT_MMU_BANK.
+ *
+ * To achieve remapping of the upper 32k, it assumes linear mapping
+ * in bank 0 when starting and remaps itself to $1***.
+ *
+ * This only works with the CS/A65 MMU CPU board!
+ */
+
 #include "kernel.i65"
 #include "kdefs.i65"
 
 #ifdef INIT_LIB6502
+#echo init uses lib6502
 #include "lib6502.i65"
 #endif
 
@@ -63,10 +76,10 @@
 start     .word ende            ; pointer to end of file in ROM
           .byt  PK_INIT+$80     ; file type = init task + auto-execute bit
           .word PRG             ; execution start
-          .byt  3               ; RAM size in 256-byte blocks
+          .byt  3               ; RAM size needed, in 256-byte blocks
           .byt  >$ff-ROMSTART	; shared mem size in 256-byte blocks
           .byt  0               ; priority
-          .word 0               ; stdin, stdout/stderr device number
+          .word 0               ; stdin, stdout/stderr device number (ignored)
           .asc  "init",0,0      ; command line
 
 	  .zero
@@ -74,6 +87,12 @@ pz	  .word 0
 s1	  .byt 0
 s2	  .byt 0
 	  .text
+
+#ifdef INIT_MMU
+	.data
+actbank	.byt 0
+	.text
+#endif
 
 #ifdef INIT_RESTART
 
@@ -84,15 +103,48 @@ s2	  .byt 0
 	.data
 npid	.byt 0
 kpid	.byt 0			; number of killed tasks
-lpa	.dsb INIT_MAXRESTART
-hpa	.dsb INIT_MAXRESTART
-pid	.dsb INIT_MAXRESTART
+
+#ifdef INIT_MMU
+bank	.dsb INIT_MAXRESTART	; bank where program resides
+#endif
+
+lpa	.dsb INIT_MAXRESTART	; ROM start address low
+hpa	.dsb INIT_MAXRESTART	; ROM start address high
+pid	.dsb INIT_MAXRESTART	; PID of started process
 killed	.dsb INIT_MAXRESTART	; this can still overflow - non-restartable
 				; tasks give signals too!
 	.text
 #endif
 
 PRG	  .(
+#ifdef INIT_MMU
+#ifdef ROM
+#print *
+	lda #>*
+	lsr
+	lsr
+	lsr
+	lsr
+#ifdef ROMTEST
+	ora #$10
+#endif
+	pha
+	ldy #1
+	jsr SETBLK
+	pla
+	clc
+	adc #1
+	ldy #2
+	jsr SETBLK
+&oldpc=*
+#print *
+	*= (* & $0fff) | $1000
+&newpc=*
+#print *
+	jmp *+3
+#endif
+#endif
+
 #ifdef INIT_VERBOSE
 	; first organize stream and set device accordingly
 	jsr GETSTR
@@ -127,11 +179,39 @@ no_out
 	sta npid
 	sta kpid
 #endif
-
+;.byt 2
+#ifdef INIT_MMU
+	lda #0
+	jsr setbank
+bankloop
+#endif	
+;.byt 2
 	  lda #<ROMSTART
           sta pz
           lda #>ROMSTART
           sta pz+1
+
+#ifdef INIT_MMU
+	ldx #6
+	ldy #17
+magicl	lda (pz),y
+	cmp magic,x
+	bne nextbank
+	iny
+	dex
+	bpl magicl
+	lda (pz),y
+	cmp pz
+	bne nextbank
+	iny
+	lda (pz),y
+	cmp pz+1
+	bne nextbank
+	jmp startloop
+
+magic	.byt "MOR2ASO"
+
+#endif
 
 startloop
           ldy #0
@@ -140,7 +220,18 @@ startloop
           and (pz),y
           cmp #$ff
           bne slx1
+
+#ifdef INIT_MMU
+nextbank
+	lda actbank
+	bne endloop
+	lda #INIT_MMU_BANK
+	jsr setbank
+	jmp bankloop
+#endif
+
 endloop   
+
 #ifdef INIT_RESTART
 	  jmp restarts
 #else
@@ -158,6 +249,10 @@ slx1	jsr dostart
 	ldy npid
 	cpy #INIT_MAXRESTART
 	bcs norestart
+#ifdef INIT_MMU
+	lda actbank
+	sta bank,y
+#endif
 	lda pz
 	sta lpa,y
 	lda pz+1
@@ -268,6 +363,7 @@ getserr3a bcs getserr3
 oldstr	
           ldy #P_DEV+2
           lda (pz),y
+	  bmi noinput
           tax
 	  pha
           ldy s1
@@ -280,6 +376,10 @@ oldstr
           jsr DEVCMD
 	  clc
 	  rts
+noinput
+	  lda #SC_EOF
+	  ldx s1
+	  jmp STRCMD
 	  .)
 
 dostart	  .(
@@ -522,6 +622,14 @@ ll	lda killed+1,x
 	jmp restarts
 
 doit
+#ifdef INIT_MMU
+	txa
+	pha
+	lda bank,x
+	jsr setbank
+	pla
+	tax
+#endif
 	lda hpa,x
 	sta pz+1
 	lda lpa,x
@@ -665,6 +773,52 @@ ifork_ok ldx #5
 end2	jsr getserr3
 end	rts	;jmp inext
 	.)
+#endif
+
+#ifdef INIT_MMU
+
+/* maps the upper half of the 64k bank to the current memory map */
+setbank	.(
+	pha
+	asl
+	asl
+	asl
+	asl
+#ifdef ROMTEST
+	bne sbok
+	ora #$10
+sbok
+#endif
+#ifdef INIT_ROM2TEST
+	cmp #INIT_MMU_BANK<<4
+	bne rom2ok
+	ora #$08	; xors the bit to map to lower half
+rom2ok
+#endif
+	sta actbank
+	ldx #8
+sbloop
+	txa
+	eor actbank
+	pha
+	txa
+	tay
+	pla
+	jsr SETBLK
+	inx
+	cpx #15
+	bcc sbloop
+	pla
+	sta actbank
+	rts
+	.)
+
+#ifdef ROM
+#print *
+/* if in ROM, change back to pseudo-relocation mode */
+	*= * - newpc + oldpc
+#print *
+#endif
 #endif
 
 ende      .)

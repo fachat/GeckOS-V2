@@ -1,0 +1,170 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* linear ramdisk driver */
+
+/*
+ * Driver for a simple RAM disk. You write side, track and sector
+ * into three memory locations and the corresponding sector is
+ * mapped to another memory location. There is can be read or written.
+ *
+ * Exports 
+ * 
+ *  DLOOP
+ *  DINIT
+ *  RWSEC
+ *  DFORMAT
+ *  GETDPB
+ *
+ * Imports (calls):
+ *
+ *  dchanged
+ *
+ */
+
+#define	RAMD_DRV	$e870
+#define	RAMD_SECTOR	$e871	/* 3 byte */
+
+#define	RAMD_DATA	$ec00
+
+	.(
+
+	.zero
+zei	.word 0
+zeid	.word 0
+	.text
+
+&DLOOP	rts	; not needed
+
+INVDPB    .(        ; x ist Drive
+          txa
+          jsr setdzei
+          ldy #D_ST
+          lda #DS_INV
+          sta (dzei),y
+          clc
+          rts
+          .)
+
+&DINIT	clc	; oh, what shall we do.... 
+          ldx #0
+il        stx zei
+          jsr INVDPB
+          ldx zei
+          inx
+          cpx #ANZDRV
+          bcc il
+          clc
+	rts
+
+&DFORMAT
+	ldx drive
+	jsr INVDPB
+	clc
+	rts
+	rts
+
+&GETDPB
+	cpx #1
+	bcs illpar
+        jsr boot2dpb
+        ldy #D_ST
+        lda #DS_OK
+        sta (dzei),y
+        ldy #D_BFLAG
+        lda #0          ; 0 -> 12 bit FAT
+        sta (dzei),y
+        clc
+        rts
+illpar	lda #E_ILLPAR
+	sec
+	rts
+
+&RWSEC	
+	php
+	sta zei
+	sty zei+1
+
+	ldy #RW_ADR
+	lda (zei),y
+	sta zeid
+	iny
+	lda (zei),y
+	sta zeid+1
+
+	ldy #RW_DRV
+	lda (zei),y
+;	bne notimp
+	sta RAMD_DRV	
+	ldy #RW_SECTOR
+	lda (zei),y
+	sta RAMD_SECTOR
+	iny
+	lda (zei),y
+	sta RAMD_SECTOR+1
+	iny
+	lda (zei),y
+	sta RAMD_SECTOR+2
+	iny
+	lda (zei),y
+	bne rwerr
+
+	plp
+	bcs write
+
+read	.(
+	ldy #0
+rl1	lda RAMD_DATA,y
+	sta (zeid),y
+	iny
+	bne rl1
+	inc zeid+1
+rl2	lda RAMD_DATA + $100,y
+	sta (zeid),y
+	iny
+	bne rl2
+	clc
+	rts
+	.)
+
+write	.(
+	ldy #0
+rl1	lda (zeid),y
+	sta RAMD_DATA,y
+	iny
+	bne rl1
+	inc zeid+1
+rl2	lda (zeid),y
+	sta RAMD_DATA + $100,y
+	iny
+	bne rl2
+	clc
+	rts
+	.)
+
+rwerr	plp
+	sec
+	rts
+        .)
+
+

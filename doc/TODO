@@ -1,0 +1,33 @@
+
+TODO-List for 2.1.0
+-------------------
+
+- FSIBM:
+
+   + ignore VFAT long filenames (or handle them... :-)
+   + I had problems copying file from HD to IEC? Stream error feature?
+   + implement OSA2 stream error feature
+   + check filesystem structure (esp. on FAT16)
+     (bytes free count differs from what is expected)
+
+- ramtest:
+
+   + make a small program to be able to test RAM on non-standard
+     places and make it available to the kernel.
+
+- lib6502:
+
+   + memory handling should use SBRK call to incerease memory size 
+     if necessary
+
+- FSDEV:
+
+   + fix _AS_INIT handling (release SEM_SENDBUF etc appropriately)
+   + use alternate ROM pages as file source (like in init)
+   + allow reading of binary files from ROM
+
+- FSIEC:
+
+   + fix _AS_INIT handling (release SEM_SENDBUF etc appropriately)
+   + fix protocol bugs when talking to a PET on IEEE488
+

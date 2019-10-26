@@ -73,6 +73,7 @@ devstart
 #include  "devices/ser_9600.a65" ; fast serial interface by Daniel Dallmann
 
 #ifdef ACIABASE
+#print ACIABASE
 #include  "devices/ser_acia.a65"
 #endif
 

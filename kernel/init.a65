@@ -134,9 +134,11 @@ prgstart  /* get system speed */
 	  jsr initthreads
           jsr inienv
           ;bcs e4
+#ifndef NO_DEVICE
           lda s1
           jsr inidev
           ;bcs e2
+#endif
 #ifndef NO_STREAMS
           jsr inistream 
           ;bcs e3
@@ -166,6 +168,7 @@ startloop
           and (pz),y
           cmp #$ff
           bne slx1
+;jmp edev
           jmp pstart
 xerr      
 	  jmp edev
@@ -609,7 +612,10 @@ taski
           pha
 #endif
 
-il        jsr irqdev
+il       
+#ifndef NO_DEVICE 
+	jsr irqdev
+#endif
 
 #ifndef NOSYSPORT
           pla
@@ -634,9 +640,10 @@ il        jsr irqdev
 #ifdef SAVEMEM
 	  RESTOREMEM()
 #endif
-
+#ifndef NO_DEVICE
           bit adev       
           bpl endirq     ; Device Interrupted -> no Task-switch
+#endif
 ;jmp endirq
           jmp irqloop
 

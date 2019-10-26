@@ -1,0 +1,136 @@
+
+Generic driver for the CS/A65 SCSI interface
+--------------------------------------------
+
+This is the generic driver for the CS/A SCSI interface, written for
+the 6502 CPU.
+
+The hardware is derived from a very old SASI interface described 
+in the german elektor magazin.
+The schematics can be found in csascsi1.{gif|ps}
+A description and parts list are in csascsi1{desc|parts}.txt.
+
+The software runs on the C64 with the C64-CS/A65 bus adaptor
+(See http://www.tu-chemnitz.de/~fachat/8bit/c64/csa/index.html)
+as well as on a CS/A65 computer.
+(See http://www.tu-chemnitz.de/~fachat/8bit/hardware/csa/index.html)
+
+To build the driver you need the xa65 6502 cross assembler.
+(See http://www.tu-chemnitz.de/~fachat/8bit/cross/xa/index.html)
+It should be easy to patch the source for another assembler.
+
+New with 1.1:
+-------------
+
+- the pc partition scanner handles extended partions better 
+- a C64 binary is included (as "mainc64"). Simply LOAD and RUN it
+  if you have the SCSI-interface at $de00. 
+  (It doesn't check if it's there!)
+
+Driver Description
+------------------
+
+The driver is divided into several parts:
+
+csascsi1.a65 contains the low-level routines to scan the SCSI bus
+	and to read/write sectors for the CS/A65 SCSI card. 
+	To use another hardware this module can be replaced.
+
+part.i65 defines a general interface to read and write blocks in a 
+	partition. Also the partition table format is defined here.
+
+pcpart.a65 uses the low-level routines to scan the devices for 
+	PC-style partition tables. They are registered in the partition 
+	table. To use a different type of partition tables 
+	(Amiga for example), replace this file.
+
+paccess.a65 implements the pread and pwrite functions to read and
+	write blocks in a partition with the use of the partition table.
+
+print*.a65 are some help routines to print debugging output when 
+	the routines are used in an OS/A65 1.3  or C64 environment.
+	It is not needed without output or has to be replaced for 
+	another operating environment.
+
+main.a65 is a simple test program. It also includes the driver for
+	assembling with the xa65 crosscompiler and the OS-specific 
+	startup code.
+
+
+Comments
+--------
+
+This is the very first version. There are sure some bugs. 
+Error handling is miserable. 
+The hardware only works as single controller and only as ID 7.
+There is no fdisk program - it would be partition-style dependent
+and would use the low-level driver.
+If in doubt, read the source :-)
+
+Here is the sample output of the main program:
+
+-------------------------------------------------------------------------
+>l"maincsa" 400:0B14
+>g 400
+CS/A65 SCSI driver
+
+Resetting SCSI bus
+Device select timeout 00
+Device select timeout 01
+Device found 02
+SEAGATE ST1096N         [Type 00, SCSI Rev. 01]
+       [Blocks: 00028091, Byte/Block: 00000200]
+Device select timeout 03
+Device found 04
+IBM     DCAS-34330W     [Type 00, SCSI Rev. 02]
+       [Blocks: 008132FF, Byte/Block: 00000200]
+Device select timeout 05
+Device select timeout 06
+
+Scanning for PC-type partitions
+
+Found Direct Access Device 02
+Partition Type 04, Device 02, First 00000020, Len 0000F7E0
+Partition Type 05, Device 02 (extended)
+Partition Type 06, Device 02, First 0000F820, Len 000187E0
+
+Found Direct Access Device 04
+Partition Type 06, Device 04, First 00000020, Len 001DB7E0
+Partition Type 05, Device 04 (extended)
+Partition Type 83, Device 04, First 001DB820, Len 0000A7E0
+Partition Type 05, Device 04 (extended)
+Partition Type 83, Device 04, First 001E6020, Len 001F47E0
+Partition Type 05, Device 04 (extended)
+Partition Type 82, Device 04, First 003DA820, Len 0003C7E0
+Partition Type 05, Device 04 (extended)
+Partition Type 83, Device 04, First 00417020, Len 003FBFE0
+
+>m e1e e5e
+>,0E1E 04 00 02 00 00 02 00 00 20 00 00 00 E0 F7 00 00:........ ...a/..
+>,0E2E 06 00 02 00 00 02 00 00 20 F8 00 00 E0 87 01 00:........ 0..a...
+>,0E3E 06 00 04 00 00 02 00 00 20 00 00 00 E0 B7 1D 00:........ ...ao..
+>,0E4E 00 00 04 00 00 02 00 00 00 70 43 30 08 04 71 00:.........pC0..q.
+>
+-------------------------------------------------------------------------
+
+As you can see the driver is pretty small (the whole text segment is
+about 1k without print + about 180 byte for partition tables etc. 
+(Of course it needs buffers to read & store the sectors read from disk)
+
+It can also handle multiple devices as well. The IBM 4G Ultra-Wide SCSI-II
+(with Wide-SCSI -> SCSI adapter) is handled as well as the old Seagate
+ST1096N SCSI-I at the same time.
+
+The partition table shows three usable partitions, of types 4 
+(FAT 16 bit < 32M) and 6 (FAT 16 bit >= 32M) and
+on (SCSI-) devices 2 and 4. the 4th to 7th byte are the bytes/block,
+then the first block and the length of the partition on the device.
+The other partitions found but written to the partition table are
+Linux partitions :-)
+
+There will be a binding to the fsibm 12/16 Bit filesystem for OS/A65.
+
+Have fun
+Andre Fachat                                           13 June 1998
+
+

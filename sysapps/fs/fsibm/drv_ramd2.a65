@@ -1,0 +1,259 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.1.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* drv/track/sector driver ramdisk */
+
+/*
+ * Driver for a simple RAM disk. You write side, track and sector
+ * into three memory locations and the corresponding sector is
+ * mapped to another memory location. There is can be read or written.
+ *
+ * Exports 
+ * 
+ *  DLOOP
+ *  DINIT
+ *  RWSEC
+ *  DFORMAT
+ *  GETDPB
+ *
+ * Imports (calls):
+ *
+ *  dchanged
+ *
+ */
+
+#define	RAMD_DRV	$e870
+#define	RAMD_SIDE	$e871
+#define	RAMD_TRACK	$e872
+#define	RAMD_SEC	$e873
+
+#define	RAMD_DATA	$ec00
+
+	.(
+
+	.zero
+zei	.word 0
+zeid	.word 0
+ddzei	.word 0
+	.text
+
+&DLOOP	rts	; not needed
+
+#if D_SLEN=32
+setddzei            /* AC=Drv-Nr    */
+          asl
+          asl
+          asl
+          asl
+          asl
+          clc
+          adc #<dpb
+          sta ddzei
+          lda #0
+          adc #>dpb
+          sta ddzei+1
+          clc
+          rts
+#endif
+
+sec2rw    .(
+          ldy #RW_DRV
+          lda (zei),y
+          jsr setddzei
+
+          ldy #RW_TRCK+1
+          lda (zei),y
+          sta ar1+1
+          dey
+          lda (zei),y
+          sta ar1
+          ora ar1+1
+          bne notboot
+
+          ;lda #0
+          ldy #RW_SIDE
+s2rl      sta (zei),y
+          iny
+          cpy #RW_ADR
+          bcc s2rl
+          ldy #RW_SEC
+          lda #1
+          sta (zei),y
+          clc
+          rts
+
+notboot   ldy #D_SECS+1
+          txa
+          cmp (ddzei),y
+          bcc sok
+          bne serr
+          dey
+          lda ar1
+          cmp (ddzei),y
+          bcs serr
+sok
+          ldy #D_SPTS+1
+          lda (ddzei),y
+          tax
+          dey
+          lda (ddzei),y
+          jsr div
+          bcs serr
+          ldy #RW_TRCK
+          sta (zei),y
+          iny
+          txa
+          sta (zei),y
+          ldy #D_SPT+1
+          lda (ddzei),y
+          tax
+          dey
+          lda (ddzei),y
+          jsr div
+          bcs serr
+          ldy #RW_SIDE
+          sta (zei),y
+          txa
+          bne serr
+          clc
+          lda ar1
+          adc #1
+          ldy #RW_SEC
+          sta (zei),y
+          iny
+          lda ar1+1
+          adc #0
+          sta (zei),y
+          rts
+serr      sec
+          rts
+          .)
+
+INVDPB    .(        ; x ist Drive
+          txa
+          jsr setdzei
+          ldy #D_ST
+          lda #DS_INV
+          sta (dzei),y
+          clc
+          rts
+          .)
+
+&DINIT	clc	; oh, what shall we do.... 
+          ldx #0
+il        stx zei
+          jsr INVDPB
+          ldx zei
+          inx
+          cpx #ANZDRV
+          bcc il
+          clc
+	rts
+
+&DFORMAT
+        ldx drive
+        jsr INVDPB
+        clc
+        rts
+        rts
+
+&GETDPB
+	cpx #1
+	bcs illpar
+	jsr boot2dpb
+        ldy #D_ST
+        lda #DS_OK
+        sta (dzei),y
+        ldy #D_BFLAG
+        lda #0          ; 0 -> 12 bit FAT
+        sta (dzei),y
+        clc
+	rts
+
+illpar	lda #E_ILLPAR
+	sec
+	rts
+
+&RWSEC	
+	php
+	sta zei
+	sty zei+1
+
+	jsr sec2rw
+
+	ldy #RW_ADR
+	lda (zei),y
+	sta zeid
+	iny
+	lda (zei),y
+	sta zeid+1
+
+	ldy #RW_DRV
+	lda (zei),y
+	sta RAMD_DRV	
+	ldy #RW_TRCK
+	lda (zei),y
+	sta RAMD_TRACK
+	ldy #RW_SIDE
+	lda (zei),y
+	sta RAMD_SIDE
+	ldy #RW_SEC
+	lda (zei),y
+	sta RAMD_SEC
+
+	plp
+	bcs write
+
+read	.(
+	ldy #0
+rl1	lda RAMD_DATA,y
+	sta (zeid),y
+	iny
+	bne rl1
+	inc zeid+1
+rl2	lda RAMD_DATA + $100,y
+	sta (zeid),y
+	iny
+	bne rl2
+	clc
+	rts
+	.)
+
+write	.(
+	ldy #0
+rl1	lda (zeid),y
+	sta RAMD_DATA,y
+	iny
+	bne rl1
+	inc zeid+1
+rl2	lda (zeid),y
+	sta RAMD_DATA + $100,y
+	iny
+	bne rl2
+	clc
+	rts
+	.)
+
+        .)
+
+

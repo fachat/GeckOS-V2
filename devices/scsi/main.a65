@@ -1,0 +1,109 @@
+
+
+#define	PRINT
+#undef	PRINT2
+#undef	DEBUG
+
+/*
+ * Sample SCSI + PC-style partition manager program
+ */
+
+;--------------------------------------------------------------
+; C64 specific code
+
+#ifdef C64
+
+#define	CSADAPTER	$de00
+
+#define	SCSIBASE	(CSADAPTER+$70)
+
+	.word $801
+	*=$801
+	.word link
+	.word 10
+	.byt $9e, "2061",0
+link	.word 0
+
+	; set up C64 - CS/A adapter
+	lda #$00
+	sta CSADAPTER+$80
+	lda #$10
+	sta CSADAPTER+$81
+	lda #$ff
+	sta CSADAPTER+$82
+	sta CSADAPTER+$83
+
+	jmp main
+
+#include "printc64.a65"
+
+#endif	/* C64 */
+
+;--------------------------------------------------------------
+; CS/A65 specific code
+
+#ifdef CSA
+
+#define	SCSIBASE	$e870
+
+	jmp main
+
+#include "printcsa.a65"
+
+#endif	/* CSA */
+
+;--------------------------------------------------------------
+
+#include "part.i65"
+
+main	.(
+	lda #<buffer
+	ldy #>buffer 
+	ldx #2
+	jsr scanpart
+
+	rts
+
+	lda #0
+	sta rwpar+PRW_PART
+	lda #1
+	sta rwpar+PRW_NSEC
+	
+	ldy #PRW_SECTOR
+	lda #0
+ml1	sta rwpar,y
+	iny
+	cpy #PRW_SECTOR+4
+	bcc ml1
+
+	lda #<buffer
+	sta rwpar+PRW_BUF
+	lda #>buffer
+	sta rwpar+PRW_BUF+1
+
+	lda #<rwpar
+	ldy #>rwpar
+	jsr pread
+
+	inc rwpar+PRW_PART
+	lda #<rwpar
+	ldy #>rwpar
+	jsr pread
+
+	rts
+
+	.)
+
+	.bss
+
+buffer	.dsb 512
+
+rwpar	.dsb PRW_SLEN
+
+	.text
+
+#include "pcpart.a65"
+#include "paccess.a65"
+#include "csascsi1.a65"		/* needs SCSIBASE */
+
+
