@@ -1,0 +1,273 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************
+ * Environment handling for lib6502
+ * exports
+ * 	Getenv, Putenv
+ *
+ */
+	.(
+	.zero
+p	.word 0
+p2	.word 0
+	.text
+
+&Getenv	.(
+; .byt 2
+	sta zth
+	sty zth+1
+
+	jsr taskinit
+
+	lda #LSEM_ENV
+	jsr llock
+
+	jsr firstv
+vloop
+	ldy #0
+	lda (p),y
+	beq notf
+
+	jsr cmpv
+	bcs next
+	sta zth
+	sty zth+1
+ret	
+	lda #LSEM_ENV
+	jsr lunlock
+	
+	lda zth
+	ldy zth+1
+	clc
+	rts
+
+next	jsr nextv
+	bcc vloop
+
+notf	lda #0
+	sta zth
+	sta zth+1
+	beq ret		; branch always
+	.)
+
+
+cmpv	.(
+	ldy #0
+nloop
+	lda (zth),y
+	beq end1
+	cmp (p),y
+	bne next
+	cmp #"="
+	beq end1
+	iny
+	bne nloop
+end1
+	lda (p),y
+	cmp #"="
+	bne next
+	iny
+
+	tya
+	clc
+	adc p
+	pha
+	lda p+1
+	adc #0
+	tay
+	pla
+	clc
+	rts
+next	sec
+	rts
+	.)
+
+firstv	.(
+	lda zta
+	clc
+	adc #<LT_ENV
+	sta p
+	lda zta+1
+	adc #>LT_ENV
+	sta p+1
+	rts
+	.)
+
+nextv	.(
+	ldy #0
+l0	lda (p),y
+	beq ende
+	iny
+	bne l0
+	sec
+	rts
+ende	iny
+	tya
+	clc
+	adc p
+	sta p
+	bcc l1
+	inc p+1
+l1	clc
+	rts
+	.)
+
+&Putenv	.(
+; .byt 2
+	sta zth
+	sty zth+1
+
+	ldy #0
+	lda (zth),y
+	bne doit
+	lda #E_ILLPAR
+	sec
+	rts
+doit
+	lda #LSEM_ENV
+	jsr llock
+
+	/* first try to find var in env. */
+
+	jsr firstv
+vloop
+	ldy #0
+	lda (p),y
+	beq notf
+
+	jsr cmpv
+	bcc found
+next
+	jsr nextv
+	bcc vloop
+	bcs notf
+
+	/* if found, remove old variable (address in p) */
+found	
+	ldy #0
+l1	lda (p),y
+	beq len
+	iny
+	bne l1
+len	iny
+	tya
+	clc
+	adc p
+	sta p2
+	lda p+1
+	adc #0
+	sta p2+1	; now p2 has the address of the following var.
+
+	ldy #0
+l2	lda (p2),y
+	beq endl
+l3	lda (p2),y
+	sta (p),y
+	iny
+	cmp #0
+	bne l3
+	beq l2
+endl			; copy finished
+
+	/* now add variable at the end of the list */
+notf	
+; .byt 2
+	jsr firstv
+
+	ldy #0
+l4	lda (p),y
+	beq ende
+l5	iny
+	lda (p),y
+	bne l5
+	iny
+	beq l4
+ende
+	sty p2
+	ldy #0
+l6	lda (zth),y
+	beq l7
+	iny
+	bne l6
+l7	iny
+	iny
+	clc
+	adc p2
+#if ENVLEN <> 256
+	cmp #ENVLEN
+#endif
+	bcs nomem
+
+	lda p2
+	clc
+	adc p
+	sta p2
+	lda p+1
+	adc #0
+	sta p2+1
+
+	ldy #0
+l8	lda (zth),y
+	sta (p2),y
+	iny
+	cmp #0
+	bne l8
+	sta (p2),y
+
+	lda #E_OK
+	.byt $2c
+nomem	lda #E_NOMEM
+	pha
+	lda #LSEM_ENV
+	jsr lunlock
+	pla
+	cmp #1
+	rts
+	.)
+
+&Getenvp .(
+	lda zta
+	clc
+	adc #<LT_ENV
+	pha
+	lda zta+1
+	adc #>LT_ENV
+	tay
+	pla
+	rts
+	.)
+
+&Getos	.(
+	lda #<ostxt
+	ldy #>ostxt
+	rts
+
+ostxt	.asc OSA_NAME, 32, OSA_VERSION, 32, OSA_CPU, 32
+	.asc OSA_ARCH, 32
+	.asc "lib6502",32,"0.6",0
+	.)
+
+	.)
+

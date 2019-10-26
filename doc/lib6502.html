@@ -1,0 +1,1161 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+<HEAD>
+   <TITLE> lib6502 standard library </TITLE>
+</HEAD>
+<BODY BGCOLOR="#FFFFFF">
+
+<H1>lib6502 standard library </H1>
+
+<H2>Version 0.6 (26 january 1997)</H2>
+
+<P><!-- Log:
+0.5 -> 0.6:
+	added os version call getos
+	changed cwd definition to let the app provide a buffer
+	removed a/y length of data processed return value from fread/fwrite,
+	added end-of-file comment to fread
+	added "cwd" call
+	added SIG_CHLD definition to signal 
+	added "yield" call
+
+0.4 -> 0.5:
+	moved file mode in fopen to xr
+	Moved getenv/putenv from the Ideas section to an own subsection
+	added directory entry definitions, added owner/group
+	    (this makes fsetattr equivalent to chmod and chown)
+	remove no-block bit from freaddir, use fcntl(FC_RCHECK)
+	E_FNAMLEN for name too long added to fopen
+	absolute values for FC_* constants added
+	fopen bits for exclusive etc added
+	realloc added
+	Trying to add more explicit values to not only have source but
+		also binary compatibility someday
+	getenv/putenv added to ideas section.
+0.3 -> 0.4:
+	completely moved to bi-directional file-nos 
+	added more comments on flock
+	introduced fcntl(FC_RCHECK) and fcntl(FC_WCHECK)
+	put a note for the directory into the fopen() description
+
+0.2 -> 0.3: 
+	added fseek
+	added stddup
+	changed forknexec to forkto
+	added forkthread
+	added how to get list of file devices
+	added how a program is started (main, a/y=pars)
+	added o65 impementation notes.
+	added dup call and notes about read-write file-nrs
+	added kill
+-->
+<HR>(c) A. Fachat </P>
+
+<P>This document consists of three parts, the <A HREF="#intro">Introduction</A>,
+the actual <A HREF="#def">library interface definition</A> and the <A HREF="#impnotes">Implementation
+Notes</A>. There also is an <A HREF="#index">Index</A> of the used function
+names, as well as a section for <A HREF="#ideas">ideas</A> for the development.
+Also <A HREF="#ack">acknowledgements</A> are given. </P>
+
+<H3><A NAME="intro"></A>Introduction</H3>
+
+<P>This file has been written to define a certain compatibility level between
+different operating systems for 6502 computer. It defines, on a more abstract
+level that can be fitted to different real OSes, an interface for system
+services. The goal of this definition is, to be able to fit into various
+different environments, like </P>
+
+<UL>
+<LI>Computers like the C64 or the Gecko computer, with a single 6502, without
+advanced memory management. </LI>
+
+<LI>Computers like the C128, with a more enhanced memory management (two
+banks with 64kByte each, relocatable zeropage and stack) </LI>
+
+<LI>The CS/A65 computer, with a 6502 and a fully virtualized address management.
+</LI>
+
+<LI>Computers with the 65816 CPU, for programs running in 8 bit emulation
+mode. </LI>
+</UL>
+
+<P>The possible operating systems also differ in style and features: </P>
+
+<UL>
+<LI>Single-tasking OSes, like the ones provided with the C64, or other
+6502 computers (if interprocess communication and process management calls
+are not used, lib6502 programs can even run on such a machine). </LI>
+
+<LI>'Monolithic' multitasking systems, that have all system services in
+the kernel </LI>
+
+<LI>Microkernel based OSes, that communicate with system servers via kernel
+communication paths, providing this functionality to the program via the
+lib6502. </LI>
+</UL>
+
+<P>This interface offers a common level for all these scenarios. Programs
+written for this library can run on any of these platforms, a simple recompile
+on the proprietary 6502 assembler/compiler will be enough. If people can
+agree on a standard file format, not even recompiling might be necessary.
+</P>
+
+<P>In this library there still is a certain degree of freedom in the implementation.
+System process IDs can still be 8 bit, as long as the library offers a
+16 bit interface to the application. Memory allocation can still be pagewise
+(in 256 byte blocks), as long as an application does not rely on that -
+in other OSes it can probably allocate smaller chunks. The purpose of this
+interface is, to hide the system OS behind. The application, on the other
+hand, should never assume any implementation specifics, that are not documented
+in this definition. </P>
+
+<P>Most of the calls are modeled along the standard libc C library, but
+there also are some calls from the Unix world. </P>
+
+<P>This file does not make any assumptions about the implementation of
+the calls, although the behaviour is (i.e. should be :-) noted as exactly
+as possible. 
+<HR></P>
+
+<H3><A NAME="def"></A>Library Interface definition</H3>
+
+<UL>
+<LI><A HREF="#file">File Interface</A> </LI>
+
+<LI><A HREF="#dir">Directory Interface</A> </LI>
+
+<LI><A HREF="#net">Network Interface</A> </LI>
+
+<LI><A HREF="#mem">Memory Management</A> </LI>
+
+<LI><A HREF="#proc">Process Management</A> </LI>
+
+<LI><A HREF="#comm">Interprocess Communication</A> </LI>
+
+<LI><A HREF="#env">Environment Handling</A> </LI>
+
+<li><a href="#index">Index</a></li>
+</UL>
+
+<H4><A NAME="file"></A>File interface</H4>
+
+<P>The file interface uses file numbers. These file numbers are valid in
+the local environment, and need not be globally valid. But the lib6502
+always has to accept these numbers, and then tranforms them internally
+wo whatever appropriate for the given OS. Of course an implementation where
+both are identical should be better in performance. </P>
+
+<P>file-nrs in lib6502 are treated as uni-directional or bi-directional
+channels, i.e. an application can either read or write to a provided uni-directional
+file-nr, and both at a time to a bi-directional file-nr. The OS can provide
+bi-directional (with read/write operations possible on the same file-descriptor
+in one task) or uni-directional (where a write to one end can be read from
+the other end even in the same task.) file-descriptors. Only the latter
+case is difficult. The stdlib must check the fileno and remap it to different
+filenos for reading or writing. <!--
+	In the former
+	case, open on a R/W file would return two identical file-nrs,
+	while pipe must return two different ones. In the latter case,
+	it must be vice versa: open returning two different file-nrs,
+	while pipe returns a single file-nr for reading and writing.
+	This leaves the flexibility for the implementation.
+--></P>
+
+<P>When an application is started, three uni-directional file-nrs do already
+exist and are open: STDIN, STDOUT, and STDERR. STDOUT gives the file-nr
+for writing task output, STDERR is for error output, while STDIN is for
+reading program input. </P>
+
+<P>All open files are closed when the process terminates. </P>
+
+<PRE>   <A NAME="f_fopen"></A>fopen:       
+                &lt;- a/y = address of null-terminated filename
+		   x   = file mode
+                        mode :  0 = read-only
+                                1 = write-only
+                                2 = read-write
+                                3 = append
+                -&gt; c=0 : x = file-nr 
+                   c=1 : a = error code         E_NOTFOUND
+                                                E_PERMISSION
+                                                E_FNAMLEN
+                                                E_DIRECTORY
+</PRE>
+
+<P>Files are named as: &quot;Device:directory/filename&quot;, where Device
+depends on the OS. There might be OSes where it's a single character (like
+A: or 8:), others might have a real name. The lib needs to be able to parse
+its own, implementation dependent namespace only. And the application should
+not assume anything about the length of the device name. Directory separator
+is &quot;/&quot;. Escape sequence for the directory separator is &quot;\/&quot;.
+For the filename interpretation see the beginning of the <A HREF="#dir">directory</A>
+section. Character set is ASCII (i.e. all codes between 0x20 and 0x7f must
+be useable, others are not allowed). </P>
+
+<P>The filesystem might imply other limitations on filename length, if
+there are directories at all, or the allowed characters. Wildcards are
+&quot;*&quot; that match any string and &quot;?&quot; that match exacly
+one character. The interpretation might depend on the filesystem, i.e.
+may not even be the same on the same system, but on different devices.
+Escape sequences are &quot;\*&quot; and &quot;\?&quot;. Escape sequence
+for &quot;\&quot; is &quot;\\&quot;. </P>
+
+<P>The mode byte can be one of the abovementioned, which map to </P>
+
+<PRE>                OPEN_RD         0
+                OPEN_WR         1
+                OPEN_RW         2
+                OPEN_AP         3
+</PRE>
+
+<P>Append means, that before any write to the file, the file pointer is
+positioned at the end of the file. The mode can be or'd with some other
+bits, like </P>
+
+<PRE>                OPEN_TRUNC      $80     If the file already exists, it will
+                                        be truncated (when writing).
+                OPEN_EXCL       $40     Only one process may have this file
+                                        open at one time.
+                OPEN_NOCREAT    $20     Do not automatically create when 
+                                        writing (OPEN_WR, _RW, _AP).
+</PRE>
+
+<P>Default is to automatically create the file when it does not exist and
+it is opened for writing. </P>
+
+<PRE>   <A NAME="f_fclose"></A>fclose       
+                &lt;- x = file-nr
+                Closes the given file-nr. Pushes all remaining data
+                to the receiver, and waits till it is written.
+                -&gt; c=0 : everything ok
+                   c=1: a = error code          E_NOFILE
+                                                E_WERROR
+                                                E_NUL
+
+   <A NAME="f_fgetc"></A>fgetc        
+                &lt;- x = file-nr
+                   c=0 : return immediately, c=1 : block till byte
+                -&gt; c=0 : a = data byte
+                   c=1 : a = error code         E_NOFILE
+                                                E_EMPTY
+                                                E_EOF
+   <A NAME="f_fputc"></A>fputc        
+                &lt;- x = file-nr, a = data byte
+                   c=0 : return immediately, c=1 : block till byte
+                -&gt; c=0 : ??
+                   c=1 : a = error code         E_NOFILE
+                                                E_FULL     (E_TRYAGAIN?)
+                                                E_NUL      (noone reads it)
+
+   <A NAME="f_fread"></A>fread        
+                &lt;- x = file-nr, a/y = address of struct:
+                        .word address_of_buffer, length_of_buffer
+                   c = 0 : return immediately, even if nothing read or
+                           buffer only partially read.
+                   c = 1 : wait till buffer is full or EOF (or error)
+                -&gt; c = 0 : ok
+                           struct given holds address+a/y, length-a/y,
+                           such that it can directly given to fread again.
+                   c = 1 : error code           E_NOFILE
+                                                E_EMPTY    (E_TRYAGAIN?)
+                                                E_EOF
+
+   <A NAME="f_fwrite"></A>fwrite       
+                &lt;- x = file-nr, a/y = address of struct:
+                        .word address_of_buffer, length_of_buffer
+                   c = 0 : return immediately, even if nothing written,
+                           or buffer only partially written.
+                   c = 1 : wait till buffer is empty (or error)
+                -&gt; c = 0 : ok
+                           struct given holds address+a/y, length-a/y,
+                           such that it can directly given to fwrite again.
+                   c = 1 : error code           E_NOFILE
+                                                E_FULL     (E_TRYAGAIN?)
+                                                E_NUL      (noone reads it)
+   <A NAME="f_fseek"></A>fseek
+                &lt;- x = file-nr, a/y = address of struct:
+                        .byt mode ; offset is relative to
+                                        0 = start of file
+                                        1 = end of file
+                                        2 = actual position
+                        .word 0,0 ; 32 bit offset
+                -&gt; c = 0 : ok;
+                   c = 1 : error code           E_NOFILE
+                                                E_NOSEEK
+</PRE>
+
+<P>fgetc and fread, and fputc and fwrite can be used interchangeably. fread/fwrite
+don't guarantee that the whole buffer is really read/written, even with
+carry set. For this, see <A HREF="f_fcntl">fcntl</A> below. 
+If <TT>fread</TT> returns an <TT>E_EOF</TT> there can still be bytes that
+have been read during this call, so the returned struct has to be checked.
+</P>
+<P>When opening
+a file read-write, then when changing between read and write, there always
+has to be an fseek operation. </P>
+
+<P>There are, however, files that cannot be seeked, namely character devices.
+If trying to use fseek on such a device, E_NOSEEK is returned. If a seekable
+file is given to STDIN <B>and</B> STDOUT/STDERR, the behaviour is not defined.
+Only non-seekable files should be given to STDIN and STDOUT/STDERR, when
+opened read-write. </P>
+
+<PRE>    <A NAME="f_pipe"></A>pipe        
+                -&gt; x = file-nr for reading
+                   y = file-nr for writing
+
+                opens a uni-directional pipe with two file numbers,
+                one for writing, and one for reading. To close the pipe,
+                each end has to be closed separately.
+
+    <A NAME="f_flock"></A>flock       
+                &lt;- x = file-nr
+                   a = operation: LOCK_SH, LOCK_EX, LOCK_UN
+                   c = 0: don't block
+                   c = 1: block till you get it
+                -&gt; c = 0: ok, got lock
+                   c = 1: a = error code        E_NOTIMP
+                                                E_NOFILE
+                                                E_LOCKED
+</PRE>
+
+<P>The flock call locks a file for other tasks access. If locked shared,
+then other tasks may also aquire shared locks - for reading, for example.
+An exclusive lock can only be aquired by exactly one task at a time - for
+writing. An exclusive lock can not be obtained when there are other shared
+locks, but a pending exclusive lock blocks all other attempts to lock it,
+even for shared locks. The flock implementation should be fair, i.e. lock
+attempts are served in the order they arrive, except that exclusive get
+served before shared locks. The flock call is optional. If not implemented,
+return E_NOTIMP </P>
+
+<PRE>    <A NAME="f_fcntl"></A>fcntl       
+                &lt;- x = file-nr, a = operation
+                        a = FC_PUSH     0  all buffers are flushed and sent
+                            FC_PULL     1  actively try to get everything 
+                                           that has already been sent
+                            FC_RCHECK   2  checks if there is data to read
+                            FC_WCHECK   3  checks if at least one byte can be
+                                           written.
+                -&gt; c = 0: ok
+                   c = 1: a = error code        E_NOFILE
+                                                E_NOTIMP
+                                                E_NOREAD
+                                                E_NOWRITE
+</PRE>
+
+<P>The fcntl return code should be ignored, as it is probably not implemented
+in most of the systems, except for RCHECK/WCHECK calls of course. </P>
+
+<PRE>    <A NAME="f_fcmd"></A>fcmd
+                &lt;- x = operation, a/y = filename,0 [ , filename2, 0 ]
+                        x = FC_RENAME   16   filename -&gt; filename2
+                            FC_DELETE   17
+                            FC_MKDIR    18
+                            FC_RMDIR    19
+                            FC_FORMAT   20   filename only to determine drive
+                            FC_CHKDSK   21    - &quot; -
+</PRE>
+
+<P>Other important calls are the stddup and the dup call. </P>
+
+<PRE>    <A NAME="f_stddup"></A>stddup
+                &lt;- x = old stdio file-nr (STDIN, STDOUT or STDERR)
+                   y = new file-nr for stdio file.
+                -&gt; c = 0: ok, x = old stdio file
+                   c = 1: a = error code        E_NOFILE
+</PRE>
+
+<P>This call replaces a stdio file-nr (the pre-defined STDIN, STDOUT, and
+STDERR file-nrs) with a new file-nr. The old file-nr must not be closed,
+as it is when the process terminates. Instead the new file-nr returned
+must be closed.</P>
+
+<PRE>     <A NAME="f_dup"></A>dup
+                &lt;- x = old file-nr
+                -&gt; c = 0: ok, x = new file-nr
+                   c = 1: a = error code        E_NOFILE
+</PRE>
+
+<P>This call 'reopens' a file, i.e. it returns a new file-nr that is used
+as the old one. They share the same read/write pointers etc. Both file-nrs
+must be closed. This way the same file can be given to STDOUT and STDERR
+in a fork call, for example. </P>
+
+<P>If dup is given a read-write file-nr, both sides are duped and the returned
+file-nr is bi-directional again. </P>
+
+<P>
+<HR></P>
+
+<P><!--
+<h4> <a name="rwnote">Note on read-write file-nrs</a></h4>
+
+	Now should any file-nr
+	as used in this lib be read-only or write-only?
+	Systems with read-write OS file descriptors should then 
+	probably return write file-nrs with an offset, to move them
+	out of the OSes valid file-nr range. So they can be relatively
+	easily handled.
+<p>
+	Otherwise it is necessary to complicate calls like close or
+	dup. But then, how does fseek now work?
+<p>
+	I could move the read-write files out of OS range, or check
+	them separately in other ways. Close would then close
+	both sides, and dup would also dup both sides.
+	When using a read-write file for one side of stdio, 
+	the other half of the communication channel would 
+	be left unused, however, which is a resource waste.
+<p>
+	Probably the second version (file-nrs uni- and bi-directional)
+	should be taken for the final lib definition, what do you think?
+<p><hr><p>
+--></P>
+
+<H4><A NAME="dir"></A>Directory Interface</H4>
+
+<P>The library maintains a path that is used for each file system operation.
+If a filename does not start with a &quot;/&quot; and not with a drive,
+the path is put in front of the filename. If the filename starts with a
+drive, it is always taken as an absolute filename, even if the &quot;/&quot;
+is missing. If only the drive is missing, it is taken from the path. </P>
+
+<P>A special case is the directory call with a filename as &quot;*:&quot;.
+It does not use the path, but returns, in each entry, an available device
+name. The length attribute should give the available amount of storage
+space on the device. A wildcard in the device field is not allowed otherwise.
+</P>
+
+<PRE>    <A NAME="f_fopendir"></A>fopendir    
+                &lt;- a/y = address of filename
+                -&gt; c = 0: ok, x = file-nr
+                   c = 1: a = error code                E_NOFILE
+                                                        E_NOTDIR
+
+    <A NAME="f_freaddir"></A>freaddir    
+                &lt;- x = file-nr a/y = address of buffer
+                       blocks until read, otherwise use fcntl(FC_RCHECK)
+
+                reads _one_ directory entry into the buffer, which is
+                of length (FD_NAME + MAX_FILENAME)
+                One entry consists of a directory struct
+
+                .word   0               ; valid bits
+		.word	0		; owner ID
+		.word	0		; group ID
+                .word   0               ; permissions (drwxrwxrwx) (2 byte)
+                .word   0,0             ; file length in byte (4 byte)
+                .byt    0,0,0,0,0,0     ; last modification date
+                                        ; (year-1990, month, day, hr, min, sec)
+
+                The valid bit say, which entry in the struct is valid.
+                bit 0 is for the permissions, bit 1 for the file length, bit 2
+                for the date. The file length, if not zero, is an 
+                approximate value (like the blocks *254 in a vc1541)
+                this struct is followed by the null-terminated filename.
+		The valid bits are:
+
+		FDV_PERM	1
+		FDV_LENGTH	2
+		FDV_MDATE	4
+		FDV_OWNER	8
+		FDV_GROUP	16
+
+		If permissions are valid, but not group/owner, then 
+		the permissions for user and group are invalid, and the 
+		permissions for others should be taken.
+
+		The directory entry struct definitions are:
+
+		FD_VALID	0	/* 1 byte */
+		FD_PERM		1	/* 2 byte */
+		FD_LENGTH	3	/* 4 byte */
+		FD_MDATE	7	/* 6 byte */
+		FD_NAME		13	/* null-terminated */
+
+		The permission bits are actually a copy from the Linux
+		man pages...:
+
+                S_ISUID         $800    /* set user ID on execution */
+                S_ISGID         $400    /* set group ID on execution */
+                S_ISVTX         $200    /* -- (sticky bit) */
+
+                S_IRWXU         $1c0    /* rwx mask for user */
+                S_IRUSR         $100    /* read by owner */
+                S_IWUSR         $080    /* write by owner */
+                S_IXUSR         $040    /* exexute by owner */
+
+                S_IRWXG         $038    /* rwx mask for group */
+                S_IRGRP         $020    /* read by group */
+                S_IWGRP         $010    /* write by group */
+                S_IXGRP         $008    /* execute by group */
+
+                S_IRWXO         $007    /* rwx mask for others */
+                S_IROTH         $004    /* read by others */
+                S_IWOTH         $002    /* write by others */
+                S_IXOTH         $001    /* execute by others */
+
+                S_IFMT          $f000   /* file type mask */
+                S_IFSOCK        $c000   /* socket */
+                S_IFLNK         $a000   /* symbolic link */
+                S_IFREG         $8000   /* regular file */
+                S_IFBLK         $6000   /* block device */
+                S_IFDIR         $4000   /* directory */
+                S_IFCHR         $2000   /* character device */
+                S_IFIFO         $1000   /* fifo */
+
+		S_IFMNAME	$3000	/* media name */
+		S_IFMFREE	$5000	/* free are on media */
+		S_IFMSIZE	$7000	/* media size */
+
+		Most of the file types are probably not implemented
+		on a 6502 system. But before defining new types, one
+		should keep the already defined values save.
+		That's for the last three entries, which are not 
+		Posix standards.
+
+		The length field can be an approximate if it is not zero
+		and the length is not valid (For VC1541 block lengths).
+
+    <A NAME="f_fgetattr"></A>fgetattr    
+                &lt;- a/y = address of dir struct, incl filename (like in freaddir)
+                -&gt; c = 0: ok,
+                   c = 1: a = error code        E_NOTIMP
+
+                This tries to fill in the bits that are _not_ valid in a
+                dir struct. For example, if freaddir returned
+                the filelength only, but no permissions, then calling
+                fgetattr should get the file permissions.
+                But it is not guaranteed, that all fields are filled,
+                as some are not implemented on a certain filesystem.
+                So even after fgetattr, a check of the valid bits is needed.
+                The filename must be completed with the device and path.
+
+    <A NAME="f_fsetattr"></A>fsetattr    
+                &lt;- a/y = address of dir struct, incl. filename
+                -&gt; c = 0: ok
+                   c = 1: a = error code        E_NOTIMP
+
+                Tries to write new file attributes (the ones where the
+                valid bits are set). Need not succeed. Clears the valid bits
+                for the attributes it has successfully set.
+                The filename must be completed with the device and path.
+
+    <A NAME="f_chdir"></A>chdir
+                &lt;- a/y = address of new path, relative to the old one
+                -&gt; c = : ok
+                   c = 1: a = error code        E_ILLDRIVE
+                                                E_ILLPATH
+    <A NAME="f_cwd"></A>cwd
+                &lt;- a/y = address of buffer, x = length of buffer
+                -&gt; c = 0: ok, buffer contains the current working directory.
+                   c = 1: a = error code        E_NOTIMP
+                                                E_FNAMLEN
+</PRE>
+
+<P>The chdir call changes the saved path in the library. A &quot;.&quot;
+filename means the same directory, while &quot;..&quot; means the parent
+directory. </P>
+<p>cwd gives the address of the path. However, the path pointed to by 
+the returned address must not be changed.</p>
+
+<H4><A NAME="net"></A>Network Interface</H4>
+
+<P>Network streams are used as well as any other file, so we only need
+opening calls. Currently only TCP/IP is defined and thought of, but there
+should be no problem allowing other networks. </P>
+
+<PRE>    <A NAME="f_connect"></A>connect     
+                &lt;- a/y address of : byte length of address (incl. length byte), 
+                   plus 4 byte inet addr (+2 byte port for TCP/UDP)
+                   x = protocol (IPV4_TCP, IPV4_UDP,...)
+                -&gt; c = 0: x = (non-seekable, bi-directional) file-nr 
+                          for read/write
+                   c = 1: a = error code        E_NOTIMP
+                                                E_PROT
+                                                E_NOROUTE
+                                                E_NOPERM
+
+    <A NAME="f_listen"></A>listen
+                &lt;- c = 0: a/y = addr of: 
+                             byte length of port, 2 byte port number 
+                             (for TCP/UDP on IP)
+                          x = protocol
+                -&gt; c = 0: ok, x = listenport
+                   c = 1: a = error code        E_NOTIMP
+                                                E_PROT
+                                                E_PORTINUSE
+                opens a port to listen at
+
+                &lt;- c = 1: x = listenport 
+                -&gt; c = 0: ok
+                   c = 1: a = error code        E_NOTIMP
+                                                E_NOPORT
+                closes the listenport again.
+
+
+    <A NAME="f_accept"></A>accept      
+                &lt;- a/y = address of buffer for struct:
+                         1 byte length of buffer (incl. length byte),
+                         the rest of the buffer need not be set.
+                         for IPV4 TCP and UDP we need place for:
+                           4 byte IP address + 
+                           2 byte port, 
+                   x = listenport
+                   c = 0: don't block
+                   c = 1: block
+                -&gt; c = 0: x = file-nr for read/write
+                   The buffer contains the address that the remote 
+                   machine uses. The 1st byte contains the length of the 
+                   address (should not differ from the length indicated
+                   by the protocol number in listen.
+                   c = 1: a = error code                E_NOTIMP
+                                                        E_ADDRLEN
+                                                        E_NOMEM
+                                                        E_TRYAGAIN
+</PRE>
+
+<P>connect is something like Unix socket() and connect() together. listen
+is something like socket(), bind() and listen() together. listen tells
+the network layer, that the application is going to accept connections
+on a certain port. Therefore, when a connection is requested from remote,
+the network layer can accept them already and hold them &quot;on line&quot;
+until the task gets the connection with accept. The maxmimum number of
+acceptable connections is implementation specific.<BR>
+accept gets the first connection waiting for an accept. the other sides
+IP and port are stored in the buffer given in a/y If a connection is refused
+after checking IP or port, the 'accepted' connection should be closed immediately.
+</P>
+
+<H4><A NAME="mem"></A>Memory Management</H4>
+
+<P>It is possible to have an allocation at byte boundaries, or at page
+boundaries - an application does not have to rely on a certain alignment!
+</P>
+
+<PRE>   <A NAME="f_malloc"></A>malloc       
+                &lt;- a/y length of block needed
+                -&gt; c=0: a/y address of block allocated
+                   c=1: a = error code          E_NOMEM
+
+   <A NAME="f_mfree"></A>mfree        
+                &lt;- a/y address of block released
+                -&gt; c=0: ok
+                   c=1: error code              E_ILLADDR
+
+   <A NAME="f_realloc"></A>realloc
+                &lt;- a/y address of block, x position of new length
+                   in zeropage (2 byte)
+                -&gt; c=0: ok
+                   c=1: error code              E_ILLADDR
+
+</PRE>
+
+<P>Allocated memory blocks are automatically freed on process termination.
+</P>
+
+<H4><A NAME="proc"></A>Process Management</H4>
+
+<P>Process management is a bit more complicated. Process ID interface is
+16 bit, although they need not all be used, of course. </P>
+
+<PRE>   <A NAME="f_exec"></A>exec         
+                &lt;- a/y = addr of filename,0 [, parameter1, 0 ...] ,0
+                -&gt; if no error, then the new program starts and gets
+                        a/y = address of filename,0 [, parameter1, 0 ...],0
+                        otherwise return:
+                   c=1: a = error code          E_NOTFOUND
+                                                E_NOMEM
+                allocates new environment and removes old environment.
+                starts newly loaded executable file.
+
+   <A NAME="f_forkto"></A>forkto    
+                &lt;- a/y addr of struct: '.byte STDIN, STDOUT, STDERR, exec_struct
+                -&gt; c=0: x/y = child pid
+                   c = 1: a = error code        E_NOMEM
+                                                E_ILLSTR
+                                                E_NOTFOUND
+
+                This is not really a fork like in Unix, but it creates a
+                new process, so it still 'forks'. The new process is 
+                started with executing the file given in the exec_struct
+                - which is the same struct as given to exec.
+                The file-nrs given for STDIN, STDOUT and STDERR share the same
+                read/write pointers as the ones in this process.
+                They are internally 'duped', and the calling task has to 
+                close them after calling forkto. No other file-nos are 
+		inherited.
+
+   <A NAME="f_forkthread"></A>forkthread
+		&lt;- a/y addr of execution for new thread
+                -&gt; c = 0: ok, xr = new thread number
+                   c = 1: a = error code        E_NOTIMP
+
+		forkthread sets up a new thread to run in the same
+		memory environment as the calling thread/process.
+		The new thread is started at the given address, with
+		an empty stack. This means the thread has to explicitely
+		call <a href="#f_term">term</a> when terminating.
+
+   <A NAME="f_term"></A>term         
+                &lt;- a = return code
+
+   <A NAME="f_kill"></A>kill         
+                &lt;- a = return code, x/y = pid (or MYTASK = myself -&gt; suicide)
+                -&gt; c=0: ok (except for MYTASK)
+                   c=1: a = error code          E_ILLPID
+</PRE>
+
+<P>The term call terminates the current thread only. The memory etc is
+only freed when all threads in this environment have terminated. Kill terminates
+all threads in the environment indicated by the process ID. </P>
+
+<PRE>   <A NAME="f_getpid"></A>getpid       
+                -&gt; x/y = own PID
+</PRE>
+
+<P>When forking, the files still share the same seek pointer (address in
+the file where they read/write). When one process writes to a file, the
+other processes write pointer moves on too, same for the read pointer.
+Otherwise file sharing with the 1541 would be impossible, for example.
+</P>
+
+<P>STDIN/STDOUT and STDERR file-nrs appear to be opened before process
+start. They can be closed as any other file, though. When calling forkto,
+the file-nrs given to it are `duped' internally, such that they have to
+be closed in the calling process, as well as in the newly created process.
+</P>
+
+<P>All files opened by this task are closed when it terminates. All memory
+blocks allocated by this task are freed when it terminates. </P>
+
+<P>The newly created process is started by calling the &quot;main&quot;
+function, with a/y pointing to a list of arguments: </P>
+
+<PRE>        .byt &quot;arg0&quot;,0, &quot;arg1&quot;,0, ... ,&quot;argn&quot;,0,0
+</PRE>
+
+<P>The &quot;main&quot; function can either call &quot;term&quot;, &quot;kill&quot;
+or return with a &quot;rts&quot; opcode. </P>
+
+<PRE>   <A NAME="f_yield"></A>yield       
+</PRE>
+<P><TT>yield</TT> gives the process control back to the scheduler. It need 
+not be called at all. But if a process is doing a busy loop (or spin-lock)
+waiting for a certain condition, it might call <TT>yield</TT> to give
+other tasks the opportunity to run. <em>It is not necessary to call 
+<TT>yield</TT> at all!</em> The scheduler interrupts any thread and 
+takes control back when the thread has used its timeslice. But if the thread
+knows that it waits for something to be done by another task, instead
+of waiting for the end of its timeslice it can call yield to give other tasks
+the immediate opportunity to run.
+</P>
+
+<H4><A NAME="comm"></A>Interprocess Communication</H4>
+
+<P>Interprocess communication heavily depends on the system underneath
+the library, so it's not that easy. So far we handle semaphores, signals,
+and send/receive. </P>
+
+<H5>Semaphores</H5>
+
+<PRE>    <A NAME="f_semget"></A>semget      
+                &lt;- c = 0: don't block, c = 1: wait till you get one
+                -&gt; c = 0: ok, x = semaphore number
+                   c = 1: a = error code        E_NOTIMP
+                                                E_NOSEM
+                gets a new semaphore 
+
+    <A NAME="f_semfre"></A>semfre      
+                &lt;- x = semaphore number
+                -&gt; c = 0: ok
+                   c = 1: a = error code        E_NOTIMP
+                                                E_NOSEM
+                                                E_INUSE
+                releases a used semaphore. If a process is waiting for
+                the semaphore, returns E_INUSE
+
+    <A NAME="f_semgetnamed"></A>semgetnamed 
+                &lt;- c = 0: a/y = name of semaphore
+                          x = 0 : if not found, return error,
+                          x = 1 : if not found, alloc name and return ok
+                -&gt; c = 0 : ok, x = semaphore number
+                   c = 1 : a = error code       E_NOTIMP
+                                                E_NOTFOUND
+                                                E_NOSEM
+                This calls tries to allocate a 'named' semaphore.
+                If the name already exists, the associated semaphore number
+                is returned. If the name doesn't exist, and x=0, then an
+                error is returned. If a name doesn't exist, and x=1, then
+                the new name is allocated, a semaphore is allocated and
+                associated with the name.
+
+                &lt;- c = 1: a/y = name of semaphore
+                -&gt; c = 0: ok
+                   c = 1: a = error code        E_NOTIMP
+                                                E_NOTFOUND
+                The named semaphore is de-allocated. The named semaphore
+                handler counts the number of allocations and frees a semphore
+                if the name is totally deallocated.
+
+                With this call, one can system-independently allocate
+                system and hardware resources, if they are protected by 
+                semaphores. 
+                predefined semaphore names are:
+
+                        SEM_C64_SERIEC, SEM_C64_PARIEC, SEM_C64_SID,
+                        SEM_C64_VID, SEM_C64_KEYBOARD,
+                        SEM_C64_CIA1TA, SEM_C64_CIA1TB, SEM_C64_CIA1TOD,
+                        SEM_C64_CIA2TA, SEM_C64_CIA2TB, SEM_C64_CIA2TOD,
+
+                        SEM_CSA_SERIEC, SEM_CSA_PARIEC, SEM_CSA_WD1770,
+
+                        SEM_GECKO_SERIEC, SEM_GECKO_IRTX
+                        
+                
+    <A NAME="f_psem"></A>psem        
+                &lt;- x = semaphore number
+                   c = 0: don't block; c = 1: wait till gotten
+                -&gt; c = 0: got semaphore
+                   c = 1: a = error code        E_NOSEM
+                Pass operation on a semaphore. Locks the semaphore.
+
+    <A NAME="f_vsem"></A>vsem        
+                &lt;- x = semaphore number
+                Free operation on a semaphore. Lets other threads &quot;pass&quot;.
+
+</PRE>
+
+<P><!--
+	All semaphores held by the process are freed when it terminates.
+	In general, positive semaphore numbers are lib stuff, negative
+	numbers are system stuff.
+--></P>
+
+<H5>Signals</H5>
+
+<P>Signals are some kind of 'remote procedure call' - a signal handler
+for a certain signal is called upon another threads' request. </P>
+
+<PRE>    <A NAME="f_signal"></A>signal      
+                &lt;- x = signal-number
+                   a/y = address of signal handler
+                -&gt; c = 0: ok
+                   c = 1: a = error code        E_NOTIMP
+                                                E_ILLSIG
+                installs a signal handler for a signal
+                signal handler address NULL de-installs a handler.
+
+    <A NAME="f_sendsignal"></A>sendsignal  
+                &lt;- a/y pid of receiving process
+                   x = signal number
+                -&gt; c = 0: ok, sent
+                   c = 1: a = error code        E_ILLPID
+                                                E_ILLSIG
+                sends a signal to another process. A signal is an emulated
+                interrupt to the address specified as the signal handler
+                address.
+</PRE>
+
+<P>Allowed signals are </P>
+
+<PRE>                SIG_USR1
+                SIG_USR2
+                SIG_USR3
+                SIG_USR4
+		SIG_CHLD
+</PRE>
+
+<P>The signal handler gets the signal mask for the signal in ac
+(They may or may not be combined if the same signal handler is used for
+more than one signal type). <BR>
+A <TT>SIG_CHLD</TT> is used to get information about child processes
+that died. If it is received, the
+xr/yr registers holds the PID of the dead child and ac holds the return 
+code of the child. Only child processes are registered that died when the 
+signal handler mask was set. You can only receive, but not send a 
+<TT>SIG_CHLD</TT>.
+</P>
+
+<H5>Send/Receive</H5>
+
+<P>This section is very preliminary, as the SEND/RECEIVE interface in OS/A65
+is not really useable without MMU, and Lunix doesn't have SEND/RECEIVE.
+</P>
+
+<PRE>    <A NAME="f_send"></A>send        
+                &lt;- a/y = address of 
+                        .word receiver_pid
+                        .word address_of_data
+                        .word length_of_data
+                   c = 0: don't block
+                   c = 1: wait till accepted
+                -&gt; c = 0: block sent
+                   c = 1: a = error code        E_ILLPID
+                                                E_NOTIMP
+                sends a message to another process. The data sent is not
+                changed, or freed or whatever.
+
+    <A NAME="f_receive"></A>receive     
+                &lt;- a/y = address of three words, second and third word
+                         give address and length of receiver buffer
+                   x = 0 : accept any sender
+                   x = 1 : first word in (a/y) contains the sender 
+                   c = 0 : don't block
+                   c = 1 : wait till received
+                -&gt; c = 0 : message received, (a/y) has
+                        .word sender_pid
+                        .word address_of_data
+                        .word length_of_data 
+                   c = 1 : a = error code       E_NOTIMP
+                                                E_ILLPID
+                                                E_NOMEM
+                The data is stored in the buffer, and length_of_data is
+                changed to the length actually received. If the buffer
+                is too short, length_of_data is set to the length needed,
+                and E_NOMEM is returned.
+
+</PRE>
+
+<P>
+<HR></P>
+
+<H4><A NAME="env"></A>Environment Handling</H4>
+
+The process environment is a table of strings handled by the lib6502
+on a per-task basis. When a task forks a new task, the environment
+is inherited by the new task. Strings here are null-terminated ASCII 
+character arrays.
+
+<PRE>
+    <A NAME="f_getenv"></A>getenv: 
+                &lt;- a/y name of env. variable
+                -&gt; a/y = address of value or NULL if not set. 
+
+    <A NAME="f_putenv"></A>putenv: 
+                &lt;- a/y addr of &quot;name=string&quot; 
+		-&gt; c=0: ok
+		   c=1: error			E_NOMEM
+						E_NOTIMP
+		add or change env var. If the variable is empty, it is
+		unset and will return either a NULL pointer with getenv
+		or a pointer to an empty string.
+
+    <A NAME="f_getenvp"></A>getenvp: 
+                -&gt; a/y addr of null-terminated list of null-terminated
+                strings with "varname=value" in each string, describing
+                all environment variables. It is <strong>NOT</strong> allowed
+                to change these variables 'by hand'.
+
+    <A NAME="f_getos"></A>getos:
+                -&gt; a/y addr of operating system string
+</PRE>
+<P>
+The operating system string is a string containing the
+<ul>
+<li> operating system name (OS/A65)
+<li> operating system version (2.0.0)
+<li> CPU type (6510)
+<li> architecture type (C64)
+<li> library type (lib6502)
+<li> library version (0.6)
+</ul>
+separated by spaces and ended by a nullbyte.
+<HR>
+<H3><A NAME="impnotes"></A>Implementation Notes</H3>
+
+<P>Implementation notes are currently available for the <A HREF="#imp_o65">o65</A>
+file format only. This file format is rather flexible, and some of the
+ideas can be taken for other lib6502 file formats. </P>
+
+<H4><A NAME="imp_o65"></A>o65 file format</H4>
+
+<P>The o65 file format is defined in another file format specification.
+It allows the use of undefined references. In order to simplify the relocation
+procedure, lib6502 files have one undefined reference, namely &quot;STDLIB&quot;.
+This reference defines the base of the lib6502 jump table. At STDLIB+0
+there is a JMP opcode pointing to the code for fopen. At STDLIB+3 is a
+JMP opcode pointing to the code for fclose etc. The order is determined
+by the order given in the index of this definition. </P>
+
+<P>A global variable is the &quot;main&quot; address, which is the start
+address for any lib6502 executable. If the &quot;main&quot; address is
+not given in the object file as a global variable, the start of the text
+segment is assumed to be the &quot;main&quot; address. </P>
+
+<P>The lib6502 file format allows the use of &quot;header options&quot;,
+where some OS specific options may be saved. The lib6502 files can - but
+don't need to - use a lib6502 header option (as defined in the o65 file
+format specification). This lib6502 header option contains the following
+struct: </P>
+
+<PRE>        .byt lib6502_major_version_nr, lib6502_minor_version_number
+        .byt lib6502_needed_level, lib6502_possible_level
+</PRE>
+
+<P>The version numbers are hints as to which library version the file is
+compiled with. The level is a new number that describes which functions
+are used, and which are not. A library may provide a certain amount of
+lib calls in the library call table (STDLIB). The maximum number of calls
+used is given in the &quot;possible_level&quot; value. The maximum number
+that must be functional (and with only few exceptions not just return &quot;E_NOTIMP&quot;)
+is given by the &quot;needed_level&quot; number. </P>
+
+<P>The level numbers are defined as: </P>
+
+<UL>
+<LI>Level 1: fopen - chdir </LI>
+
+<LI>Level 2: connect - accept </LI>
+
+<LI>Level 3: malloc - mfree </LI>
+
+<LI>Level 4: exec - getpid </LI>
+
+<LI>Level 5: semget - receive </LI>
+</UL>
+
+<P>If the file needs a Possible Level greater than the level provided by
+the library, an &quot;E_LIBLEVEL&quot; error code should be returned by
+forkto or exec. 
+<HR>For example, a program that needs the file functions, and can optionally
+(i.e. if available) use the exec and fork calls, should have &quot;1&quot;
+as a Needed Function, and level 4 as Possible Functions. </P>
+
+<H3><A NAME="index"></A>Index</H3>
+
+<UL>
+<LI><A HREF="#f_fopen">fopen</A> </LI>
+
+<LI><A HREF="#f_fclose">fclose</A> </LI>
+
+<LI><A HREF="#f_fgetc">fgetc</A> </LI>
+
+<LI><A HREF="#f_fputc">fputc</A> </LI>
+
+<LI><A HREF="#f_fread">fread</A> </LI>
+
+<LI><A HREF="#f_fwrite">fwrite</A> </LI>
+
+<LI><A HREF="#f_fseek">fseek</A> </LI>
+
+<LI><A HREF="#f_pipe">pipe</A> </LI>
+
+<LI><A HREF="#f_flock">flock</A> </LI>
+
+<LI><A HREF="#f_fcntl">fcntl</A> </LI>
+
+<LI><A HREF="#f_fcmd">fcmd</A> </LI>
+
+<LI><A HREF="#f_stddup">stddup</A> </LI>
+
+<LI><A HREF="#f_dup">dup</A> </LI>
+</UL>
+
+<UL>
+<LI><A HREF="#f_fopendir">fopendir</A> </LI>
+
+<LI><A HREF="#f_freaddir">freaddir</A> </LI>
+
+<LI><A HREF="#f_fgetattr">fgetattr</A> </LI>
+
+<LI><A HREF="#f_fsetattr">fsetattr</A> </LI>
+
+<LI><A HREF="#f_chdir">chdir</A> </LI>
+
+<LI><A HREF="#f_cwd">cwd</A> </LI>
+</UL>
+
+<UL>
+<LI><A HREF="#f_connect">connect</A> </LI>
+
+<LI><A HREF="#f_listen">listen</A> </LI>
+
+<LI><A HREF="#f_accept">accept</A> </LI>
+</UL>
+
+<UL>
+<LI><A HREF="#f_malloc">malloc</A> </LI>
+
+<LI><A HREF="#f_mfree">mfree</A> </LI>
+
+<LI><A HREF="#f_realloc">realloc</A> </LI>
+</UL>
+
+<UL>
+<LI><A HREF="#f_exec">exec</A> </LI>
+
+<LI><A HREF="#f_forkto">forkto</A> </LI>
+
+<LI><A HREF="#f_forkthread">forkthread</A> </LI>
+
+<LI><A HREF="#f_term">term</A> </LI>
+
+<LI><A HREF="#f_kill">kill</A> </LI>
+
+<LI><A HREF="#f_getpid">getpid</A> </LI>
+
+<LI><A HREF="#f_yield">yield</A> </LI>
+</UL>
+
+<UL>
+<LI><A HREF="#f_semget">semget</A> </LI>
+
+<LI><A HREF="#f_semfre">semfre</A> </LI>
+
+<LI><A HREF="#f_semgetnamed">semgetnamed</A> </LI>
+
+<LI><A HREF="#f_psem">psem</A> </LI>
+
+<LI><A HREF="#f_vsem">vsem</A> </LI>
+
+<LI><A HREF="#f_signal">signal</A> </LI>
+
+<LI><A HREF="#f_sendsignal">sendsignal</A> </LI>
+
+<LI><A HREF="#f_send">send</A> </LI>
+
+<LI><A HREF="#f_receive">receive</A> </LI>
+</UL>
+
+<UL>
+<LI><A HREF="#f_getenv">getenv</A></LI>
+
+<LI><A HREF="#f_putenv">putenv</A></LI>
+
+<LI><A HREF="#f_getenvp">getenvp</A></LI>
+
+<LI><A HREF="#f_getos">getos</A></LI>
+</UL>
+
+<P>
+<HR></P>
+
+<H3><A NAME="ideas"></A>Ideas</H3>
+
+<UL>
+<LI>service numbers conversion from text to number by generalized getxxxfromname?
+</LI>
+
+<LI>listen + accept to _one_ call with local space for remote address?
+</LI>
+
+</UL>
+
+<P>
+<HR></P>
+
+<H3><A NAME="ack"></A>Acknowledgements</H3>
+
+<P>Acknowledgements go to </P>
+
+<UL>
+<LI>Daniel Dallmann, author of Lunix, for discussions and comments on the
+library </LI>
+
+<LI>Craig Bruce, the author of ACE, for some comments and bugfixes </LI>
+</UL>
+
+</BODY>
+</HTML>

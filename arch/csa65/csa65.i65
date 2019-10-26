@@ -1,0 +1,65 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef _CSA65_H_
+#define _CSA65_H_
+
+#include "chips/via6522.i65"
+#include "chips/pia6521.i65"
+
+/*        System-Defs              */
+
+#ifndef SYSPORT
+#define   SYSPORT   $efe0
+#endif
+#ifndef NOMMU
+#define   MMU       $eff0
+#endif
+#define   BLKSIZ    $1000
+#define	  BLKLOG    12	   /* number of addressbits valid in one BLKSIZ */ 
+
+#ifndef SYSPAGE
+#define   SYSPAGE   $0     /* $12 zum testen, wenn System nicht startet  */
+#endif
+
+
+/*********************** Hardware structs *******************************/
+/*        SysIO                    */
+
+#define   SYS_TIRQ  %10000000 /* bmi/bpl          */
+#define   SYS_KEY   %01000000
+#define   SYS_IOINH %00100000
+#define   SYS_EXTIO %00010000
+#define   SYS_LED   %00001000
+#define   SYS_RTS   %00000100
+#define   SYS_IRQEN %00000010
+#define   SYS_IRQ   %00000001
+
+#ifndef LEDPORT
+#define	LEDPORT	SYSPORT
+#define	LED_LED SYS_LED
+#endif
+
+#endif
+

@@ -1,0 +1,47 @@
+
+#include "lib6502.i65"
+
++main	.(
+.byt 2
+	lda #<t1
+	ldy #>t1
+	jsr getenv
+.byt 2
+	lda #<t2
+	ldy #>t2
+	jsr putenv
+
+	lda #<t1
+	ldy #>t1
+	jsr getenv
+
+	lda #<t3
+	ldy #>t3
+	jsr putenv
+
+	lda #<t4
+	ldy #>t4
+	jsr getenv
+
+.byt 2
+
+	lda #<forkx
+	ldy #>forkx
+;	jsr forkto
+
+	lda #0
+	rts
+	
+	.data
+t1	.asc "AVAR",0
+t2	.asc "BVAR=test",0
+t3	.asc "AVAR2=foo",0
+t4	.asc "BVAR",0
+
+forkx	.byt STDIN, STDOUT, STDERR, "tstenv",0,0
+	.zero
+	.byt 0
+
+	.text
+	.)
+

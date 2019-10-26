@@ -1,0 +1,428 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/***************************************************************************
+ * Here are the user routines (open, close etc)
+ */
+
+	.bss
+tcbno  	.byt 0
+	.text
+
+	; server struct:
+	; remote_ip, remote_port, local_port, flag, queue_packet
+
+&user_init .(
+#ifndef NO_TEST
+	jsr tcp_test_init
+#endif
+#ifndef NO_FSTCP
+	jsr fstcp_init
+#endif
+#ifndef NO_WWW
+	jsr wwwsrv_init
+#endif
+#ifndef NO_RSH
+	jsr rsh_init
+#endif
+#ifndef NO_LIBIP
+	jsr libip_init
+#endif
+	rts
+	.)
+
+srv_open .(
+	ldy #TCB_SERVICE
+	lda (tcbp),y
+	sta srv
+	iny
+	lda (tcbp),y
+	sta srv+1
+
+	ldy #SRV_OPEN+1
+	lda (srv),y
+	pha
+	dey
+	lda (srv),y
+	pha
+	rts
+	.)
+
+rx_queue_packet .(
+	tax
+
+	ldy #TCB_SERVICE
+	lda (tcbp),y
+	sta srv
+	iny
+	lda (tcbp),y
+	sta srv+1
+
+	ldy #SRV_QUEUE+1
+	lda (srv),y
+	pha
+	dey
+	lda (srv),y
+	pha
+
+	rts
+	.)
+
+&tcp_abort .(
+	jsr settcb
+	bcs notcb
+
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_LISTEN
+	beq del
+	cmp #TCP_SYNTXD
+	beq del
+
+	cmp #TCP_CLOSING
+	bcs ok
+	jsr send_reset
+del
+	jsr tclose
+	clc
+	rts
+notcb	lda #TE_NOCONN
+	.byt $2c
+closing	lda #TE_CLOSING
+	sec
+	rts
+ok	clc
+	rts
+	.)
+
+&tcp_close .(
+	jsr settcb
+	bcc tcbok
+	jmp notcb
+tcbok
+&&tcb_close
+#ifdef DEBUGTCP2
+DB("tcp_close tcbp=")
+lda tcbp+1:jsr EHexout:lda tcbp:jsr EHexout:
+/*DB(" sig=")
+pla:pha:jsr EHexout:*/
+DB(" st=")
+ldy #TCB_STATE:lda (tcbp),y:jsr EHexout
+jsr ECrlfout
+#endif
+
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_LISTEN
+	beq del
+	cmp #TCP_SYNTXD
+	beq del
+
+	cmp #TCP_SYNRXD
+	beq c1b
+	cmp #TCP_ESTAB
+	bne c2
+c1b	
+;	ldy #TCB_NTXBUF
+;	lda (tcbp),y
+;	beq c1a
+	ldy #TCB_FLAG
+	lda (tcbp),y	; queued fin !
+	ora #THF_FIN+THF_ACK
+	sta (tcbp),y
+;	clc
+;	rts
+;
+;c1a	jsr send_fin
+;	bcs c1b
+	ldy #TCB_STATE
+	lda #TCP_FINW1
+	sta (tcbp),y
+
+	clc
+	rts
+
+c2	cmp #TCP_CLOSEW
+	bne closing
+;	jsr send_fin		; should always be able to queue -> no check
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	ora #THF_ACK+THF_FIN
+	sta (tcbp),y
+
+	ldy #TCB_STATE
+	lda #TCP_CLOSING
+	sta (tcbp),y
+	clc
+	rts
+del
+	jsr tclose
+	clc
+	rts
+notcb	lda #TE_NOCONN
+	.byt $2c
+closing	lda #TE_CLOSING
+	sec
+	rts
+	.)
+
+&tcp_signal .(
+
+#ifdef DEBUGTCP
+pha
+DB("tcp_signal tcbp=")
+lda tcbp+1:jsr EHexout:lda tcbp:jsr EHexout:
+DB(" sig=")
+pla:pha:jsr EHexout:
+DB(" st=")
+ldy #TCB_STATE:lda (tcbp),y:jsr EHexout
+jsr ECrlfout
+pla
+#endif
+
+	cmp #TE_SIG_FIN
+	bne nofin
+;c1b	
+;	ldy #TCB_NTXBUF
+;	lda (tcbp),y
+;	beq c1a
+	ldy #TCB_FLAG
+	lda (tcbp),y	; queued fin !
+	ora #THF_FIN+THF_ACK
+	sta (tcbp),y
+;	clc
+;	rts
+;
+;c1a	jsr send_fin
+;	bcs c1b
+	ldy #TCB_STATE
+	lda #TCP_LASTACK
+	sta (tcbp),y
+
+        ldy #TCB_MSL
+        lda #<TIME_LASTACK
+        sta (tcbp),y
+        iny
+        lda #>TIME_LASTACK
+        sta (tcbp),y
+
+	clc
+	rts
+nofin	
+	cmp #TE_SIG_RESET
+	bne norst
+	jmp tclose
+norst
+	rts
+	.)
+
+&tcp_listen .(
+	sta srv
+	sty srv+1
+	jsr gettcb
+	bcs notcb
+	stx conn
+
+	ldy #TCB_SERVICE
+	lda srv
+	sta (tcbp),y
+	iny
+	lda srv+1
+	sta (tcbp),y
+
+	ldy #SRV_LPORT
+	lda (srv),y
+	tax
+	iny
+	lda (srv),y
+	ldy #TCB_TRGP
+	sta (tcbp),y
+	iny
+	txa
+	sta (tcbp),y
+	
+	ldy #TCB_STATE
+	lda #TCP_LISTEN
+	sta (tcbp),y
+
+	ldx conn
+	clc
+	;rts
+notcb	rts
+	.)
+
+&tcp_open .(
+	sta srv
+	sty srv+1
+	jsr gettcb
+	bcs notcb
+	stx conn
+
+	ldy #TCB_SERVICE
+	lda srv
+	sta (tcbp),y
+	iny
+	lda srv+1
+	sta (tcbp),y
+
+	ldy #SRV_RIP
+l0	lda (srv),y
+	sta (tcbp),y
+	iny	
+	cpy #SRV_RIP+4
+	bcc l0
+
+	ldy #TCB_TRGIP
+l1	lda MyIP-TCB_TRGIP,y
+	sta (tcbp),y
+	iny
+	cpy #TCB_TRGIP+4
+	bcc l1
+
+	ldy #SRV_RPORT
+	lda (srv),y
+	tax
+	iny
+	lda (srv),y
+	ldy #TCB_SRCP+1
+	sta (tcbp),y
+	dey
+	txa
+	sta (tcbp),y
+
+	lda conn
+	pha
+	jsr getlport
+
+	ldy #TCB_TRGP+1
+	sta (tcbp),y
+	dey
+	txa
+	sta (tcbp),y
+
+	pla
+	sta conn
+
+	jsr iniseq
+
+	ldy #TCB_STATE
+	lda #TCP_SYNTXD
+	sta (tcbp),y
+
+ 	jsr send_syn	; should always be able to queue -> no check (TODO)
+
+	ldx conn
+	clc
+notcb	rts
+	.)
+
+	/* gets a new local port between 1024 and 4096 (checks if in use!) */
+getlport .(
+/*DB("getlport:")*/
+	lda tcbp
+	pha
+	lda tcbp+1
+	pha
+
+	lda lport+1
+	cmp #>1024
+	bcc setp
+incp
+	inc lport
+	bne l0
+	inc lport+1
+l0
+	lda lport+1
+	cmp #>4096
+	bcc l2
+setp	lda #<1024
+	sta lport
+	lda #>1024
+	sta lport+1
+l2
+	ldx #0
+l1	stx conn
+	jsr settcb
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_CLOSED
+	beq next
+
+	ldy #TCB_TRGP
+	lda (tcbp),y
+	cmp lport+1
+	bne next
+	iny
+	lda (tcbp),y
+	cmp lport
+	beq incp
+next	ldx conn
+	inx
+	cpx #MAXCONN
+	bcc l1
+	
+	pla
+	sta tcbp+1
+	pla
+	sta tcbp
+
+/*lda lport+1:jsr EHexout:lda lport:jsr EHexout:jsr ECrlfout*/
+
+	lda lport
+	ldx lport+1
+	rts
+
+	.data
+lport 	.word 0
+	.text
+	.)
+
+signal_user .(
+	.data
+sig	.byt 0
+	.text
+
+	tax
+	ldy #TCB_SERVICE
+	lda (tcbp),y
+	sta srv
+	iny
+	lda (tcbp),y
+	sta srv+1
+	
+	ldy #SRV_SIGNAL
+	lda (srv),y
+	iny
+	ora (srv),y
+	beq nosig
+	lda (srv),y
+	pha
+	dey
+	lda (srv),y
+	pha
+	txa
+nosig
+	rts
+	.)
+

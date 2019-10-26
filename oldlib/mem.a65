@@ -1,0 +1,846 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************
+ * New memory management for IP buffers 
+ * exports
+ * 	binit
+ * 	balloc, bfree, btrunc, bsplit, brealloc
+ *	getbadr, getblen
+ *
+ * The routines are _not_ threadsave!
+ * They have to be secured with SEM_MEM before calling them!
+ *
+ */
+
+#define	IPBUFFER	$2000
+
+#define	MINBUF	8
+#define	MINMASK	%11111000
+
+#ifndef MAXSLOT
+#define	MAXSLOT	32
+#endif
+
+#ifndef MEMINIVAL
+#define	MEMINIVAL 0
+#endif
+
+#undef DEBUGMEM
+#undef DB
+#define	DB(a)
+
+	.(
+
+	.data
+slotladr .dsb MAXSLOT
+slothadr .dsb MAXSLOT
+slotllen .dsb MAXSLOT
+slothlen .dsb MAXSLOT
+slotrlln .dsb MAXSLOT
+slotrhln .dsb MAXSLOT
+slotownr .dsb MAXSLOT
+slotpid  .dsb MAXSLOT
+
+#ifdef NOMMU
+init	.byt 0		; if not MEMINIVAL then init was ok!
+#endif
+
+flist 	.word 0
+slot	.byt 0
+
+	.zero
+p	.word 0
+p2	.word 0
+p3	.word 0
+p4	.word 0
+
+;	.bss
+;buf	.dsb IPBUFFER
+
+	.text
+
+/* init memory management */
+/* x holds hibyte of start address of memory, y length in pages */
++binit	.(
+#ifdef NOMMU
+	lda init
+	cmp #MEMINIVAL
+	bne end
+#endif
+	stx flist+1
+	stx p+1
+	lda #0
+	sta flist
+	sta p
+
+	tya
+	ldy #3
+	sta (p),y
+	dey
+	lda #0
+	sta (p),y
+	dey
+	sta (p),y
+	dey
+	sta (p),y
+
+	;lda #0
+	tay
+l0	sta slotladr,y
+	sta slothadr,y
+	sta slotownr,y
+	iny
+	cpy #MAXSLOT
+	bcc l0
+
+#ifdef NOMMU
+	inc init
+#endif
+end
+	clc
+	rts
+	.)
+
+/**************************************************************************/
+/* a/y = size of buffer to be allocated -> x buffer-ID */       
+&balloc	.(
+	/* walk along freelist, and take first matching buffer 
+	   length is made a multiple of 8 (for freelist connectors */
+
+	pha
+	jsr getbslot
+	pla
+	bcc gotslot
+	DB("balloc: no slot!^m^j")
+	lda #E_NOMEM
+	sec
+	rts
+gotslot
+	stx slot
+
+	sta slotrlln,x
+	pha
+	tya
+	sta slotrhln,x
+	pla
+
+	adc #MINBUF-1
+	and #MINMASK
+	sta slotllen,x
+	tya
+	adc #0
+	sta slothlen,x
+
+	jsr GETPID
+	txa
+	ldx slot
+	sta slotpid,x
+
+/*jsr printlist*/
+#if 0 /*def DEBUGMEM*/
+DB("^m^jalloc(")
+txa
+jsr EHexout
+lda slothlen,x
+jsr EHexout
+lda slotllen,x
+jsr EHexout
+DB("^m^jFlist=")
+lda flist+1
+jsr EHexout
+lda flist
+jsr EHexout
+jsr ECrlfout
+#endif	
+	lda #0
+	sta p2
+	sta p2+1
+	lda flist
+	sta p
+	lda flist+1
+	sta p+1
+l0
+#if 0	/*def DEBUG*/
+DB("^m^jCheck@")
+lda p+1:jsr EHexout:lda p:jsr EHexout
+jsr ECrlfout
+#endif
+	ldy #2
+	lda (p),y
+	sec
+	sbc slotllen,x
+	sta p3
+	iny
+	lda (p),y
+	sbc slothlen,x
+	sta p3+1
+	bcs found 
+
+	lda p
+	sta p2
+	lda p+1
+	sta p2+1
+	ldy #1
+	lda (p2),y
+	sta p+1
+	dey
+	lda (p2),y
+	sta p
+	ora p+1
+	bne l0
+	
+oops	lda #E_NOMEM
+	sec
+	rts	
+
+found
+	/* ok, we found a free buffer: p points to the buffer, p2 to the
+	   previous one. p3 is the length of the free buffer minus the
+	   needed size. If the buffer is longer than needed, create a 
+	   new free buffer, then link new buffer to freelist */
+
+#if 0	/*def DEBUG*/
+DB("Found Free buffer to alloc:")
+DB("p=")
+lda p+1:jsr EHexout:lda p:jsr EHexout
+DB("p2=")
+lda p2+1:jsr EHexout:lda p2:jsr EHexout
+DB("p3=")
+lda p3+1:jsr EHexout:lda p3:jsr EHexout
+jsr ECrlfout
+#endif
+
+	lda p		/* save buffer address */
+	sta slotladr,x
+	lda p+1
+	sta slothadr,x
+	inc slotownr,x
+		
+	lda p3 		/* check length */
+	ora p3+1
+	beq nocreate
+	
+	lda p		/* get address of new free buffer */
+	clc
+	adc slotllen,x
+	sta p4
+	lda p+1
+	adc slothlen,x
+	sta p4+1
+
+	ldy #0		/* copy next pointer */
+	lda (p),y
+	sta (p4),y
+	iny
+	lda (p),y
+	sta (p4),y
+
+	iny		/* set new length */
+	lda slotllen,x
+	sta (p),y
+	lda p3
+	sta (p4),y
+	iny
+	lda slothlen,x
+	sta (p),y
+	lda p3+1
+	sta (p4),y
+	jmp set2
+nocreate
+	ldy #0
+	lda (p),y
+	sta p4
+	iny
+	lda (p),y
+	sta p4+1
+set2
+	lda p2
+	ora p2+1
+	beq freestart
+
+	ldy #0
+	lda p4
+	sta (p2),y
+	iny
+	lda p4+1
+	sta (p2),y
+	clc
+	bcc geta
+freestart
+#if 0	/*def DEBUG*/
+DB("^m^jFreestart")
+lda p+1:jsr EHexout:lda p:jsr EHexout:jsr ECrlfout
+#endif
+	lda p4
+	sta flist
+	lda p4+1
+	sta flist+1
+	clc
+geta
+#if 0 /*def DEBUGMEM*/
+php:txa:pha
+DB("^m^jallocated buffer ")
+txa: jsr EHexout
+lda slothadr,x: jsr EHexout: lda slotladr,x: jsr EHexout
+lda slothlen,x: jsr EHexout: lda slotllen,x: jsr EHexout
+jsr ECrlfout
+jsr printmem
+jsr printlist
+pla:tax:plp
+#endif
+	lda slotladr,x
+	ldy slothadr,x
+	rts
+	.)
+
+/**************************************************************************/
+
+/* free buffer (ID=xr) */
+&bfree	.( 
+/*clc:rts*/
+&bfree2
+	cpx #MAXSLOT
+	bcc okfree
+#if 0
+	DB("bfree: illegal slot#, retadr=")
+	txa:pha:tsx:lda $0103,x:jsr EHexout:lda $0102,x:jsr EHexout
+	jsr ECrlfout:pla:tax
+#endif
+	sec
+	rts
+okfree	lda slotownr,x
+	bne okf1
+#if 0
+	DB("bfree: slot ")
+	txa:jsr EHexout:DB(" not in use, retadr=")
+	txa:pha:tsx:lda $0103,x:jsr EHexout:lda $0102,x:jsr EHexout
+	jsr ECrlfout:pla:tax
+#endif
+	sec
+	rts
+okf1
+/*	DB("bfree(")*/
+
+#if 0 /*def DEBUGMEM*/
+DB("Freeing Slot ")
+txa:jsr EHexout:DB(", #ownr="):lda slotownr,x:jsr EHexout:
+DB(", retadr="):txa:pha:tsx:lda $103,x:jsr EHexout:lda $102,x:jsr EHexout
+pla:tax:jsr ECrlfout
+#endif
+
+	dec slotownr,x
+	bne end2
+
+	lda slothadr,x
+	sta p3+1
+	lda slotladr,x
+	sta p3
+	ora p3+1
+	beq end2
+
+	ldy #2
+	lda slotllen,x
+	sta (p3),y
+	iny
+	lda slothlen,x
+	sta (p3),y	
+
+	lda #0
+	sta slothadr,x
+	sta slotladr,x
+
+	lda flist
+	ora flist+1
+	bne ok		/* no free buffer so far? */
+
+	lda p3
+	sta flist
+	lda p3+1
+	sta flist+1
+	ldy #0
+	tya
+	sta (p3),y
+	iny
+	sta (p3),y
+end2	clc
+	rts
+ok	
+	lda #0
+	sta p2
+	sta p2+1
+	lda flist
+	sta p
+	lda flist+1
+	sta p+1
+
+	/* we have to find the place where to put the buffer in the
+	   ordered free list. Then we have to check if we can merge
+	   free buffers */
+loop
+#if 0	/*def DEBUGMEM*/
+DB("Check slot ")
+lda p+1: jsr EHexout:lda p: jsr EHexout
+DB("["): ldy #3:lda (p),y:jsr EHexout:dey:lda (p),y:jsr EHexout
+DB("]->"):ldy #1:lda (p),y:jsr EHexout:dey:lda (p),y:jsr EHexout
+jsr ECrlfout
+#endif
+
+	lda p3+1
+	cmp p+1
+	bcc found
+	bne next
+	lda p3
+	cmp p
+	bcc found
+next
+	lda p
+	sta p2
+	lda p+1
+	sta p2+1
+	ldy #0
+	lda (p2),y
+	sta p
+	iny
+	lda (p2),y
+	sta p+1
+	ora p
+	bne loop
+	beq found
+end
+	clc
+	rts
+
+found	/* p2 is the buffer before the one to be freed, p the one behind.
+	   p3 is the buffer to be inserted */
+
+#if 0	/*def DEBUGMEM*/
+DB("Found buffer^m^j")
+DB("p3=")
+lda p3+1:jsr EHexout:lda p3:jsr EHexout:jsr ECrlfout
+DB("p2=")
+lda p2+1:jsr EHexout:lda p2:jsr EHexout
+DB("["):ldy #3:lda (p2),y:jsr EHexout:dey:lda (p2),y:jsr EHexout
+DB("]->"):ldy #1:lda (p2),y:jsr EHexout:dey:lda (p2),y:jsr EHexout
+jsr ECrlfout
+DB("p=")
+lda p+1:jsr EHexout:lda p:jsr EHexout
+DB("["):ldy #3:lda (p),y:jsr EHexout:dey:lda (p),y:jsr EHexout
+DB("]->"):ldy #1:lda (p),y:jsr EHexout:dey:lda (p),y:jsr EHexout
+jsr ECrlfout
+#endif
+	lda p2
+	ora p2+1
+	bne fok
+			; insert before the first free buffer so far
+	ldy #0
+	lda flist
+	sta (p3),y
+	iny
+	lda flist+1
+	sta (p3),y
+	lda p3
+	sta flist
+	ldy p3+1
+	sty flist+1
+	jsr bmerge
+#if 0	/*def DEBUGMEM*/
+jsr printmem
+#endif
+	clc
+	rts
+fok			; insert to list
+	ldy #1
+	lda p+1		;lda (p2),y
+	sta (p3),y
+	dey
+	lda p		;lda (p2),y
+	sta (p3),y
+	lda p3
+	sta (p2),y
+	iny
+	lda p3+1
+	sta (p2),y
+
+	lda p3
+	ldy p3+1
+	jsr bmerge
+	lda p2
+	ldy p2+1
+	jsr bmerge
+#if 0	/*def DEBUGMEM*/
+jsr printmem
+#endif	
+	clc
+	rts
+	.)
+
+/**************************************************************************/
+/* split buffer xr at size a/y for first part. return new buffer ID in x */
+&bsplit	.(
+	stx slot
+#if 0 /*def DEBUGMEM*/
+pha
+tya
+pha
+DB("^m^jbsplit buffer ")
+txa
+jsr EHexout
+pla
+pha
+jsr EHexout
+pla
+tay
+pla
+pha
+jsr EHexout
+jsr ECrlfout
+pla
+#endif
+	sta p3
+	sty p3+1
+/*pha:tya:pha:DB("bsplit "):jsr printlist:jsr ECrlfout:pla:tay:pla*/
+
+	clc
+	adc #MINBUF-1
+	and #MINMASK
+	sta p2
+	bcc l0
+	iny
+l0 	sty p2+1
+
+	lda slotownr,x
+	beq splitownr
+
+	tya
+	cmp slothlen,x
+	bcc ok
+	bne oops
+	lda p2
+	cmp slotllen,x
+	bcc ok
+	bne oops
+
+/*DB("Btrunc to same size!^m^j")*/
+	lda p3
+	sta slotrlln,x
+	lda p3+1
+	sta slotrhln,x
+	sec
+	rts
+
+oops	DB("bsplit: oops^m^j")
+	sec
+	rts
+
+splitownr
+	DB("bsplit: no owner!^m^j")
+	jmp oops
+
+ok	lda p3
+	sta slotrlln,x
+	lda p3+1
+	sta slotrhln,x
+
+/*DB("slot="):lda slot:jsr EHexout:jsr ECrlfout*/
+	jsr getbslot
+	bcs oops
+
+	ldy slot
+	clc
+	lda slotladr,y
+	adc p2
+	sta slotladr,x
+	lda slothadr,y
+	adc p2+1
+	sta slothadr,x
+	sec
+	lda slotllen,y
+	sbc p2
+	sta slotllen,x
+	lda slothlen,y
+	sbc p2+1
+	sta slothlen,x
+	
+	lda p2
+	sta slotllen,y
+	lda p2+1
+	sta slothlen,y
+
+	inc slotownr,x	
+oknull	
+#if 0
+DB("^m^jsplit buffer @")
+	jsr printlist
+#ifdef DEBUGMEM
+	txa
+	jsr EHexout
+	lda slothadr,x
+	jsr EHexout 
+	lda slotladr,x
+	jsr EHexout 
+	lda slothlen,x
+	jsr EHexout 
+	lda slotllen,x
+	jsr EHexout 
+	jsr ECrlfout
+jsr printmem
+#endif
+#endif
+	clc
+	rts
+	.)
+
+/**************************************************************************/
+/* truncate buffer xr to size a/y */
+&btrunc	.(
+	jsr bsplit
+	bcs oops
+	jmp bfree2
+oops	rts
+	.)
+
+/* realloc buffer xr to size a/y */
+/* produce assemble errror
+&brealloc .(
+	.)
+*/
+
+/* get adress of buffer */
+&getbadr .(
+	cpx #MAXSLOT
+	bcs maxerr
+	lda slotownr,x
+	beq err
+	lda slotladr,x
+	ldy slothadr,x
+	clc
+	rts
+err	
+#if 0
+	DB("getbadr from unused slot=")
+	txa
+	jsr EHexout
+	DB("!^m^j")
+#endif
+	sec
+	rts
+maxerr	DB("getbadr from illegal slot^m^j")
+	sec
+	rts
+	.)
+
+/* get length of buffer */
+&getblen .(
+	lda slotrlln,x
+	ldy slotrhln,x
+	clc
+	rts
+	.)
+
+/* this registers one more user - so one bfree is ignored */
+&incownr .(
+	cpx #MAXSLOT
+	bcs err
+	lda slotownr,x
+	beq incerr
+	inc slotownr,x
+	clc
+	rts
+err	DB("incownr: illegal buffer^m^j")
+	sec
+	rts
+incerr	DB("incownr: unused buffer^m^j")
+	sec
+	rts
+	.)
+
+/* get free buffer-ID slot */
+getbslot .(
+	ldx #0
+l0
+	clc
+	lda slotownr,x
+	beq found
+	inx
+	cpx #MAXSLOT
+	bcc l0
+found
+	rts
+	.)
+
+/* check if two free buffers (i.e. a/y plus following) can be merged */
+bmerge	.(
+	sta p
+	sty p+1
+	ldy #2
+	clc
+	lda (p),y
+	adc p
+	sta p3
+	iny
+	lda (p),y
+	adc p+1
+	sta p3+1
+	ldy #0
+	lda (p),y
+	cmp p3
+	bne nomerge
+	iny
+	lda (p),y
+	cmp p3+1
+	bne nomerge
+merge
+	ldy #2
+	clc
+	lda (p3),y
+	adc (p),y
+	sta (p),y
+	iny
+	lda (p3),y
+	adc (p),y
+	sta (p),y
+	ldy #0
+	lda (p3),y
+	sta (p),y
+	iny
+	lda (p3),y
+	sta (p),y
+nomerge
+	clc
+	rts
+	.)
+
+/**************************************************************************/
+#ifdef DEBUGMEM
+
+	.data
+pac	.byt 0
+pxr	.byt 0
+pyr	.byt 0
+	.text
+
+&printlist .(
+	php
+	sta pac
+	stx pxr
+	sty pyr
+
+	ldx #0
+l0	lda slotownr,x
+	beq next
+	txa
+	jsr EHexout
+	lda #":"
+	jsr ECout
+	lda slotownr,x
+	jsr EHexout
+	lda #"@"
+	jsr ECout
+	lda slothadr,x
+	jsr EHexout
+	lda slotladr,x
+	jsr EHexout
+	lda #"["
+	jsr ECout
+	lda slothlen,x
+	jsr EHexout
+	lda slotllen,x
+	jsr EHexout
+	DB("] ")
+
+	lda slotladr,x
+	and #%00000111
+	bne error
+next
+	inx
+	cpx #MAXSLOT
+	bcc l0
+	jsr ECrlfout
+
+	lda pac
+	ldx pxr
+	ldy pyr
+	plp
+	rts
+error	brk
+	.)
+
+&printmem .(
+	php
+	sta pac
+	stx pxr
+	sty pyr
+
+DB("^m^jMemory Free List:^m^j")
+	lda flist
+	sta p
+	lda flist+1
+	sta p+1
+	ldx #STDERR
+loop
+	lda p+1
+;	beq ende
+	jsr EHexout
+	lda p
+	jsr EHexout
+	lda #"["
+	jsr Fputc
+	ldy #3
+	lda (p),y
+	jsr EHexout
+	dey
+	lda (p),y
+	jsr EHexout
+	DB("]->")
+	ldy #1
+	lda (p),y
+	jsr EHexout
+	dey
+	lda (p),y
+	jsr EHexout
+	jsr ECrlfout
+
+	ldy #1
+	lda (p),y
+	pha
+	dey
+	lda (p),y
+	sta p
+	pla
+	sta p+1
+	ora p
+	bne loop
+
+	lda pac
+	ldx pxr
+	ldy pyr
+	plp
+	rts
+ende	brk
+	.)
+#endif
+
+	.)
+
+

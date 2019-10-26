@@ -1,0 +1,36 @@
+
+/* These definitions are without the two leading version/marker bytes,
+ * length is without options 
+ */
+#define	HDR_MAGIC	0
+#define	HDR_VERSION	3
+#define	HDR_MODE	4
+#define	HDR_TBASE	6
+#define	HDR_TLEN	8
+#define	HDR_DBASE	10
+#define	HDR_DLEN	12
+#define	HDR_BBASE	14
+#define	HDR_BLEN	16
+#define	HDR_ZBASE	18
+#define	HDR_ZLEN	20
+#define	HDR_STACKLEN	22
+#define	HDR_LEN		24
+
+#define	A_ADR		$80
+#define	A_HIGH		$40      /* or'd with the low byte */
+#define	A_LOW		$20
+#define	A_MASK		$e0      /* reloc type mask */
+#define	A_FMASK		$0f      /* segment type mask */
+
+#define	SEG_UNDEF	0
+#define	SEG_ABS		1
+#define	SEG_TEXT	2
+#define	SEG_DATA	3
+#define	SEG_BSS		4
+#define	SEG_ZERO	5
+
+#define	FM_OBJ		%00010000
+#define	FM_SIZE		%00100000
+#define	FM_RELOC	%01000000
+#define	FM_CPU		%10000000
+

@@ -1,0 +1,589 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/* if not 'relocated' for other purposes, use std addr for stdio */
+#ifndef STDIOADDR	
+#define	STDIOADDR	$e800
+#endif
+
++STDLIB =STDIOADDR
+
+#include "kernel.i65"	/* kernel calls are preprocessor defines! */
+
+/* TODO: check NOMMU and OLDROM to set something like threadsave */
+
+#ifdef ROM
+
+          .(
+
+	.zero
+xr        .byt 0
+	.text
+
+getc      .(
+#ifdef OLDROM
+          stx xr
+          ldx #STDIN
+          .byt $2c
+#else
+	  php
+	  sei
+	  sta xr
+	  txa
+	  ldx xr
+	  plp
+	  pha
+	  ldx #STDIN
+	  jsr fgetc
+	  tax
+	  pla
+	  php
+	  sei
+	  sta xr
+	  txa
+	  ldx xr
+	  plp
+	  rts
+#endif
+&fgetc    
+#ifdef OLDROM
+	  stx xr
+#endif
+gc1       jsr GETC
+          bcc ok
+          cmp #E_EOF
+          beq ok
+          jsr YIELD
+          jmp gc1
+ok        
+#ifdef OLDROM
+	  ldx xr
+#endif
+          rts
+          .)
+
+crlfout   lda #13
+          jsr putc
+lfout     lda #10
+putc      .(
+#ifdef OLDROM
+          stx xr
+          pha
+          ldx #STDOUT
+          bne pc1
+#else
+	  php		; exchange x and a - thread save
+	  sei
+	  sta xr
+	  txa
+	  ldx xr
+	  plp		; implicit cli
+	  pha		; save former xr first
+	  txa
+	  ldx #STDOUT
+	  jsr fputc
+	  tax		; ac to xr
+	  pla		; get former xr from stack	
+	  php		; and exchange x and a back
+	  sei
+	  sta xr
+	  txa
+	  ldx xr
+	  plp
+	  rts
+#endif	  
+
+&fputc    pha
+#ifdef OLDROM
+          stx xr
+#endif
+pc1       jsr PUTC
+          bcc ok
+          cmp #E_NUL
+          beq ok
+          jsr YIELD
+          pla
+          pha
+          jmp pc1
+ok        
+#ifdef OLDROM
+	  ldx xr
+#endif
+          pla
+          rts
+          .)
+
+serbrk    .(
+          stx xr
+          lda #SC_STAT
+          ldx #STDIN
+          jsr STRCMD
+          ldx xr
+          cmp #E_SEMPTY
+          beq s3
+          sec
+          rts
+#ifndef OLDROM
+s3	  clc
+	  rts
+#endif
+          .)
+
+	.zero
+d1        .word 0
+	.text
+dezbout   .(
+
+#ifndef OLDROM
+	  php		; thread-save
+	  sei
+#endif
+l1        tay
+          sec
+          sbc #100
+          bcs l1
+          lda #0
+          sta d1
+          tya
+l2        tay
+          sec
+          sbc #10
+          bcc l3
+          inc d1
+          bcs l2
+l3        asl d1
+          asl d1
+          asl d1
+          asl d1
+          tya
+          ora d1          
+#ifndef OLDROM
+	  plp
+#endif
+&hexout  
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr nibout
+          pla
+          and #$0f
+nibout    clc
+          adc #"0"
+          cmp #"9"+1
+          bcc nibok
+          adc #6
+nibok     jmp putc
+          .)
+          
+txtout    .(
+tp        =d1		/*syszp+1*/
+
+#ifndef OLDROM
+	  php			; switching multitasking of is a 
+	  sei			; 'bad thing' (tm)! - but a mutex is needed
+#endif
+          sta tp
+          sty tp+1
+          ldy #0
+tol       lda (tp),y
+          beq tole
+          jsr putc
+          iny
+          bne tol
+          inc tp+1
+          bne tol
+tole      
+#ifndef OLDROM
+	  plp
+#else
+&s3
+#endif
+	  clc
+          rts
+          .)
+
+#if 0
+#ifndef OLDROM
+-syszp += 3
+#endif
+#endif
+
+/***********************************************************************
+ * Warning! The following routines (Directory stuff, assigntab) are
+ * _not_ thread-save!
+ */
+
+#define   PATH_DRV  0
+#define   PATH_NAME (PATH_DRV+1)   /* ohne abschliessendes DIRSIGN    */
+
+	.zero
+zp        .word 0
+d         .byt 0
+maxpath   .byt 0
+	.text
+	
+          .(
+
+&usedir   sta zp
+          sty zp+1
+          lda PCBUF+FS_OPEN_DRV
+          bpl ok         ; Laufwerk angegeben, war nix
+          
+          ldy #PATH_DRV
+          lda (zp),y
+          sta PCBUF+FS_OPEN_DRV
+
+          ldx #FS_OPEN_NAME
+          lda PCBUF,x
+          cmp #DIRSIGN   ; Pfad absolut angegeben
+          beq ok         ; war auch nix
+          
+ud2       iny
+          lda (zp),y
+          bne ud2
+          sty d          
+ud4       lda PCBUF,x
+          beq ud3
+          inx
+          bne ud4
+ud3       inx
+          txa
+          clc
+          adc d
+          sta d
+          bcs nerr
+          tay
+ud5       lda PCBUF,x
+          sta PCBUF,y
+          dey
+          dex
+          cpx #FS_OPEN_NAME
+          bcs ud5
+          ldy #PATH_NAME
+ud6       lda (zp),y
+          sta PCBUF+FS_OPEN_NAME-PATH_NAME,y
+          beq ud7
+          iny
+          bne ud6
+ud7       lda #DIRSIGN
+          sta PCBUF+FS_OPEN_NAME-PATH_NAME,y
+          ldx d
+          clc
+          rts
+nerr      sec
+          rts
+ok        ldx #FS_OPEN_NAME
+ok1       lda PCBUF,x
+          beq oke
+          inx
+          bne ok1
+oke       inx
+          clc
+          rts
+          .)
+          
+          .(
+#if 0
+zp        =syszp
+d         =syszp+2
+maxpath   =syszp+3
+#endif
+
+&chdir    sta zp
+          sty zp+1
+          stx maxpath
+          lda PCBUF+FS_CMD_DRV
+          bmi nodrive
+          ldy #PATH_DRV
+          cmp (zp),y
+          beq nodrive
+          sta (zp),y
+          iny
+          lda #0
+          sta (zp),y
+nodrive   inc zp
+          bne nd1
+          inc zp+1
+          ldy #0
+                         ; Name untersuchen
+nd1       ldx #FS_CMD_NAME
+          lda PCBUF,x
+          bne ndrx       ; kein Name dann Pfad lîschen
+          sta (zp),y
+          clc
+          rts
+ndrx
+          cmp #DIRSIGN   ; Name beginnt mit DIRSIGN
+          bne nd2
+          lda #0         ; dann Pfad lîschen
+          sta (zp),y
+          
+nd2a      inx
+nd2       lda PCBUF,x    ; weiter Name anschauen
+          beq ndr        ; kein Name dann Ende
+          cmp #DIRSIGN
+          beq nd2a       ; DIRSIGN Åberlesen
+          cmp #"."
+          bne nameok     ; kein '.' dann ok
+          inx
+          lda PCBUF,x    ; hier mindestens ein '.'
+          beq ndr        ; Null dann Ende
+          cmp #DIRSIGN   ; DIRSIGN,
+          beq nd2a       ; dann '.' ignorieren
+          cmp #"."       ; noch'n Punkt ?
+          bne nerrx      ; nein, dann 
+          jsr getpos
+          ldy d          ; Position des letzten DIRSIGNs
+          lda #0
+          sta (zp),y     ; lîschen = eine Verzeichnis-Ebene hîher
+          beq nd2a       ; (absolut)
+
+nerrx     dex
+nameok    jsr getpos     ; y=LÑnge des alten Pfads
+          sty d          ; hier Verzeichnis-Name an Pfad anhÑngen
+no        iny
+          cpy maxpath
+          bcs nerr
+          lda PCBUF,x
+          beq nr
+          cmp #DIRSIGN
+          beq nr
+          sta (zp),y
+          inx
+          bne no
+nr        lda #0
+          sta (zp),y
+          ldy d
+          lda #DIRSIGN   ; alles ok, dann Nullbyte (Ende alter Pfad) mit
+          sta (zp),y     ; DIRSIGN Åberschreiben
+          lda PCBUF,x    ; Ende des neuen Verzeichnisses
+          bne nd2a       ; nein, dann wieder nach oben
+ndr       clc
+          rts
+nerr      sec
+          rts
+getpos    ldy #0         ; holt y=LÑnge des alten Pfadnamens
+          sty d          ; und d=Position des letzten DIRSIGNs
+no0       lda (zp),y
+          beq no1
+          cmp #DIRSIGN
+          bne no2
+          sty d
+no2       iny
+          bne no0          
+no1       rts
+          .)          
+           
+          .(
+#if 0
+zp        =syszp
+d         =syszp+2
+#endif
+
+&getname  sta zp
+          sty zp+1
+          lda #0
+          sta PCBUF+FS_OPEN_NAME
+          ldy #<-1
+          sty PCBUF+FS_OPEN_DRV
+g1        iny
+          lda (zp),y
+          beq gr
+          cmp #" "
+          beq g1
+          cmp #":"
+          beq g1
+          cmp #34        ; "
+          beq g2
+          iny
+          lda (zp),y
+          dey
+          cmp #":"
+          bne g2
+          lda (zp),y
+          cmp #"A"
+          bcc g3
+          sbc #1
+g3        and #$0f
+          sta PCBUF+FS_OPEN_DRV
+          iny
+          iny
+g2        dey
+          ldx #FS_OPEN_NAME
+          bne g2a
+
+&set2name     /* x=iobuf, y=pcbuf */
+          sta zp
+          sty zp+1
+          ldy #<-1
+g2a       lda #" "
+          sta d
+gn1       iny
+          lda (zp),y
+          beq gn3
+          cmp #" "
+          beq gn1
+          cmp #">"
+          beq gn3
+          cmp #34   ; "
+          bne gn2
+          iny
+          sta d
+gn2       lda (zp),y
+          beq gn3
+          cmp d
+          beq gn3a
+          sta PCBUF,x
+          inx
+          iny
+          bne gn2
+
+gn3a      iny
+gn3       lda #0
+          sta PCBUF,x
+          inx
+gr        rts
+          .)
+
+          .(
+#ifndef NOMMU
+	.zero
+#else
+	.data
+#endif
+assigntab .dsb 10
+	.text
+
+&assign   bcc assigndrv
+          cpx #<-1
+          bne a
+iniassign
+          ldx #0
+ai        txa
+          sta assigntab,x
+          inx
+          cpx #10
+          bcc ai
+          clc
+          rts
+assigndrv
+          pha
+          cpx #10
+          bcs ae
+          lda assigntab,x
+          tax
+ae        pla
+          rts
+          
+a         cpx #10
+          bcs ar
+          sta assigntab,x
+ar        rts
+          .)
+
+#include "oldlib/mem.a65"
+#include "oldlib/zmem.a65"
+#include "oldlib/loader.a65"
+
+#if * > STDIOADDR-3*24
+#echo "STDLIB to long!"
+#endif
+
+#ifndef STDTST
+          .dsb STDIOADDR-*-3*24,<-1
+
+#echo Putting STDIO table to
+#print * 
+
+#endif
+
+jmp loader
+
+jmp zalloc
+jmp zfree
+
+jmp balloc
+jmp bfree
+jmp btrunc
+jmp bsplit
+jmp getbadr
+jmp getblen
+jmp incownr
+
+jmp set2name
+jmp usedir
+jmp chdir
+jmp getname
+jmp assign
+jmp dezbout
+jmp serbrk
+jmp crlfout
+jmp hexout
+jmp txtout
+jmp putc
+jmp getc
+jmp fputc
+jmp fgetc
+
+#ifndef STDTST
+#if *-STDIOADDR
+#echo Fehler: STDIO address not right!
+ldx ,x
+#endif
+#endif
+
+          .)
+
+#endif
+
+Loader		=STDLIB-72
+
+Zalloc		=STDLIB-69
+Zfree		=STDLIB-66
+
+Balloc		=STDLIB-63
+Bfree		=STDLIB-60
+Btrunc		=STDLIB-57
+Bsplit		=STDLIB-54
+Getbadr		=STDLIB-51
+Getblen		=STDLIB-48
+Incownr		=STDLIB-45
+
+Set2name  	=STDLIB-42		/* $e7d6	*/
+Usedir    	=STDLIB-39		/* $e7d9 	*/
+Chdir     	=STDLIB-36		/* $e7dc	*/
+Getname   	=STDLIB-33		/* $e7df	*/
+Assign    	=STDLIB-30		/* $e7e2	*/
+Dezbout   	=STDLIB-27		/* $e7e5	*/
+Serbrk    	=STDLIB-24		/* $e7e8	*/
+Crlfout   	=STDLIB-21		/* $e7eb	*/
+Hexout    	=STDLIB-18		/* $e7ee	*/
+Txtout    	=STDLIB-15		/* $e7f1	*/
+Putc      	=STDLIB-12		/* $e7f4	*/
+Getc      	=STDLIB-9		/* $e7f7	*/
+Fputc     	=STDLIB-6		/* $e7fa	*/
+Fgetc     	=STDLIB-3		/* $e7fd	*/
+

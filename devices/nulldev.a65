@@ -1,0 +1,120 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+    Generic nulldevice
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#define   ANZINSTR  16
+
+          .(
+          .word nulend
+          jmp nulprg
+          .asc "nuldev",0
+
+	.data
+anzinstr  .byt 0
+instr     .dsb ANZINSTR
+	.text
+
+nulprg    cmp #DC_RES
+          bne sp1
+          
+          ldy #0
+          sty anzinstr
+          lda #<-1
+ni1       sta instr,y
+          iny
+          cpy #ANZINSTR
+          bcc ni1
+          clc
+          rts
+
+sp1       cmp #DC_IRQ
+          bne sp2
+
+          ldy #0
+spil      ldx instr,y
+          bmi spiln
+          jsr GETC
+          bcc spil
+          cmp #E_EOF
+          bne spiln
+
+          ldx instr,y
+          lda #SC_NUL
+          jsr STRCMD
+          lda #<-1
+          sta instr,y
+
+spiln     iny
+          cpy #ANZINSTR
+          bcc spil
+          clc
+	lda #E_NOIRQ
+          rts
+
+sp2       cmp #DC_RX_OFF
+          beq nlnotimp
+          cmp #DC_TX_OFF
+          bne sp3
+          ldy #0              ; rxoff
+rxo1      ldx instr,y
+          lda #SC_NUL
+          jsr STRCMD
+          lda #<-1
+          sta instr,y
+          iny
+          cpy #ANZINSTR
+          bcc rxo1
+          bcs ok
+
+sp3       cmp #DC_RX_ON
+          beq nlnotimp
+          cmp #DC_TX_ON
+          bne sp5
+
+ok        lda #0
+          .byt $2c
+nlnotimp  lda #E_NOTIMP
+          .byt $2c
+nldevon   lda #E_DON
+          cmp #1
+          rts
+
+sp5       cmp #DC_GS
+          bne nlnotimp
+          ldx #0
+sp5a      lda instr,x
+          bpl sp5n
+          tya
+          sta instr,x
+          clc
+          rts
+sp5n      inx
+          cpx #ANZINSTR
+          bcc sp5a
+          bcs nldevon
+
+#undef ANZINSTR
+
+nulend    .)
+

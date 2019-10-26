@@ -1,0 +1,234 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.3.3
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#define   NOPRG
+
+          .(
+#ifdef ROM
+          .word ende
+          .byt  PK_PRG+$80
+          .byt  4
+          .word 0
+          .word PRG
+          .byt  8,$c,9,$d,$a,$e,<-1
+          .asc  "fsdev",0
+#else
+
+#include  "oa1\oa1con.def"
+#include  "oa1\oa1str.def"
+#include  "oa1\oa1sj.a65"
+#include  "oafs\oa1fs.def"
+
+#ifdef NOPRG
+          .word $800
+          *=$800
+          jmp PRG
+#else
+          .word $800
+          *=$800
+          .word 0
+          .byt  PK_PRG
+          .byt  4
+          .word 0
+          .word PRG
+          .byt <-1
+#endif
+#endif
+
+-syszp    =$10
+-sysmem   =$300
+-sysblk   =$800
+
+owntask   =sysmem
+ac        =sysmem+1
+xr        =sysmem+2
+yr        =sysmem+3
+-sysmem   +=4
+
+PRG       .(
+          stx owntask
+
+	  clc
+	  ldx #SEM_SENDBUF
+	  jsr PSEM
+
+          lda #1         ; 1 Drive 
+          sta PCBUF+FM_REG_DRVS
+          lda owntask
+          sta PCBUF+FM_REG_ENV
+          lda #FM_REG
+          ldx #SEND_FM   
+          ldy #2
+          jsr SEND
+
+	  php
+	  ldx #SEM_SENDBUF
+	  jsr VSEM
+	  plp
+
+          bcc loop
+          jmp TERM
+
+loop      sec
+          jsr RECEIVE
+          bcs loop
+          
+          sta ac
+          stx xr
+          sty yr
+          
+          ldy #ta-t
+          jsr tout
+          lda ac
+          jsr HEXOUT
+          ldy #ty-t
+          jsr tout
+          lda yr
+          jsr HEXOUT
+          ldy #tx-t
+          jsr tout
+          lda xr
+          jsr HEXOUT
+          ldy #td-t
+          jsr tout
+          lda PCBUF+FS_OPEN_DRV
+          jsr HEXOUT
+          ldy #ts-t
+          jsr tout
+          lda PCBUF+FS_OPEN_STR
+          jsr HEXOUT
+          ldy #tp-t
+          jsr tout
+          lda PCBUF+FS_OPEN_PFAD
+          jsr HEXOUT
+          ldy #tt-t
+          jsr tout
+          ldy #FS_OPEN_NAME
+l1        lda PCBUF,y
+          bne l2
+          lda #"@"
+l2        jsr SEROUT
+          iny
+          cpy yr
+          bcc l1
+          ldy #te-t
+          jsr tout
+          
+          lda #<-1
+          sta PCBUF+FS_X_ERR
+          ldx xr
+          ldy #FS_X_SLEN
+          jsr SEND
+          
+          jmp loop
+          
+HEXOUT    .(
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr NIBOUT
+          pla
+          and #$0f
+NIBOUT    clc  
+          adc #"0"
+          cmp #"9"+1
+          bcc nout
+          adc #6
+nout      jmp SEROUT
+          .)
+
+          .(
+dxr       =sysmem
+dyr       =sysmem+1
+str       =sysmem+2
+-sysmem   +=3
+
+&SERIN    stx dxr
+          ldx #STDIN
+          bne s0
+&IN       stx dxr
+s0        sty dyr
+          stx str
+s1        ldx str
+          jsr GETC
+          bcc s1a
+          cmp #E_EOF
+          beq s1b
+          jsr YIELD
+          jmp s1
+s1b       sec
+s1a       ldx dxr
+          ldy dyr
+          rts
+          
+&SEROUT   stx dxr
+          ldx #STDOUT
+          bne o0
+&OUT      stx dxr
+o0        sty dyr
+s2        pha
+          jsr PUTC
+          pla
+          bcc s2a
+          jsr YIELD
+          jmp s2
+s2a       ldx dxr
+          ldy dyr
+          cmp #0
+          rts
+          
+&SERBRK   stx dxr
+          sty dyr
+          lda #SC_STAT
+          ldx #STDIN
+          jsr STRCMD
+          ldx dxr
+          ldy dyr
+          cmp #E_SEMPTY
+          bne s3
+          clc
+          rts
+s3        sec
+          rts
+          .)
+        
+tout      lda t,y
+          beq tend
+          jsr SEROUT
+          iny
+          bne tout
+tend      rts
+
+t ta      .asc "AC=",0
+tx        .asc " XR=",0
+ty        .asc " YR=",0
+td        .asc 13,10,"DRV=",0
+ts        .asc " STR=",0
+tp        .asc " PATH=",0
+tt te     .asc 13,10,0
+         
+ende      .)
+           

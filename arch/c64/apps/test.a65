@@ -1,0 +1,28 @@
+
+#include "kdefs.i65"
+#include "kernel.i65"
+
+	*=$2000
+	.word 0
+	.byt PK_PRG
+	.byt 12
+	.word 0
+	.word PRG
+	.byt <-1
+
+PRG
+l0
+	ldx #STDIN
+	jsr GETC
+	bcs l0
+
+	ldx #STDOUT
+l1	pha
+	jsr PUTC
+	bcc l2
+	pla
+	bcs l1
+
+l2	pla
+	jmp l0
+	

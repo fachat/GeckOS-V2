@@ -1,0 +1,558 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This is a driver for the newly developed 9600 baud RS232 interface
+ * for the C64 and the C128. It uses the shift registers of the two
+ * CIA 6526 for receiving and transmitting bytes.
+ * Currently it runs on 1MHz CPU clock (i.e. C64) only. 
+ *
+ * When sending, it shifts the data byte out through the CIA1 SR,
+ * adding a start bit at the beginning and 7 stopbits at the end,
+ * which makes up two bytes for the SR. It should be possible to compress
+ * the stuff, but not now...
+ * When receiving, we wait for an NMI at Flag2, that comes with the
+ * received start bit. Then C64CIA2 TimerB is started and gives pulses
+ * at PB7, which are routed to CNT2 at the userport. The C64CIA2 shifts
+ * the incoming data bits to the SR and generates an NMI when the SR
+ * is full. 
+ * This procedure slows down sending, but enables us to receive at 
+ * 9600 baud. It has to be guaranteed that the NMI routine is done
+ * within a bit's time (i.e. about 100 CPU cycles @ 1MHz) at 9600 baud.
+ *
+ * Only 9600 Baud are supported now. Timer values etc are taken from
+ * the miniterm program by Daniel Dallmann
+ */
+
+          .(
+	  .word devend2
+	  jmp prg1
+	  .asc "ser",sernr, 0
+-sernr += 1
+
+/*
+ * status: Bit 	0 = 1= handshake enabled
+ *		1 : 1= no ACIA found
+ *		4 : 1= we want to process NMIs
+ * 		5 : 1= set RTS hi
+ *		6 : 1= we are transmitting
+ *	  	7 : 1= we are receiving
+ *
+ */
+
+	.data
+dev       .byt 0
+div       .byt 0
+status    .byt 0
+instr     .byt 0
+outstr    .byt 0
+brkkey    .byt 0
+smode	  .byt 0
+inp	  .byt 0
+outp	  .byt 0
+nmistate  .byt 0
+
+	.zero
+rmode	  .byt 0
+oldnmi	  .word 0
+
+	.bss
+bytetab	  .dsb 256
+inbuf	  .dsb 256
+
+	.text
+
+prg1      ldx #0
+
+          stx dev
+          cmp #DC_RES
+          beq devini
+          pha
+          lda status
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq1
+          jmp others
+devirq1	  jmp devirq
+
+/*****************************************************************/
+
+devini  .(  
+	  lda #0
+          sta status
+          sta instr
+          sta outstr
+
+	lda #3
+	sta brkkey
+
+	lda #$80
+	sta smode		; sending mode
+	sta rmode		; receiving <0 = wait stop bit; >0 = wait SR
+
+	lda #0
+	sta inp
+	sta outp
+
+	; generate bit reversed data field
+	ldx #0
+l1	stx div
+	ldy #8
+	txa
+l0	lsr
+	rol div
+	dey
+	bne l0
+	lda div
+	sta bytetab,x
+	inx
+	bne l1
+
+	php
+	sei
+
+	; program CIA1 timer A for sending
+
+	lda C64CIA2+CIA_DDRA	; pa2 input
+	and #%11111011
+	sta C64CIA2+CIA_DDRA
+	lda #%00000001
+	sta C64CIA1+CIA_ICR	; disable IRQ for CIA1 timer A
+	lda #%10001000		
+	sta C64CIA1+CIA_ICR	; enable IRQ for CIA1 SR full
+	lda #<50
+	sta C64CIA1+CIA_TAL
+	lda #>50
+	sta C64CIA1+CIA_TAH
+	lda #%01010001		; start timer A, force load, cont mode, SR out
+	sta C64CIA1+CIA_CRA
+
+	lda #$df
+	sta C64CIA1+CIA_SDR	; send byte $ff
+	lda #$ff
+	sta C64CIA1+CIA_SDR	; 
+
+	lda C64CIA1+CIA_ICR		; clear actual irqs
+
+	; program CIA2 for receiving
+
+	lda #%01111111
+	sta C64CIA2+CIA_ICR	; disable all NMI
+	lda C64CIA2+CIA_CRA
+	and #%10111111
+	sta C64CIA2+CIA_CRA	; set SDR for input
+
+	; program CIA2 for I/O
+	lda #%10000110
+	sta C64CIA2+CIA_PRB
+	lda C64CIA2+CIA_DDRB
+	and #%10000110
+	ora #%10000110
+	sta C64CIA2+CIA_DDRB
+
+	lda #$80
+	sta rmode
+
+	sec
+	lda #<NMIserial
+	ldy #>NMIserial
+	jsr SETNMI		; old NMIvector is saved by SETNMI 
+
+	plp
+          clc
+          rts
+	.)
+
+/*****************************************************************/
+
+devirq  .(
+	lda C64CIA1+CIA_ICR
+	bpl noirq
+	and #%00001000
+	bne notmyirq		; due to the 6526 design, all irq flags are lost now
+
+	lda smode
+	ora #$80
+	sta smode
+	
+notmyirq
+	lda #E_OK
+	.byt $2c
+noirq	lda #E_NOIRQ
+	pha
+
+	; try to send something
+	lda smode
+	bpl endtx
+
+	bit status
+	bvc endtx		; we don't send
+
+	bit C64CIA2+CIA_PRB
+	bvc endtx		; CTS hi
+
+        ldx instr		; send new data byte
+        jsr GETC
+        bcs test2
+	
+	tax
+	lda bytetab,x
+	lsr
+	sta C64CIA1+CIA_SDR	; 7 data bits, 1 start bit
+	ror
+	ora #$7f
+	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
+
+	lda #0
+	sta smode
+	beq endtx
+
+test2   cmp #E_EOF
+        bne endtx
+        jsr txoff
+
+			; now let's see if there's something to receive
+endtx
+	bit status
+	bpl endirq
+
+	ldx outp
+	cpx inp
+	beq nobyt	; no byte to fetch
+
+fetch	lda inbuf,x
+	ldx outstr
+
+	cmp brkkey
+	bne nobrk
+	lda #SC_SSTAT
+	ldy #SCE_BRK
+	jsr STRCMD
+	lda brkkey
+nobrk
+	jsr PUTC
+	bcs test
+
+	inc outp
+
+nobyt   ldx outstr
+        lda #SC_STAT
+        jsr STRCMD
+test    bcc rx2end
+        cmp #E_NUL
+        bne tstwater
+        jsr rxoff
+	jmp endirq
+tstwater  
+	cmp #E_SEMPTY
+        beq wl
+        tax
+        lda status
+        and #1
+        bne wh
+        txa
+        cmp #E_SFULL
+        bne nofull
+	jsr rtshi
+	jmp endirq
+nofull
+        cmp #E_SHWM
+        bne twl
+wh      ldx #0  
+	jsr rtshi
+	jmp rx2end
+twl     cmp #E_SLWM
+        bne rx2end
+wl      ldx #0  
+	jsr rtslo
+
+rx2end	ldx outp
+	cpx inp
+	bne fetch
+
+endirq	pla
+	lda #E_NOIRQ
+	rts
+
+        .)
+
+/*****************************************************************/
+
+ctrlnmi	.(
+	sta nmistate
+	cmp #NMI_ON
+	bne off
+	lda status
+	and #%00100000
+	bne norts
+	jsr rts_lo
+norts	lda status
+	and #%00010000
+	beq nonmi
+	jsr nmi_on
+nonmi	rts
+	
+off
+	jsr rts_hi
+	jsr nmi_off
+	rts
+	.)
+
+	; structure before NMI routine as required by SETNMI
+	.word oldnmi
+	.word ctrlnmi
+NMIserial .(
+	pha
+	cld
+	bit rmode
+	bmi startbit
+databyte
+	txa
+	pha
+
+	lda #%00010010
+	sta C64CIA2+CIA_CRB	; stop timer
+	lsr
+	sta C64CIA2+CIA_ICR	; disable SDR NMI
+	lda #%10010000
+	sta C64CIA2+CIA_ICR	; enable Flag2 NMI
+	
+	inc rmode		; $7f -> $80
+
+	lda C64CIA2+CIA_SDR	; only SDR NMI should be set
+
+	tax
+	lda bytetab,x
+	ldx inp
+	sta inbuf,x
+	inc inp
+
+	pla
+	tax
+	pla
+	bit C64CIA2+CIA_ICR
+	jmp (oldnmi)
+
+startbit	
+	dec rmode		; $80 -> $7f
+	lda C64CIA2+CIA_SDR
+	lda #%00010011
+	sta C64CIA2+CIA_CRB	; start timer
+	sta C64CIA2+CIA_ICR	; disable Flag2 NMI
+	lda #%10001000
+	sta C64CIA2+CIA_ICR	; enable SR NMI
+	pla
+	bit C64CIA2+CIA_ICR
+	jmp (oldnmi)
+
+	.)
+
+nmion   .(
+	lda status
+	ora #%00010000
+	sta status
+	lda nmistate
+	cmp #NMI_ON
+	bne nonmi
+&nmi_on
+	lda #<100
+	sta C64CIA2+CIA_TBL
+	lda #>100
+	sta C64CIA2+CIA_TBH
+
+	lda #%00010010
+	sta C64CIA2+CIA_CRB	; Timer B force load, stop, pulse PB7
+
+	lda C64CIA2+CIA_ICR	; clear NMI
+	lda #%10011000		; enable IRQ for Flag2
+	sta C64CIA2+CIA_ICR
+nonmi
+	rts
+	.)
+
+nmioff	.(
+	lda status
+	and #%11101111
+	sta status	
+&nmi_off
+	lda #%00011000
+	bit rmode
+	bpl nmi_off		; wait for char received
+	sta C64CIA2+CIA_ICR
+	lda C64CIA2+CIA_ICR
+	rts
+	.)
+
+/*****************************************************************/
+
+rtshi
+	lda status
+	ora #%00100000
+	sta status	
+rts_hi
+	lda C64CIA2+CIA_PRB
+	and #%11111101
+	sta C64CIA2+CIA_PRB
+	rts
+
+rtslo
+	lda status
+	and #%11011111
+	sta status	
+	lda nmistate
+	cmp #NMI_ON
+	bne nolo
+rts_lo
+	lda C64CIA2+CIA_PRB
+	ora #%00000010
+	sta C64CIA2+CIA_PRB
+nolo
+	rts
+
+/*****************************************************************/
+
+others    cmp #DC_GS		; set stream to get data from
+          bne o1
+          lda status
+          and #DC_SW_TX
+          bne devonx
+          tya
+          sta instr
+          jmp ok
+devonx    jmp devon
+o1        cmp #DC_PS		; set stream to put data to
+          bne o2
+          lda status
+          and #DC_SW_RX
+          bne devonx
+          tya
+          sta outstr
+okx       jmp ok
+o2        cmp #DC_RX_ON		; switch receiver on
+          bne o3
+	; lda #3
+	; sta brkkey
+	jsr nmion
+	jsr rtslo
+	;jsr dtrlo
+          lda #DC_SW_RX
+          bne o2a
+o3        cmp #DC_TX_ON		; switch sender on
+          bne o4
+	;jsr dtrlo
+          lda #DC_SW_TX
+o2a       ora status
+          sta status
+          bne okx
+o4        cmp #DC_RX_OFF	; switch receiver off, send eof to stream
+          bne o5
+rxoff     ldx dev
+          lda status
+          and #DC_SW_RX
+          beq devoffx
+	jsr rtshi
+	jsr nmioff
+          lda outstr
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldx dev
+          lda status
+          and #255-DC_SW_RX
+          sta status
+	  jmp checkdtr
+
+devoffx   jmp  devoff
+
+o5        cmp #DC_TX_OFF	; switch sender off, send nul to stream
+          bne o6
+txoff     ldx dev
+          lda status
+          and #DC_SW_TX
+          beq devoffx
+          lda instr
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldx dev
+          lda status
+          and #255-DC_SW_TX
+          sta status
+checkdtr
+	and #DC_SW_TX+DC_SW_RX
+	bne active
+	;jsr dtrhi
+active 	jmp ok
+
+o6        cmp #DC_HS		; set handshake -- currently ignored (TODO)
+          bne o6a
+          lda status
+          and #255-1
+          sta status
+          tya
+          and #1
+          ora status
+          sta status
+          jmp ok
+
+o6a       cmp #DC_SPD		; set speed - currently ignored here
+          bne o7
+          jmp ok
+
+o7        cmp #DC_ST		; get status...
+          beq ok 
+          cmp #DC_EXIT		; disable everything
+          bne o8		; onotimp
+          jsr rxoff
+          jsr txoff
+          ldx dev 
+          lda status
+          ora #2
+          sta status
+	  bne ok
+o8
+	  cmp #DC_BRKKEY
+	  bne onotimp
+	  lda brkkey
+	  sty brkkey
+	  tay
+	  ; jmp ok
+          
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+devend2   .)
+

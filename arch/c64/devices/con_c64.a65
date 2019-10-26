@@ -1,0 +1,319 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#define	MAX_SCREEN	4		/* hard maximum number of screens */
+
+#define	MAX_ASCREEN	#4		/* soft maximum number of screens */
+
+#define	SWITCHKEY	C64SWITCH
+
+#define	SET_MMU
+
+#define	BELLIRQ	
+
+#define	TRIGBELL	
+
+#define	MAXSPAL		#40
+
+#define	MAXZEIL		#25
+
+#define	KEY_START	20	/* when does key repetition start */
+
+				/* screen# -> hi byte of base address in AC */
+#define	HI_VID	        asl:asl:clc:adc #VIDPAGE<<4
+
+#define	ACT_HI_VID      lda hivid
+
+#define	SCR_SPACE	32
+
+#define	SCR2ASC
+
+#define	ASC2SCR
+
+&console_init .(
+	jsr inivid
+	jsr inicrsr
+	jsr inikbd
+	rts
+	.)
+
+/*
+ * For the C64 we put the video screen memory to $e000-$ec00, i.e.
+ * we have three possible screens only. We need $ec00-$efff for the
+ * stdlib. We use the std charom at $d000 in the RAM under I/O that
+ * the VIC doesn't see. The boot loader has to copy the charom there.
+ * Then we have all the memory below the I/O relatively free.
+ */
+
+inivid	.(
+        lda #0
+        sta C64VIC+VIC_IRR            ; no interrupts
+        sta C64VIC+VIC_SPRITE_EN      ; sprites off
+        lda #27
+        sta C64VIC+VIC_CR1            ; 25 lines
+        lda #8
+        sta C64VIC+VIC_CR2            ; 40 cols
+;       lda #(($10 & %001110000)>>3)+(($20 & %00111100)<<2)
+        lda #%10000100
+        sta C64VIC+VIC_BASE           ; character and screen base
+
+        lda C64CIA2+CIA_DDRA          ; set upper two video address bits
+        ora #3                        ; via CIA2, PRA Bit 0 and 1
+        sta C64CIA2+CIA_DDRA          ; set bits to output mode
+        lda C64CIA2+CIA_PRA
+        and #%11111100
+        sta C64CIA2+CIA_PRA           ; change to uppermost page ($c000-)
+
+        lda #C64_TEXT_COL             ; set the screen (text) color
+        ldy #0
+coloop  sta $d800,y
+        sta $d900,y
+        sta $da00,y
+        sta $db00,y
+        iny
+        bne coloop
+
+        lda #C64_BGND_COL             ; set the border and background color
+        sta C64VIC+VIC_BGND_COL0
+        lda #C64_BORDER_COL
+        sta C64VIC+VIC_EXT_COL
+	rts
+	.)
+
+&setact	.(
+        asl
+        asl
+        asl
+        asl
+        ora #%10000100
+        sta C64VIC+VIC_BASE
+	rts
+	.)
+
+/**************************************************************************
+ * Cursor handling
+ */
+
+          .(
+        .data
+crsrfl  .byt 0
+crsrcnt .byt 0
+        .text
+
+&inicrsr
+	lda #0
+	sta crsrfl
+	sta crsrcnt
+	rts
+
+&&crsroff .(                    ; disable cursor
+          bit crsrfl
+          bpl ret               ; not enabled
+
+          bit crsrfl
+          bvc clr               ; not inversed
+          ldy spalte
+          lda (vzei),y
+          eor #$80
+          sta (vzei),y
+clr       lda #0
+          sta crsrfl
+&ret      rts
+	.)
+
+&&crsron .(			; enable cursor
+          bit crsrfl
+          bmi irq               ; already enabled
+          lda #0                ; inverse cursor next crsrirq
+          sta crsrcnt
+          lda #128              ; enabled, but not invers
+          sta crsrfl
+
+&irq      
+	  dec crsrcnt
+          bpl ret               ; not this time
+          lda #10
+          sta crsrcnt
+
+          ldy spalte
+          lda (vzei),y
+          eor #$80
+          sta (vzei),y
+          lda crsrfl
+          eor #$40
+          sta crsrfl
+
+          rts
+          .)
+
+	.)
+
+/**************************************************************************/
+
+          .(
+
+kcnt       =zei2
+        .data
+rcnt      .byt 0
+shiftfl   .byt 0
+prev      .byt 0
+        .zero
+tzei      .word 0
+        .text
+
+&inikbd   .(
+          lda #0
+          sta C64CIA1+CIA_DDRB
+          lda #$ff
+          sta C64CIA1+CIA_DDRA
+          sta C64CIA1+CIA_PRA
+          lda #4
+
+          sta rcnt
+          sta rspd
+          rts
+          .)
+
+&&getkey  .(
+          lda #0
+          sta shiftfl
+          ldy #$ff
+          sty kcnt
+
+          sta C64CIA1+CIA_PRA
+l0        lda C64CIA1+CIA_PRB
+          cmp C64CIA1+CIA_PRB
+          bne l0
+          cmp #$ff
+          beq nokey
+
+          lda #%11111110
+          sta C64CIA1+CIA_PRA
+	  pha			; we need to save this, as more pressed
+				; keys can change the value read back!
+	  ldx #0
+
+l1        lda C64CIA1+CIA_PRB
+          cmp C64CIA1+CIA_PRB
+          bne l1
+          ldy #8
+
+nextbit   lsr
+          bcs nobit
+          pha
+          lda ktab,x
+          cmp #5
+          bcs realkey
+          cmp #3
+          beq realkey
+          ora shiftfl
+          sta shiftfl
+          bpl l3
+realkey   stx kcnt
+l3        pla
+nobit     inx
+          cpx #65
+          bcs endkey
+          dey
+          bne nextbit           ; test next bit
+	  pla
+          sec
+          rol 
+	  sta C64CIA1+CIA_PRA
+	  pha
+          bne l1                ; always
+
+endkey    pla
+	  lda kcnt
+          cmp #$ff
+          beq nokey
+          cmp prev
+          bne lx
+
+          dec rcnt
+          bne nkret
+          ldx rspd
+          .byt $2c
+
+lx        ldx #KEY_START
+          stx rcnt
+
+          sta prev
+
+          tay
+          lda shiftfl
+          and #3
+          asl
+          tax
+          lda ttab,x
+          sta tzei
+          lda ttab+1,x
+          sta tzei+1
+
+          lda (tzei),y
+          ldx shiftfl
+          clc
+          rts
+
+nokey     ldx #<-1
+          stx prev
+          ldx #KEY_START
+          stx rcnt
+nkret     ldx shiftfl
+          sec
+          rts
+          .)
+
+ttab      .word ktab, stab, ctab, sctab
+
+ktab      .byt TC_BS, TC_CR, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CDWN
+          .byt "3wa4zse", 1 /* shift */
+          .byt "5rd6cftx7yg8bhuv"
+          .byt "9ij0mkon+pl-.:@,"
+          .byt "\*;", TC_HOME, 1 /* shift */, "=^^/"
+          .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /* stop */
+
+stab      .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
+          .byt "#WA$ZSE", 1 /* shift */
+          .byt "%RD&CFTX'YG(BHUV"
+          .byt ")IJ0MKON+PL->[@<"
+          .byt "\*]", TC_CLR, 1 /* shift */, "=^^?"
+          .byt "!", TC_ESC, 2 /* control */, 34," ", 6 /* C= */, "Q", 3 /*stop*/
+
+ctab      .byt TC_DEL, TC_EOL, TC_WRU, 0, 6 /* F1 */, 0, 0, TC_WLO
+          .byt "3^w^a4^z^s^e", 1 /* shift */
+          .byt "5^r^d6^c^f^t^x7^y^g8^b^h^u^v"
+          .byt "9^i^j0^m^k^o^n+^p^l-.:@,"
+          .byt "\*;", TC_WCLS, 1 /* shift */, "=^^/"
+          .byt "1", TC_CLL, 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /*stop*/
+
+sctab     .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
+          .byt "3^W^A4^Z^S^E", 1 /* shift */
+          .byt "5^R^D6^C^F^T^X7^Y^G8^B^H^U^V"
+          .byt "9^I^J0^M^K^O^N+^P^L-.:@,"
+          .byt "\*;", TC_CLR, 1 /* shift */, "=^^/"
+          .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /* stop */
+
+	.)
+

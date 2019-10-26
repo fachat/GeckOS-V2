@@ -1,0 +1,598 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************
+ * Exec handling for lib6502
+ * exports
+ * 	Exec, Forkto, Forkthread, Term, Kill, Getpid
+ *
+ */
+
+	.(
+
+/**********************************************************************
+ * Forkto forks a new thread and executes the executable given.
+ * No open files are inherited. 
+ * 
+ * It forks a new OS task and sets it to run at a library routine
+ * that communicates with the local library routine by a stream.
+ * The task environment is transfered this way. 
+ *
+ * The forked task then opens the executable and invokes the 
+ * exec code to start the new executable.
+ *
+ * The forked task closes the comm. stream without error if everything
+ * went right, or sets the error bits if there was an error. If there
+ * was an error, the forked task writes the error code to the stream
+ * which the forking task can read before closing it.
+ *
+ */
+
+	.(
+strerr	rts
+
+&&Forkto
+	sta zth
+	sty zth+1
+
+	jsr GETSTR
+	bcs strerr
+	txa
+	pha
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM		; get the sendbuf which we need to FORK
+
+	pla
+	sta PCBUF+FORK_NAME	; - no name, give comm stream as parameter
+	pha			; save for later
+
+	ldy #0
+	lda (zth),y
+	tax
+	jsr checkfd_r
+	bcs ferr2
+	stx PCBUF+FORK_STDIN
+
+	ldy #1
+	lda (zth),y
+	tax
+	jsr checkfd_w
+	bcs ferr2
+	stx PCBUF+FORK_STDOUT
+
+	ldy #2
+	lda (zth),y
+	tax
+	jsr checkfd_w
+ferr2	bcs ferr
+	stx PCBUF+FORK_STDERR
+
+	ldx PCBUF+FORK_STDIN
+	lda #SC_REG_RD
+	jsr STRCMD
+	ldx PCBUF+FORK_STDOUT
+	lda #SC_REG_WR
+	jsr STRCMD
+	ldx PCBUF+FORK_STDERR
+	lda #SC_REG_WR
+	jsr STRCMD
+
+	pla
+&&init_forkto_i			; this is a ROM entry only for init
+				; which has to start lib6502 progs without
+				; too much support
+	pha
+
+	ldy #3
+	ldx #FORK_NAME+1	; copy cmdline + parameter
+l0	lda (zth),y
+l1	sta PCBUF,x
+	iny
+	inx
+	beq lerr
+	cmp #0
+	bne l0
+	cpx #FORK_NAME+2	; first char
+	beq l0
+	lda PCBUF-2,x
+	bne l0
+
+	pla
+&&mon_forkto_i			; this is a ROM entry for the monitor
+				; ac = comm stream, xr = length of fork
+				; struct in PCBUF. First byte of filename
+				; is comm stream
+	pha
+
+	lda #16			; initial RAM size
+	sta PCBUF+FORK_SIZE
+	lda #0
+	sta PCBUF+FORK_PRIORITY
+#ifndef LIB6502_SHAREDZERO
+	lda #>-ROMSTART		; shared ROM size
+#endif
+	sta PCBUF+FORK_SHARED
+
+	lda #<libfork
+	sta PCBUF+FORK_ADDR
+	lda #>libfork
+	sta PCBUF+FORK_ADDR+1
+
+	txa
+	tay
+;.byt 2
+	jsr FORK
+;.byt 2
+	bcc ok
+	pha
+
+	ldx PCBUF+FORK_STDIN
+	lda #SC_NUL
+	jsr STRCMD
+	ldx PCBUF+FORK_STDOUT
+	lda #SC_EOF
+	jsr STRCMD
+	ldx PCBUF+FORK_STDERR
+	lda #SC_EOF
+	jsr STRCMD
+	
+	pla
+	.byt $2c
+lerr	lda #E_FNAMLEN
+ferr
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+	tay
+	pla
+	tax
+	jsr FRESTR
+	tya
+	sec
+	rts
+ok	
+	pla			; stream number
+	sta zth
+	stx zth+1
+
+	; copy cwd to communication stream
+	lda zta		; check if task is lib6502, otherwise 
+	ora zta+1	; just send empty path (when called from init)
+	bne initd
+
+	lda #0
+	ldx zth
+	jsr eputc	; empty path (drive byte + zero-length path)
+	jsr eputc
+	jsr eputc	; empty environment
+	jsr eputc
+;.byt 2
+	jmp l2
+initd
+	ldy #LT_PATH
+	lda (zta),y
+	ldx zth
+	jsr eputc
+
+ll	iny
+	lda (zta),y
+	jsr eputc
+	cmp #0
+	bne ll
+
+	; copy env to communication stream 
+
+	lda zth
+	tax
+	pha
+	lda zth+1
+	pha
+	lda zta
+	clc
+	adc #<LT_ENV
+	sta zth
+	lda zta+1
+	adc #>LT_ENV
+	sta zth+1
+
+	ldy #0
+	lda (zth),y	
+	jsr eputc
+le	iny
+	lda (zth),y
+	jsr eputc
+	cmp #0
+	bne le
+	dey
+	lda (zth),y
+	beq lee
+	iny
+	jmp le
+lee	
+	pla
+	sta zth+1
+	pla
+	sta zth
+
+l2	jsr YIELD
+	; wait till forked thread returns error code - indicated by PUSH flag.
+	ldx zth
+	lda #SC_ESTAT
+	jsr STRCMD
+	tya
+	and #SCE_PUSH
+	beq l2
+
+	ldx zth
+	jsr GETC
+	pha
+
+	; close comm. stream
+	ldx zth
+	lda #SC_NUL
+	jsr STRCMD
+
+	pla
+	ldx zth+1
+	ldy #0
+	cmp #1
+	rts
+
+eputc	.(
+	pha
+	jsr PUTC
+	bcc eok
+	cmp #E_NUL
+	beq cerr
+	jsr YIELD
+	pla
+	jmp eputc
+cerr	
+eok	pla
+	rts
+	.)
+
+egetc	.(
+	jsr GETC
+	bcc eok
+	cmp #E_EOF
+	beq cerr
+	jsr YIELD
+	jmp egetc
+cerr	
+eok	rts
+	.)
+
+
+libfork .(		/* this is the routine where the new task is started */
+	cli
+	lda PCBUF+FORK_NAME
+	pha
+;.byt 2
+	jsr taskinit
+;.byt 2
+			; read cwd from parent
+	pla
+	pha
+	tax
+	jsr egetc
+	ldy #LT_PATH	; drive byte
+	sta (zta),y
+rd	iny
+	jsr egetc	; nullbyte terminated path
+	sta (zta),y
+	cmp #0
+	bne rd
+			; read env from parent
+	lda zta
+	clc
+	adc #<LT_ENV
+	sta zth
+	lda zta+1
+	adc #>LT_ENV
+	sta zth+1
+	pla
+	pha
+	tax
+	ldy #0
+	jsr egetc
+	sta (zth),y	; at least one byte long - now dey below always works
+re	iny
+	jsr egetc
+	sta (zth),y
+	cmp #0
+	bne re
+	dey
+	lda (zth),y
+	beq endenv	; last one was zero too -> end of environment
+	iny
+	jmp re
+endenv
+			; call exec routine
+	lda #<PCBUF+FORK_NAME+1
+	ldy #>PCBUF+FORK_NAME+1
+	jsr doload
+
+	tax
+
+	pla
+	sta zth		; comm stream number
+	txa
+
+	php
+	pha
+	tya
+	pha
+	bcc noerr
+	txa
+	.byt $2c
+noerr	lda #0
+
+	ldx zth
+	jsr PUTC
+	ldy #SCE_PUSH
+	lda #SC_SSTAT
+	jsr STRCMD
+	lda #SC_EOF
+	jsr STRCMD
+
+	pla
+	sta zth+1
+	pla
+	sta zth
+	plp
+	bcs loaderr
+
+	lda #>term-1
+	pha
+	lda #<term-1
+	pha
+
+	lda zta
+	clc
+	adc #<LT_CMDPARS
+	pha
+	lda zta+1
+	adc #>LT_CMDPARS
+	tay
+	pla			; pointer to cmd line
+	jmp (zth)
+
+loaderr
+;.byt 2
+	jsr GETPID
+	jsr bcleanpid		; free all memory allocated by this task
+	jmp TERM
+	
+	.)
+
+	.)
+
+/**********************************************************************
+ *
+ */
+
+&Forkthread .(
+	sta zth
+	sty zth+1
+	ldy #LT_NTHREADS
+	lda (zta),y
+	clc
+	adc #1
+	sta (zta),y
+	
+	lda zth
+	ldy zth+1
+	jsr FORKT
+	bcs error
+	rts
+error	pha
+	ldy #LT_NTHREADS
+	lda (zta),y
+	sec
+	sbc #1
+	sta (zta),y
+	pla
+	sec
+	rts
+	.)
+
+&Kill	.(
+	cpx #<MYTASK
+	bne nosuicide
+	cpy #>MYTASK
+	beq Term
+nosuicide
+	lda #E_NOTIMP
+	sec
+	rts
+	.)
+
+&Term	.(
+	pha
+	jsr taskinit		; well, if necessary...?
+	ldy #LT_NTHREADS
+	lda (zta),y
+	beq errzero
+	sec
+	sbc #1
+	sta (zta),y
+	beq cleanup
+errzero	pla
+	jmp TERM
+cleanup
+	ldy #LT_FTAB
+l0	lda (zta),y
+	bne closefd
+l1	iny
+	cpy #LT_FTAB+MAXFILES
+	bcc l0
+
+	jsr GETPID
+	jsr bcleanpid		; free all memory allocated by this task
+	pha
+	jmp TERM
+
+closefd	
+	and #5
+	beq nord
+	tya
+	pha
+	clc
+	adc #MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+	pla
+	tay
+nord	lda (zta),y
+	and #2
+	beq nowr
+	tya
+	pha
+	clc
+	adc #2*MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_EOF
+	jsr STRCMD
+	pla
+	tay
+nowr	lda #0
+	sta (zta),y
+	beq l1
+	.)
+
+&Getpid	.(
+	jsr GETPID
+	ldy #0
+	rts
+	.)
+
+doload	.(
+	.zero
+cp	.word
+	.text
+
+	sta zth
+	sty zth+1	
+
+	/* copy parameter to save area */
+	lda #LSEM_EXEC
+	jsr llock
+
+	lda zta
+	clc
+	adc #<LT_CMDPARS
+	sta cp
+	lda zta+1
+	adc #>LT_CMDPARS
+	sta cp+1
+
+	ldy #0
+c0	lda (zth),y
+	sta (cp),y
+	iny
+	cpy #CMDLEN
+	bcc c0
+
+	lda #LSEM_EXEC
+	jsr lunlock
+
+	ldx #0
+	jsr fopen2	; like fopen, does not release PCBUF
+
+
+	php
+	txa
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+	plp
+
+	bcs ende
+	pha
+	tax
+
+	jsr loader
+
+	sta zth
+	pla
+	tax
+	lda zth
+
+	php
+	pha
+	tya
+	pha
+	jsr fclose
+	pla
+	tay
+	pla
+	plp
+ende	rts
+	.)
+
+&Exec	.(
+	sta zth
+	sty zth+1
+
+	jsr GETPID
+
+	ldy #LT_INISTACK
+	lda (zta),y
+	tax
+	txs
+
+	lda zta
+	ldy zta+1
+;.byt 2
+	jsr bcleanpida	; clean all allocated mem except addr in a/y
+
+	lda zth
+	ldy zth+1
+
+	jsr doload
+	bcs end
+;.byt 2
+	sty zth+1
+	sta zth
+	jsr doit
+	jmp term
+doit
+	jmp (zth)
+
+end 
+	rts
+	.)
+
+	.)
+

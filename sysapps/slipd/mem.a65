@@ -1,0 +1,193 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * emulates old stdlib memory routines for slipd until slipd is rewritten
+ * to lib6502
+ *
+ */
+
+#include "lib6502.i65"
+
+#define	NUMBLOCKS 32
+
+	.(
+
+	.bss
+blk	.byt 0
+owncnt	.dsb NUMBLOCKS
+addrl	.dsb NUMBLOCKS
+addrh	.dsb NUMBLOCKS
+lenl	.dsb NUMBLOCKS
+lenh	.dsb NUMBLOCKS
+	.text
+
+&binit	.(
+	ldx #0
+	txa
+l0	sta owncnt,x
+	inx
+	cpx #NUMBLOCKS
+	bcc l0
+	clc
+	rts
+	.)
+
+&balloc	.(
+	pha
+	ldx #0
+l0	lda owncnt,x
+	beq found
+	inx
+	cpx #NUMBLOCKS
+	bcc l0
+	pla
+	rts
+found	
+	stx blk
+	pla
+	sta lenl,x
+	pha
+	tya
+	sta lenh,x
+	pla
+	jsr malloc
+	ldx blk
+	sta addrl,x
+	pha
+	tya
+	sta addrh,x
+	pla
+	bcs error
+	inc owncnt,x
+&error	rts
+	.)
+
+&bfree	.(
+	cpx #NUMBLOCKS
+	bcs error
+	lda owncnt,x
+	beq freerror
+	clc
+	dec owncnt,x
+	bne nofree
+	lda addrl,x
+	ldy addrh,x
+	jsr mfree
+nofree  rts
+freerror
+DB("bfree: owncnt zero slot=")
+txa:jsr EHexout:lda #" ":jsr ECout
+lda addrh,x:jsr EHexout:lda addrl,x:jsr EHexout:jsr ECrlfout
+	sec
+	rts
+	.)
+
+&incownr .(
+	cpx #NUMBLOCKS
+	bcs error
+	inc owncnt,x
+	beq boom
+	rts
+boom	DB("incownr overflow^m^j")
+	sec
+	rts
+	.)
+
+&getbadr .(
+	cpx #NUMBLOCKS
+	bcs error
+	lda addrl,x
+	ldy addrh,x
+	clc
+	rts
+	.)
+
+&getblen .(
+	cpx #NUMBLOCKS
+	bcs error
+	lda lenl,x
+	ldy lenh,x
+	clc
+	rts
+	.)
+
+&btrunc	.(
+	.zero
+t	.word 0
+	.text
+
+	sta t
+	sty t+1
+	cpx #NUMBLOCKS
+	bcs error
+	sec
+	lda owncnt,x
+	beq error
+	txa
+	pha
+	lda addrl,x
+	ldy addrh,x
+	ldx #t
+	jsr realloc
+	pla
+	tax
+	bcs berror
+	lda t
+	sta lenl,x
+	lda t+1
+	sta lenh,x
+berror	rts
+	.)
+
+#iflused printmem
+&printmem .(
+	jsr ECrlfout
+	ldx #0
+l0	lda owncnt,x
+	beq next
+	txa
+	jsr EHexout
+	jsr spout
+	lda addrh,x
+	jsr EHexout
+	lda addrl,x
+	jsr EHexout
+	jsr spout
+	lda lenh,x
+	jsr EHexout
+	lda lenl,x
+	jsr EHexout
+	jsr ECrlfout
+next	inx
+	cpx #NUMBLOCKS
+	bcc l0
+	rts
+	.)
+
+spout	lda #" "
+	jmp ECout
+#endif
+
+	.)
+

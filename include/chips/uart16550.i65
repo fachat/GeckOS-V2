@@ -1,0 +1,41 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef UART_RXTX
+
+/*	  UART 16550		   */
+
+#define	UART_RXTX	0		/* DLAB=0 */
+#define	UART_IER	1		/* DLAB=0 */
+#define	UART_DLL	0		/* divisor latch low, DLAB=1 */
+#define	UART_DLH	1		/* divisor latch high, DLAB=1 */
+#define	UART_IIR	2		/* Irq Ident. Reg., read only */
+#define	UART_FCR	2		/* FIFO Ctrl Reg., write only */
+#define	UART_LCR	3		/* Line Ctrl Reg */
+#define	UART_MCR	4		/* Modem Ctrl Reg */
+#define	UART_LSR	5		/* Line Status Reg */
+#define	UART_MSR	6		/* Modem Status Reg */
+#define	UART_SCR	7		/* 'scratchpad', i.e. unused */
+
+#endif
+

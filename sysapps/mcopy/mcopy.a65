@@ -1,0 +1,646 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef ROM
+/*#define   NOPRG*/
+#define   TEST1
+#define   TEST2
+#define   TEST3
+#define   STDTST
+#endif
+
+#define   SEROUT    Putc
+#define   OUT       Fputc
+#define   HEXOUT    Hexout
+#define   TXTOUT    Txtout
+#define   CRLFOUT   Crlfout
+
+          .(
+#ifdef ROM
+          .word ende
+          .byt PK_PRG
+          .byt 2
+          .word 0
+          .word PRG
+          .byt /*8,8,9,9,$a,$a,$b,$b,$c,$c,$d,$d,*/ $e,$e,<-1
+          .asc "mcopy",0,0
+#else
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+#include  "fdefs.i65"
+
+#ifdef NOPRG
+
+          .word $800
+          *=$800
+          jmp PRG
+
+#else
+          ;.word $800
+          *=$800
+          .word 0
+          .byt PK_PRG
+          .byt 4
+          .word 0
+          .word PRG
+          .byt <-1
+
+#endif
+#endif          
+
+#if 0
+
+#ifndef   NOMMU
+-sysmem   =$400
+-syszp    =$40
+#endif
+
+#echo mcopy:
+#print    sysmem
+#print    syszp
+
+#endif
+
+#define   MAXLINE   80
+
+	.data
+outpfad   .dsb MAXLINE
+inpfad    .dsb MAXLINE
+inmask    .dsb MAXLINE
+
+c         .byt 0
+indrv     .byt 0
+outdrv    .byt 0
+dirstr    .byt 0
+
+direntry  .dsb FS_DIR_NAME+32
+
+	.zero
+zei       .word 0
+
+	.text
+
+PRG       .(
+          jsr CRLFOUT
+          
+          jsr ininames
+          bcc l1
+le        jmp error
+l1        
+#ifdef TEST2
+     lda indrv
+     clc
+     adc #"A"
+     jsr SEROUT
+     jsr CRLFOUT
+     lda #<inpfad
+     ldy #>inpfad
+     jsr TXTOUT
+     jsr CRLFOUT
+     lda #<inmask
+     ldy #>inmask
+     jsr TXTOUT
+     jsr CRLFOUT
+     lda outdrv
+     clc
+     adc #"A"
+     jsr SEROUT
+     jsr CRLFOUT
+     lda #<outpfad
+     ldy #>outpfad
+     jsr TXTOUT
+     jsr CRLFOUT
+#endif
+          jsr opendir
+          bcs le
+
+ll        jsr readentry
+          bcs le
+          jsr testentry
+          bcs ll
+#ifdef TEST1    
+     lda #<direntry+FS_DIR_NAME
+     ldy #>direntry+FS_DIR_NAME
+     jsr TXTOUT
+     jsr CRLFOUT
+#endif
+          jsr copyfile
+          jmp ll
+          .)     
+
+copyfile  .(
+          lda indrv
+          sta PCBUF+FS_OPEN_DRV
+          ldx #0
+          ldy #FS_OPEN_NAME
+cp0       lda inpfad,x
+          beq cp1
+          sta PCBUF,y
+          iny
+          inx
+          bne cp0
+cp1       ldx #FS_DIR_NAME
+cp2       lda direntry,x
+          sta PCBUF,y
+          beq cp3
+          inx
+          iny
+          bne cp2
+cp3       iny
+          jsr GETSTR
+          stx PCBUF+FS_OPEN_STR
+          stx c
+#ifdef TEST1
+          php
+          lda #"s"
+          jsr SEROUT
+          txa
+          jsr HEXOUT
+          plp
+#endif
+          bcs cpe1x
+cp4       lda #SC_REG_RD
+          jsr STRCMD
+          lda #FS_OPEN_RD
+          ldx #SEND_FM
+          jsr SEND
+          bcs cpe0x
+          sec
+          jsr RECEIVE
+          cmp #1
+          bcs cpe0x
+
+          lda outdrv
+          sta PCBUF+FS_OPEN_DRV
+          ldx #0
+          ldy #FS_OPEN_NAME
+cp5       lda outpfad,x
+          beq cp6
+          sta PCBUF,y
+          iny
+          inx
+          bne cp5
+cp6       ldx #FS_DIR_NAME
+cp7       lda direntry,x
+          sta PCBUF,y
+          beq cp8
+          inx
+          iny
+          bne cp7
+cp8       iny
+          lda c
+#ifdef TEST1
+          pha
+          lda #"r"
+          jsr SEROUT
+          pla
+          pha
+          jsr HEXOUT
+          pla
+#endif
+          sta PCBUF+FS_OPEN_STR
+          ldx #SEND_FM
+          lda #FS_OPEN_OW
+          jsr SEND
+cpe0x     bcs cpe0
+cpe1x     bcs cpe1y
+          sec
+          jsr RECEIVE
+          cmp #1
+          bcs cpe0
+          
+          ldx #3
+          clc
+          jsr error
+          ldx #4
+          clc
+          jsr error
+          jsr CRLFOUT
+
+#ifdef TEST1
+          lda #"t"
+          jsr SEROUT
+          lda c
+          jsr HEXOUT
+#endif
+
+cp9       jsr YIELD
+          ldx c
+          lda #SC_RWANZ
+          jsr STRCMD
+          cpy #1
+          bne cp9
+          
+          ldx c
+          lda #SC_NUL
+          jsr STRCMD
+          clc
+          rts
+          
+cpe0      ldx c
+          lda #SC_NUL
+          jsr STRCMD          
+cpe1      ldx c
+          jsr FRESTR
+cpe1y     sec
+          ldx #2
+          rts
+          .)
+          
+testentry .(
+          lda direntry+FS_DIR_MODE
+          cmp #FS_DIR_MOD_FIL
+          bne notfnd
+
+          ldy #0
+          ldx #FS_DIR_NAME
+          lda inmask,y
+          beq found
+t1        lda inmask,y
+          beq test2point
+          cmp #"*"
+          beq nextpoint
+          cmp #"."
+          beq test2point
+          cmp #"?"
+          beq t2
+          cmp direntry,x
+          bne notfnd
+t2        lda direntry,x
+          beq notfnd
+t3        inx
+          iny
+          bne t1
+          
+nextpoint iny
+          lda inmask,y
+          beq np1
+          cmp #"."
+          bne nextpoint
+          iny
+np1       lda direntry,x
+          bne np2
+          lda inmask,y
+          beq found
+          bne notfnd
+np2       cmp #"."
+          beq np3
+          inx
+          bne np1
+np3       inx
+          bne t1
+          
+test2point
+          lda direntry,x
+          beq tp1
+          cmp #"."
+          beq tp1
+          cmp #" "
+          bne notfnd
+          inx
+          bne test2point
+tp1       cmp inmask,y
+          bne notfnd
+          cmp #0
+          beq found
+          bne t3
+
+found     clc
+          rts
+          
+notfnd    sec
+          rts
+          .)
+
+readentry .(
+          ldy #0
+rel       ldx dirstr
+          jsr GETC
+          bcc re1
+          cmp #E_EOF
+          beq rex
+          jsr YIELD
+          jmp rel
+re1       sta direntry,y
+          iny
+          cpy #FS_DIR_NAME+1
+          bcc rel
+#ifdef TEST3
+     jsr Putc
+#endif
+          cmp #0
+          bne rel
+          clc
+          rts
+rex       ldx dirstr
+          lda #SC_NUL
+          jsr STRCMD
+          sec
+          ldx #2
+          rts
+          .)
+          
+opendir   .(
+          lda indrv
+          sta PCBUF+FS_OPEN_DRV
+          ldx #0
+          stx PCBUF+FS_OPEN_PFAD
+          ldy #FS_OPEN_NAME
+od1       lda inpfad,x
+          sta PCBUF,y
+          beq od2
+          inx
+          iny
+          bne od1
+od2       iny
+          jsr GETSTR
+          bcs ode
+          stx dirstr
+          stx PCBUF+FS_OPEN_STR
+#ifdef TEST3
+     tya
+     pha
+     lda #"X"
+     jsr Putc
+     lda #<PCBUF+FS_OPEN_NAME
+     ldy #>PCBUF+FS_OPEN_NAME
+     jsr Txtout
+     pla
+     tay
+#endif
+          lda #FS_OPEN_DR
+          ldx #SEND_FM
+          jsr SEND
+          bcs odes
+#ifdef TEST3
+     lda #"x"
+     jsr Putc
+#endif
+          sec
+          jsr RECEIVE
+          cmp #1
+          bcs odes
+          rts
+odes      ldx dirstr
+          jsr FRESTR
+ode       sec
+          ldx #1
+          rts
+          .)
+          
+error     .(
+          php
+          txa
+          asl
+          tax
+          lda tadr+1,x
+          tay
+          lda tadr,x
+          jsr TXTOUT
+          plp
+          bcc erts
+          jmp TERM
+erts      rts
+
+tadr      .word usage, nodir, eoc, copying, PCBUF+FS_OPEN_NAME
+
+usage     .asc "Usage: mcopy drv:inputfiles drv:outputdir",0
+nodir     .asc "Dir nicht gefunden",0
+eoc       .asc "Kopie beendet",0
+copying   .asc "Kopiere: ",0
+          .)
+          
+ininames  .(
+          ldy #1
+          sty indrv
+          sty outdrv
+          dey
+l1        lda PCBUF,y
+          beq lex
+          iny
+          cmp #" "
+          bne l1
+          sta c
+l2        lda PCBUF,y
+          beq lex
+          cmp #" "
+          bne l3
+          iny
+          bne l2
+l3        cmp #34
+          beq l3a
+          tax
+          lda PCBUF+1,y
+          cmp #":"
+          bne l3b
+          txa
+          and #31
+          sta indrv
+          iny
+          iny
+          ldx #0
+          lda PCBUF,y
+          beq lex
+          cmp #" "
+          beq l6
+l3b       lda PCBUF,y
+l3a       cmp #34
+          bne l4
+          sta c
+          iny
+          lda PCBUF,y
+lex       beq le
+l4        ldx #0
+l5        sta inpfad,x
+          inx
+          iny
+          lda PCBUF,y
+          beq le
+          cmp c
+          bne l5
+          cmp #34
+          bne l6
+          iny
+l6        lda #0
+          sta inpfad,x
+          lda #" "
+          sta c
+l7        lda PCBUF,y
+          beq le
+          cmp #" "
+          bne l8
+          iny
+          bne l7
+l8        cmp #34
+          beq l8a
+          tax
+          lda PCBUF+1,y
+          cmp #":"
+          bne l8b
+          txa
+          and #31
+          sta outdrv
+          iny
+          iny
+          ldx #0
+          lda PCBUF,y
+          beq lx
+          cmp #" "
+          beq lx
+l8b       lda PCBUF,y
+l8a       ldx #0
+          cmp #34
+          bne l9
+          sta c
+          iny
+          lda PCBUF,y
+          beq le
+l9        sta outpfad,x
+          iny
+          inx
+          lda PCBUF,y
+          beq lx
+          cmp c
+          bne l9
+lx        lda #0
+          sta outpfad,x
+
+          jmp x1
+         
+le        ldx #0
+          sec
+          rts
+
+x1        ldy #0
+          sty c
+x2        lda inpfad,y
+          beq xx
+          iny
+          cmp #DIRSIGN
+          bne x2
+          sty c
+          beq x2
+xx        ldy c
+          ldx #0
+x3        lda inpfad,y
+          sta inmask,x
+          beq x4
+          inx
+          iny
+          bne x3
+x4        lda #0
+          ldy c
+          sta inpfad,y
+
+          dec indrv
+          dec outdrv
+          clc
+          rts
+          .)
+
+/*          
+TXTOUT    .(
+          sta zei
+          sty zei+1
+          ldy #0
+l1        lda (zei),y
+          beq le
+          jsr SEROUT
+          iny
+          bne l1
+le        rts
+          .)
+        
+          .(
+	.data
+dxr       .byt 0
+str       .byt 0
+	.text
+
+&SEROUT   stx dxr
+          ldx #STDOUT
+          bne o0
+&OUT      stx dxr
+o0 s2     pha
+          jsr PUTC
+          pla
+          bcc s2a
+          jsr YIELD
+          jmp s2
+s2a       ldx dxr
+          cmp #0
+          rts
+     
+&SERBRK   stx dxr
+          lda #SC_STAT
+          ldx #STDIN
+          jsr STRCMD
+          ldx dxr
+          cmp #E_SEMPTY
+          bne s3
+          clc
+          rts
+s3        sec
+          rts
+
+          .)
+
+#ifdef TEST1
+HEXOUT    .(
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr nibout
+          pla
+          and #$0f
+nibout    clc
+          adc #"0"
+          cmp #":"
+          bcc n1
+          adc #6
+n1        jmp SEROUT
+          .)
+#endif
+        
+CRLFOUT   LDA #13:JSR SEROUT
+LINEFEED  LDA #10
+          JMP SEROUT
+*/
+
+#if 0
+#print    sysmem
+#print    syszp
+#endif
+
+#ifdef STDTST
+#define ROM
+#include "stdlib/stdio.a65"
+#endif
+
+ende      .)
+          
+

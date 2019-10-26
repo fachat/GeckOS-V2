@@ -1,0 +1,527 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#define	VIA1	$ec10
+
+#include "chips/via6522.i65"
+
+#define	DATAO	%00000001
+#define	DATAI	%00000100
+#define	CLKO	%00001000
+#define	CLKI	%01000000	/* must be bit 6 -> bvc/bvs */
+#define	ATNO	%00000010
+#define	ATNI	%00010000
+#define	ATNA	%00100000
+
+	.zero
+cnt2      .byt 0
+byte      .byt 0
+bytfl     .byt 0
+eoifl     .byt 0
+	.text
+
+
++IECINIT 
+#ifdef SEM_T1
+	  clc
+	  ldx #SEM_T1
+	  jsr PSEM
+#endif
+	  sei
+
+	  lda VIA1+VIA_DDRB
+	  and #%10000000
+	  ora #%00101011
+          sta VIA1+VIA_DDRB
+          cmp VIA1+VIA_DDRB
+          bne inix
+          lda VIA1+VIA_DRB
+          and #$80
+          sta VIA1+VIA_DRB
+          lda #%01010000	; T1, CB1 disable IRQ
+          sta VIA1+VIA_IER
+          sta VIA1+VIA_IFR
+          lda VIA1+VIA_PCR
+          ora #%00010000	; CB1 positive edge
+          sta VIA1+VIA_PCR
+          lda VIA1+VIA_ACR
+          and #%00111111	; T1 timed IRQ
+          sta VIA1+VIA_ACR
+
+          lda #0
+          sta status
+          sta cnt2
+          sta bytfl
+          sta eoifl
+          clc
+          .byt $24
+inix      sec
+	  cli
+#ifdef SEM_T1
+	  php
+	  ldx #SEM_T1
+	  jsr VSEM
+	  plp
+#endif
+          rts
+
+&getif	  .(			/* we need timer 1, as well as irtx */
+#ifdef SEM_T1
+	  clc
+	  ldx #SEM_T1
+	  jsr PSEM
+#endif
+#ifdef NMIDEV
+	  lda #NMI_OFF
+	  jsr CTRLNMI
+#endif
+	  php
+	  sei
+	  lda VIA1+VIA_ACR
+	  and #%00111111
+	  sta VIA1+VIA_ACR
+	  lda VIA1+VIA_PCR
+          lda #%01010000	; T1, CB1 disable IRQ
+          sta VIA1+VIA_IER
+          sta VIA1+VIA_IFR
+	  plp
+
+	  rts
+	  .)
+
+&freif	  .(
+#ifdef NMIDEV
+	  lda #NMI_ON
+	  jsr CTRLNMI
+#endif
+#ifdef SEM_T1
+	  ldx #SEM_T1
+	  jmp VSEM
+#else
+	  rts
+#endif
+	  .)
+
+&IECIN     .(
+          sei
+          lda #0
+          sta eoifl
+          lda #8
+          sta cnt2
+          jsr clkhi
+          jsr datalo
+
+l14       ;    jsr testatn
+          ;    bcs atnin
+          lda VIA1+VIA_DRB    ; wait clkhi
+          cmp VIA1+VIA_DRB
+          bne l14
+          and #CLKI
+          bne l14 
+
+l19       jsr setti      
+          jsr datahi
+
+l16       jsr fragti
+          bne l15   ; abgelaufen
+          ;    jsr testatn
+          ;    bcs atnin
+          bit VIA1+VIA_DRB    ; wait clklo
+          bvc l16
+          bvs l17
+
+l15       lda eoifl
+          beq l18
+          lda #2
+          jmp error
+l18       dec eoifl
+          jsr datalo
+          jsr waitus
+          lda #$40
+          jsr seterror
+          bne l19
+
+l17   	  sec
+	  lda #DATAI
+l20       bit VIA1+VIA_DRB
+	  bvs l20
+	  bne l20a
+	  clc
+l20a
+          ror byte
+
+l21       bit VIA1+VIA_DRB
+          bvc l21
+
+          dec cnt2
+          bne l17
+
+          jsr datalo
+          bit status
+          bvc l22
+          jsr endhndshk
+#ifdef SHOW
+php
+cli
+lda #"x"
+jsr OUT
+lda status
+jsr HEXOUT
+plp
+#endif
+          lda byte
+	  eor #$ff
+          sec
+          rts
+
+l22       lda byte
+	  eor #$ff
+          clc
+          rts
+          
+
+&nodev     lda #$80
+&error     jsr seterror
+          jsr atnhi
+endhndshk jsr waitus
+          jsr datahi
+          jsr clkhi
+#ifdef SHOW
+	lda #"y"
+	jsr OUT
+	lda status
+	jsr HEXOUT
+#endif
+          sec
+          rts
+	  .)
+
+#ifdef CLK1MHZ
+/**************************** start of 1MHz section ************************/
+
+         
+&setti    lda #<1000
+          sta VIA1+VIA_T1CL
+          lda #>1000     
+          sta VIA1+VIA_T1CH
+          rts
+&fragti   lda VIA1+VIA_IFR
+          and #%01000000
+          rts
+
+waitms    txa
+          ldx #$b6
+          bne w4
+waitus    txa
+          ldx #8
+w4        dex
+          bne w4
+          tax
+          rts
+
+
+/****************************** end of 1MHz section ************************/
+#else
+/**************************** start of 2MHz section ************************/
+
+         
+&setti    lda #<2000
+          sta VIA1+VIA_T1CL
+          lda #>2000     
+          sta VIA1+VIA_T1CH
+          rts
+&fragti   lda VIA1+VIA_IFR
+          and #%01000000
+          rts
+
+waitms    txa
+          ldx #$b6
+	  jsr w4
+          ldx #$b6
+          bne w4
+waitus3	  txa
+	  ldx #8
+	  bne w4
+waitus2	  txa
+	  ldx #16
+	  bne w4
+waitus    txa
+          ldx #16
+w4        dex
+          bne w4
+          tax
+          rts
+
+
+/****************************** end of 2MHz section ************************/
+#endif
+
+/*
+atnout    .(
+          pha
+lda #0
+sta status
+          bit bytfl
+          bpl l1         ; noch ein byte zu senden
+
+          sec
+          ror eoifl        ; dann mit eoi senden
+          jsr iecout
+	  lda #0
+	  sta bytfl
+          ;lsr bytfl      ; flags ruecksetzen
+
+l1        pla
+          sta byte
+*/
+iec0out	  .(          
+	  sei
+          jsr datahi
+          jsr atnlo
+&iec2out  sei
+	  jsr clklo
+          jsr datahi
+          jsr waitms
+&iecout   sei 
+          jsr datahi
+
+l0        lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne l0
+          ;lsr                 ; data in c
+          ;bcs nodev
+	  and #DATAI
+	  beq nodev
+
+          jsr clkhi
+          bit eoifl
+          bpl l3    
+                              ; eoi senden
+l4        ;    jsr testatn
+          ;    bcs atnin
+          lda VIA1+VIA_DRB    ; wait data hi
+          cmp VIA1+VIA_DRB
+          bne l4
+          ;lsr
+          ;bcc l4
+	  and #DATAI
+	  bne l4
+
+l5        ;    jsr testatn
+          ;    bcs atnin
+          lda VIA1+VIA_DRB    ; wait data lo
+          cmp VIA1+VIA_DRB
+          bne l5
+          ;lsr
+          ;bcs l5
+	  and #DATAI
+	  beq l5
+
+l3        ;    jsr testatn
+          ;    bcs atnin
+          lda VIA1+VIA_DRB    ; wait data hi
+          cmp VIA1+VIA_DRB
+          bne l3
+          ;lsr
+          ;bcc l3
+	  and #DATAI
+	  bne l3
+
+          jsr clklo
+          lda #8
+          sta cnt2
+
+#ifndef CLK1MHZ
+          jsr waitus2
+#endif
+
+l6        lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne l6
+          ;lsr
+          ;bcc timexout
+	  and #DATAI
+	  bne timexout
+
+          ror byte            ; bit setzen
+          bcs l7
+          jsr datalo
+          bne l8
+l7        jsr datahi
+
+l8        jsr clkhi
+          jsr waitus
+
+          jsr dhiclo
+#ifndef CLK1MHZ
+	  jsr waitus3
+#endif
+          dec cnt2
+          bne l6
+
+          jsr waitdlo
+          bcs timeout
+          rts
+timeout   lda #3
+          .byt $2c
+timexout  lda #4
+          jmp error
+	  .)
+ /*
+atnin     jsr datalo
+          jsr clkhi
+          sec
+          rts
+*/
+/*
+testatn   .(
+          lda VIA1+VIA_DRB
+          bmi tstatn
+          and #%00100000
+          beq c
+s         sec
+          rts
+tstatn    and #%00100000
+          beq s
+c         clc
+          rts
+          .)
+*/
+
+
+clklo     lda VIA1+VIA_DRB
+          ora #CLKO
+          sta VIA1+VIA_DRB
+          rts
+clkhi     lda VIA1+VIA_DRB
+          and #255-CLKO
+          sta VIA1+VIA_DRB
+          rts
+datalo    lda VIA1+VIA_DRB
+          ora #DATAO
+          sta VIA1+VIA_DRB
+          rts
+datahi    lda VIA1+VIA_DRB
+          and #255-DATAO
+          sta VIA1+VIA_DRB
+          rts
+atnlo     lda VIA1+VIA_DRB
+          ora #ATNA+ATNO
+          sta VIA1+VIA_DRB
+          rts
+atnhi     lda VIA1+VIA_DRB
+          and #255-ATNA-ATNO
+          sta VIA1+VIA_DRB
+          rts
+atnalo    lda VIA1+VIA_DRB
+          ;and #%11011111
+	  ora #ATNA
+          sta VIA1+VIA_DRB
+          rts
+atnahi    lda VIA1+VIA_DRB
+          ;ora #%00100000
+	  and #255-ATNA
+          sta VIA1+VIA_DRB
+          rts
+dhiclo    lda VIA1+VIA_DRB
+          ;and #%11111101
+          ;ora #%00000100
+	  ora #CLKO
+	  and #255-DATAO
+          sta VIA1+VIA_DRB
+          rts
+
+waitdlo   
+          jsr setti
+w1        jsr fragti
+          bne w2
+          lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne w1
+          ;lsr
+          ;bcs w1
+	  and #DATAI
+	  beq w1
+	  clc
+          rts
+w2        sec
+          rts
+
+
+sectalk  .(
+          sei
+          sta byte
+          jsr iec2out
+          bcs st1
+          jsr datalo
+          jsr atnhi
+          jsr clkhi
+st2       bit VIA1+VIA_DRB
+          ;bvs st2
+          bvc st2
+st1       cli
+          rts
+          .)
+
+seclisten .(
+	  sei
+          sta byte
+          jsr iec2out
+          jsr atnhi
+          cli
+          rts
+	  .)
+
+&UNTALK   .(
+	  sei
+          jsr clklo
+          lda #$5f
+          jsr atnout
+          jsr atnhi
+          jsr clkhi
+          jsr datahi
+          cli
+          rts
+	  .)
+
+&UNLISTEN .(
+	  lda #$3f
+          sei
+          jsr atnout
+          jsr atnhi
+          jsr clkhi
+          cli
+          rts
+	  .)
+
+
+#undef	VIA1
+#undef	DATAO
+#undef	DATAI
+#undef	CLKO
+#undef	CLKI
+#undef	ATNO
+#undef	ATNI
+#undef	ATNA
+
+

@@ -1,0 +1,10 @@
+
+Here are the more or less hardware independent devices.
+
+They are either completely architecture independent or they
+include files from the arch/`arch` directory.
+
+If they only need a single base address for a chip which could
+be defined elsewhere (like the UART serial device), then 
+they should also go here.
+

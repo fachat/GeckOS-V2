@@ -1,0 +1,55 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef _VICII_H_
+#define _VICII_H_
+
+#define	VIC_SPRITE_X	0
+#define	VIC_SPRITE_Y	1
+#define	VIC_SPRITE_XMSB	16
+#define	VIC_CR1		17
+#define	VIC_RASTERIRQ	18
+#define	VIC_LPEN_X	19
+#define	VIC_LPEN_Y	20
+#define	VIC_SPRITE_EN	21
+#define	VIC_CR2		22
+#define	VIC_SPRITE_YEXP	23
+#define	VIC_BASE	24
+#define	VIC_IRR		25
+#define	VIC_IMR		26
+#define	VIC_SPRITE_PRIO	27
+#define	VIC_SPRITE_MCOL	28
+#define	VIC_SPRITE_XEXP	29
+#define	VIC_SPRITE_SPR	30
+#define	VIC_SPRITE_BGND	31
+#define	VIC_EXT_COL	32
+#define	VIC_BGND_COL0	33
+#define	VIC_BGND_COL1	34
+#define	VIC_BGND_COL2	35
+#define	VIC_BGND_COL3	36
+#define	VIC_SPRITE_MC0	37
+#define	VIC_SPRITE_MC1	38
+#define	VIC_SPRITE_COL	39		/* +0, ... ,+7 */
+
+#endif
+

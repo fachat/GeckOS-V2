@@ -1,0 +1,665 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef MEMINIVAL
+#define	MEMINIVAL	0	/* reset value of RAM content */
+#endif
+
+#ifndef NOMMU
+
+#ifdef NMIDEV
+#echo Warning, nmidev only without mmu - disabling it
+#undef NMIDEV
+#endif
+
+#ifndef NMIRESET
+#echo Warning, no nmireset only without mmu - disabling nmi services
+#define NMIRESET
+#endif
+
+#endif
+
+/***************************************************************************
+ * 
+ * Hardware initialization
+ *
+ */
+
+          .(
+	.zero
+pz        .word 0
+; cnt       .byt 0
+	.text
+
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+s1        .byt 0
+s2        .byt 0
+
+	.text
+
+&notimp	  lda #E_NOTIMP
+	  sec
+	  rts
+
+&preset   sei 
+          cld
+/*
+ * initializes the hardware memory mapping, the system (preemption) timer
+ * and the memory management, if needed. Also the macros 
+ * GETFREQ(), LEDPORT, LED_LED, H_ERROR, and CLRTIMER() are defined.
+ * It jumps to he_ram if there is not enough RAM available.
+ */
+#include "kernel/kinit.a65"
+
+;          cmp #MIN_MEM	; memory size at least needed
+;          bcc he_ram
+;	  sta cnt
+
+/* still a lot TODO! */
+#if 0 /* def NOMMU */
+	  ;sta cnt
+	  sec
+	  sbc #>startmem+255
+	  tay
+	  ldx #>startmem+255
+	  jsr binit
+
+	  lda #startzero
+	  jsr zinit
+
+	  lda cnt
+#endif
+          jmp prgstart
+
+he_zero   ldx #HE_ZP
+          .byt $2c
+he_ram    ldx #HE_RAM
+          .byt $2c
+;e1        ldx #HE_IMEM
+;          .byt $2c
+;e2        ldx #HE_IDEV
+;          .byt $2c
+;e3        ldx #HE_ISTR
+;          .byt $2c
+;e4        ldx #HE_IENV
+;          .byt $2c
+erom      ldx #HE_ROM
+          .byt $2c
+edev      ldx #HE_DEV
+
+          jmp HERROR
+
+/***************************************************************************
+ * 
+ * ROM initialization
+ *
+ */
+
+prgstart  /* get system speed */
+          GETFREQ()
+          sta s1
+
+#ifdef LEDPORT
+          jsr LEDOFF
+#endif
+
+#ifdef NMIDEV
+          jsr ininmi
+#endif
+	  jsr initthreads
+          jsr inienv
+          ;bcs e4
+          lda s1
+          jsr inidev
+          ;bcs e2
+#ifndef NO_STREAMS
+          jsr inistream 
+          ;bcs e3
+#endif
+#ifndef NO_SEM
+          jsr inisem
+#endif
+#ifndef NO_FSM
+          jsr fminit     
+#endif
+
+#ifdef STARTMEM
+	  ; lda cnt
+	  STARTMEM()
+#endif
+;.byt 2
+	  lda #<ROMSTART
+          sta pz
+          lda #>ROMSTART
+          sta pz+1
+
+startloop 
+;.byt 2
+	  ldy #0
+          lda (pz),y
+          iny
+          and (pz),y
+          cmp #$ff
+          bne slx1
+          jmp pstart
+xerr      
+	  jmp edev
+endloop   jmp erom
+
+slx1      ldy #P_KIND+2
+          lda (pz),y
+          bpl slx2
+          and #$7f
+          ; cmp #PK_PRG
+          ; beq iprg
+          cmp #PK_DEV
+          beq idev
+          cmp #PK_INIT	; PK_FS
+          beq ifs
+slx2      jmp inext
+
+idev
+          ldy #P_ADDR+2
+          lda (pz),y
+          tax			;sta PCBUF+REGDEV_ADR
+          iny
+          lda (pz),y
+          tay			;sta PCBUF+REGDEV_ADR+1
+          lda #DC_REGDEV
+          jsr DEVCMD
+          bcs xerr
+          jmp inext
+
+ifs       
+
+#if 0
+	  ldx #STDNUL
+          stx s1
+          stx s2
+          bne ifs1
+
+iprg      jsr GETSTR
+          bcs endloop
+          stx s1
+          jsr GETSTR
+endloopx  bcs endloop
+          stx s2
+          ldy #P_DEV+2
+          lda (pz),y
+          tax
+          ldy s2
+          lda #DC_GS
+          jsr DEVCMD
+          ldy #P_DEV+2
+          lda (pz),y
+          tax
+          ldy s1
+          lda #DC_PS
+          jsr DEVCMD
+          ldy #P_DEV+2
+          lda (pz),y
+          pha
+          tax
+          lda #DC_RX_ON
+          jsr DEVCMD
+#ifdef CMOSCPU
+	  plx
+#else
+          pla
+          tax
+#endif
+          lda #DC_TX_ON
+          jsr DEVCMD
+
+
+ifs1      lda s2
+          sta PCBUF+FORK_STDOUT
+          sta PCBUF+FORK_STDERR
+          lda s1
+          sta PCBUF+FORK_STDIN
+#endif
+
+	  lda #STDNUL
+          sta PCBUF+FORK_STDERR
+          sta PCBUF+FORK_STDOUT
+          sta PCBUF+FORK_STDIN
+
+	  ldy #P_PRIORITY+2
+	  lda (pz),y
+	  sta PCBUF+FORK_PRIORITY
+
+	  ldy #P_RAM+2
+	  lda (pz),y
+	  sta PCBUF+FORK_SIZE
+	  iny
+	  lda (pz),y
+	  sta PCBUF+FORK_SHARED
+
+          ldy #P_ADDR+2
+          lda (pz),y
+          sta PCBUF+FORK_ADDR
+          iny  
+          lda (pz),y
+          sta PCBUF+FORK_ADDR+1
+
+	  lda #0
+	  sta PCBUF+FORK_NAME
+	  sta PCBUF+FORK_NAME+1
+#if 0
+	  ldy #P_NAME+1
+	  ldx #2
+cmdn	  iny
+	  lda (pz),y
+	  sta PCBUF+FORK_NAME-P_NAME-2,y
+	  bne cmdn
+	  dex
+	  bne cmdn
+	  iny
+#endif
+          jsr FORK
+#if 0
+          ldx s1
+          lda #SC_NUL
+          jsr STRCMD
+          ldx s2
+          lda #SC_EOF
+          jsr STRCMD
+#endif
+
+inext     
+	  ldy #0
+          lda (pz),y
+          tax
+          iny
+          lda (pz),y
+          sta pz+1
+          stx pz
+          jmp startloop
+
+/***************************************************************************
+ * 
+ * Error handling
+ *
+ */
+
+#ifdef LEDPORT
++LEDOFF   lda LEDPORT
+          ora #LED_LED
+          sta LEDPORT
+          rts
+#endif
+
++HERROR   .(        ; xr=Fehlernummer -1=1mal aus, -2=2mal aus etc
+#ifdef EMUTEST
+.byt 2
+#endif
+#ifdef LEDPORT
+          LDA LEDPORT:EOR #LED_LED
+          STA LEDPORT
+          LDY #0:TYA
+PRE2      ADC #1:BNE PRE2
+          INY:BNE PRE2
+          LDA LEDPORT:EOR #LED_LED
+          STA LEDPORT
+          LDA #0:TAY
+PRE3      ADC #1:BNE PRE3:INY
+          BNE PRE3:inx:BNE HERROR
+          ldx #15
+          lda #0:tay
+pre5      adc #1:bne pre5
+          iny:bne pre5
+          dex:bne pre5
+#else
+	  H_ERROR
+#endif
+
+#ifdef EMUTEST	/* then save some process info and restart CS/A */
+.(
+lda #$11
+sta $eff2
+ldx #0
+cp1 lda $eff0,x
+sta $2000,x
+inx
+cpx #16
+bcc cp1
+pla
+sta $2010
+pla
+sta $2011
+tsx
+stx $2012
+l0 jmp l0
+.)
+
+#endif
+          JMP RESET 
+
+          .)
+
+/***************************************************************************
+ * 
+ * NMI handling
+ *
+ */
+          .(
+&&pnmi
+#ifdef NMIRESET
+	jmp RESET
+&&ctrlnmi
+&&setnmi lda #E_NOTIMP
+        sec
+        rts
+#else
+#ifdef  NMIDEV
+	jmp (nmiadr)
+         
+	.data 
+nmiadr  .word 0
+nmicnt 	.byt 0
+	.text
+
+&ininmi   ;lda #<zend
+          ;ldy #>zend
+	  lda #NMI_ON		; 0
+	  sta nmicnt
+ininmi2	  lda #<yendnmi
+	  ldy #>yendnmi
+n1        sta nmiadr
+          sty nmiadr+1
+          clc
+zend      rts
+
+	  ; struct for CTRLNMI
+	  .word $ffff
+	  .word zend
+yendnmi   rti
+
+&&setnmi   jsr memsys
+          bcc n2
+	  tax
+	  lda nmiadr
+	  pha
+	  lda nmiadr+1
+	  pha
+
+	php
+	sei
+	lda #NMI_OFF
+	jsr CTRLNMI	; before we mess with the NMI pointer, switch it off
+
+	txa
+        jsr n1
+
+	lda nmiadr
+	sec
+	sbc #4
+	sta tmp
+	lda nmiadr+1
+	sbc #0
+	sta tmp+1
+
+	ldy #0
+	lda (tmp),y
+	sta tmp2
+	iny
+	lda (tmp),y
+	sta tmp2+1
+
+	tsx
+	lda $0102,x	
+	sta (tmp2),y
+	dey
+	lda $0103,x
+	sta (tmp2),y
+
+	ldy #2
+	lda (tmp),y
+	sta tmp2
+	iny
+	lda (tmp),y
+	sta tmp2+1	
+
+	lda #NMI_OFF
+ 	jsr c2		; init new device with NMI off
+
+	lda #NMI_ON	; now switch on again, if allowed
+	jsr CTRLNMI
+	plp
+
+	  pla
+	  tay
+	  pla
+          jmp ne
+n2        jsr ininmi2
+ne        jmp memtask
+	  ;jsr memtask
+          ;rts        
+
+	.zero
+tmp	.word 0
+tmp2	.word 0
+	.data
+cmd	.byt 0
+	.text
+
+&&ctrlnmi 
+	jsr memsys
+	php
+	sei
+	cmp #NMI_ON
+	beq con
+	cmp #NMI_OFF
+	beq coff
+	lda #E_NOTIMP
+	.byt $2c
+crts	lda #E_OK
+	plp
+	cmp #1
+	jmp memtask
+	;jsr memtask
+	;rts
+
+con 	lda nmicnt
+	beq crts
+	dec nmicnt
+	bne crts
+	lda #NMI_ON
+	beq nmicmd2
+
+coff	clc
+	lda nmicnt
+	inc nmicnt
+	cmp #0
+	bne crts
+	lda #NMI_OFF
+nmicmd2
+	jsr nmicmd		; nmicmd is only called at state change!
+	jmp crts
+
+nmicmd
+	sta cmd 
+	tya
+	pha
+	txa
+	pha
+	lda nmiadr
+	ldx nmiadr+1
+
+ctrl0	sec
+	sbc #4
+	sta tmp
+	txa
+	sbc #0
+	sta tmp+1
+
+	ldy #2
+	lda (tmp),y
+	sta tmp2
+	iny
+	lda (tmp),y
+	sta tmp2+1
+
+	lda cmd
+	jsr c2
+
+	ldy #0
+	lda (tmp),y	
+	sta tmp2
+	iny
+	lda (tmp),y
+	sta tmp2+1
+	and tmp2
+	cmp #$ff		; address $ffff ?
+	beq ce
+	lda (tmp2),y
+	tax
+	dey
+	lda (tmp2),y
+	jmp ctrl0
+
+ce	clc
+	pla
+	tax
+	pla
+	tay
+	lda cmd
+	clc
+	rts
+
+c2	jmp (tmp2)
+
+#else	/*  NMIDEV */
+          rti
+&&ctrlnmi
+&&setnmi   lda #E_NOTIMP
+          sec
+          rts
+#endif
+#endif			/* NMIRESET */
+          .)
+
+/***************************************************************************
+ * 
+ * IRQ handling
+ *
+ */
+          .(
+&&pirq     
+#ifdef CMOSCPU
+	pha
+	phx
+	phy
+#else
+	  pha
+          txa
+          pha
+          tya
+          pha
+#endif
+          tsx
+          lda $104,x
+          and #$10
+          beq pb1
+&petbrkjmp
+          cld
+#ifdef EMUTEST
+	.byt 2
+#endif
+          jmp pbrk
+&petirqjmp
+pb1 
+          cld
+          jsr memsys
+
+#ifdef SAVEMEM
+	  KERNELIRQ()
+	  bne taski
+	  SAVEMEM
+taski
+#endif
+          
+#ifndef NOSYSPORT
+          lda SYSPORT    ; save timer-irq state
+          pha
+#endif
+
+il        jsr irqdev
+
+#ifndef NOSYSPORT
+          pla
+          ora SYSPORT    ; no timer-irq?
+          pha            ; save it
+          
+	  CLRTIMER()
+
+          jsr testirq    ; irq line still set?
+          beq il         ; yes, than back to loop
+
+          pla
+          bpl endirq2     ; no timer-irq -> no task switch!
+#else
+
+	  CLRTIMER()
+#endif
+
+	  KERNELIRQ()
+	  bne endirq
+
+#ifdef SAVEMEM
+	  RESTOREMEM()
+#endif
+
+          bit adev       
+          bpl endirq     ; Device Interrupted -> no Task-switch
+;jmp endirq
+          jmp irqloop
+
+#ifndef NOSYSPORT
+endirq2  
+#ifdef SAVEMEM
+	  KERNELIRQ()
+	  bne taski2
+	  RESTOREMEM()
+taski2
+#endif
+#endif
+
+endirq
+	  jmp retirq
+          .)
+
+#ifndef NOSYSPORT
++testirq  .(
+          lda SYSPORT
+          and #SYS_IRQ
+          rts
+          .)
+#endif
+          .)
+

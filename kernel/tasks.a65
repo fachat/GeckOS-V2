@@ -1,0 +1,1370 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/*        Struct Task Environment Entry          */
+
+/* we have three structs now: 
+ * TE_* 	for task environment handling - not needed for system without
+ *       	memory management
+ * TT_*		task table, contains STD streams, etc
+ * TH_*		thread table, has stack info and state
+ */
+
+/* We have a significant change in kernel ID allocation. Task and Thread
+ * IDs now are directly pointers into the corresponding tables! 
+ * Illegal kernel parameters may do some damage now, but it is supposed to be
+ * faster.
+ * If we need consecutive task IDs (probably lower 5 bits local, upper
+ * three bits net node number), a simple lookup table should be the fastest 
+ * and shortest way.
+ *
+ * When entering the kernel, the tasks PCBUF is copied or mapped to SYSBUF
+ *
+ * The Environment number 0 is the system environment, where the kernel
+ * and all the devices operate. On simple systems (without MMU) the same
+ * environment is used for all tasks.
+ *
+ * The scheduler changed in that all the waiting threads are just 
+ * ignored. Instead the thread state must be set at, e.g. VSEM, or
+ * SEND/RECEIVE by checking for waiting threads.
+ */
+
+#define	TT_STDIN	0	/* Stdin */
+#define	TT_STDOUT	1	/* Stdout */
+#define	TT_STDERR	2	/* Stderr */
+#define	TT_PARENT	3	/* parent process ID */
+#define	TT_SIGADR	4	/* addr of signal routine */
+#define	TT_LIBSAVE	6	/* 2 byte stdlib pointer to process info */
+#define	TT_ENV		8	/* environment number */
+#define	TT_NTHREADS	9	/* number of running threads */
+#define	TT_SIGMASK	10	/* mask of allowed signals */
+#define	TT_SIGPEND	11	/* mask of pending signals */
+#define	TT_PRIORITY	12	/* priority (i.e. irqcnt) of task */
+#define	TT_RETCODE	13	/* return code after kill */
+#define	TT_SLEN		14	/* length of task struct */
+
+#define	TH_ST		0	/* thread state */
+#define	TH_TASK		1	/* task ID */
+#define	TH_SP		2	/* stack pointer */
+#define	TH_LIBSAVE	3	/* 2 byte saved to make stdlib thread save */
+#define	TH_PAR		5	/* 3 byte kernel parameter space */
+#define	TH_SLEN		8	/* length of thread struct */
+
+#ifndef ST_LEN
+#define	ST_LEN	128		/* stack length */
+#endif
+
+          .(
+
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+
+actTask  .byt 0
+actThread .byt 0
+
+&Syscnt	  .byt 0
+Irqcnt	  .byt 0
+#ifdef NEED_SLOCK
+lockfl	  .byt 0
+#endif
+
+div       .byt 0
+div2      .byt 0
+div3      .byt 0
+
+	  .data
+
+Xenv	  .dsb ANZXENV
+taskTab	  .dsb MAXNTASKS * TT_SLEN
+threadTab .dsb MAXNTHREADS * TH_SLEN
+
+	  .text
+
+/******************************************************************/
+/* here are the routines to handle the task and thread tables */
+
+&initthreads .(
+	ldx #0
+	txa
+l0	sta threadTab,x
+	inx
+	cpx #MAXNTHREADS * TH_SLEN
+	bcc l0
+
+	tax
+l1	sta taskTab,x
+	inx
+	cpx #MAXNTASKS * TT_SLEN
+	bcc l1
+	rts
+	.)
+
+getthread .(
+	ldy #0
+l0
+	lda threadTab + TH_ST,y
+	beq found
+	jsr ynextthread
+	bcc l0
+	rts
+found	
+	; lda #0
+	sta threadTab + TH_LIBSAVE,y
+	sta threadTab + TH_LIBSAVE+1,y
+	clc
+	rts
+	.)
+
+gettask	.(
+	ldx #0
+l0
+	lda taskTab + TT_NTHREADS,x
+	beq found
+	txa
+	clc
+	adc #TT_SLEN
+	tax
+	cmp #MAXNTASKS * TT_SLEN
+	bcc l0
+	rts
+found
+	; lda #0
+	sta taskTab + TT_SIGADR,x
+	sta taskTab + TT_SIGADR+1,x
+	sta taskTab + TT_SIGMASK,x
+	sta taskTab + TT_SIGPEND,x
+	sta taskTab + TT_LIBSAVE,x
+	sta taskTab + TT_LIBSAVE+1,x
+	clc
+	rts
+	.)
+
+/* 
+ * returns next thread ID in a and y. 
+ * zero flag and carry flag are set when overrun to thread no 0
+ */ 
+ynextthread .(
+	tya
+&anextthread
+	clc
+	adc #TH_SLEN
+	cmp #MAXNTHREADS * TH_SLEN
+	bcc l0
+	lda #0
+l0	tay
+	rts
+	.)
+
+/************************************************************************/
+/* memory management related, but architecture specific parts
+ */
+
+#include "kernel/kenv.a65"
+
+/************************************************************************/
+
+/* fork a new task */
+
+&&fork   .(
+	  jsr memsys
+	  sty div
+	  MAPSYSBUF
+
+	  ldx SYSBUF+FORK_STDIN
+          jsr teststd
+          stx SYSBUF+FORK_STDIN
+          ldx SYSBUF+FORK_STDOUT
+          jsr teststd
+          stx SYSBUF+FORK_STDOUT
+          ldx SYSBUF+FORK_STDERR
+          jsr teststd
+          stx SYSBUF+FORK_STDERR
+
+	  lda SYSBUF+FORK_SIZE
+	  ldy SYSBUF+FORK_SHARED
+	  jsr kgetenv
+	  bcc env
+	  jmp noenv
+env 	  stx div3
+
+	  jsr gettask
+	  bcs nothread2
+	  stx div2
+	  ; x is new task
+
+	  lda SYSBUF+FORK_PRIORITY
+	  bne prio_ok
+	  ldy actTask
+	  cpy #<-1
+	  beq prio_def
+	  lda taskTab + TT_PRIORITY,y
+	  .byt $2c
+prio_def  lda #IRQCNT
+prio_ok	  sta taskTab + TT_PRIORITY,x
+	  lda actTask
+	  sta taskTab + TT_PARENT,x
+
+	  jsr getthread
+nothread2 bcs nothread
+	  ; y has thread no
+	  sty div
+
+
+	  lda div2			; task id
+	  sta threadTab + TH_TASK,y	; new task id for thread
+	  tax
+	  lda #1
+	  sta taskTab + TT_NTHREADS,x	; reserve task
+
+	  lda div3 
+	  sta taskTab + TT_ENV,x	; save env
+
+          lda #TS_RDY
+          sta threadTab + TH_ST,y	; reserve thread
+	  txa
+	  sta threadTab + TH_PAR,y
+
+          lda SYSBUF+FORK_STDIN
+          sta taskTab+TT_STDIN,x
+          lda SYSBUF+FORK_STDOUT
+          sta taskTab+TT_STDOUT,x
+          lda SYSBUF+FORK_STDERR
+          sta taskTab+TT_STDERR,x
+
+	  ldx div		; init new threads stack
+	  jsr initsp
+
+	  lda actThread
+	  pha
+
+	  lda div
+	  jsr setthread
+
+	  lda SYSBUF+FORK_ADDR
+	  clc
+	  adc #$ff
+	  pha
+          lda SYSBUF+FORK_ADDR+1
+	  adc #$ff
+	  jsr push
+	  pla
+	  jsr push
+
+	  pla
+	  jsr setthread
+
+	  CPFORKBUF()
+
+	  ldx div2		; return task ID 
+	  lda #E_OK
+	  beq fend
+nothread
+	  ldx div3
+	  jsr freenv
+	  lda #E_NOTASK
+	  .byt $2c
+noenv	  lda #E_NOENV
+fend	  cmp #1
+	  jmp memtask
+	  ;jsr memtask
+          ;rts
+          .)
+
+&&forkt	  .(
+	  jsr memsys
+	  clc
+	  adc #$ff		; prepare for RTS
+	  pha
+	  tya
+	  adc #$ff
+	  pha
+
+	  lda actThread
+	  sta div
+
+	  jsr getthread
+	  bcs nothread
+	  ; y has new thread no
+	  lda actTask
+	  sta threadTab + TH_TASK,y
+	  tax
+	  inc taskTab + TT_NTHREADS,x
+
+	  tya
+	  tax
+	  jsr initsp
+
+	  txa
+	  jsr setthread
+
+	  pla
+	  jsr push
+	  pla
+	  jsr push
+
+	  ldy actThread
+
+;	  ldx actTask
+;	  txa
+;	  sta threadTab + TH_TASK,y
+;	  inc taskTab + TT_NTHREADS,x
+
+	  tya
+	  pha
+
+	  lda #TS_RDY
+	  sta threadTab + TH_ST,y
+
+	  lda div
+	  jsr setthread
+
+	  pla
+	  tax 
+	
+	  lda #E_OK
+	  clc
+	  jmp memtask
+	  ;jsr memtask
+	  ;rts
+
+nothread  pla
+	  pla
+	  lda #E_NOENV
+	  sec
+	  jmp memtask
+	  .)
+&&kterm    		; active thread terminates
+	  .(
+	  jsr memsys
+;.byt 2
+          ldx actTask
+	  tay
+	  lda taskTab + TT_NTHREADS,x
+	  cmp #1
+	  beq suicide
+
+	  dec taskTab + TT_NTHREADS,x
+
+	  ldy actThread
+	  lda #TS_FREE
+	  sta threadTab + TH_ST,y
+
+	  jmp nexttask
+	  .)
+
+/* TODO: setup last thread to clean up library! */
+suicide	  ldx actTask
+	  tya			; ac = return code
+	  jmp k1
+&&kkill	  jsr memsys
+k1 	  .(
+	  sta taskTab + TT_RETCODE,x
+	  stx div2
+
+	  .(
+	  ldy #0
+k2	  txa
+	  cmp threadTab + TH_TASK,y
+	  bne kn
+	  lda #TS_FREE
+	  sta threadTab + TH_ST,y
+	  dec taskTab + TT_NTHREADS,x
+	  beq ke
+kn	  jsr ynextthread
+	  bcc k2
+ke	  .)
+	  .(
+	  lda #0
+k3	  tax
+	  lda div2
+	  cmp taskTab + TT_PARENT,x
+	  bne k4
+	  lda #<-1
+	  sta taskTab + TT_PARENT,x
+	  cmp taskTab + TT_NTHREADS,x	; waiting for checkchld
+	  bne k4
+	  inc taskTab + TT_NTHREADS,x
+k4	  txa
+	  clc
+	  adc #TT_SLEN
+	  cmp #TT_SLEN*MAXNTASKS
+	  bcc k3
+	  .)
+
+	  .(
+	  ldy div2
+          ldx taskTab+TT_STDIN,y
+          lda #SC_NUL
+          jsr STRCMD
+          ldx taskTab+TT_STDOUT,y
+          lda #SC_EOF
+          jsr STRCMD
+          ldx taskTab+TT_STDERR,y
+          lda #SC_EOF
+          jsr STRCMD
+	  .)
+
+	  .(
+	  ldy div2
+	  ldx taskTab + TT_PARENT,y
+	  cpx #<-1
+	  beq nosig
+	  lda #SIG_CHLD
+	  and taskTab + TT_SIGMASK,x
+	  beq nosig
+	  lda #SIG_CHLD
+	  php
+	  sei
+	  ora taskTab + TT_SIGPEND,x
+	  sta taskTab + TT_SIGPEND,x
+	  plp
+	  lda #<-1
+	  sta taskTab + TT_NTHREADS,y
+nosig	  .)
+
+	  ldy div2
+	  ldx taskTab + TT_ENV,y
+	  jsr freenv
+
+          jmp nexttask
+          .)
+
+ /************************************************************************/
+/* The scheduler */
+
+
+nexttask .(			; the next thread should be scheduled
+
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+schedThread .byt 0	/* ??? current scheduled thread number */
+
+	.text
+
+          lda actThread		; schedThread
+#ifdef NEED_SLOCK
+	  bit lockfl
+	  bmi ok
+#endif
+	  jsr anextthread
+	  bcc ok
+&&pstart			; the scheduler is started here
+	  lda #0
+#ifdef NEED_SLOCK
+	  sta lockfl
+#endif
+	  jsr setthread
+	  lda actThread
+ok	  tay
+	  sta schedThread
+	  cld
+          cli
+          
+          ; sty schedThread
+psl
+          lda threadTab + TH_ST,y
+	  beq next
+
+	  ldx threadTab + TH_TASK,y
+	  lda taskTab + TT_SIGMASK,x
+	  beq nosig
+	  sty schedThread	; signals can be sent by devices...!
+	  lda taskTab + TT_SIGPEND,x
+	  beq nosig
+	  jsr checksig
+	  ldy schedThread
+nosig	  lda threadTab + TH_ST,y
+
+          cmp #TS_RDY         ; thread ready
+          beq s1              ; then start
+          
+          cmp #TS_IRQ         ; thread Interrupted
+          beq s2              ; then start
+
+next                          ; check next thread
+	  jsr ynextthread
+	  cmp schedThread     ; test if we started the loop with this
+			      ; thread - if yes, none is able to run...
+          bne psl 
+          
+          ldx #HE_TASK        ; no task runnable - reset machine (will change!)
+          jmp HERROR
+          .)
+          
+          .(
+&s1       
+	  ldx threadTab + TH_TASK,y
+	  lda taskTab + TT_PRIORITY,x
+	  sta Irqcnt
+	  tya
+	  jsr setthread
+
+	  ldy actThread
+	  lda threadTab+TH_PAR+2,y
+          pha
+          lda threadTab+TH_PAR,y
+          tax
+          lda threadTab+TH_PAR+1,y
+          tay
+          pla
+          clc
+          cli             
+	  jmp memtask
+          .)
+
+          .(
+&&irqloop  			; scheduler is called in interrupt routine
+          dec Irqcnt		; simple priority counter...
+          bne s2a
+
+          ldy actThread
+          lda #TS_IRQ
+          sta threadTab+TH_ST,y
+	  jmp nexttask
+&s2	  
+	  ldx threadTab + TH_TASK,y
+	  lda taskTab + TT_PRIORITY,x
+	  sta Irqcnt
+	  tya
+	  jsr setthread
+
+s2a	  ;jmp endirq
+&&retirq	
+          MEMTASK2()
+
+#ifdef CMOSCPU
+          ply
+          plx
+          pla
+#else
+          pla
+          tay
+          pla
+          tax
+          pla
+#endif
+          rti
+
+          .)
+/*
+&&irqenv  .(
+	  rts
+	  .)
+*/
+
+/*********************************************************************/
+
+&&suspend  .(
+	  jsr memsys
+          sty div
+          ldy actThread
+          sta threadTab+TH_PAR+2,y
+          txa
+          sta threadTab+TH_PAR,y
+          lda div
+          sta threadTab+TH_PAR+1,y
+          lda #TS_RDY
+&wsigentry
+          sta threadTab+TH_ST,y
+          jmp nexttask
+          .)
+
+/*********************************************************************/
+
+#ifdef NEED_RENICE
+
+&renice  .(
+	  jsr memsys
+	  ldy actTask
+	  ldx taskTab + TT_PRIORITY,y
+	  clc
+	  adc taskTab + TT_PRIORITY,y
+	  sta taskTab + TT_PRIORITY,y
+	  txa
+	  clc
+	  jmp memtask
+	  ;jsr memtask
+	  ;rts
+	  .)
+
+#else
+
+&renice =notimp
+
+#endif
+
+/*********************************************************************/
+/* We don't really need this after making fork transfer the PCBUF! */
+
+#ifdef NEED_SLOCK
+
+&slock	  .(
+	  jsr memsys
+	  bcc unlock
+	  lda #$ff
+	  .byt $2c
+unlock	  lda #0
+	  sta lockfl
+	  clc
+	  jmp memtask
+	  .)
+
+#else
+
+&slock	=notimp
+
+#endif
+  
+/*********************************************************************/
+
+#ifdef NEED_CHECKCHLD
+
+&&checkchld .(
+	jsr memsys
+	lda #0
+loop	tax
+	lda actTask
+	cmp taskTab + TT_PARENT,x
+	bne next
+	lda #<-1
+	cmp taskTab + TT_NTHREADS,x
+	bne next
+	lda taskTab + TT_RETCODE,x	; error code
+	inc taskTab + TT_NTHREADS,x	
+	clc
+	beq end
+next	txa
+	clc
+	adc #TT_SLEN
+	cmp #TT_SLEN*MAXNTASKS
+	bcc loop
+end	jmp memtask
+	.)
+
+#else
+
+&checkchld =notimp
+
+#endif
+
+/*********************************************************************/
+
+#ifdef NEED_GETINFO
+
+&&getinfo
+	.(
+	jsr memsys
+	MAPSYSBUF
+	ldy #0
+	sty div
+loop
+	GETTASKMEM
+	ldx div
+	sta SYSBUF + TN_MEM,x
+	tya
+	sta SYSBUF + TN_PID,x
+	lda taskTab + TT_ENV,y
+	sta SYSBUF + TN_ENV,x
+	lda taskTab + TT_PARENT,y
+	sta SYSBUF + TN_PARENT,x
+	lda taskTab + TT_NTHREADS,y
+	sta SYSBUF + TN_NTHREADS,x
+
+	lda taskTab + TT_STDIN,y
+	sta SYSBUF + TN_STDIN,x
+	lda taskTab + TT_STDOUT,y
+	sta SYSBUF + TN_STDOUT,x
+	lda taskTab + TT_STDERR,y
+	sta SYSBUF + TN_STDERR,x
+
+	lda taskTab + TT_SIGADR,y
+	sta SYSBUF + TN_SIGNAL,x
+	lda taskTab + TT_SIGADR + 1,y
+	sta SYSBUF + TN_SIGNAL + 1,x
+
+	lda taskTab + TT_SIGMASK,y
+	sta SYSBUF + TN_SIGMASK,x
+
+	txa
+	clc
+	adc #TN_SLEN
+	sta div
+	tya
+	clc
+	adc #TT_SLEN
+	tay
+#if MAXNTASKS <= ANZ_ENV
+	cpy #TT_SLEN * MAXNTASKS
+#else
+	lda div
+	cmp #TN_SLEN * ANZ_ENV
+#endif
+	bcc loop
+	clc
+	jmp memtask
+
+	.)
+#else
+
+&getinfo = notimp
+
+#endif
+
+/************************************************************************/
+
+#ifdef NO_SEND	/* no SEND/RECEIVE/XRECEIVE calls */
+
+&&ksend		=notimp
+&&xreceive	=notimp
+&&kreceive	=notimp
+
+#else	/* NO_SEND */
+
+&&ksend	.(
+	jsr memsys
+	cpx #SEND_SYS
+	beq serr
+	sty div
+	ldy actThread
+	sta threadTab + TH_PAR+2,y
+#ifndef NO_FSM
+	cpx #SEND_FM
+	bne send1
+	ldx actTask
+	jsr fm		; needs ac for FM_REG check
+	bcs serr2
+#endif
+send1	jsr testenv
+	bcs serr
+	cpx actTask
+	beq serr
+	ldy actThread
+	txa
+	sta threadTab + TH_PAR,y
+	lda div
+	sta threadTab + TH_PAR+1,y
+
+	ldy #0
+l0	txa
+	cmp threadTab + TH_TASK,y
+	bne next
+	lda threadTab + TH_ST,y
+	cmp #TS_WFTX
+	beq copy
+	cmp #TS_WXTX
+	bne next
+	lda threadTab + TH_PAR,y
+	cmp actTask
+	beq copy
+next
+	jsr ynextthread
+	bcc l0
+	ldx actThread
+	lda #TS_WFRX
+	sta threadTab,x
+	jmp nexttask
+
+serr	lda #E_NOENV
+serr2	cmp #1
+	jmp memtask
+	;jsr memtask
+	;rts
+copy
+#ifdef CPPCBUFTX
+	sty div
+	CPPCBUFTX()
+	ldy div
+#endif	
+	lda actTask
+	sta threadTab + TH_PAR,y
+	ldx actThread
+	lda threadTab + TH_PAR+2,x
+	sta threadTab + TH_PAR+2,y
+	lda threadTab + TH_PAR+1,x
+	sta threadTab + TH_PAR+1,y
+	lda #TS_RDY
+	sta threadTab + TH_ST,y
+
+	ldx threadTab + TH_TASK,y
+
+	lda #0
+	beq serr2
+	.)
+
+&&xreceive 
+	lda #<-1
+	.byt $2c
+&&kreceive .(
+	lda #0		; TS_WFTX
+	jsr memsys
+	php
+	sta div2
+
+	sty div
+	ldy actThread
+	txa
+	sta threadTab + TH_PAR,y
+	lda div
+	sta threadTab + TH_PAR+1,y
+
+	ldy #0
+l0	lda threadTab + TH_ST,y
+	cmp #TS_WFRX
+	bne next
+	lda actTask
+	cmp threadTab + TH_PAR,y
+	bne next
+	bit div2
+	bpl copy
+	txa
+	cmp threadTab + TH_TASK,y
+	beq copy
+next
+	jsr ynextthread
+	bcc l0
+	plp
+	bcc nowait
+	lda #TS_WFTX
+	bit div2
+	bpl l1
+	lda #TS_WXTX
+l1	ldy actThread
+	sta threadTab + TH_ST,y
+	jmp nexttask
+
+nowait	lda #E_NOTX
+	sec
+	jmp memtask
+
+copy	plp
+#ifdef CPPCBUFRX
+	sty div
+	CPPCBUFRX()
+	ldy div
+#endif
+	lda #TS_RDY
+	sta threadTab + TH_ST,y
+	lda actTask
+	sta threadTab + TH_PAR,y
+
+	lda threadTab + TH_PAR+2,y
+	pha
+	lda threadTab + TH_TASK,y
+	tax
+	lda threadTab + TH_PAR+1,y
+	tay
+	pla
+	clc
+	jmp memtask
+	.)
+
+#endif	/* NO_SEND */
+
+/*********************************************************************/
+/* Signal handling */
+
+&setsig	.(
+	jsr memsys
+	ldx actTask
+	sty div
+	bcs setadr
+	ldy taskTab + TT_SIGMASK,x
+	sta taskTab + TT_SIGMASK,x
+	tya
+	ldy div
+	clc
+	jmp memtask
+	;jsr memtask
+	;rts
+setadr	php		; this address might be used in IRQ and exchange is 
+	sei 		; _not_ atomic without this SEI!
+	ldy taskTab + TT_SIGADR,x
+	sta taskTab + TT_SIGADR,x
+	tya
+	pha
+	ldy taskTab + TT_SIGADR+1,x
+	lda div
+	sta taskTab + TT_SIGADR+1,x
+	pla
+	plp
+	clc
+	jmp memtask
+	;jsr memtask
+	;rts
+	.)
+
+/* 
+ * sendsig can also be called from a device or interrupt routine,
+ * therefore we only save the signal and let the scheduler do all
+ * the resolving 
+ */
+
+&sendsig .(		; ac = signal mask, xr = target task
+	jsr memsys
+	bcs sends
+	lda #TS_WSIG
+	jmp wsigentry
+sends
+	ldy taskTab + TT_NTHREADS,x
+	beq not
+	tay
+	and taskTab + TT_SIGMASK,x
+	beq ok
+	tya
+	php		; make operation atomic
+	sei
+	ora taskTab + TT_SIGPEND,x
+	sta taskTab + TT_SIGPEND,x
+	plp
+ok	lda #E_OK
+	.byt $2c
+not	lda #E_NOTASK
+	clc
+	jmp memtask
+	;jsr memtask
+	;rts
+	.)
+
+/*
+ * checksig is called when the scheduler sees that a signal is pending
+ * when putting a thread to running again
+ */
+
+checksig .(
+	lda taskTab + TT_SIGADR,x
+	ora taskTab + TT_SIGADR+1,x
+	beq clear
+
+	lda threadTab + TH_ST,y
+	cmp #TS_RDY
+	beq sigrdy
+	cmp #TS_WSIG
+	beq sigrdy
+	cmp #TS_IRQ
+	beq sigirq
+	
+	lda taskTab + TT_SIGMASK,x
+	and #SIG_INTABLE
+	beq none
+
+	lda threadTab + TH_ST,y
+	cmp #TS_WFRX	
+	beq sigint
+	cmp #TS_WXTX
+	beq sigint
+	cmp #TS_WFTX
+	beq sigint
+	cmp #TS_WFSEM
+	beq sigint
+none	rts		/* TODO: check interruptable flag, interrupt */
+	
+sigrdy	.(
+	tya
+	jsr setthread
+	jsr incretadr
+	lda #0
+	jsr push			; status reg for RTI
+	ldy actThread
+	lda threadTab + TH_PAR+2,y
+	jsr push			; ac for PLA
+&sig1	ldx actTask
+	lda taskTab + TT_SIGPEND,x
+	ldy actThread		
+	sta threadTab + TH_PAR+2,y	; ac for signal routine
+	lda taskTab + TT_SIGADR,x
+	clc
+	adc #<-1
+	pha
+	lda taskTab + TT_SIGADR+1,x
+	adc #>-1
+	jsr push
+	pla
+	jsr push
+&clear	lda #0
+	ldx actTask
+	sta taskTab + TT_SIGPEND,x
+&rtsad	rts
+	.)
+
+sigirq	.(
+	tya
+	jsr setthread
+	jsr pull			; xr
+	ldy actThread
+	sta threadTab + TH_PAR,y
+	jsr pull			; yr 
+	ldy actThread
+	sta threadTab + TH_PAR+1,y	; ac and sr still on stack
+&sig2	lda #TS_RDY
+	sta threadTab + TH_ST,y
+	bne sig1			; always
+	.)
+
+sigint	.(				; interrupted system call 
+	tya
+	jsr setthread
+	jsr incretadr
+	lda #1				; status register for RTI (c=1)
+	jsr push
+	lda #E_INT
+	jsr push			; return code for kernel call
+	ldy actThread
+	jmp sig2
+	.)
+
+incretadr .(
+	jsr pull
+	clc
+	adc #1
+	bcc l1
+	pha
+	jsr pull
+	tay
+	iny
+	tya
+	jsr push
+	pla
+l1	jmp push
+	.)
+
+	.)
+
+/*********************************************************************/
+/* Semaphore handling */
+
+#ifdef NO_SEM	/* no semaphore code */
+
+&&getsem	=notimp
+&&fresem	=notimp
+&&kpsem		=notimp
+&&kvsem		=notimp
+
+#else	/* NO_SEM */
+
+          .(
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+SEMFRE    .dsb (ANZSEM+7)/8
+SEMVAL    .dsb (ANZSEM+SYSSEM+7)/8
+
+	.text
+
+&&kpsem   .(
+          jsr memsys
+	  bcc ps1
+          jsr tstnset
+	  jmp memtask
+ps1
+          ldy actThread
+          txa
+          sta threadTab+TH_PAR,y      ; Semaphor-Nummer
+	  jsr tstnset
+	  bcc rtask
+          ldy actThread
+          lda #TS_WFSEM
+          sta threadTab+TH_ST,y
+          jmp nexttask
+rtask	  jmp memtask
+	  ;jsr memtask
+	  ;rts
+          .)
+
+&&kvsem    .(
+	  jsr memsys
+	  ; x has semaphore number
+
+	  ldy actThread
+l0	  lda threadTab + TH_ST,y
+	  cmp #TS_WFSEM
+	  bne next
+	  txa
+	  cmp threadTab + TH_PAR,y
+	  beq gotone
+next	  jsr ynextthread
+	  cpy actThread
+	  bne l0
+
+          txa
+          clc
+          adc #SYSSEM
+          cmp #ANZSEM+SYSSEM
+          bcs illpar
+          jsr asetxy
+          eor #$ff
+          and SEMVAL,x
+          sta SEMVAL,x
+          jmp ok
+
+gotone	  lda #TS_RDY
+	  sta threadTab + TH_ST,y
+ok
+	  lda #E_OK
+	  clc
+	  jmp memtask
+	  ;jsr memtask
+	  ;rts
+          .)
+
+/* Semaphore administration (alloc, free) */
+
+
+&&getsem  .(
+	  jsr memsys
+          ldx #0
+l2        lda SEMFRE,x
+          beq gnext
+          ldy #0
+l3        lsr
+          bcs found
+          iny
+          cpy #8
+          bcc l3
+found     lda POT2,y
+          eor #<-1
+          and SEMFRE,x
+          sta SEMFRE,x
+          txa
+          asl
+          asl
+          asl
+          sta div
+          tya
+          clc
+          adc div
+          tax
+          lda #E_OK
+gne       cmp #1
+	  jmp memtask
+	  ;jsr memtask
+          ;rts
+gnext     inx
+          cpx #(ANZSEM+7)/8
+          bcc l2
+          lda #E_NOSEM
+          bcs gne
+	  .)
+
+&gsetxy    txa
+asetxy    tax
+	  and #7
+          tay
+          txa
+          lsr
+          lsr
+          lsr
+          tax
+          lda POT2,y
+          rts
+          
+&&fresem  .(
+	  jsr memsys
+          cpx #ANZSEM
+          bcs illpar
+          jsr gsetxy
+          ora SEMFRE,x
+          sta SEMFRE,x
+          lda #E_OK
+          .byt $2c
+&illpar   lda #E_NOSEM
+          cmp #1
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+	  .)
+
+&&inisem  .(
+	  ldy #(ANZSEM+SYSSEM+7)/8-1
+          lda #0
+i1        sta SEMVAL,y
+          dey
+          bpl i1
+
+	  lda #$ff
+          ldy #(ANZSEM+7)/8-1
+if1       sta SEMFRE,y
+          dey
+          bpl if1
+          clc
+          rts
+	  .)
+
+tstnset   .(
+          txa
+          clc
+          adc #SYSSEM
+          cmp #ANZSEM+SYSSEM
+          bcs illpar1
+          jsr asetxy
+          and SEMVAL,x
+          bne set
+          lda POT2,y
+          ora SEMVAL,x
+          sta SEMVAL,x
+          lda #E_OK
+          .byt $2c
+illpar1	  lda #E_NOSEM
+	  .byt $2c
+set       lda #E_SEMSET
+          cmp #1
+          rts
+	  .)
+
+	  .)
+
+#endif	/* NO_SEM */
+
+/************************************************************************/
+
+          .(
+&&teststd php
+	  ldy actTask
+	  cpy #<-1
+	  beq stdok
+          cpx #STDIN
+          bcc stdok
+          pha
+          txa
+          sec
+          sbc #STDIN
+          clc
+          adc actTask
+          tax
+          lda taskTab+TT_STDIN,x
+          tax
+          pla
+stdok     plp
+          rts
+          .)
+
+&kgetpid  .(
+	  jsr memsys
+	  ldx actTask
+	  ldy actThread
+	  jmp memtask
+	  .)
+
+          .(
+&testenv  cpx #OWNTASK
+          bne te1
+          ldx actTask
+          clc
+          rts
+te1       cpx #$fe-ANZXENV
+          bcc te2
+          cpx #$fe
+          bcs te2
+          pha
+          lda Xenv-($fe-ANZXENV),x
+          tax
+          pla
+te2       clc	;cpx #$fe-ANZXENV
+          rts            ; c=1 on error
+          .)
+
+&tdup     .(
+          jsr memsys
+          cpx #$fe-ANZXENV
+          bcc tdx
+          cpx #$fe
+          bcs tdx
+          sta Xenv-($fe-ANZXENV),x
+          clc
+          .byt $24
+tdx       sec
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+          .)
+
+/************************************************************************/
+
+          .(
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+d         .byt 0
+
+	.text
+
+&&kdup     jsr memsys
+          php
+          cpx #STDIN
+          bcc duperr
+          stx d
+          tax
+          jsr teststd
+#ifdef CMOSCPU
+	  phx
+#else
+          txa
+          pha
+#endif
+          lda d
+          clc
+          adc #<-STDIN
+          clc  
+          adc actTask
+          tax
+          lda taskTab+TT_STDIN,x
+          tay
+          pla
+          plp
+          bcc dupget
+          sta taskTab+TT_STDIN,x
+dupget    tya
+          clc
+          jmp memtask
+	  ;jsr memtask
+          ;rts     
+duperr    plp
+          sec
+          lda #E_NOSTR
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+          .)
+    
+          .(
+&&pbrk    
+	  jsr memsys
+          lda #TS_BRK
+          ldy actThread
+          sta threadTab+TH_ST,y
+          jmp nexttask
+          .)
+
+          .) 
+
+

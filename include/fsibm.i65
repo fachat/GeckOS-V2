@@ -1,0 +1,47 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef _FSIBM_H_
+#define _FSIBM_H_
+
+#define   IE_CMD     <-65
+#define   IE_Q       <-66
+#define   IE_GT      <-67
+#define   IE_RD      <-68
+#define   IE_WR      <-69
+#define   IE_V       <-70
+#define   IE_FT      <-71
+
+#define   IE_NOCLUS  <-72      /* no more cluster available (disk full)	*/
+#define   IE_INVDATA <-73      /* inconsistent data on disk		*/
+#define   IE_ILLCLUS <-74      /* Cluster# ==1 or >F_CLUS    		*/
+#define   IE_VALBUF  <-75      /* try to write valid buffer with XW (??)*/ 
+#define   IE_FILEXIST <-76     /* file exists				*/
+#define   IE_DISKFULL <-77     /* disk full				*/
+#define   IE_DNEMPTY <-78      /* subdirectory not empty when rmdir	*/
+#define   IE_NOFILE  <-79      /* no more file structrure (internal)	*/ 
+#define   IE_ILLNAM  <-80      /* name with joker ("*","?","\"")	*/
+#define   IE_FOPEN   <-81      /* file locked				*/
+
+#endif
+

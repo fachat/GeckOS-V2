@@ -1,0 +1,12 @@
+
+The "sysapps" directory contains system-dependend programs. These include
+
+  - filesystem servers
+
+  - internet servers
+
+  - hardware dependend stuff (like irtx or ibmon)
+
+  - some old programs that have not been ported to lib6502 or are not worth
+    the time doing it (if you like, port them and I move them to apps)
+

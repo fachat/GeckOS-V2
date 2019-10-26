@@ -1,0 +1,90 @@
+
+Here is a list of known bugs of version 2.0.0-pre1
+--------------------------------------------------
+
+- starting ROM program is only possible in the old-style shell
+  and it doesn't fill in the command line. Starting o65 files is ok.
+
+- lib6502 does not use SBRK when memory is exhausted.
+
+- slipd libip routines seem to be buggy still - very weird effects!
+  I have no idea where they come from. When I start hunting one, it
+  disappears and another pops up. Amongs them were:
+  - closing telnet seems to set nthreads in kernel tables to $ff!!!!
+  - also opening a telnet connection prints some weird characters on the
+    wrong screen (stream gets "$ff $ff $c6 $07 $07 $07..." bytes sent,
+    I have no idea where from...)
+  - telnet works on telnet port somehow - bug hangs if streams are closed...
+    should comply to rfc1143
+  - httpd doesn't work although using almost all the same routines as
+    rsh which work
+  - SC_ESTAT does not seem to recognize E_EOF the same way as SC_STAT?
+    (slipd, in rsh.a65, label newpkt)
+  I have found and fixed a bug in the lib6502 fread/fwrite that could 
+  probably have caused this bug, but have not (yet) checked this.
+
+- using inet apps without registering an inet task blocks those programs
+  (kernel problem as not-registered task is not recognized)
+
+- listen does not check if port already in use
+  also there is no way to free listenports in use by crashed/killed
+  programs - probably when reuse, overwrite old listenport such 
+  that table does not fill up?
+
+- telnet doesn't really implement local echo mode.
+
+- slipd uses accesses to $dc** (C64 CIA timers) to generate initial
+  pseudo-random sequence numbers.
+
+- when getting tcp signal, set error flag in associated streams
+
+- SLIPD: wwwroot path given to chdir, but not used when opening a file;
+  only the first letter is used as drive.
+
+- FSIEC does not recognize chdir paths when reading directories
+  from the bus (i.e. C64 reads from IEEE488 bus and CSA drive is the 
+  fsibm drive), files are ok.
+
+- more diagnostics ("why the beep...", i.e. why the "?") in lsh
+
+- keyboard layout into docs
+
+- when fsiec on C64 is parallel but doesn't find the interface, it
+  dies too ungracefully...
+
+- when path overflows, behaviour is undefined
+
+- C64 sbrk always returns ROMSTART instead of RAMSIZE?
+
+- a semaphore can be released when a process is waiting for it
+
+- console: control-character printed?
+
+- (multiple) errors on non-existant IEC drives are not handled correctly:
+  gecko may break, C64 sometimes reads empty stream...
+
+- FSIEC hangs on disk full with C64 parallel IEC bus interface (and probably
+  others too)
+
+- FSIEC (on CS/A65) seems not to release the interface semaphore after
+  init every time?
+
+- serial line drivers ignore handshake value (i.e. rts/cts vs. xon/xoff)
+
+- serial IEC bus for CS/A65 architecture only works with 1MHz (is this a bug?)
+
+- The CS/A65 console doesn't work when interrupting the device is enabled.
+  (could be kernel or device problem...)
+
+- C64 fsiec filesystem (serial/parallel?) reads one byte from file even
+  when it's not found (in VICE)
+
+- C64 console doesn't generate the F1 key with shift and shift/ctrl?
+
+- CS/A65: non-ROM-started devices don't work.
+
+- spooler device doesn't forward BRK and PUSH flags
+
+- fsiec, fsibm and fsdev ignore stream brk/push/pull flags, and don't set 
+  stream error flags (only fsiec sets SCE_[RW]ERRM flags).
+

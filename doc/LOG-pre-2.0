@@ -1,0 +1,312 @@
+
+Now the transition from 1.3.x to 1.4.0 takes place
+
+1) 1.3.90: make new directory structure, and use segments:
+
+   - include directory overhauled. 20mar1997
+
+   - kernel now assembles standalone (with xa >= 2.1.3)
+
+   - fsdev now assembles standalone (with xa >= 2.1.3)
+
+   - C64 is working now (w/o fsiec)
+
+   - removed many global variables (mostly from kernel)
+
+   - made fsiec assemble, checked C64 serial and parallel (fixed a bug
+     in the serial code)
+
+   - now all architectures (c64, csa65, gecko) are converted,
+     although only c64 is tested now.
+
+   - all apps are converted, although not tested
+
+2) 1.3.91: cleanup more archtecture dependend stuff
+
+   - moved hardware stuff from oa1si.a65 to arch/*/devices/kinit.a65
+     C64 works again
+
+   - put Gecko fsiec back to mainstream fsiec. added getif and freif
+     to fsiec device interface
+
+   - divided console code into hardware independent (devices/console.a65)
+     and hardware dependent (arch/*/devices/con_*.a65) code.
+     C64 should work (does on VICE), csa also, but this is not tested.
+     C64 cannot give the F1 switch key with shift+ctrl (bug!)
+
+   - CS/A architecture (with ROMTEST) works, except for the console
+
+   - CS/A console works, when not interruptable. 
+
+3) 1.3.92: dynamic memory management / relocatable loader
+
+   - added memory management from slip to stdlib. It is initialized
+     from the kernel on startup. New GETPID system call added to allow
+     owner identification for memory blocks
+
+   - new zeropage memory management in stdlib. Added o65 loader from xa 
+     to stdlib
+
+   - made loader work. loads o65 files now, but no undefined symbols
+     (like KERNEL and STDIOADDR) are relocated.
+
+4) 1.3.93: started kernel rewrite...
+
+   - removed: memory management, signals
+
+   - added error state byte for streams (untested)
+
+   - rewrote env handling to allow threads etc. Use different tables
+     removed send/(x)receive, setirq, getenv, freenv, setblk, wterm, getinfo,
+     treset, read/write and signal from kernel in this process.
+
+   - reimplemented send/receive/xreceive.
+
+   - implemented signals
+
+   - reimplemented STACKCOPY option.
+
+   - started working on CS/A65 MMU architecture
+
+   - implemented SLOCK and RENICE kernel calls
+
+   - cleaned up kernel init routines, added zerotest.a65 and ramtest.a65
+
+   - worked on SEND/RECEIVE for MMU.
+
+   - real memory handling for MMU
+
+   - cleanup device handling code (with and w/o MMU)
+     but: in CS/A65, non-ROM-started devices don't work!
+
+   - fixed a bug in setnam (device handling kernel code).
+
+   - moved [load|save][thread|task] all to setthread, which is
+     now completely in kenv
+
+   - runs on the Gecko now.
+
+   - made all calls to memtask from JSR to JMP (for NOMMU, keep a 
+     dummy for CS/A). return from interrupt needs special care, though.
+
+   - The debugging speed when running on the xcsa emulator is impressing,
+     compared to the time to find an error on the real machine.....
+     CSA debugging done (multitasking works, video device too, so works
+     send/receive)
+
+5) 1.3.94: support code and glue fixes
+
+   - console and serial devices support SCE_PUSH (console only) and
+     SCE_BRK bits. fsdev and fsiec support the error code bits SCE_?ERRM.
+
+   - shortened CS/A65 part a bit to get more kernel space
+
+   - sbrk for CS/A65, GETINFO (short version...)
+
+   - SHORTRAMTEST - only check one value besides MEMINIVAL, probably 
+     MEMINIVAL ^ $ff, to still allow mirrorcheck in CS/A
+
+   - fixed nasty bug in CS/A65 setthread.
+
+   - removes stream read/write counter handling from FORK and from
+     ROM init. Introduced new ROM file format.
+     Introduced "init" process to start ROM processes with command line
+     FORK now copies the PCBUF to the started process, which has to releas
+     the SENDBUF semaphore after reading the command line
+
+   - removed stdlib calls from most sysapps (fs*, mon)
+     Also put "sh" from "apps" to "sysapps" and renamed it to "mon".
+     So far there is still a link from "apps/sh" to "sysapps/mon",
+     as long as there is no new shell.
+
+   - included fileformat.html (for o65 files) and lib6502.html for the
+     new stdlib in the doc directory.
+     moved the "stdlib" directory to "oldlib"
+
+   - moved libsave to THREADSAVE, TASKSAVE and ENVSAVE
+     all are now cleared on respective allocation
+
+   - removed bogus kernel calls. updated kernel docs (kernel.html).
+     improved GETINFO call and adapted the Shell code for it.
+
+   - fixed small bugs in fork and kill. (revealed by GETINFO...)
+
+   - SLOCK (scheduler lock) is optional now.
+
+   - reordered error codes
+
+   - made some more stuff for the proto directory
+
+   - when a process terminates and the parent waits for sigchld,
+     TT_NTHREADS is set to -1 and sigchld is sent. If parent is killed
+     or checkchld is called from parent, then task is freed.
+     checkchld returns the process ID of the terminated child
+
+   - init process now has restart ability - a ROM task can be restarted
+     when the task has terminated.
+
+   - fixed a bug in the console code that didn't check for E_NUL
+     in any case...
+
+   - also fixed a little bug in asetxy...
+
+   - kernel seems to work on real CS/A65 too now...
+     (fixed a little bug in BRK handling of csa65/devices/oa1sd.a65)
+
+6) 1.3.95: stdlib handling 
+
+   - SUSPEND kernel call renamed to YIELD
+
+   - realloc added to lib6502
+
+   - implemented file handling, signal handling, semaphores
+     according to lib6502 specs
+
+   - changed command line parameter format for ROM
+
+   - fixed a bug in arch/c64/kernal/kenv.a65 for stack address overflow
+     with more than 4 threads.
+
+   - stdlib handling
+     When task is killed (from other task, or BRK), how to clear all
+     lib resources? Call signal exit handler on _any_ exit, and lib
+     clears then?
+
+   - implemented almost all (except network and environment) feasible
+     lib6502 calls.
+
+   - moved the lib6502 to version 0.5
+
+   - init now boots (i.e. loads and starts) o65 file from lib6502 :-))
+
+   - exec now passes command line parameter to program
+
+   - dup works with stdio
+
+   - added cwd to lib6502 definition
+
+   - changed names from "oa1*" to more descriptive names
+
+   - lsh parses command line and redirects stdio
+
+   - lsh now executes builtin commands as well as external commands :-))
+
+   - streams are now 64 instead of 128 byte long (gives double the number
+     of streams on a C64)
+
+   - FSIEC opens files now without ",P"
+
+   - lsh can now combine stdout and stderr with ">!" or "!>! redirectors.
+     replacing ">" with ">>" does an append.
+
+   - giving the shell a filename should make it read from the file and 
+     put it into quiet mode (untested)
+
+   - shell now receives sigchld from started tasks
+
+   - added sigchld to signal definition in lib6502
+
+   - added yield to lib6502 definition
+
+   - shell understands "&" and ";"
+
+   - added some simple file utilities (rmdir, mkdir, rm, format, chkdsk)
+     but more info has to be put here.
+
+   - added simple "ls" command
+
+   - added "cat" command
+
+   - changed return values for fread/fwrite
+
+   - added "mv" command (only to same device)
+
+   - forkto now copies the cwd to the child process, which makes it 
+     run programs from relative path.
+
+6) 1.3.96: inet handling 
+
+   - mon and slipd can now also be run from lsh
+
+   - slipd now works as before. It now takes its IP address from the first 
+     packet received.
+
+   - implemented traceroute protocol: ICMP port unreachable for udp
+
+   - some TCP bugfixes: does not eat up tcbs anymore when errorneous packets
+     arrive while listening. Detected some weird end of connection bug
+     triggered by high traffic...
+
+   - seem to have fixed the all end-of-connection problems.
+
+   - added one more virtual terminal to C64 console device
+
+   - slipd seems to be fixed...? 
+     slipd can now redirect its stderr (away from stdout and to a file given
+     on the command line) -> rom startable.
+
+   - wwwsrv prefixes a file with the content-type header, depending on file
+     extension.
+
+   - fixed a nasty old bug in ackxmit (slipd)
+
+   - added flib2osa_[rw] calls to stdlib to map from lib6502 fileno to 
+     OS/A65 stream.
+
+   - rsh working
+
+   - simple tlogin
+
+   - fixed bugs in lib6502 exec and bcleanpida code
+
+   - tlogin now sends the telnet WILL ECHO and WON'T ECHO options to 
+      hide password
+
+6) 1.3.97: lib6502 inet handling 
+
+   - fixed a bug in lib6502 fopendir
+
+   - made fstcp working again
+
+   - console is in no-echo mode by default. mon now switches console to 
+     fullscreen mode with TC_ECHO
+
+   - telnet works
+
+   - getenv/putenv work
+
+   - shell now has "echo" and "set" builtins, including variable substitution
+
+   - added "getos" lib6502 call and "uname" shell builtin.
+
+   - listen works
+
+   - rewrote fcntl to use checkfd_* - makes it shorter and works with STDIO
+
+   - fixed a really nasty bug that decreased system stack when receiving
+     a message that is already prepared.
+
+   - implemented lib6502 httpd, and lib6502 accept/listen works
+
+   - fixed a bug in slipd that killed it when no memory available. Now a
+     random connection is closed to get more memory.
+
+   - mon now recognizes STDOUT E_NUL as break condition, which makes
+     it stop much faster when it is in an endless loop... :-)
+
+   - loader does now align, and relocates LIB6502 and OSA2KERNEL, and calls
+     "main" to start
+
+   - overhauled docs
+
+6) 2.0.0-pre*: ports and bugfixes
+
+   - added CBM8x96 support
+
+   - added support for PET with 32k RAM
+
+
+TODO: 
+
+   - tons of bugfixes
+

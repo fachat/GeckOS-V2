@@ -1,0 +1,640 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+          .(
+#ifdef ROM
+start     .word ende		; pointer to end of file in ROM
+#ifdef FSDEV_AS_INIT
+          .byt  PK_INIT+$80	; file type = filesystem + auto-execute bit
+#else
+          .byt  PK_FS+$80	; file type = filesystem + auto-execute bit
+#endif
+          .word PRG		; execution start
+          .byt  16		; RAM size in 256-byte blocks
+	  .byt  >$ff-ROMSTART; $ff-start ; shared mem size in 256-byte blocks
+	  .byt  0		; priority
+          .word 0		; stdin, stdout/stderr device number
+          .asc  "fsdev",0,0	; command line
+#else
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+#include  "fdefs.i65"
+
+          .word $800
+          *=$800
+          jmp PRG
+
+#endif
+
+#include  "fsdef.i65"
+
+#ifndef MAXFILE
+#ifndef NOMMU
+#define   MAXFILE   8
+#else
+#define	  MAXFILE   4		/* must be more than ANZDRV (number of
+				   drives), because for each drive a buffer
+				   is reserved */
+#endif	/* NOMMU */
+#endif	/* MAXFILE */
+
+#define   BUFSIZE   128
+
+#ifdef FSDEV_NOROM
+#define   ANZDRV    1
+#else
+#define   ANZDRV    2
+#endif
+
+	.zero
+fzei      .word 0
+bzei      .word 0
+rzei      .word 0
+
+	.data
+owntask   .byt 0
+anz       .byt 0
+cnt       .byt 0
+cmd       .byt 0
+client    .byt 0
+actfil    .byt 0
+dev       .byt 0
+ftab      .dsb F_SLEN*MAXFILE
+
+	.bss
+buf       .dsb MAXFILE*BUFSIZE
+
+	.text
+
+PRG       .(
+          stx owntask
+
+          ldx #<-1
+          jsr setzei     ; init setzei (actfil)
+          ldx #0
+          stx anz
+p1        jsr setzei
+          lda #F_FL_FRE
+          ldy #F_FL
+          sta (fzei),y
+          inx
+          cpx #MAXFILE
+          bcc p1
+
+	  ; we now inherit PCBUF from the FORK call (if PK_FS)
+	  ; clc
+	  ; ldx #SEM_SENDBUF
+	  ; jsr PSEM
+
+          lda #ANZDRV         ; 2 Drives
+          sta PCBUF+FM_REG_DRVS
+          lda owntask
+          sta PCBUF+FM_REG_ENV
+          lda #FM_REG
+          ldx #SEND_FM   
+          ldy #2
+          jsr SEND
+
+	  php
+	  ldx #SEM_SENDBUF
+	  jsr VSEM
+	  plp
+
+          bcc loopt
+          jmp TERM
+
+loopt     lda anz
+          bne loop
+          sec
+          .byt $24
+loop      clc
+          jsr RECEIVE
+          bcs l1
+          jsr rxmess
+l1        ldx #0
+          stx cnt
+          stx anz
+l2        jsr setzei
+          ldy #F_FL
+          lda (fzei),y
+          cmp #F_FL_FRE
+          bne l2a
+          jmp nextl
+
+l2a       inc anz
+          ldy #F_MODE
+          lda (fzei),y
+          cmp #F_MODE_RD
+          bne l3
+
+ol        ldy #F_BYT
+          lda (fzei),y
+          ldy #F_LEN
+          cmp (fzei),y
+          beq l4
+          pha
+          ldy #F_STR
+          lda (fzei),y
+          tax
+          pla
+          tay
+          lda (bzei),y
+          jsr PUTC
+          bcs l5n
+          ldy #F_BYT
+          lda (fzei),y
+          clc
+          adc #1
+          sta (fzei),y
+          jmp ol
+
+l4        ldy #F_FL
+          lda (fzei),y
+          cmp #F_FL_EOF
+          bne l4a
+          ldy #F_STR
+          lda (fzei),y
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          jsr close
+          jmp nextl
+l4a       jsr clrbuf
+          jsr loadbuf
+          bcc l5
+          ldy #F_FL
+          lda #F_FL_EOF
+          sta (fzei),y
+l5        jmp nextl
+
+l5n       cmp #E_NUL
+          bne l5
+          ldy #F_STR
+          lda (fzei),y
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          jsr close
+
+l3 nextl  
+          inc cnt
+          ldx cnt
+          cpx #MAXFILE
+          bcs endloop
+          jmp l2
+endloop   jsr YIELD
+          jmp loopt
+          .)
+
+rxmess    .(
+          stx client
+          cmp #FS_OPEN_DR
+          bne rx1
+          jsr getfre
+          bcs rxe1a
+          jsr clrbuf
+          lda #F_FL_DIR
+oprrx     ldy #F_FL
+          sta (fzei),y
+          lda PCBUF+FS_OPEN_STR
+          ldy #F_STR
+          sta (fzei),y
+          ldy #F_MODE
+          lda #F_MODE_RD
+          sta (fzei),y
+          lda #<-1
+          ldy #F_DEV
+          sta (fzei),y
+          lda PCBUF+FS_OPEN_DRV
+          ldy #F_DRV
+          sta (fzei),y
+          ldy #F_STR
+          lda (fzei),y
+          tay
+          jmp rxok
+
+#ifndef FSDEV_NOROM
+oprrom    jsr findrnam
+          bcs rxe1a
+          jsr getfre
+          bcs rxe1a
+          jsr clrbuf
+          jsr ldrombuf
+          lda #F_FL_EOF
+          jmp oprrx
+#endif
+
+rx1       cmp #FS_OPEN_RD
+          bne rx2
+
+#ifndef FSDEV_NOROM
+          lda PCBUF+FS_OPEN_DRV
+          beq oprdev
+          jmp oprrom
+#endif
+
+oprdev    lda PCBUF+FS_OPEN_STR         /* Stream vom Open sichern      */
+          sta cnt
+          ldx #0
+          ldy #FS_OPEN_NAME
+rxw1      lda PCBUF,y                   /* Name vom Open in PCBUF       */
+          sta PCBUF,x                   /* fuer DC_GNUM kopieren        */
+          inx
+          iny
+          cmp #0
+          bne rxw1
+          lda #DC_GNUM                  /* Die Device-Nummer zu dem     */
+          jsr DEVCMD                    /* Namen holen                  */
+rxe1a     bcs rxe1                      /* Fehler dann Ende             */
+          stx dev                       /* Device-Nummer speichern      */
+          ldy cnt                       /* Stream als                   */
+          lda #DC_PS                    /* Ausgabe des Devices          */
+          jsr DEVCMD                    /* registrieren                 */
+          bcs rxe1                      /* Fehler dann Ende             */
+          ldx dev                       /* Device-Nummer zurckholen    */
+          lda #DC_RX_ON                 /* šbertragung starten          */
+          jsr DEVCMD                    /* und los...                   */
+          bcs rxe1                      /* Fehler dann Ende             */
+          ldy cnt                       /* hier geht's normal weiter    */
+          jmp rxok
+
+rx2       cmp #FS_OPEN_OW
+          beq rx2a
+          cmp #FS_OPEN_WR
+          bne rx3
+rx2a      
+#ifndef FSDEV_NOROM
+	  lda PCBUF+FS_OPEN_DRV
+          beq opwdev
+          jmp opwrom
+#endif
+
+opwdev    lda PCBUF+FS_OPEN_STR
+          sta cnt
+          ldx #0
+          ldy #FS_OPEN_NAME
+rxr1      lda PCBUF,y
+          sta PCBUF,x
+          inx
+          iny
+          cmp #0
+          bne rxr1
+          lda #DC_GNUM
+          jsr DEVCMD
+          bcs rxe1
+          stx dev
+          ldy cnt
+          lda #DC_GS
+          jsr DEVCMD
+          bcs rxe1
+          ldx dev
+          lda #DC_TX_ON
+          jsr DEVCMD
+          bcs rxe1
+          ldy cnt
+          jmp rxok
+
+#ifndef FSDEV_NOROM
+opwrom    lda #E_FWPROT
+          .byt $2c
+#endif
+rx3       lda #E_NOTIMP
+          .byt $2c
+rxok      lda #E_OK
+          .byt $2c
+rxe1      lda #E_FNOFIL
+          sta PCBUF+FS_X_ERR
+          ldx owntask
+          stx PCBUF+FS_X_ENV
+          ldy actfil
+          sty PCBUF+FS_X_FIL
+          ldy #FS_X_SLEN
+          ldx client
+          jmp SEND
+          .)
+
+loadbuf   .(
+          ldy #F_DEV
+          lda (fzei),y
+          bpl ldr0
+          jmp loadirnam
+
+ldr0      
+	clc
+	ldx #SEM_SENDBUF
+	jsr PSEM
+
+	  ldy #F_DRV
+          lda (fzei),y
+          beq lddev
+
+          ldy #F_DEV
+          lda (fzei),y
+          jsr setrzei
+          bcs lde             ; rzei zeigt auf verkettungszeiger
+          ldy #P_NAME+1
+; ldr3      iny                 ; deshalb hier zwei mehr
+;           iny
+;           lda (rzei),y
+;           bpl ldr3            ; ende der Tabelle feststellen
+          ldx #<-1
+ldr4      inx
+          iny
+          lda (rzei),y
+          sta PCBUF,x
+          bne ldr4
+          beq ldr5
+          
+lddev     ldy #F_DEV
+          lda (fzei),y
+          tax
+          lda #DC_GNAM
+          jsr DEVCMD
+          bcs lde
+ldr5      ldx #0
+          ldy #FS_DIR_NAME
+ld1       lda PCBUF,x
+          sta (bzei),y
+          inx
+          iny
+          cmp #0
+          bne ld1
+          tya
+
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+
+          ldy #F_LEN
+          sta (fzei),y
+          lda #0
+          ldy #FS_DIR_LEN
+ld2       sta (bzei),y
+          iny
+          cpy #FS_DIR_MODE
+          bcc ld2
+          lda #FS_DIR_MOD_FIL
+          sta (bzei),y
+          ldy #F_DEV
+          lda (fzei),y
+          clc
+          adc #1
+          sta (fzei),y
+          clc
+          rts
+
+lde   
+	ldx #SEM_SENDBUF
+	jsr VSEM
+    	  ldy #0
+lde1      lda ldet,y
+          sta (bzei),y
+          iny
+          cpy #FS_DIR_NAME+1
+          bcc lde1
+          tya
+          ldy #F_LEN
+          sta (fzei),y
+          sec
+          rts
+          
+ldet      .word 0,0
+          .byt 0,0,0,0,0,0,FS_DIR_MOD_FRE,0
+          
+loadirnam 
+#ifndef FSDEV_NOROM
+	  ldy #F_DRV
+          lda (fzei),y
+          bne romnam
+#endif
+          lda #<devtxt
+          ldy #>devtxt
+#ifndef FSDEV_NOROM
+          bne dn1
+romnam    lda #<romtxt
+          ldy #>romtxt
+#endif
+dn1       sta rzei
+          sty rzei+1
+          ldy #0
+dn2       lda (rzei),y
+          sta (bzei),y
+          iny
+          cpy #FS_DIR_NAME
+          bcc dn2
+dn3       lda (rzei),y
+          sta (bzei),y
+          iny
+          cmp #0
+          bne dn3
+          tya
+          ldy #F_LEN
+          sta (fzei),y
+          lda #0
+          ldy #F_DEV
+          sta (fzei),y
+          clc
+          rts
+
+#ifndef FSDEV_NOROM
+romtxt    .word 0,0      ; len
+          .byt  90,8,23
+          .byt  9,33,0
+          .byt  FS_DIR_MOD_NAM
+          .asc "romdisk",0
+#endif
+
+devtxt    .word 0,0
+          .byt 90,8,23
+          .byt 9,33,0
+          .byt FS_DIR_MOD_NAM
+          .asc "devices",0
+
+          .)
+
+close     lda #F_FL_FRE
+          ldy #F_FL
+          sta (fzei),y
+          rts
+
+getfre    .(
+          ldx #ANZDRV
+          stx cnt
+gf1       jsr setzei
+          ldy #F_FL
+          lda (fzei),y
+          cmp #F_FL_FRE  
+          clc
+          beq gf2
+          inc cnt
+          ldx cnt
+          cpx #MAXFILE
+          bcc gf1
+gf2       rts
+          .)
+     
+clrbuf    lda #0
+          ldy #F_LEN
+          sta (fzei),y
+          ldy #F_BYT
+          sta (fzei),y
+          rts
+    
+setzei    .(             ; setzt zeiger, x=filenr
+          cpx actfil
+          beq sz1
+          stx actfil
+          txa
+          asl
+          asl
+          asl
+          clc
+          adc #<ftab
+          sta fzei
+          lda #>ftab
+          adc #0
+          sta fzei+1
+          txa
+#if 1
+	  lsr
+	  pha
+	  lda #0
+	  ror		; clears carry
+	  adc #<buf
+	  sta bzei
+	  pla
+	  adc #>buf
+	  sta bzei+1
+#else
+          clc
+          adc #>buf*2
+          lsr
+          sta bzei+1
+          lda #<buf*2
+          ror
+          sta bzei
+#endif
+sz1       rts
+          .)
+
+setrzei   .(
+          sta cmd
+          ldx #<ROMSTART
+          lda #>ROMSTART
+ldr1      stx rzei
+          sta rzei+1
+          ldy #1
+          lda (rzei),y
+          dey
+          and (rzei),y
+          tax
+          inx
+          sec
+          beq lde        ; dann Verkettungszeiger =-1
+          lda cmd
+          clc
+          beq lde
+          dec cmd
+          lda (rzei),y
+          tax
+          iny
+          lda (rzei),y
+          jmp ldr1
+lde       rts
+          .)
+
+#ifndef FSDEV_NOROM
+findrnam  .(
+          lda #<ROMSTART
+          ldx #>ROMSTART
+fn1       sta rzei
+          stx rzei+1
+          ldy #1
+          lda (rzei),y
+          dey
+          and (rzei),y
+          tay
+          iny
+          beq fns
+          ldy #P_NAME+1
+; fn2       iny
+;           iny
+;           lda (rzei),y
+;           bpl fn2             ; ende der Tabelle ?
+          ldx #<-1
+fn3       iny
+          inx
+          lda (rzei),y
+          cmp PCBUF+FS_OPEN_NAME,x
+          bne fnnxt
+          cmp #0
+          bne fn3
+          clc
+          rts
+fnnxt     ldy #1
+          lda (rzei),y
+          tax
+          dey
+          lda (rzei),y
+          jmp fn1
+fns       sec
+          rts
+          .)
+
+ldrombuf  .(
+          lda #0
+          tay
+          sta (bzei),y
+          iny
+          sta (bzei),y
+          iny
+lr1       lda (rzei),y
+          sta (bzei),y
+          iny
+          cpy #P_NAME+2
+          bcc lr1
+; lr2       lda (rzei),y
+;           sta (bzei),y
+;           iny
+;           cmp #128            ; Ende der Tabelle bei <0
+;           bcs lre
+;           lda (rzei),y
+;           sta (bzei),y
+;           iny
+;           bne lr2
+lre       tya
+          ldy #F_LEN
+          sta (fzei),y
+          rts
+          .)
+#endif
+
+#undef ANZDRV
+#undef BUFSIZE
+#undef MAXFILE
+
+ende      .)
+

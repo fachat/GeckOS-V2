@@ -1,0 +1,66 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef ROM
+
+#include  "kdefs.def"
+#include  "kernel.i65"
+
+          ;.word $700
+          *=$700
+          
+/*#define   NOPRG*/
+
+#endif
+
+          
+/*        Device-Block        */
+
+          .(
+
+          .word endd
+          .byt PK_DEV+$80
+          .word devstart
+	  .dsb P_NAME - P_RAM, $ff
+          .asc "devices",0,0
+
+devstart
+
+#define	CONSOLE_DEVICE	"devices/con_csa.a65"
+#include  "devices/console.a65"
+
+#include  "devices/par.a65"
+#include  "devices/nulldev.a65"
+#include  "devices/spooler.a65"
+
+-sernr = "1"
+#include "devices/oa1ds.a65"
+
+#define UARTBASE $e830
+/*#include  "devices/ser_uart.a65"*/
+
+          .word $ffff
+
+endd      .)
+

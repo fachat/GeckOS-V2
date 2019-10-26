@@ -1,0 +1,41 @@
+
+#include "kdefs.i65"
+#include "lib6502.i65"
+
+	.zero
+z	.byt 0
+
+	.text
+
+ll	inc $d020
+	jmp ll
+/*
+	ldy #0
+
+l0	sty z
+	lda text,y
+
+	sta bss,y
+	beq ende
+
+	ldx #STDOUT	
+	jsr fputc
+	bcs ende
+
+	ldy z
+	iny
+	bne l0
+ende
+	rts
+
+
+	.data
+
+text	.asc "the quick brown fox jumps over the lazy dog",0
+
+	.bss
+
+bss	.dsb 100
+
+*/
+

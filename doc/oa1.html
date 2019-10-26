@@ -1,0 +1,656 @@
+<html><head>
+<title> OS/A65 Multitasking OS for 6502 </title>
+</head><body>
+<p><h1 align=center> OS/A65 Multitasking OS for 6502 </h1></p>
+<p> <h2 align=center> (c) 1989-96 Andre Fachat </h2></p>
+<hr>
+<h3><p> 
+This is the description of a small operating system for the 6502 CPU.
+It is a microkernel design, with preemtive multitasking, without
+memory protection and swapping though. With a page mapped MMU the
+different tasks are paged out and memory up to 1 MByte is supported.
+Available software includes a shell with piping and I/O redirection, 
+filesystems for (Commodore serial and parallel) IEEE488 interface,
+as well as for PC-style disks. Devices can be handled as files as well.
+A BASIC interpreter has been ported from the C64.
+A version for the C64 is available with version 1.3.5.
+</p><p>
+A description of the kernel interna, the kernel interface and the 
+standard library is given.  
+Some of the devices and filesystems are introduced. 
+</p></h3>
+<p> <ul>
+<li> <a href="#overview">Overview</a>
+<li> <a href="#kernel">Kernel</a>
+<ul>
+<li> <a href="#kn-gates">Entry/Exit Gates</a>
+<li> <a href="#kn-env">Task Handling</a>
+<li> <a href="#kn-mem">Memory Management</a>
+<li> <a href="#kn-devices">Device Management</a>
+<li> <a href="#kn-stream">Stream Management</a>
+<li> <a href="#kn-messages">Messages</a>
+<li> <a href="#kn-sem">Semaphores</a>
+<li> <a href="#kn-signals">Signals</a>
+<li> <a href="#kn-fsm">File System Manager</a>
+</ul>
+<li> <a href="#stdlib">Standard Library</a>
+<li> <a href="#filesystems">Available Filesystems</a>
+<ul>
+<li> <a href="#fs-dev">Device filesystem 'fsdev'</a>
+<li> <a href="#fs-iec">IEEE 488 filesystem 'fsiec'</a>
+<li> <a href="#fs-ibm">FAT filesystem 'fsibm'</a>
+</ul>
+<li> <a href="#software">Available Software</a>
+<ul>
+<li> <a href="#sw-shell">The Shell 'sh'</a>
+<li> <a href="#sw-mon">The Monitor 'mon'</a>
+<li> <a href="#sw-basic">BASIC interpreter</a>
+</ul>
+<li> <a href="#hardware">CS/A65 Hardware</a>
+<ul>
+<li> <a href="#hw-cpu">CPU</a>
+<li> <a href="#hw-bus">Bus System</a>
+<li> <a href="#hw-io">I/O Addressing</a>
+<li> <a href="#hw-mmu">MMU Subsystem</a>
+<li> <a href="#hw-interfaces">Some Interfaces</a>
+</ul>
+<li> <a href="#porting">Porting to other platforms</a>
+<ul>
+<li> <a href="#pt-nommu">CS/A65 without MMU Subsystem</a>
+<li> <a href="#pt-c64">C64 port</a>
+<li> <a href="#pt-c128">Ideas for a C128 port</a>
+</ul>
+<li> <a href="#nextversion">Next Version?</a>
+<li> <a href="#bugs">Known bugs and possible improvements</a>
+</ul> </p> <p>
+<h2><a name="overview">Overview</a></h2>
+OS/A65 has been written from somewhere in 1989 or 1990 up to the end of 1992
+and is currently in version 1.35. It runs on a selfbuilt 6502 computer
+with (or without) a 74ls610 MMU to allow task paging. 
+</p><p>
+This system has been written for a special 6502 computer, as described
+below. But then the kernel is completly hardware independent,
+device drivers doing all the hardware interface stuff.
+A special MMU is used to allow task paging, which gives lots
+of interesting features. A version for computers without MMU
+is available, though. In this version the different tasks
+have to be cooperative, in that different zeropage/RAM addresses
+have to be used.
+</p><p>
+All tables, like environment tables, or streams etc are static, i.e.
+their sizes are fixed at compile time. Otherwise a very sophisticated
+memory allocation/free handler for kernel memory would have been necessary.
+This would have used much of the CPU power and of the system RAM for 
+administrative needs only. I didn't want this.
+</p><p>
+If an IRQ occurs, the current process is marked interrupted and
+the next runnable task is being started, thus providing preemptive
+multitasking. A simlpe round robin scheduler is being used.
+No threads are available, as the CPU needs to have its stack
+in $01xx in memory. The non-MMU version is a kind of threaded
+system, as the memory is the same for all tasks, but the stack
+at $01xx being divided into several parts for the different tasks.
+</p><p>
+The MMU maps memory pages of 4k size. The kernel is within the uppermost
+4k, to include the 6502 Reset, IRQ and NMI vectors. I/O ports are 
+mapped to $e800 to $efff. The rest of the memory can be mapped from 
+the maximum total available memory of 1 MByte in 4k Blocks.
+Each task has its own memory environment, i.e. has its own view of the
+memory. It communicates with the system only by the means of kernel
+calls. Therefore the kernel provides a message-sending interface, as well
+as simple signals and semaphores. 
+</p><p>
+Data transfer is done via 128 byte sized fifos, called streams. The 
+stream management as well as the memory manager are within the kernel,
+although it wouldn't be necessary. For performance reasons the filesystem
+manager is in the kernel as well. It dispatches the messages sent to
+the filesystem to registered filesystem tasks.
+</p><p>
+The system structure looks like the following diagram.
+<pre>
+
+    ---------- --------- --------- ------ -------
+    |  fsdev | | fsiec | | fsibm | | sh | | mon | tasks...
+    ---------- --------- --------- ------ -------
+    ---------------------------- -------------- ----- ---------- --------
+    |          |               | |    fsm     | |   | |        | |      |
+    |          |      env      | -------------- |   | |        | |      |
+    |          |               ------------------   | | stream | | mem  |
+    |          |                                    | |        | |      |
+    |          -------------------------------------- |        | |      |
+    |             devices                           | |        | |      |
+    ------------------------------------------------- ---------- --------
+    --------- ------- ----------- ---------- 
+    | video | | par | | spooler | | serial | devices...
+    --------- ------- ----------- ---------- 
+
+</pre>
+</p> <p>
+The CS/A hardware consists of several boards, one for the CPU and MMU, 
+one for the ROM, 32k RAM and
+some basic I/O hardware. A video board with 64k RAM gives PAL 
+(european video standard, as opposed to NTSC) b/w video output. A high 
+resolution mode is available. There is a standard PC floppy drive 
+interface, two serial interfaces (unfortunately without fifo), a 
+parallel printer output, a keyboard interface, and a parallel IEEE 488
+interface. A serial - Commodore compatible - IEC bus interface is 
+available as well.
+Most interfaces, i.e. chip addresses and I/O connections are compatible
+to the old Commodore CBM 3032 computer. Some things have been changed
+to avoid connections between different boards, though (A 3032 emulator
+is working).
+And of course new interfaces have been added, e.g. an infrared LED to
+control audio or other equipment by infrared commands.
+A special interface card and cable allows to replace a 6502 in an existing
+computer and make its 64k memory part of the CS/A memory.
+</p>
+
+<p> <h2><a name="kernel">Kernel</a></h2> 
+The size of the kernel is 4 kByte and it is located at $f000 in 
+CPU address space. Kernel entry takes place with an IRQ, an NMI
+or via kernel call. These calls take place via a jumptable
+located at $f000, the beginning of the kernel.
+</p><p>
+<h3><a name="kn-gates">Kernel entry/exit</a></h3>
+It is possible to get into the kernel through an CPU interrupt or a 
+direct kernel call. After an IRQ the CPU registers are saved on the 
+stack and the kernel is entered via a special routine 'memsys'.
+This transparent (i.e. no registers except stack pointer are changed) 
+routine switches from Task environment to system memory environment.
+Each kernel call has, as one of the first instructions, a call to this
+routine to enter kernel address space. A similar routine, 'memtask',
+is called at kernel exit to enter task memory space.
+</p><p>
+<h3><a name="kn-env">Task Handling</a></h3>
+A task can be described by the memory map it is using and the CPU registers.
+Interrupting a task and saving this information allows to restart the task
+later. Here, in addition to this, a task has some additional properties.
+The mapping of the STD* streams is saved in the environment table as well
+as an optional task interrupt routine (if enabled at compile time).
+The task status shows if a task is blocked, interrupted, runnable
+or has executed a BRK opcode (which stops the task).
+No resource bookkeeping is done. A task has to release all resources
+it has allocated by itself, except for the STD* streams. 
+</p><p>
+GETENV allocates a new environment struct in the kernel (which
+can be freed with FREENV). With SETBLK the MMU mapping of
+bus address space to CPU address space for an environment can be
+manipulated. READ and WRITE allow other tasks to manipulate the 
+contents of another environments memory.
+</p><p>
+With FORK an environment then becomes a task, i.e.
+starts to live. TERM and KILL allow the task itself or another task
+to remove the task and free the environment struct. WTERM waits until
+a task has terminated. TRESET resets the PC of a (running) task to 
+another address (really dirty trick...).
+</p><p>
+GETINFO gives an overview of how many tasks are in use and what is 
+their status. At the moment a maximum of 16 tasks (with MMU) is
+possible.
+</p><p>
+<h3><a name="kn-devices">Device Management</a></h3>
+Devices are a different kind of object. They have their memory
+mapping as well, it just simply consists of one memory page.
+Then devices are not really running tasks but they are 
+waiting for a message, that is passed through the DEVCMD system call.
+The DEVCMD call registeres new devices and provides an interface to
+the devices. When calling a device, the device memory mapping is 
+established and the device entry point is called as a subroutine.
+After the return the control goes back to the calling task.
+The DEVCMD interface is even reentrant: the video device allows 
+interrupts to occur during device execution so that, for example,
+serial devices can be served without loosing characters (Of course
+the video device itself has a mutex construct builtin to avoid 
+confusion).
+</p><p>
+<h3><a name="kn-mem">Memory Management</a></h3>
+The memory management routines are independent from all other 
+routines. For performance reasons they are in the kernel and not
+put into a separate task. At startup no memory is available.
+The kernel then tests the memory, gets its size and calls ENMEM 
+to register usable RAM to the memory handler. The video 
+driver does the same at startup when adding the video RAM to the
+system. GETMEM can then be used to get a free block of RAM.
+GETBLK tries to allocate a specific memory block where, for example,
+some special hardware like the video buffer is mapped in.
+FREMEM releases an allocated memory block. According to the system
+hardware a set of 256 memory blocks can be handled, which make up
+1 MByte of memory. The memory routines can not be called from within 
+an interrupt.
+</p><p>
+<h3><a name="kn-stream">Stream Management</a></h3>
+Streams, as this word is used here, are 128 byte FIFO buffers to allow
+easy data transfer. The stream routines can be called from within an 
+interrupt. Each stream counts how many tasks are writing and reading 
+from it. If both counters are zero, the stream is free. If only one is
+empty, special return codes are generated to indicate the situation.
+At a fork, for example, the number of writing tasks is incremented for
+STDOUT and STDERR, while the number of reading tasks is incremented
+for STDIN. After a task has exited, the STD* counters are decremented.
+A filesystem listening on the tasks STDOUT stream then
+gets the return code E_EOF, because no task is writing on the stream
+anymore.
+STD* streams are negative stream numbers and are the same
+for all tasks. They are mapped to the real stream numbers that are being
+kept in the environment table for each task. All other stream numbers are 
+global and there is only a limited set of stream, as they are 
+statically allocated.
+</p><p>
+<h3><a name="kn-messages">Messages</a></h3>
+The message interface provides another easy means of interprocess 
+communication. Messages are exchanged using the rendez-vous technique,
+i.e. both involved tasks have to be in the SEND respectively RECEIVE
+routine. The SEND routine always blocks until the given message is
+taken over by the receiving task. RECEIVE either waits for a 
+message or returns with E_NOTX if no message has been found. 
+The message is then copied from the senders message buffer (at $02xx)
+to the receivers message buffer (at $02xx). The return values are set
+and both tasks are marked runnable. 
+If a RECEIVE blocks and a SEND takes place, both tasks are marked
+waiting at first, but the scheduler detects that and lets them
+exchange the messages.
+While RECEIVE gets messages from 
+any task, XRECEIVE allows to receive messages from a certain task 
+only.
+</p><p>
+Negative task numbers are used for special purposes. Certain system
+calls, that need more parameter than fit into the CPU registers
+can be called not only via jumptable but also via the SEND interface.
+For this, the -1 ($ff) is used for system calls. -2 ($fe) is
+used for the file system manager. -3 to -12 ($fd-$f4) can be 
+mapped to any other task by the TDUP system call. -3 is reserved 
+for an error exception handler and -4 for a timer task. Messages
+to these task numbers are internally redirected to the registered task. 
+</p><p>
+<h3><a name="kn-sem">Semaphores</a></h3>
+As the 6502 CPU has no idea about atomic operations, semaphores have to
+be provided by the system to allow mutex constructs 
+(Well, there are atomic instructions, like INC or the shift opcodes. But
+then there is - in not-CMOS versions - no test-and-set). Semaphores 
+can be allocated using GETSEM
+and released with FRESEM. Then with a PSEM operation on a certain 
+semaphore a task can enter a critical region of the program. All other
+tasks block when they try to do the same PSEM operation. Only after
+a VSEM on the semaphore another task waiting in a PSEM is revived 
+and can enter the critical region.
+Negative semaphore numbers cannot be allocated but can be used as some kind
+of system semaphores. What they mean has yet to be defined, though.
+</p><p>
+<h3><a name="kn-signals">Signals</a></h3>
+Signal handling consists of a single system call. With the carry flag 
+cleared, the calling task is blocked until a specified signal is received.
+With the carry flag set, a signal is sent. Only listening tasks receive
+the signal.
+</p><p>
+<h3><a name="kn-fsm">Filesystem Manager</a></h3>
+Disks are
+administered as drives, as a virtual filesystem with mounts etc
+would have been to much for this system. 
+The filesystem manager should actually be another task and is in the 
+kernel only for performance and resource limitation reasons. 
+The TDUP interface would provide an easy way to register a filesystem manager,
+if it were an extra task.
+But then the used filesystem manager just redirects the send message
+'on the fly'. An extra task would have to receive the message, 
+redirect it and send it to the filesystem task - blocking until
+the message is taken over!
+</p><p>
+When a filesystem task, e.g. for IBM PC disks, is started, it registers
+itself with the filesystem manager by sending an appropriate message
+to task -2 ($fe). The filesystem then knows about how many drives are
+supported by the filesystem and adds them to its list. A request to, e.g.
+open a file is sent to the filesystem manager. From the drive number
+the file system manager knows to which task to redirect the message.
+It also remaps the drive number to the ones used in the filesystem
+task.
+</p><p>
+Once a read-only or write-only file is opened, all communication takes
+place via streams. Another interface, using read and write messages
+is planned, but has not yet been implemented. Some filesystems (like 
+fsiec for Commodore floppy drives) wouldn't even support it.
+</p><p>
+<h2><a name="stdlib">Standard Library</a></h2>
+<em>The standard library of OS/A65 v1 has been replaced by the
+<a href="lib6502.html">lib6502</a>.</em><p>
+The so called standard library is a set of 
+subroutines that tasks may
+map into their memory or not. The library is below the 
+I/O area, at $e800. Directly below $e800 the jumptable for the
+library is located. All routines run in task space, and have no
+connection to the kernel, except for calling normal system calls. 
+</p><p>
+<h2><a name="filesystems">Available Filesystems</a></h2>
+All filesystem tasks use a common <a href="filesystems.html">Filesystem
+Interface</a> to communicate with other tasks. The SEND/RECEIVE
+calls are used to open files, while the Streams are used to transfer the
+data. The filesystem manager redirects the SENDs to the right
+filesystem tasks automatically.
+<h3><a name="fs-dev">Device Filesystem 'fsdev'</a></h3>
+The device filesystem provides an easy interface to devices, in allowing
+them to be used as files. A request to open the device, for example, 
+is served by calling the appropriate DEVCMD commands.
+</p><p>
+fsdev also provides an easy interface to the ROM structure. The 
+programs stored in the system can be started from there. They cannot
+be read, as only a header is being provided. This header, when used
+to start the program, remaps the ROM into the task memory. This way
+one need not move all the program through the stream interface.
+</p><p>
+<h3><a name="fs-iec">IEEE 488 Filesystem 'fsiec'</a></h3>
+This filesystem can be used in two directions. First it provides an
+interface for CS/A to access Commodore disk drives on an IEEE 488
+interface. Reading directories as well as renaming and deleting files and
+formating and checking disks is supported.
+</p><p>
+The other way around with fsiec the CS/A computer can be used as a disk 
+drive for Commodore computers. The filesystem drives are mapped to the
+drives 0-? of a single drive unit on the IEEE 488 bus. In addition to the
+standard IEC floppy commands directory handling is supported. For 
+programs that only understand one drive, drives can be remapped with 
+assign.
+</p><p>
+<h3><a name="fs-ibm">FAT Filesystem 'fsibm'</a></h3>
+The FAT filesystem is used to control and handle PC-style formatted disks
+on standard PC disk drives on the CS/A floppy board. Several 
+3.5" and 5.25" formats are supported, up to 1.44 MByte 3.5" HD disks.
+As hardware a WD1770 floppy controler at address $e8e0 is used. A 6522 VIA
+at $e8f0 provides some additional control lines for drive select, motor on,
+etc.
+</p><p>
+For those who remember: I wrote the program 'bdos' for the german 64er
+magazin, which allowed the C128 to read and write PC disks. fsibm
+has not a byte of code from this project, instead it is completely
+rewritten. 
+</p><p>
+One flaw of this filesystem is that it assumes it has the floppy 
+controller for itself. So there is no way to share it, e.g. 
+with a disk monitor. The next revision should define a semaphore
+for this.
+</p><p>
+<h2><a name="software">Available Software</a></h2>
+<h3><a name="sw-shell">The Shell 'sh'</a></h3>
+The <a href="shell.html">shell</a> is a command line interpreter that
+provides an easy to use interface to the system. A scripting language is
+not available, though.  For external commands and some internal commands
+like DIR and more I/O redirection is possible. I.e. that the STD*
+streams can be redirected to a file or even piped to other programs.
+</p><p>
+<h3><a name="sw-mon">The Monitor 'mon'</a></h3>
+<a href="mon.html">'mon'</a> is a full featured 6502 assembly and
+machine language monitor.  Among the usual standard commands other
+features like, for example, relocating 6502 in a certain area or
+searching for opcodes with specified addressing modes is possible.
+</p><p>
+<h3><a name="sw-basic">BASIC interpreter</a></h3>
+The <a href="basic.html">BASIC interpreter</a> is an extended Commodore
+Basic V2 interpreter as found in the C64. In fact it is de-assembled
+from the C64 and patched to make it work on CS/A. In addition, some
+commands have been changed and new commands have been added, amongst
+them the Commodore Basic V4 commands.  In contrast to the C64 basic
+interpreter, it runs in multitasking and you can quit ;-)
+</p><p>
+<h2><a name="hardware">CS/A65 Hardware</a></h2>
+<h3><a name="hw-cpu">CPU</a></h3>
+The used CPU is a quite old one: the MOS 6502 or one of its clones,
+like the Rockwell R65C02, for example. This 8 bit CPU has been designed
+in the early 70s (?) but is still in use. The Rockwell modem chipset,
+for example, is based on a R65C02 core. The CPU has one general purpose
+8 bit register, the accumulator. Two 8 bit index registers, x and y, help with 
+addressing modes. The PC is 16 bit wide, as is the address bus to the 
+outside of the chip. The stack pointer is only 8 bit, thus confining
+the stack to the area $01xx in memory. The so called zeropage ($00xx)
+is used with special addressing modes to allow smaller code and
+faster execution times by leaving out the address high byte.
+An 8 bit status register completes the register set.
+</p><p>
+The hardware interface is quite simple. In fact it is compatible to the
+motorola 6800 series chips. Commodore lost a lawsuit started by Motorola 
+where commodore
+was forbidden to use the number 6500 (or was it 6501) and the same
+pinout as the 6800 chip, thus making it a plug in replacement for the
+Motorola chip. But then they could use the hardware interface, 
+though. Which means that one can simply use any 68xx interface chip
+with a 6502 and vice versa.
+</p><p>
+Phi2 is the CPU clock output. During Phi2 high all address lines and
+the read/write line are valid. Data is given on the data bus for write 
+somewhere in the middle of Phi2 high and it stays valid until the 
+Phi2 high-low transition. During read the data lines are latched
+at the same transition. The CPU always reads some memory addresses,
+even if its really doing something else. 
+</p><p>
+/RESET, /NMI and /IRQ are the most important input lines. They are 
+low active and the I/O chips have open collector outputs so that
+they can be wire-or'd together.
+</p><p>
+<h3><a name="hw-bus">Bus system</a></h3>
+The hardware consists of several boards, connected by a 64 pin 
+bus interface (DIN 41612, rows a+c). On the bus are 20 address
+lines and 8 data lines. /NMI, /IRQ, /RESET, /SO, RDY, SYNC and R/W
+are the usual (buffered) 6502 control lines. Phi0, Phi1 and Phi2
+are on the bus as well as a 2Phi2, which is a frequency doubled 
+phi2. Each low-high transition on 2Phi2 gives a
+transition on Phi2. This can, for example, directly be connected 
+to /RAS of dynamic RAMs.
+</p><p>
+<h3><a name="hw-io">I/O System</a></h3>
+The CPU boards detects any access to a 4 or 2 kByte sized Area
+from $e000 or $e800 to $efff and automatically selects the bus
+line /IOSEL, and /MEMSEL otherwise. This way a simple 8 bit 
+compare with, for example, a single 74688 with the address 
+lines A4 to A11 selects a 16 byte I/O window for any interface
+chip.
+/IOINH(ibit) disables this feature, but therefore the I/O 
+memory has to be detected from normal memory access
+(via /MEMSEL) and /EXTIO be activated therefore from an 
+external circuit.
+(Well, the next revision should see /IOSEL as an open collector
+output...)
+</p><p>
+All interface circuits, even including the MMU on the CPU 
+board, are connected to the bus lines. The CPU
+can be cut off from the bus with /BE, thus allowing other
+CPUs or bus masters to take the bus and even access the MMU.
+The CPU has to be shutdown with
+RDY for this, though.
+</p><p>
+<h3><a name="hw-mmu">MMU subsystem</a></h3>
+The 74ls610 (used to be on the COCOM list, haha...) is 
+a set of 16 12 bit registers, where only 8 bit are used 
+here. During Phi2 low the CPU address lines A12 to A15
+are used to select the appropriate register and latch its
+contents to the output address lines A12-A19. Unfortunately
+this chip is quite slow (I'd say that a hand-constructed thing
+would be much faster...) so that for 2 MHz CPU clock
+a 4 MHz (CMOS) CPU has to be used.
+During Phi2 high the I/O access 
+to read and write the registers from the bus takes place.
+At RESET the MMU is set to 'through' mode, i.e. the 
+CPU address lines A12 to A15 are passed through and 
+A16 to A19 are left zero, to allow a defined RESET 
+condition. The first I/O write on the MMU registers 
+then enables it.
+Then the CPU memory is divided into 16 4 kByte blocks, that
+can each be mapped from one of the 256 4 kByte Blocks in the
+1 MByte bus address space by setting the MMU registers.
+</p>
+<p>
+<h3><a name="hw-interfaces">I/O boards</a></h3>
+The video board has 64 kByte dynamic RAM that is used as
+video and CPU memory and a 6545/6845 video CRT controller. 
+The memory access is twice as fast as the CPU access, so that
+during Phi2 low the video readout is done and at Phi2 high
+the usual CPU access takes place. The lowest address bits
+are connected to the row, so that the video access 
+automatically refreshes the RAM. With 1 MHz CPU clock 
+40 columns are displayed, with 2 Mhz 80 columns can 
+be seen. The CRT is located at $e880 in I/O space, and 
+a write only control port at $e888. This port gives the
+missing address lines A14 and A15 for the CRT, 2 bits
+to select the charset (located in an EPROM on the board
+that can not be read by the CPU) and 2 bits to invert 
+the HSYNC and VSYNC signals if necessary. 
+The last used bit maps the CRT row select lines
+RA0 and RA1 (that normally select the character row 
+in the charset)
+to the RAM/CPU address lines A12 and A13. This way -
+and with a 1 to 1 charset - some high
+resolution mode with 640x200 pixel is possible, with 
+a rather strange memory map, though. 
+This is necessary due to the 127 row limit in the CRT.
+</p><p>
+An IEEE 488 board with a 6821 PIA at $e82x and a 6522 VIA
+at $e84x makes up a mostly Commodore PET 3032 compatible
+IEEE 488 interface. The PIA is used for the data transfer,
+while the VIA port A is used for the control lines. 
+VIA port B controls a Commodore serial IEC bus interface.
+Both interfaces can be used as master or slave, i.e.
+the have the circuitry to set NRFD/NDAC on the IEEE 488
+and the DATA (?) line on the serial bus, if ATN on the bus
+is set. So the master can see that there is a device on
+the bus, even if it isn't ready to serve the request. 
+VIA CA2 can be externally connected to the 
+video card to allow PET compatible switching between
+upper/lowercase and uppercase/graphics charset.
+VIA CB2  drives, PET compatible of course, a piezo beeper ;-)
+</p><p>
+At $e810-$e817 is, as in a PET, a 6821 PIA to handle the
+keyboard, while on the same board, at $e818-$e81f, a
+6551 ACIA (which is not in a PET ;-) to handle a serial 
+interface is located.
+</p><p>
+The same ACIA is also located on the BIOS board, that also contains
+32k ROM and 32k RAM that make up the lowest 64 kByte of the
+Megabyte bus address space. This BIOS card together with 
+the CPU makes up a complete computer. The ACIA is at $efe8-$efef,
+while at $efe0 a control port is located. 
+One bit allows the detection of an IRQ (e.g. to stop the irq
+routine if all interrupts are served), two others are used
+to control and sense a 50 Hz (line frequency in Europe, which
+is put on the bus by the power supply) interrupt.
+Two other bits control the /IOINH line and allow the I/O address
+space to be located in $0e000-$0effff in bus (!) address space,
+so that it can be mapped anywhere in CPU address space.
+</p><p>
+On the floppy board a WD 1770 (like in the Commodore
+VC1571) chip at $e8fx can control PC compatible disk drives. 
+A 6522 VIA at $e8fx supplies the timers and some additional
+I/O lines and also gives a simple 8 bit parallel interface
+(for e.g. printers).
+</p><p>
+A special interface board emulates a 6502 in another computer
+(restricted to 1 MHz or below). A 40 line cable is used
+to connect the socket for the 6502, e.g. in a VC1541, with the
+board. The 64 kByte address space of this VC1541 is then 
+mapped into the bus address space $02000-$02ffff. So you can,
+for example, test new ROMs by putting the new ROM image in
+the CS/A RAM and then remapping it for the old ROMs.
+</p><p>
+The C64 uses 8 select lines to select the keyboard rows.
+The return value is then read in by 8 column port lines.
+This simply is a RAM readout scheme - so that a 
+RAM can simulate a keyboard for the C64. 
+The keyboard simulator board provides such a RAM. It can 
+be written or read by the CPU during Phi2 high, and the
+row select address from the C64 is read at Phi2 low and
+latched. So, for example, the C64 can be controlled remotely.
+</p> <p>
+<h2><a name="porting">Porting to other platforms</a></h2>
+Currently two ports have been done. One is a port to the CS/A65 without
+MMU, to use it in embedded applications I had in mind. The other one
+is the C64 port.
+</p> <p>
+<h3><a name="pt-nommu">NOMMU-Port</a></h3>
+The port to a system without MMU is one of the more difficult. 
+The problem is, that global variables cannot be mapped to different
+physical memory locations for different tasks. So this has to be
+avoided. Unfortunately there are global variables used to communicate
+with the kernel nearly everywhere. So these variables have to be 
+protected by semaphores. Another thing is that a binary can normally
+only be invoced once. All variables would otherwise be the same for all
+invocations and running different tasks on them would normally 
+give a real mess. More on this issue can be found in
+<a href="nommu.html">nommu.html</a>.
+</p> <p>
+<h3><a name="pt-c64">C64-Port</a></h3>
+After porting it to a system without MMU, there was only a small step
+porting it to the C64. The first implementation used the Commodore
+parallel IEEE488 interface, as it's easier to program - and simulate
+in an emulator... But after all, it has the same deficiencies as any
+other system without MMU. More details on the actual implementation
+can be found in <a href="README.c64">README.c64</a>. <p>
+On the other hand, to be really useful without an MMU besides 
+embedded applications, some things are still missing. 
+A program relocator, for example, would make it much easier in that 
+the applications don't have to be assembled to a certain memory area.
+Instead they could be relocated to some free memory when being loaded.
+</p> <p>
+<h3><a name="pt-c128">What about a C128-Port?</a></h3>
+The C128, for example, would surely be a good candidate for a new
+version: It can map the zeropage and the stack anywhere in memory and
+can thus have different ones for each task. In addition to this, a
+relocator would have to be implemented, to be able to load programs to
+any address.  The (to be implemented new) memory manager then has to
+keep track of which memory is used for each program.  If one says that
+read/write memory (i.e. global variables, except zeropage) should only
+be dynamically allocated, one could even use shared read only binaries.
+I.e. several invocations would only use one copy of the binary while
+running. Global variables used would be global to all invocations,
+giving some kind of task shared memory.  A flag in the file header could
+indicate the relocator and/or shared binary mode.
+</p> <p>
+<h2><a name="nextversion">What about the next version?</a></h2>
+Well, a next version is not planned currently. But then the whole
+stuff is under the GNU public license and could be used by anyone.
+</p> <p>
+The new binary format with relocation would surely justify a jump
+to version 1.4. This would make it much more usable for the C64. But 
+for this not only the relocator has to be written, but also the assembler
+has to be changed to write out a relocatable file format.
+This would also imply an extended memory manager, that keeps track
+which memory is used by which task. And it would also use a smaller
+block size than 4kByte.
+</p> <p>
+<h2><a name="bugs">Are there known bugs?</a></h2>
+Well, there used to be some very few spurious BRK executions in a task.
+That's why I reduced the maximum number of tasks from 6 to 5, increasing
+the individual stack size to 40. The previously smaller stack size of
+32 seemed to cause this problem, which seems to be gone now. The problem 
+is that a normal 
+interrupt alone needs 10 bytes on each tasks stack - one can reduce 
+that, but with some effort only.<br>
+When pressing the return key, sometimes the invers cursor stays on the
+screen, causing the program to give a syntax error or whatsoever 
+when it reads a $a0 from its input stream. <br>
+</p> <p>
+But other than that, none. But I haven't tested the C64 version
+as much as the one for my selfbuilt computer. So there might still
+be bugs in the serial bus handling or in the stuff special to computers
+without MMU.
+</p> <p>
+Ok, when starting up the ROM, the initial tasks are set up and then the
+scheduler is started. This might cause problems when e.g. a filesystem
+is not fast enough detecting its drives during the first scheduled
+timeslice. Another filesystem might come in between so that the drive
+numbers could be assigned in a different order. 
+</p> <p>
+Possible improvements are:
+<ul>
+<li> A malloc() equivalent, that could be located in the STDIO lib.
+At least some kind of sbrk() call we already have in the kernel.
+<li> A relocator to be able to load binaries to different memory locations,
+esp. for the versions without an MMU.
+<li> There currently is no way to handle shared memory (in the MMU version) 
+in a generalized manner. I think of somethink like a Unix (Linux) mmap()
+equivalent.
+<li> The data transfer via streams is quite slow. Another interface
+to handle block transfer would surely improve things. Something like
+'copy memory from task A, address x length l to task B, address y'.
+<li> Starting a new task from within the shell is way too slow. Reading
+a file and writing it to another environments memory with the WRITE
+system function takes its time. Instead the shell should just load a small
+loader program into the new environment. This then reads the program 
+from the stream and executes it.
+</ul>
+</body>
+</html>

@@ -1,0 +1,15 @@
+
+******** ibmon ******** 17.7.92, A. Fachat
+
+Dieser Diskettenmonitor bedient den Shugart-Bus ber den WD1770. Er liest 
+und schreibt Sektoren, die ber Laufwerk, Seite, Track und  Sektor 
+adressiert wird. Die Befehle O,F,C,M,B,I,X und T sind aus der Shell 
+bernommen. Folgende Befehle sind fr die Bedienung der Disketten da:
+r drv side track sector (adresse)  : einzelnen Sektor lesen
+w drv side track sector (adresse)  : einzelnen Sektor schreiben
+l drv s0 s1 t0 t1 sc0 sc1 (adr)    : mehrere Sektoren lesen
+s drv s0 s1 t0 t1 sc0 sc1 (adr)    : mehrere Sektoren schreiben
+          Bei l und s wird eine innere Schleife von [sc0,sc1[, darber 
+     eine Schleife von [t0,t1[ und darber eine von [s0,s1[ durchlaufen.
+n drv format                       : Formatiert Diskette im Format 'format'
+

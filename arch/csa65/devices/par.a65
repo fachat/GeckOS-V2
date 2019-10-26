@@ -1,0 +1,144 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#define   WD_VIA    $e8f0
+
+          .(
+          .word cntrend
+          jmp centrprg
+          .asc "par",0
+
+	.data
+instr     .byt 0
+status    .byt 0
+	.text
+
+centrprg  cmp #DC_RES
+          bne sp1
+          
+          ldx #0
+          stx status
+          dex
+          stx WD_VIA+VIA_DDRB
+          cpx WD_VIA+VIA_DDRB
+          beq ct1
+          inc status
+          sec
+          rts
+ct1       lda WD_VIA+VIA_PCR
+          and #%00001111      ;port b
+          ora #%11100000      ;cb2 hi out, cb1 neg. edge
+          sta WD_VIA+VIA_PCR
+          lda WD_VIA+VIA_ACR
+          and #%11100001      ;shift off, pb latch disabled
+          sta WD_VIA+VIA_ACR
+          lda #%00011100      ;cb2, shift, cb1 irq off
+          sta WD_VIA+VIA_IFR
+          sta WD_VIA+VIA_IER
+          clc
+          rts
+          
+sp1       pha
+          lda status
+          lsr
+          pla
+          bcs nlnotimp
+;          and #1
+;          beq ct2
+;          pla
+;          lda #E_NOTIMP
+;          sec
+;          rts
+ct2       ;pla
+          cmp #DC_IRQ
+          bne sp2
+
+          lda status
+          and #DC_SW_TX
+          beq spe
+          
+          lda WD_VIA+VIA_IFR
+          and #%00010000
+          beq spe
+
+          ldx instr
+          jsr GETC
+          bcc spil
+          cmp #E_EOF
+          bne spe
+	jsr txoff
+	bcc spe		; always
+
+spil      sta WD_VIA+VIA_DRB
+          lda WD_VIA+VIA_PCR
+          and #%11011111      ;ora #%11100000
+          sta WD_VIA+VIA_PCR
+          ora #%11100000      ;and #%11011111
+          sta WD_VIA+VIA_PCR
+spe       clc
+	lda #E_NOIRQ		; no irq source has been removed
+          rts
+
+sp2       cmp #DC_RX_OFF
+          beq nlnotimp
+          cmp #DC_TX_OFF
+          bne sp3
+txoff     ldx instr
+          lda #SC_NUL
+          jsr STRCMD
+          lda status
+          and #255-DC_SW_TX
+          sta status
+          jmp ok
+
+sp3       cmp #DC_RX_ON
+          beq nlnotimp
+          cmp #DC_TX_ON
+          bne sp5
+          lda #DC_SW_TX
+          ora status
+          sta status
+
+ok        lda #0
+          .byt $2c
+nlnotimp  lda #E_NOTIMP
+          .byt $2c
+nldevon   lda #E_DON
+          cmp #1
+          rts
+
+sp5       cmp #DC_GS
+          bne sp6        ;nlnotimp
+          lda status
+          and #DC_SW_TX
+          bne nldevon
+          sty instr
+          beq ok
+
+sp6       cmp #DC_EXIT
+          bne nlnotimp
+          inc status
+          bne ok
+cntrend   .)
+

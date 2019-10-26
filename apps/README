@@ -1,0 +1,8 @@
+
+The "apps" directory contains the source for stdlib programs, i.e.
+programs that do _not_ use the kernel and do _not_ use hardware specifics.
+
+lsh:	lib6502 shell interpreter
+
+file:	lib6502 file utilities, like rmdir, mkdir, ls, rm
+

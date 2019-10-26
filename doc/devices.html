@@ -1,0 +1,81 @@
+<html><head>
+<title> OS/A65 Device Drivers </title>
+</head><body>
+<p><h1 align=center> OS/A65 Device Drivers </h1></p>
+<p> <h2 align=center> (c) 1989-96 Andre Fachat </h2></p>
+<hr><p>
+
+This file gives a description of the so far implemented device drivers
+for OS/A65.
+
+<h4>video Device</h4>
+The video device incorporates not only one but four devices, video1-video4
+(with 2MHz, only 2 devices are working).
+As hardware it needs the video card and the keyboard card with a CBM 3032
+keyboard attached to it. If available,
+the piezo beeper on the IEEE488 card is used to generate bell signals.
+<br> The video card has one video port only, so the video is shared
+between the four possible video devices. The "@" key is used to switch between
+the different terminals. As there is no way to send some kind of ioctl 
+message along a stream, this key has some more functions:
+with Control (RVS/OFF key on CBM 3032 keyboard), the key closes the stream 
+from the sender side, thus signaling an EOF. With control and shift,
+the the device is switched between the two modes.
+<ol>
+<li> <strong>indirect mode</strong>: keyboard events are printed on the 
+screen only, not sent to the stream. If a Return occurs, the actual
+line is sent to the stream. This is default.
+<li> <strong>direct mode</strong>: all keyboard events are directly
+passed to the stream.
+</ol>
+Supported terminal control codes are Bell, Backspace, Carriage Return,
+Line Feed and Form Feed. 
+<h4>par Device</h4>
+This device handles the (simple) centronics port on the shugart bus 
+board.
+<h4>nuldev Device</h4>
+This device reads a given stream until end, i.e. EOF and then closes
+the stream. Like /dev/null for writing. You cannot read from it. Only
+a certain number of streams can be handled before an error is returned
+on open.
+<h4>spooler Device</h4>
+This is a kind of serializer. You can copy one file after the other
+to this device, even if the first files are not yet through. When copying 
+the output of the spooler to another file, e.g. the spooler 
+device, they appear in the same order as copied into and intact, i.e.
+the files are not mixed.
+<h4>ser Device</h4>
+Ser stands for serial device and that's what it's doing. It handles the
+two serial device ACIAs on the BIOS and on the keyboard board of the CS/A65
+computer. There are
+some watch outs, though. From the serial device, only RTS/CTS are handled.
+A low on an incoming /RTS stops sending. If the stream to write the data
+to is above the high water mark (3/4 fifo size), then /CTS is set low.
+After the stream going below the low water mark (1/4 fifo size), /CTS 
+is set high again.<br>
+With DC_SPEED, the baud rate of the device can be set:
+<pre>
+parameter (y)      speed (baud)
+-------------------------------
+ 1                   50
+ 2                   75
+ 3                  109.92
+ 4                  134.58
+ 5                  150
+ 6                  300
+ 7                  600
+ 8                 1200
+ 9                 1800
+ 10                2400
+ 11                3600
+ 12                4800
+ 13                7200
+ 14                9600
+ 15               19200
+</pre>
+With version 1.3.10 we now also have driver for an UART 16550A, with 16
+byte builtin FIFO (oa1ds3.a65). There also is a RS232 driver for the
+fast RS232 interface for the C64 by Daniel Dallmann, as 
+described on his homepage or in the comp.sys.cbm FAQ.
+</body>
+</html>

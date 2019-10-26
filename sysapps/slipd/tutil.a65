@@ -1,0 +1,724 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/*
+ * TCP utilities 
+ */
+
+	.(
+
+	.bss
+phdr	.dsb TPH_LEN
+	.text
+
+/* make IP header to TCP header */
+&&ip2tcp .(
+        lda #0
+        sta phdr+TH_PTCL-1
+        ldy #IPH_PROT
+        lda (pp),y
+        sta phdr+TH_PTCL
+        ldy #IPH_SRC
+c1      lda (pp),y
+        sta phdr-IPH_SRC,y	/* TH_SRCIP == 0 */
+        iny
+        cpy #IPH_TRG+4
+        bne c1
+        ldy #TH_TCPLEN
+        lda pdl+1
+        sta phdr,y
+        lda pdl
+        sta phdr+1,y
+
+        lda pd
+        sec
+        sbc #TPH_LEN
+        sta pd
+        lda pd+1
+        sbc #0
+        sta pd+1
+
+        lda pdl
+        clc
+        adc #TPH_LEN
+        sta pdl
+        lda pdl+1
+        adc #0
+        sta pdl+1
+
+        ldy #0
+c2      lda phdr,y
+        sta (pd),y
+        iny
+        cpy #TPH_LEN
+        bne c2
+#if 0
+lda ppl:ldy ppl+1:ldx #pp
+jsr printpacket2
+#endif
+	rts
+	.)
+
+/* make IP header from TCP pseudo header
+ * (i.e. copy the IP addresses to the right location and set protocol
+ * the rest is done in the IP layer */
+&&tcp2ip .(
+	lda phl
+	cmp #TCP_OFFSET
+	beq nomove
+move    DB("packet start mismatch!^m^j")
+.byt 2:lda pp
+#if 0
+        DB("ip=")
+        lda qp+1: jsr EHexout: lda qp: jsr EHexout
+        DB(", pd=")
+        lda pd+1: jsr EHexout: lda pd: jsr EHexout
+#endif
+        sec
+	rts
+nomove
+/*
+        lda ql
+        sec
+        sbc #<TPH_LEN
+        sta qlen
+        lda ql+1
+        sbc #>TPH_LEN
+        sta qlen+1
+*/
+#if 0
+DB("nomove: qp=")
+lda pp+1:jsr EHexout: lda pp:jsr EHexout
+DB(", qlen=")
+lda ppl+1:jsr EHexout: lda ppl:jsr EHexout
+DB(", qd=")
+lda pd+1:jsr EHexout: lda pd:jsr EHexout
+DB(", ql=")
+lda pdl+1:jsr EHexout: lda pdl:jsr EHexout:jsr ECrlfout
+#endif
+        lda pd
+        clc
+        adc #4
+        sta p2
+        lda pd+1
+        adc #0
+        sta p2+1
+
+        ldy #TH_TRGIP+3
+l3      lda (pd),y
+        tax
+        lda (p2),y
+        sta (pd),y
+        txa
+        sta (p2),y
+        dey
+        cpy #<TH_SRCIP-1
+        bne l3
+
+        ldy #1          ; IP_PROT
+        lda #6
+        sta (pd),y
+	clc
+	rts
+	.)
+
+&findtcb .(
+        ldx #<-1
+next    inx
+        cpx #MAXCONN
+        bcc t1			; t1 -> next full search loop
+
+nextl   dex
+        bpl inuse		; inuse -> nextl listen search loop
+
+        DB("No Connection!^m^j")
+        sec
+	rts
+
+t1      jsr settcb
+        ldy #TCB_STATE
+        lda (tcbp),y
+        cmp #TCP_LISTEN+1
+        bcc next
+search
+        ldy #TH_SRCP            /* TCB_HDR must be 0! */
+tl      lda (pd),y
+        cmp (tcbp),y
+        bne next
+        iny
+        cpy #TH_TRGP+2
+        bcc tl
+
+        ldy #TH_SRCIP
+tm      lda (pd),y
+        cmp (tcbp),y
+        bne next
+        iny
+        cpy #TH_TRGIP+4
+        bcc tm
+ok	clc
+	rts
+	
+inuse   jsr settcb              /* TODO: make listen not occupy a full TCB */
+        ldy #TCB_STATE
+        lda (tcbp),y
+        cmp #TCP_LISTEN
+        bne nextl               /* full search */
+
+        ldy #TH_TRGP
+iu2     lda (pd),y
+        cmp (tcbp),y
+        bne nextl
+        iny
+        cpy #TH_TRGP+2
+        bcc iu2
+        ; ok, we found one. now copy IP addresses and remote port
+
+        ldy #TCB_SERVICE        /* check if multiple listens */
+        lda (tcbp),y
+        sta srv
+        iny
+        lda (tcbp),y
+        sta srv+1
+        ldy #SRV_FLAG
+        lda (srv),y
+        and #SFL_MULT
+        beq nodup
+                                /* yes, then dup tcb */
+        lda tcbp
+        sta srv
+        lda tcbp+1
+        sta srv+1
+        stx conn
+        jsr gettcb
+        bcc iu4
+        ldx conn
+        jmp nextl
+iu4
+        ldy #0
+iu3     lda (srv),y
+        sta (tcbp),y
+        iny
+        cpy #TCB_LEN
+        bcc iu3
+nodup
+        ldy #TH_SRCIP
+li1     lda (pd),y
+        sta (tcbp),y
+        iny
+        cpy #TH_TRGP+2
+        bcc li1
+        jmp ok
+	.)
+
+&checkseq .(		/* check sequence number */
+tmpu 	=phdr
+
+        ldy #TH_SEQ     /* we don't handle disordered packets - ignore them */
+seql    lda (pd),y
+        cmp (tcbp),y
+        bcc lesscheck
+        bne seqmm1
+next    iny
+        cpy #TH_SEQ+4
+        bcc seql
+        clc		/* pkt.seq == tcb.rcvnxt */
+        rts
+lesscheck
+        ldy #TH_SEQ+3
+        lda (pd),y
+        clc
+        adc dlen
+        sta tmpu+3
+        dey
+        lda (pd),y
+        adc dlen+1
+        sta tmpu+2
+        dey
+        lda (pd),y
+        adc #0
+        sta tmpu+1
+        dey
+        lda (pd),y
+        adc #0
+        sta tmpu
+
+        ldy #TCB_RCV_NXT
+seqt    lda tmpu-TCB_RCV_NXT,y
+        cmp (tcbp),y
+        bcc seqmm1
+        bne setdiscd
+        iny
+        cpy #TCB_RCV_NXT+4
+        bcc seqt
+        bcs setdiscd
+
+seqmm1  
+#ifdef DEBUGTCP
+	DB("Sequence mismatch^m^j")
+#endif
+        sec		/*  pkt.seq+dlen <= tcb.rcvnxt < pkt.seq */
+        rts
+
+setdiscd
+        ldx #4
+        ldy #TCB_RCV_NXT+3
+        sec
+s1      lda (tcbp),y
+        sbc (pd),y
+        sta tmpu-TCB_RCV_NXT,y
+        dey
+        dex
+        bne s1
+
+        lda tmpu
+        ora tmpu+1
+        bne seqmm1
+			/* discd = tcb.rcvnxt - pkt.seq */
+        lda tmpu+2
+        sta discd+1
+        lda tmpu+3
+        sta discd
+        clc
+        rts
+        .)
+
+	.)
+
+seql2ack .(			/* pkt.seq + dlen -> pkt.ack */
+        clc
+        ldy #TH_SEQ+3
+        lda (pd),y
+        adc dlen
+        ldy #TH_ACK+3
+        sta (pd),y
+        ldy #TH_SEQ+2
+        lda (pd),y
+        adc dlen+1
+        ldy #TH_ACK+2
+        sta (pd),y
+        ldy #TH_SEQ+1
+        lda (pd),y
+        adc #0
+        ldy #TH_ACK+1
+        sta (pd),y
+        ldy #TH_SEQ
+        lda (pd),y
+        adc #0
+        ldy #TH_ACK
+        sta (pd),y
+	rts
+	.)
+
+ack2seq	.(			/* pkt.ack -> pkt.seq */
+	ldy #TH_ACK
+        lda (pd),y
+        ldy #TH_SEQ
+        sta (pd),y
+        ldy #TH_ACK+1
+        lda (pd),y
+        ldy #TH_SEQ+1
+        sta (pd),y
+        ldy #TH_ACK+2
+        lda (pd),y
+        ldy #TH_SEQ+2
+        sta (pd),y
+        ldy #TH_ACK+3
+        lda (pd),y
+        ldy #TH_SEQ+3
+        sta (pd),y
+	rts
+	.)
+
+clrseq	.(			/* 0 -> pkt.seq */
+        lda #0
+        ldy #TH_SEQ
+l0      sta (pd),y
+        iny
+        cpy #TH_SEQ+4
+        bcc l0
+	rts
+	.)
+
+tcpxip	.(			/* pkt.srcip <-> pkt.trgip */
+        lda pd
+        clc
+        adc #TH_TRGIP - TH_SRCIP
+        sta p2
+        lda pd+1
+        adc #0
+        sta p2+1
+
+        ldy #TH_SRCIP
+l2      lda (pd),y
+        tax
+        lda (p2),y
+        sta (pd),y
+        txa
+        sta (p2),y
+        iny
+        cpy #TH_SRCIP+4
+        bcc l2
+	rts
+	.)
+
+tcpxp	.(
+        lda pd
+        clc
+        adc #TH_TRGP - TH_SRCP
+        sta p2
+        lda pd+1
+        adc #0
+        sta p2+1
+
+        ldy #TH_SRCP
+l1      lda (pd),y
+        tax
+        lda (p2),y
+        sta (pd),y
+        txa
+        sta (p2),y
+        iny
+        cpy #TH_SRCP+2
+        bcc l1
+	rts
+	.)
+
+shortpk	.(		/* shorten packet to minimum reply */
+        lda #$50		
+        ldy #TH_DOFFSET		/* data offset */
+        sta (pd),y
+        lsr
+        lsr
+        ldy #TH_TCPLEN+1	/* TCPLEN in byte */
+        sta (pd),y
+        clc
+        adc #TPH_LEN
+        sta pdl			/* plus pseudo header length is tcp len */
+        dey
+        lda #0
+        sta (pd),y
+        adc #0
+        sta pdl+1
+
+        lda pdl
+        clc
+        adc phl			/* plus pp->pd offset is packet length */
+        sta ppl
+        lda pdl+1
+        adc #0
+        sta ppl+1
+
+        tay
+        lda ppl
+        ldx pslot
+        jmp btrunc		/* and shorten */
+	.)
+
+preptcp	.(
+	ldy #TH_TCPLEN+1
+	lda pdl
+	sec
+	sbc #TPH_LEN
+	sta (pd),y
+	dey
+	lda pdl+1
+	sbc #0
+	sta (pd),y
+
+        ldy #TH_WINDOW
+        lda #>TCPWIN
+        sta (pd),y
+        iny
+        lda #<TCPWIN
+        sta (pd),y
+
+	ldy #TH_CHECK
+	jmp setdcheck
+	.)
+
+seqsyn	.(			/* ++pkt.seq -> tcb.rcvnxt */
+        ldy #TH_SEQ+3
+        clc
+        lda (pd),y
+        adc #1
+        sta (pd),y
+        sta (tcbp),y
+        dey 
+        lda (pd),y
+        adc #0
+        sta (pd),y
+        sta (tcbp),y
+        dey
+        lda (pd),y
+        adc #0
+        sta (pd),y
+        sta (tcbp),y
+        dey
+        lda (pd),y
+        adc #0
+        sta (pd),y
+        sta (tcbp),y
+        rts
+	.)
+
+iniseq .(			/* rand() -> tcb.sndnxt,tcb.snduna */
+        ldy #TCB_SND_NXT
+        lda $dc07
+        sta (tcbp),y
+        iny
+        lda $dc06
+        sta (tcbp),y
+        iny
+        lda $dd07
+        sta (tcbp),y
+        iny
+        lda $dd06
+        sta (tcbp),y
+
+        lda #4
+        clc
+        adc tcbp
+        sta p2
+        lda #0
+        adc tcbp+1
+        sta p2+1
+
+        ldy #TCB_SND_UNA
+l0      lda (p2),y
+        sta (tcbp),y
+        iny
+        cpy #TCB_SND_UNA+4
+        bcc l0
+        clc
+        rts
+	.)
+
+setseq  .(		/* tcp.sndnxt -> pkt.seq */
+        lda tcbp
+        clc
+        adc #8
+        sta p2
+        lda tcbp+1
+        adc #0
+        sta p2+1
+
+        ldy #TH_SEQ
+l5      lda (p2),y
+        sta (pd),y
+        iny
+        cpy #TH_SEQ+4
+        bcc l5
+        rts
+        .)
+
+setack  .(		/* tcb.rcvnxt -> pkt.ack */
+        lda pd
+        clc
+        adc #4
+        sta p2
+        lda pd+1
+        adc #0
+        sta p2+1
+
+        ldy #TCB_RCV_NXT
+l5      lda (tcbp),y
+        sta (p2),y
+        iny
+        cpy #TCB_RCV_NXT+4
+        bcc l5
+        rts
+        .)
+
+getuna	.(		/* pkt.ack -> tcb.snduna */
+        ldy #TH_ACK
+a1      lda (pd),y
+        sta (tcbp),y
+        iny
+        cpy #TH_ACK+4
+        bcc a1
+	rts
+	.)
+
+getseq  .(		/* pkt.seq -> tcb.rcvnxt */
+        ldy #TCB_RCV_NXT
+l0      lda (pd),y
+        sta (tcbp),y
+        iny
+        cpy #TCB_RCV_NXT+4
+        bcc l0
+	rts
+        .)
+
+&decseq .(		/* tcb.sndnxt-- */
+        ldx #3
+        ldy #TCB_SND_NXT+3
+        sec
+        lda (tcbp),y
+        sbc #1
+        sta (tcbp),y
+l0      dey
+        lda (tcbp),y
+        sbc #0
+        sta (tcbp),y
+        dex
+        bne l0
+        rts
+        .)
+
+        /* add a/x to tx_nxt */
+addtxnxt .(
+        ldy #TCB_SND_NXT+3
+        clc
+        adc (tcbp),y
+        sta (tcbp),y
+        dey
+        txa
+        adc (tcbp),y
+        sta (tcbp),y
+        dey
+        ldx #2
+l5      lda (tcbp),y
+        adc #0
+        sta (tcbp),y
+        dey
+        dex
+        bne l5
+        rts
+        .)
+
+        /* add a/x to rx_nxt */
+addrxnxt .(
+        ldy #TCB_RCV_NXT+3
+        clc
+        adc (tcbp),y
+        sta (tcbp),y
+        dey
+        txa
+        adc (tcbp),y
+        sta (tcbp),y
+        dey
+        ldx #2
+l5      lda (tcbp),y
+        adc #0
+        sta (tcbp),y
+        dey
+        dex
+        bne l5
+        rts
+        .)
+
+checkack .(     /* TODO: check for below ISS */
+        /* first check with SND_UNA - if less then ignore */
+        ldy #TH_ACK
+l1      lda (pd),y
+        cmp (tcbp),y
+        bcc badack0
+        bne l1a
+        iny
+        cpy #TH_ACK+4
+        bcc l1
+l1a
+        lda tcbp
+        clc
+        adc #4
+        sta p2
+        lda tcbp+1
+        adc #0
+        sta p2+1
+
+        /* now check with SND_NXT - if greater then error */
+        ldy #TH_ACK
+l2      lda (p2),y
+        cmp (pd),y
+        bcc badack1
+        bne okack1
+        iny
+        cpy #TH_ACK+4
+        bcc l2
+
+        /* now check for equality with SND_NXT */
+        ldy #TH_ACK+3
+l3      lda (p2),y
+        cmp (pd),y
+        bne okack1
+        dey
+        cpy #TH_ACK
+        bcs l3
+        lda #2          ; exactly SND_NXT
+        .byt $2c
+okack1  lda #1          ; not exactly SND_NXT
+        clc
+        rts
+badack0 lda #0          ; old acknowledge
+        .byt $2c
+badack1 lda #3          ; ack ahead
+        sec
+        rts
+        .)
+
+aheadiss .(     /* TODO: actually save ISS. this assumes we don't send data
+                   before we are in TCP_ESTAB! */
+        lda #4
+        clc
+        adc tcbp
+        sta p2
+        lda #0
+        adc tcbp+1
+        sta p2+1
+
+        ldy #TH_ACK
+l0      lda (pd),y
+        cmp (p2),y
+        bne bad
+        iny
+        cpy #TH_ACK+4
+        bcc l0
+        clc
+        rts
+bad     sec
+        rts
+        .)
+
+&&exports .(	/* exchange udp ports _before_ ip2tcp */
+	lda pd
+	clc
+	adc #2
+	sta p2
+	lda pd+1
+	adc #0
+	sta p2+1
+	ldy #0
+l0	lda (pd),y
+	tax
+	lda (p2),y
+	sta (pd),y
+	txa
+	sta (p2),y
+	iny
+	cpy #0+2
+	bcc l0
+	rts
+	.)
+

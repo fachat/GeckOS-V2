@@ -1,0 +1,842 @@
+
+/**************************************************************************
+ * 
+ * Loader for 6502 relocatable binary format
+ *
+ * The loader supports 16 bit o65 version 1 files without undefined 
+ * references. Also it doesn't like pagewise relocation and 65816 
+ * code, because there are different/additional relocation entries.
+ *
+ * The subroutine 'loader' is called with a file descriptor, that has a 
+ * meaning for the support routines, in the X register.
+ * The file must already be open. Also binit must have been called before.
+ * The loader doesn't close the file.
+ *
+ * Support routines are:
+ *
+ *   malloc	a/y = length of block needed -> a/y address of block
+ *
+ *   zalloc	a   = length of needed zeropage block. returns a=address
+ *   zfree	a   = address of block to free
+ *
+ *   fgetc	x   = file descriptor, returns read byte (c=0) or error (c=1)
+ *		      The error is passed through; fgetc blocks if no data
+ *		      available
+ *   fgetb	x   = filedescriptor, a/y = address of block descriptor,
+ *                    i.e. a word start address and a word length of block.
+ *                    returns (c=0) or error in accu (c=1).
+ *
+ **************************************************************************/
+
+/**************************************************************************
+ * Here is the real loader code
+ *
+ * we keep it simple and stupid...
+ * The loader allocated only one memory block for text, data and bss together
+ * For now there is no align (yet)
+ *
+ */
+
+#include "file_o65.def"
+
+#undef	DEBUG
+#undef	UDEBUG
+#undef	ADEBUG
+
+#ifdef DEBUG
+#define DBL(A)   .(:jmp ll2:ll1 .byt A,0:ll2 php:lda #<ll1:ldy #>ll1:jsr etxtout:plp:.):
+#else
+#define	DBL(A)
+#endif
+
+
+/*
+#define	E_NOMEM		<-40
+#define	E_FVERSION	<-41
+*/
+
+loader 	.(
+
+	.zero
+p1	.word 0
+p2	.word 0
+
+	.data
+tmp	.byt 0
+file	.byt 0
+amode	.byt 0		; align mode
+
+header	.dsb HDR_LEN
+
+memory	.word 0
+textm	.word 0		; memory block for everything
+textd	.word 0		; difference to assemble address
+datam	.word 0
+numud	.word 0		; number of undef'd references
+udlc	.byt 0
+datad	.word 0
+bssd	.word 0
+
+zeroa	.byt 0		; address of zeropage block
+zerod	.word 0
+
+reladdr	.word 0,0	; we have two undef'd labels
+
+	.text
+
+	lda #LSEM_LOAD
+	jsr llock
+	
+	jsr l2x
+
+	php
+	pha
+	lda #LSEM_LOAD
+	jsr lunlock
+	pla
+	plp
+	rts
+
+	;*********************************
+l2x
+	stx file
+	sec
+	jsr fgetc
+	bcs end
+	sta tmp
+	sec
+	jsr fgetc
+	bcs end
+	tay
+	lda tmp
+	cpy #0
+	bne rt
+	cmp #1
+	beq load
+rt 	lda #E_FVERSION		; ok, but not this version
+	.byt $2c
+errhdr	lda #E_FLOGICAL
+end	sec
+	rts
+
+load	.(
+	lda #<header
+	sta p1
+	lda #>header
+	sta p1+1
+	lda #<HDR_LEN
+	sta p1+2
+	lda #>HDR_LEN
+	sta p1+3
+
+	ldx file
+	lda #<p1
+	ldy #>p1
+	jsr fgetb
+	bcs end
+				; header loaded, check magic and version
+	lda header+HDR_MAGIC
+	cmp #$6f
+	bne errhdr
+	lda header+HDR_MAGIC+1
+	cmp #"6"
+	bne errhdr
+	lda header+HDR_MAGIC+2
+	cmp #"5"
+	bne errhdr
+	lda header+HDR_VERSION
+	cmp #0
+	bne errhdr
+	lda header+HDR_MODE+1
+	and #%11110000
+	bne errhdr
+
+#ifdef ADEBUG
+DBL("^m^jheader=")
+ldy #0:lx lda header,y:jsr ehexout:jsr espout:iny:cpy #HDR_LEN:bcc lx
+jsr ecrlfout
+#endif
+
+	lda header+HDR_MODE
+#ifdef ADEBUG
+pha:DBL("amode=")
+pla:pha:jsr ehexout:jsr ecrlfout:pla
+#endif
+
+	and #3
+	asl
+	sta amode		; align mode
+				; now allocate buffers
+	lda header+HDR_TLEN	
+	ldy header+HDR_TLEN+1	; we have to modify length to keep data aligned
+	jsr doalign		; align length -> keep text seg. alignement
+	clc
+	adc header+HDR_DLEN
+	pha
+	tya
+	adc header+HDR_DLEN+1
+	tay
+	pla
+	jsr doalign
+	clc
+	adc header+HDR_BLEN
+	pha
+	tya
+	adc header+HDR_BLEN+1
+	tay
+	pla
+
+	; now we have to increase alloc size, as malloc is byte aligned
+	ldx amode
+	clc
+	adc aadd,x
+	pha
+	tya
+	adc aadd+1,x
+	tay
+	pla
+
+#ifdef ADEBUG
+pha:tya:pha:DBL("malloc size: ")
+pla:tay:jsr ehexout:pla:pha:jsr ehexout:jsr ecrlfout:pla
+#endif
+	jsr malloc
+	bcc gotmem
+	rts
+gotmem
+	sta memory		; keep real address
+	sty memory+1
+#ifdef ADEBUG
+DBL("got memory at ")
+lda memory+1:jsr ehexout:lda memory:jsr ehexout:jsr ecrlfout
+lda memory:ldy memory+1
+#endif
+
+	jsr doalign
+	sta textm		; text load address
+	sty textm+1
+
+#ifdef ADEBUG
+DBL("aligned to ")
+lda textm+1:jsr ehexout:lda textm:jsr ehexout:jsr ecrlfout
+lda textm:ldy textm+1
+#endif
+
+
+	; compute textd
+				; lda textm
+	sec
+	sbc header+HDR_TBASE
+	sta textd
+	tya 			; lda textm+1
+	sbc header+HDR_TBASE+1
+	sta textd+1
+
+	; compute datad
+	lda header+HDR_TLEN
+	ldy header+HDR_TLEN+1
+	jsr doalign
+	clc
+	adc textm
+	pha
+	tya
+	adc textm+1
+	tay
+	pla
+	sta datam
+	sty datam+1
+
+	sec
+	sbc header+HDR_DBASE
+	sta datad
+	tya
+	sbc header+HDR_DBASE+1
+	sta datad+1
+
+	; compute bssd
+	lda header+HDR_DLEN
+	ldy header+HDR_DLEN+1
+	jsr doalign
+	clc
+	adc datam
+	pha
+	tya
+	adc datam+1
+	tay
+	pla
+#ifdef ADEBUG
+pha:tya:pha:DBL("put bss to ")
+pla:tay:jsr ehexout:pla:pha:jsr ehexout:jsr ecrlfout:pla
+#endif
+	sec
+	sbc header+HDR_BBASE
+	sta bssd
+	tya
+	sbc header+HDR_BBASE+1
+	sta bssd+1
+
+	lda header+HDR_ZLEN
+	beq zero0
+	jsr zalloc
+	bcs no_zero
+	sec
+	sbc header+HDR_ZBASE
+	sta zerod
+	lda #0
+	sta zerod+1
+zero0
+	jmp do_load
+
+&no_file lda zeroa
+	jsr zfree
+no_zero lda memory
+	ldy memory+1
+	jsr mfree
+	sec
+	rts
+
+do_load				; load options (i.e. ignore them now)
+	ldx file
+	sec
+	jsr fgetc
+	bcs no_file
+	cmp #0
+	beq load_text
+	tay
+	dey
+optl	sec
+	jsr fgetc
+	bcs no_file
+	dey
+	bne optl
+	beq do_load
+
+load_text			; load text segment
+	lda textm
+	sta p1
+	lda textm+1
+	sta p1+1
+	lda header+HDR_TLEN	
+	sta p1+2
+	lda header+HDR_TLEN+1
+	sta p1+3
+#ifdef ADEBUG
+DBL("load text: ")
+lda p1+1:jsr ehexout:lda p1:jsr ehexout:jsr espout:lda p1+3:jsr ehexout
+lda p1+2:jsr ehexout:jsr ecrlfout
+#endif
+
+	ldx file
+	lda #<p1
+	ldy #>p1
+	jsr fgetb		; loads text segment
+	bcs no_file
+
+	lda datam
+	sta p1
+	lda datam+1
+	sta p1+1
+	lda header+HDR_DLEN	
+	sta p1+2
+	lda header+HDR_DLEN+1
+	sta p1+3
+
+#ifdef ADEBUG
+DBL("load data: ")
+lda p1+1:jsr ehexout:lda p1:jsr ehexout:jsr espout:lda p1+3:jsr ehexout
+lda p1+2:jsr ehexout:jsr ecrlfout
+#endif
+	ldx file
+	lda #<p1
+	ldy #>p1
+	jsr fgetb		; loads data segment
+	bcs no_file2
+
+	; check number of undefined references
+#if 1
+	jsr checkundef
+	bcc dorel
+#else
+	ldx file
+	sec
+	jsr fgetc
+	bcs no_file2
+	cmp #0
+	bne no_file2		; we have some -> not handled
+	ldx file
+	sec
+	jsr fgetc
+	bcs no_file2
+	cmp #0
+	beq dorel
+#endif
+&no_file2
+	jmp no_file
+dorel
+	; ok, text segments loaded, now relocate
+
+	lda textm
+	sec
+	sbc #1
+	sta p1
+	lda textm+1
+	sbc #0
+	sta p1+1
+	jsr trel
+
+	lda datam
+	ldy datam+1
+	sec
+	sbc #1
+	sta p1
+	tya
+	sbc #0
+	sta p1+1
+	jsr trel
+
+	jsr getmain
+	bcc foundmain
+
+	lda textm		; return start of text segment
+	ldy textm+1
+foundmain
+#ifdef DEBUG
+pha:tya:pha:DBL("exec addr=")
+pla:tay:jsr ehexout:pla:pha:jsr ehexout:jsr ecrlfout:pla
+#endif
+	clc
+	rts
+	.)
+
+
+
+trel	.(
+	ldx file
+	sec
+	jsr fgetc
+no_file1 bcs no_file2
+	cmp #0
+	beq reloc_rts
+	cmp #255
+	bne t1
+	lda #254
+	clc
+	adc p1
+	sta p1
+	bcc trel
+	inc p1+1
+	jmp trel
+t1	clc
+	adc p1
+	sta p1
+	bcc t1a
+	inc p1+1
+t1a			; p1 is the relocation address
+	ldx file
+	sec
+	jsr fgetc
+	bcs no_file1
+	tay
+	and #A_MASK
+	sta tmp
+	tya
+	and #A_FMASK
+	jsr getreldiff
+	ldy tmp
+	cpy #A_ADR
+	bne t2
+
+	ldy #0
+	clc
+	adc (p1),y
+	sta (p1),y
+	iny
+	txa
+	adc (p1),y
+	sta (p1),y
+	jmp trel
+t2	
+	cpy #A_LOW
+	bne t3
+	ldy #0
+	clc
+	adc (p1),y
+	sta (p1),y
+	jmp trel
+t3
+	cpy #A_HIGH
+	bne trel
+	sta p2
+	stx p2+1
+	ldx file
+	sec
+	jsr fgetc
+	clc
+	adc p2		; just get the carry bit
+	ldy #0
+	lda p2+1	; relocate high byte
+	adc (p1),y
+	sta (p1),y
+	jmp trel
+
+reloc_rts
+	clc
+	rts
+	.)
+	
+getreldiff .(		; comparing with SEG_UNDEF would give a way
+			; to get label value here for undefined refs
+	cmp #SEG_TEXT
+	bne notext
+	lda textd
+	ldx textd+1
+	rts
+notext	cmp #SEG_DATA
+	bne nodata
+	lda datad
+	ldx datad+1
+	rts
+nodata	cmp #SEG_BSS
+	bne nobss
+	lda bssd
+	ldx bssd+1
+	rts
+nobss	cmp #SEG_ZERO
+	bne nozero
+	lda zerod
+	ldx zerod+1
+	rts
+nozero	cmp #SEG_UNDEF
+	bne noundef
+	ldx file
+	sec
+	jsr fgetc
+	bcs err
+	tay
+	sec
+	jsr fgetc
+	bcs err
+	cmp #0
+	bne err
+#ifdef UDEBUG
+tya:pha:DBL("found undef:")
+pla:pha:jsr ehexout:pla:tay
+#endif
+	tya
+	asl
+	tay
+	lda reladdr+1,y
+	tax
+	lda reladdr,y
+#ifdef UDEBUG
+pha:txa:pha:DB(" addr=")
+tsx:lda $0101,x:jsr ehexout:tsx:lda $0102,x:jsr ehexout:jsr ecrlfout
+pla:tax:pla
+#endif
+	; rts
+noundef 
+err	rts
+	.)
+
+doalign	.(	; increase given value to align it
+	ldx amode
+	clc
+	adc aadd,x
+	and aand,x
+	pha
+	tya
+	adc aadd+1,x
+	and aand+1,x
+	tay
+	pla
+	rts
+
+&aadd	.word 0,     1,     3,     255
+aand	.word $ffff, $fffe, $fffc, $ff00
+	.)
+
+/* check undefined references list for occurances of LIB6502 and OSA2KERNEL */
+
+checkundef .(
+	.data	;.bss
+#define	LBLEN	12
+lbuf	.dsb LBLEN
+	.text
+
+	ldx file
+	sec
+	jsr fgetc
+	bcs ret
+	sta numud
+
+	ldx file
+	sec
+	jsr fgetc
+	bcs ret
+	sta numud+1
+
+	ora numud
+	beq ret
+
+	lda numud+1
+	bne err
+	lda numud
+	cmp #3
+	bcc ok
+err	sec
+ret	rts
+
+ok			; numud = 1 oder 2
+	lda #0
+	sta numud+1	; numud = number of labs, numud+1 = label counts
+okl
+	ldy #0
+l1	ldx file
+	sec
+	jsr fgetc
+	bcs ret
+	sta lbuf,y
+	iny
+	cpy #LBLEN
+	bcs err
+	cmp #0
+	bne l1
+
+#ifdef UDEBUG
+DBL("^m^jundef: ")
+lda #<lbuf:ldy #>lbuf:jsr etxtout:jsr ecrlfout
+#endif
+
+	ldx #0
+	stx udlc
+l3	dex
+	ldy #<-1
+l4	iny
+	inx
+	lda lbuf,y
+	cmp ul1,x
+	bne next
+	cmp #0
+	bne l4
+	; found
+#ifdef UDEBUG
+DBL("udlc=")
+lda udlc:jsr ehexout
+DBL(" numud=")
+lda numud:jsr ehexout
+DBL(" numud+1=")
+lda numud+1:jsr ehexout:jsr ecrlfout
+#endif
+	lda udlc
+	asl
+	tax
+	lda numud+1
+	asl
+	tay
+	lda ud1,x
+	sta reladdr,y
+	lda ud1+1,x
+	sta reladdr+1,y
+
+	inc numud+1
+	dec numud
+	beq nook
+	jmp okl
+nook
+	clc
+	rts
+
+next	lda ul1,x
+	beq fn
+	inx
+	bne next
+fn	inc udlc
+	inx
+	lda ul1,x
+	beq nol3
+	jmp l3
+nol3
+	sec		; label not found at all
+	rts
+
+ul1	.asc "OSA2","KERNEL",0, "LIB","6502",0, 0
+ud1	.word OSA2KERNEL, LIB6502
+	.)
+
+getmain	.(
+	ldx file
+	sec
+	jsr fgetc
+	bcs err
+	sta numud
+	sec
+	jsr fgetc
+	bcs err
+	sta numud+1
+	ora numud
+	beq err
+
+	; we only try to read the file until we get the "main" value
+
+l2	ldy #0
+l0	sec
+	jsr fgetc
+	bcs err
+	cmp mtxt,y
+	bne nextl
+	iny
+	cmp #0
+	bne l0
+	sec
+	jsr fgetc
+	bcs err
+	cmp #2		; check for text segment
+	bne err
+	sec
+	jsr fgetc
+	bcs err
+	tay
+	sec
+	jsr fgetc
+	bcs err
+	tax
+	tya
+	clc
+	adc textd
+	pha
+	txa
+	adc textd+1
+	tay
+	pla
+	clc
+	rts
+
+nextl	sec
+	jsr fgetc
+	bcs err
+	cmp #0
+	bne nextl
+	ldy #3
+l1	sec
+	jsr fgetc
+	bcs err
+	dey
+	bne l1
+	jmp l2
+
+err	sec
+	rts
+
+mtxt	.asc "main",0
+	.)
+
+	.)
+
+/**************************************************************************
+ * Here come the support routines
+ *
+ * first is a simple and basic implementation of fgetb, just using fgetc
+ */
+
+fgetb	.(
+	.zero 
+p	.word 0
+	.data
+file	.byt 0
+l	.word 0
+	.text
+	
+	stx file		; x=file, a/y=addr of addr/len struct
+	sta p
+	sty p+1
+	ldy #3
+	lda (p),y
+	sta l+1
+	dey
+	lda (p),y
+	sta l
+	ora l+1
+	beq ende
+	dey
+	lda (p),y
+	pha
+	dey
+	lda (p),y
+	sta p
+	pla
+	sta p+1
+
+loop	ldx file
+	sec
+	jsr fgetc		; this is a simple implementation
+	bcs end
+	ldy #0
+	sta (p),y
+	inc p
+	bne l0
+	inc p+1
+l0	
+	lda l
+	bne l1
+	dec l+1
+l1	dec l
+
+	lda l
+	ora l+1
+	bne loop
+ende	clc
+end
+	rts
+	.)
+
+#ifdef DEBUG
+ehexout	.(
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibout
+	pla
+	and #$0f
+nibout	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc ok
+	adc #6
+ok	ldx #STDERR
+	sec
+	jmp fputc
+	.)
+
+etxtout	.(
+	.zero
+tp	.word 0
+	.text
+
+	sta tp
+	sty tp+1
+	ldx #STDERR
+	ldy #0
+l0	lda (tp),y
+	beq ende
+	sec
+	jsr fputc
+	iny
+	bne l0
+ende	rts
+	.)
+
+ecrlfout
+	lda #13
+	jsr ecout
+	lda #10
+	.byt $2c
+espout	lda #" "
+ecout	.(
+	ldx #STDERR
+	sec
+	jmp fputc
+	.)
+#endif
+

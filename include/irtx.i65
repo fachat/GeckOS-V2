@@ -1,0 +1,215 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef _IRTX_H_
+#define _IRTX_H_
+
+/* these definitions are for using the SEND/RECEIVE interface to send
+   commands to the irtx task and thus to the remote device */
+
+#define   SEND_IRTX      $FB		/* pseudo-task ID */
+
+#define   ITX_KIND       0		/* PCBUF+ITX_KIND = type of device */
+#define   ITX_MSG        1		/* PCBUF+ITX_MSG = message number */
+
+/* remote device types */
+#define   IK_SONY        0		/* of type Sony */
+#define   IM_SY_SLEN     2         	/* length of message number */
+
+/************************ Sony Master Control ******************************/
+
+#define   SY_MC_VOLU     $812      /*$4810*/
+#define   SY_MC_VOLD     $813      /*$c810*/
+#define   SY_MC_MUTE     $814      /*$2810*/
+#define   SY_MC_CD       $825      /*$a410*/
+#define   SY_MC_TUNER    $821      /*$8410*/
+#define   SY_MC_PHONO    $820      /*$0410*/
+#define   SY_MC_TAPE     $823      /*$c410*/
+#define   SY_MC_DAT      $846      /*$6210*/
+#define   SY_MC_VIDEO1   $822      /*$4410*/
+#define   SY_MC_VIDEO2   $81e      /*$7810*/
+#define   SY_MC_VIDEO3   $842      /*$4210*/
+#define   SY_MC_P_LDP    $315      /*$a8c0*/
+#define   SY_MC_P_VTR    $115      /*$a880*/
+#define   SY_MC_P_TV     $095      /*$a900*/
+#define   SY_MC_P_AUDIO  $815      /*$a810*/
+    
+/************************ Sony CD-Player CDP-450 ***************************/
+
+#define   SY_CD_CONT     $89d      /*$b910*/
+#define   SY_CD_PGM      $89f      /*$f910*/
+#define   SY_CD_SHUFF    $8b5      /*$ad10*/
+#define   SY_CD_CLR      $8ac      /*$3510*/
+#define   SY_CD_AB       $8aa      /*$5510*/
+#define   SY_CD_DISP     $8a8      /*$1510*/
+#define   SY_CD_G16      $8a7      /*$e510*/
+#define   SY_CD_PLAY     $8b2      /*$4d10*/
+#define   SY_CD_PAUSE    $8b9      /*$9d10*/
+#define   SY_CD_STOP     $8b8      /*$1d10*/
+#define   SY_CD_AMSZ     $8b0      /*$0d10*/
+#define   SY_CD_AMSV     $8b1      /*$8d10*/
+#define   SY_CD_INDZ     $8b6      /*$6d10*/
+#define   SY_CD_INDV     $8b7      /*$ed10*/
+#define   SY_CD_FASTZ    $8b3      /*$cd10*/
+#define   SY_CD_FASTV    $8b4      /*$2d10*/
+#define   SY_CD_SKIP     $8be      /*$7d10*/     /* Nicht auf der alten RC -> No effect  */
+#define   SY_CD_XZ       $8ba      /*$5d10*/     /*  "    Effekt wie FastZ               */
+#define   SY_CD_XV       $8bb      /*$dd10*/     /*  "    Effekt wie FastV               */
+#define   SY_CD_1        $880      /*$0110*/
+#define   SY_CD_2        $881      /*$8110*/
+#define   SY_CD_3        $882      /*$4110*/
+#define   SY_CD_4        $883      /*$c110*/
+#define   SY_CD_5        $884      /*$2110*/
+#define   SY_CD_6        $885      /*$a110*/
+#define   SY_CD_7        $886      /*$6110*/
+#define   SY_CD_8        $887      /*$e110*/
+#define   SY_CD_9        $888      /*$1110*/
+#define   SY_CD_10       $8a0      /*$0510*/
+#define   SY_CD_11       $8a1      /*$8510*/
+#define   SY_CD_12       $8a2      /*$4510*/
+#define   SY_CD_13       $8a3      /*$c510*/
+#define   SY_CD_14       $8a4      /*$2510*/
+#define   SY_CD_15       $8a5      /*$a510*/
+#define   SY_CD_16       $8a6      /*$6510*/
+
+/***************************** Sony LDP ************************************/
+
+#define   SY_LD_PLAY     $31a      /*$58c0*/
+#define   SY_LD_STOP     $318      /*$18c0*/
+#define   SY_LD_AMSZ     $335      /*$acc0*/
+#define   SY_LD_AMSV     $334      /*$2cc0*/
+#define   SY_LD_XZ       $31b      /*$d8c0*/
+#define   SY_LD_XV       Ý31c      /*$38c0*/
+
+/****************************** Sony TV ************************************/
+
+#define   SY_TV_TVIDEO   $0a5      /*$a500*/
+#define   SY_TV_VOLU     $092      /*$4900*/
+#define   SY_TV_VOLD     $093      /*$c900*/
+#define   SY_TV_PRGU     $090      /*$0900*/
+#define   SY_TV_PRGD     $091      /*$8900*/
+#define   SY_TV_ENTER    $08b      /*$d100*/
+#define   SY_TV_1        $080      /*$0100*/
+#define   SY_TV_2        $081      /*$8100*/
+#define   SY_TV_3        $082      /*$4100*/
+#define   SY_TV_4        $083      /*$c100*/
+#define   SY_TV_5        $084      /*$2100*/
+#define   SY_TV_6        $085      /*$a100*/
+#define   SY_TV_7        $086      /*$6100*/
+#define   SY_TV_8        $087      /*$e100*/
+#define   SY_TV_9        $088      /*$1100*/
+#define   SY_TV_0        $089      /*$9100*/
+
+/****************************** Sony Tuner *********************************/
+
+#define   SY_TU_SHIFT    $6b3      /*$cd60*/
+#define   SY_PRESU       $690      /*$0960*/
+#define   SY_PRESD       $691      /*$8960*/
+
+/****************************** Sony Deck A ********************************/
+
+#define   SY_DA_FASTZ    $833      /*$cc10*/
+#define   SY_DA_FASTV    $834      /*$2c10*/
+#define   SY_DA_RPLAY    $837      /*$ec10*/     
+#define   SY_DA_PLAY     $832      /*$4c10*/
+#define   SY_DA_STOP     $838      /*$1c10*/
+#define   SY_DA_PAUSE    $839      /*$9c10*/
+#define   SY_DA_REC      $836      /*$6c10*/
+#define   SY_DA_AUX      $83f      /*$fc10*/     /* ???? */
+
+/****************************** Sony Deck B ********************************/
+
+#define   SY_DB_FASTZ    $71b      /*$d8e0*/
+#define   SY_DB_FASTV    $71c      /*$38e0*/
+#define   SY_DB_RPLAY    $720      /*$04e0*/
+#define   SY_DB_PLAY     $71a      /*$58e0*/
+#define   SY_DB_STOP     $718      /*$18e0*/
+#define   SY_DB_PAUSE    $719      /*$98e0*/
+#define   SY_DB_REC      $71e      /*$78e0*/
+#define   SY_DB_AUX      $71f      /*$f8e0*/     /* ???? */
+
+/****************************** Sony DAT ***********************************/
+
+#define   SY_DAT_FASTZ   $e3b      /*$dc70*/
+#define   SY_DAT_FASTV   $e3c      /*$3c70*/
+#define   SY_DAT_PLAY    $e3a      /*$5c70*/
+#define   SY_DAT_STOP    $e38      /*$1c70*/
+#define   SY_DAT_PAUSE   $e39      /*$9c70*/
+#define   SY_DAT_REC     $e3d      /*$bc70*/
+#define   SY_DAT_AUX     $e3f      /*$fc70*/     /* ???? */
+
+/****************************** Sony Video1 ********************************/
+
+#define   SY_V1_CHU      $110      /*$0880*/
+#define   SY_V1_CHD      $111      /*$8880*/
+#define   SY_V1_ANTVTR   $12a      /*$5480*/  
+#define   SY_V1_FASTZ    $11b      /*$d880*/
+#define   SY_V1_FASTV    $11c      /*$3880*/
+#define   SY_V1_PLAY     $11a      /*$5880*/
+#define   SY_V1_STOP     $118      /*$1880*/
+#define   SY_V1_PAUSE    $119      /*$9880*/
+
+/****************************** Sony Video2 ********************************/
+
+#define   SY_V2_CHU      $390      /*$09c0*/
+#define   SY_V2_CHD      $391      /*$89c0*/
+#define   SY_V2_ANTVTR   $3aa      /*$55c0*/  
+#define   SY_V2_FASTZ    $39b      /*$d9c0*/
+#define   SY_V2_FASTV    $39c      /*$39c0*/
+#define   SY_V2_PLAY     $39a      /*$59c0*/
+#define   SY_V2_STOP     $398      /*$19c0*/
+#define   SY_V2_PAUSE    $399      /*$99c0*/
+
+/****************************** Sony Video3 ********************************/
+
+#define   SY_V3_CHU      $590      /*$09a0*/
+#define   SY_V3_CHD      $595      /*$a9a0*/
+#define   SY_V3_ANTVTR   $5aa      /*$55a0*/  
+#define   SY_V3_FASTZ    $59b      /*$d9a0*/
+#define   SY_V3_FASTV    $59c      /*$39a0*/
+#define   SY_V3_PLAY     $59a      /*$59a0*/
+#define   SY_V3_STOP     $598      /*$19a0*/
+#define   SY_V3_PAUSE    $599      /*$99a0*/
+
+/***************************** Universum Fernseher *************************/
+
+#define   UNI_TV_POWER   $e
+#define   UNI_TV_VIDEO   $d
+#define   UNI_TV_MUTE    $9
+#define   UNI_TV_VOLD    $4
+#define   UNI_TV_VOLU    $3
+#define   UNI_TV_1       $10
+#define   UNI_TV_2       $11
+#define   UNI_TV_3       $12
+#define   UNI_TV_4       $13
+#define   UNI_TV_5       $14
+#define   UNI_TV_6       $15
+#define   UNI_TV_7       $16
+#define   UNI_TV_8       $17
+#define   UNI_TV_9       $18
+#define   UNI_TV_10      $19
+#define   UNI_TV_11      $1a
+#define   UNI_TV_12      $1b
+
+#endif
+

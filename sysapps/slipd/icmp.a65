@@ -1,0 +1,204 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * receive icmp messages and process them (icmp2).
+ * generate icmp error messages for traceroute (replytrace)
+ * generate icmp port unreachable message for all incoming udp traffic (porterr)
+ */
+
+/* #define	DEBUGICMP */
+
+#ifdef DEBUGICMP
+#define	DBICMP(a)	DB(a)
+#else
+#define	DBICMP(a)
+#endif
+
+	.(
+tmpp	=p
+	.bss
+tmpsl	.byt 0
+tihl	.byt 0
+msg	.byt 0
+	.text
+
+&&uporterr 
+	ldy #0		; port unreachable
+	.byt $2c
+&&replytrace .(
+	ldy #1		; ttl exceeded
+	sty msg
+	sta tihl
+	stx tmpsl
+	jsr getpinfo
+	ldy #IPH_FL
+	lda (pp),y
+	and #%00011111
+	iny
+	ora (pp),y
+	bne frag
+	; get reply buffer and copy original message 
+	lda tihl
+	clc
+	adc #8		; the reply has the orig. IP header + 8 byte data
+	sta tihl
+	clc
+	adc #28
+	ldy #0
+	jsr balloc
+	bcs endreply	; discard
+	lda #28
+	jsr getpinfo
+
+	ldx tmpsl
+	jsr getbadr
+	sta tmpp
+	sty tmpp+1
+
+	ldy #0
+t1	lda (tmpp),y
+	sta (pd),y
+	iny
+	cpy tihl
+	bcc t1
+				; copy src ip to new trg ip
+	lda tmpp	
+	sec
+	sbc #4
+	sta tmpp
+	bcs t2
+	dec tmpp+1
+t2
+	ldy #IPH_TRG
+t3
+	lda (tmpp),y
+	sta (pp),y
+	iny
+	cpy #IPH_TRG+4
+	bcc t3
+
+	ldx tmpsl
+	jsr bfree
+
+	ldx pslot
+	lda #20
+	jsr getpinfo
+
+	ldy #IPH_PROT
+	lda #1
+	sta (pp),y
+
+	ldx msg
+	lda typetab,x
+	ldy #0			; behind IP header	
+	sta (pd),y
+	iny
+	lda codetab,x
+	sta (pd),y		; ttl time exceeded in transmit
+
+	jmp sendicmp
+	
+frag	DBICMP("tracereply fragment - no reply!^m^j")
+	jmp idisc
+endreply
+	DBICMP("No buffer for tretrace^m^j")
+	jmp idisc
+
+typetab	.byt 3,	11
+codetab	.byt 3,	0
+	.)
+
+&&icmp2	.(
+	jsr getpinfo
+	bcc piok
+	DBICMP("getpi error in icmp^m^j")
+	rts
+piok
+	lda pdl
+	ldy pdl+1
+	ldx #pd
+	jsr checksum3
+
+#if 0 /*def DEBUGPKT*/
+php
+pha
+txa
+pha
+DB("ICMP Checksum=")
+pla
+tay
+jsr EHexout
+pla
+pha
+jsr EHexout
+jsr ECrlfout
+tya
+tax
+pla
+plp
+#endif
+	bcc icmpok
+	jmp idisc_check
+icmpok
+	ldy #0
+	lda (pd),y		; icmp type
+	cmp #8			; echo message
+	beq echo
+	jmp idisc_type
+echo
+	/* ECHO Message */
+				; modify message to echo reply message
+	lda #0			; icmp echo reply
+	sta (pd),y
+
+	jsr pxip		; src IP -> trg IP
+&sendicmp
+	jsr setmyip		; my IP -> src IP
+
+	ldy #ICMP_CSUM
+	jsr setdcheck
+
+	jsr prepip
+
+#ifdef DEBUGPKT
+ldx #<pp
+lda ppl
+ldy ppl+1
+jsr printpacket2
+#endif
+	ldx pslot
+	jmp queueslot
+
+idisc_check
+	DB("ICMP: wrong checksum^m^j")
+	jmp idisc
+idisc_type
+	DB("ICMP: wrong type^m^j")
+&idisc	
+	ldx pslot
+	jmp bfree
+	.)
+
+	.)
+

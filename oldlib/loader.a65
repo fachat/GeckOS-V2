@@ -1,0 +1,438 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**************************************************************************
+ * 
+ * Loader for 6502 relocatable binary format
+ *
+ * The loader supports 16 bit o65 version 1 files without undefined 
+ * references. Also it doesn't like pagewise relocation and 65816 
+ * code, because there are different/additional relocation entries.
+ *
+ * The support routines, that have to be changed are at the end of the
+ * file. The stuff in this file is in absolute format (well, you have to
+ * bootstrap from something :-)
+ * The support routines for the file handling are for the operating system
+ * OS/A65, as of version 1.3.10b. The first part of the file (wrapped in
+ * "#ifdef C64") shows how to use it with a C64, for example.
+ * 
+ * The subroutine 'loader' is called with a file descriptor, that has a 
+ * meaning for the support routines, in the X register.
+ * The file must already be open. Also binit must have been called before.
+ * The loader doesn't close the file.
+ *
+ * Support routines are:
+ *
+ *   zalloc	a   = length of needed zeropage block. returns a=address
+ *   zfree	a   = address of block to free
+ *
+ *   fgetc	x   = file descriptor, returns read byte (c=0) or error (c=1)
+ *		      The error is passed through; fgetc blocks if no data
+ *		      available
+ *   fgetb	x   = filedescriptor, a/y = address of block descriptor,
+ *                    i.e. a word start address and a word length of block.
+ *                    returns (c=0) or error in accu (c=1).
+ *
+ **************************************************************************/
+
+
+/**************************************************************************
+ * This part is a binding for a C64
+ * to show how it works
+ */
+
+#include "file_o65.def"
+
+#define	E_NOMEM		<-40
+#define	E_FVERSION	<-41
+
+loader 	.(
+	.zero
+p1	.word
+p2	.word
+
+	.data
+tmp	.byt 0
+file	.byt 0
+
+header	.dsb HDR_LEN
+
+textb	.byt 0		; memory block ID
+texta	.word 0		; address of block
+;textl	.word 0		; address of block
+textd	.word 0		; difference to assemble address
+
+;datab	.byt 0
+dataa	.word 0
+;datal	.word 0
+datad	.word 0
+
+;bssb	.byt 0
+bssa	.word 0
+bssd	.word 0
+
+zeroa	.byt 0
+zerod	.word 0
+
+	.text
+
+	stx file
+	jsr Fgetc
+	bcs end
+	sta tmp
+	jsr Fgetc
+	bcs end
+	tay
+	lda tmp
+	cpy #0
+	bne rt
+	cmp #1
+	beq load
+rt 	lda #E_FVERSION		; ok, but not this version
+end	sec
+	rts
+
+load	.(
+	lda #<header
+	sta p1
+	lda #>header
+	sta p1+1
+	ldx #p1
+	lda #<HDR_LEN
+	ldy #>HDR_LEN
+	jsr fgetb
+	bcs end
+				; header loaded, check magic and version
+	lda header+HDR_MAGIC
+	cmp #$6f
+	bne end
+	lda header+HDR_MAGIC+1
+	cmp #"6"
+	bne end
+	lda header+HDR_MAGIC+2
+	cmp #"5"
+	bne end
+	lda header+HDR_VERSION
+	cmp #0
+	bne end
+	lda header+HDR_MODE+1
+	and #%11110000
+	bne end
+				; now allocate buffers
+				/* TODO: check alignment! */
+	lda header+HDR_TLEN
+	ldy header+HDR_TLEN+1
+	clc
+	adc header+HDR_DLEN
+	pha
+	tya
+	adc header+HDR_DLEN+1
+	tay
+	pla
+	clc
+	adc header+HDR_BLEN
+	pha
+	tya
+	adc header+HDR_BLEN+1
+	tay
+	pla
+	jsr Balloc
+	bcc ok
+	jmp no_text
+ok
+	stx textb
+	sta texta
+	sty texta+1
+	clc
+	adc header+HDR_TLEN
+	sta dataa
+	pha
+	tya
+	adc header+HDR_TLEN+1
+	sta dataa+1
+	tay
+	pla
+	adc header+HDR_DLEN
+	sta bssa
+	pha
+	tya
+	adc header+HDR_DLEN+1
+	sta bssa+1
+	tay
+	pla
+
+	sec
+	sbc header+HDR_BBASE
+	sta bssd
+	tya
+	sbc header+HDR_BBASE+1
+	sta bssd+1
+
+	sec
+	lda dataa
+	sbc header+HDR_DBASE
+	sta datad
+	lda dataa+1
+	sbc header+HDR_DBASE+1
+	sta datad+1
+
+	sec
+	lda texta
+	sbc header+HDR_TBASE
+	sta textd
+	lda texta+1
+	sbc header+HDR_TBASE+1
+	sta textd+1
+
+	lda header+HDR_ZLEN
+	jsr Zalloc
+	bcs no_zero
+
+	sta zeroa
+	sec
+	sbc header+HDR_ZBASE
+	sta zerod
+	lda #0
+	sta zerod+1
+
+	jmp do_load
+
+no_file
+no_zero 
+	ldx textb
+	jsr Bfree
+
+close
+no_text	ldx file
+	lda #E_NUL
+	jsr STRCMD
+	sec
+	rts
+
+do_load				; load options (i.e. ignore them now)
+	ldx file
+	jsr Fgetc
+	bcs no_file
+	cmp #0
+	beq load_text
+	tay
+	dey
+optl	jsr Fgetc
+	bcs no_file
+	dey
+	bne optl
+	beq do_load
+
+load_text			; load text segment
+	lda texta
+	sta p1
+	lda texta+1
+	sta p1+1
+	ldx #p1
+	lda header+HDR_TLEN
+	ldy header+HDR_TLEN+1
+	jsr fgetb
+	bcs no_file
+				; load data segment
+	lda dataa
+	sta p1
+	lda dataa+1
+	sta p1+1
+	ldx #p1
+	lda header+HDR_DLEN
+	ldy header+HDR_DLEN+1
+	jsr fgetb
+	bcs no_file
+				; check number of undefined references
+	ldx file
+	jsr Fgetc
+&no_file2 bcs no_file
+	cmp #0
+	bne no_file		; we have some -> not handled
+	ldx file
+	jsr Fgetc
+	bcs no_file
+	cmp #0
+	bne no_file
+				; ok, text segments loaded, now relocate
+	lda texta
+	sec
+	sbc #1
+	sta p1
+	lda texta+1
+	sbc #0
+	sta p1+1
+	jsr trel
+
+	lda dataa
+	sec
+	sbc #1
+	sta p1
+	lda dataa+1
+	sbc #0
+	sta p1+1
+	jsr trel
+
+	jsr close 
+
+	lda texta		; return start of text segment
+	ldy texta+1
+	clc
+	rts
+	.)
+
+trel	.(
+	ldx file
+	jsr Fgetc
+no_file1 bcs no_file2
+	cmp #0
+	beq reloc_rts
+	cmp #255
+	bne t1
+	lda #254
+	clc
+	adc p1
+	sta p1
+	bcc trel
+	inc p1+1
+	jmp trel
+t1	clc
+	adc p1
+	sta p1
+	bcc t1a
+	inc p1+1
+t1a			; p1 is the relocation address
+	ldx file
+	jsr Fgetc
+	bcs no_file1
+	tay
+	and #A_MASK
+	sta tmp
+	tya
+	and #A_FMASK
+	jsr getreldiff
+	ldy tmp
+	cpy #A_ADR
+	bne t2
+
+	ldy #0
+	clc
+	adc (p1),y
+	sta (p1),y
+	iny
+	txa
+	adc (p1),y
+	sta (p1),y
+	jmp trel
+t2	
+	cpy #A_LOW
+	bne t3
+	ldy #0
+	clc
+	adc (p1),y
+	sta (p1),y
+	jmp trel
+t3
+	cpy #A_HIGH
+	bne trel
+	sta p2
+	stx p2+1
+	ldx file
+	jsr Fgetc
+	clc
+	adc p2		; just get the carry bit
+	ldy #0
+	lda p2+1	; relocate high byte
+	adc (p1),y
+	sta (p1),y
+	jmp trel
+
+reloc_rts
+	clc
+	rts
+	.)
+	
+getreldiff .(		; comparing with SEG_UNDEF would give a way
+			; to get label value here for undefined refs
+	cmp #SEG_TEXT
+	bne notext
+	lda textd
+	ldx textd+1
+	rts
+notext	cmp #SEG_DATA
+	bne nodata
+	lda datad
+	ldx datad+1
+	rts
+nodata	cmp #SEG_BSS
+	bne nobss
+	lda bssd
+	ldx bssd+1
+	rts
+nobss	cmp #SEG_ZERO
+	bne nozero
+	lda zerod
+	ldx zerod+1
+nozero	rts
+	.)
+
+fgetb   .(
+	.zero
+p       .word 0
+	.data
+l       .word 0
+	.text
+
+	sta l
+	sty l+1
+	lda 0,x
+	sta p
+	lda 1,x
+	sta p+1
+
+loop    ldx file
+        jsr Fgetc               ; this is a simple implementation
+        bcs end1
+        ldy #0
+        sta (p),y
+        inc p
+        bne l0
+        inc p+1
+l0
+        lda l
+        bne l1
+        dec l+1
+l1      dec l
+
+        lda l
+        ora l+1
+        bne loop
+        clc
+end1
+        rts
+        .)
+
+	.)
+
+

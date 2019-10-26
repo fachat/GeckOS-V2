@@ -1,0 +1,892 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+    Generic console device
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+          .(
+
+          .(
+#define   DC_SW_MOD      $20
+#define   DC_SW_EXIT     $10
+
+          .word     devend1
+          jmp prg1
+          .asc "video1",0
+
+devend1   .word     devend2
+          jmp prg2
+          .asc "video2",0
+
+devend2   .word     devend3
+          jmp prg3
+          .asc "video3",0
+
+devend3   .word     devend
+          jmp prg4
+          .asc "video4",0
+
+#include CONSOLE_DEVICE
+
+prg4      ldx #3
+          .byt $2c
+prg3      ldx #2
+	  .byt $2c
+prg2      ldx #1
+          .byt $2c
+prg1      ldx #0
+
+          .)
+
+	.data          
+screen    .byt 0	; screen the device is working on 
+actscr    .byt 0	; visible screen
+freq	  .byt 0	; hardware status byte from kernel (1/2 MHz bit)
+#ifndef NOSYSPORT
+syscnt	  .byt 0	; reentrance semaphore when IRQ can be checked
+#endif
+shfl	  .byt 0	; shift flag for typed char
+rspd	  .byt 0	; key repeat speed
+status    .dsb MAX_SCREEN
+outstr    .dsb MAX_SCREEN
+getstr    .dsb MAX_SCREEN
+brkkey    .dsb MAX_SCREEN
+
+	.zero
+zei2	.word 0
+
+	.text
+
+          .(
+	  pha
+	  tya 
+	  pha
+	  txa
+	  jsr setscr
+	  ldx screen
+	  pla
+	  tay
+	  pla
+          cmp #DC_RES
+          bne p1
+
+	  sty freq
+
+	  txa
+	  beq foo		; screen 0 is always reset, to set MAX_SCREEN
+	  cmp #MAX_SCREEN
+	  bcs max_err
+foo 
+          lda #0		; linein off ; DC_SW_MOD	; linein ein
+          sta status,x
+	  lda #3		; ^C
+	  sta brkkey,x
+
+          lda #0
+          sta outstr,x
+          sta getstr,x
+
+#ifndef NOSYSPORT
+          sta syscnt
+#endif
+          sta actscr
+
+          txa
+          bne re		; only the first is hw-initialized
+
+	  jsr console_init	; init hardware (called with y=hardware byte)
+	  jsr inivscr
+&re
+          clc
+          rts
+
+max_err	  sec
+	  rts
+          .)
+
+          .(
+p2x       jmp p2
+
+#if 0 /*ndef NOSYSPORT */
+noirq	  lda #E_NOIRQ
+	  .byt $2c
+#endif
+&max_err  lda #E_NODEV
+	  sec
+	  rts
+#if 0 /*ndef NOSYSPORT */
+wasirq	  lda #E_OK
+	  rts
+#endif
+
+&p1 	  cpx #MAX_SCREEN
+	  bcs max_err
+
+	  pha
+          lda status,x
+          and #DC_SW_EXIT
+          beq p1ok
+          pla
+          sec
+          rts
+p1ok      pla
+          cmp #DC_IRQ
+          bne p2x
+
+#if 1 /*def NOSYSPORT*/	/* allows interruptable devices! */
+	  jsr do_irq
+	  sec
+	  rts
+#else
+          bit SYSPORT
+	  bpl noirq	/* not my (50 Hz) irq */
+          lda SYSPORT
+          sta SYSPORT	/* clear 50 Hz interrupt */
+
+          lda syscnt	/* this devices has already been interrupted */
+	  bmi wasirq	/* then return */
+          lda SYSPORT
+          and #1
+          beq do_irq	/* CPU irq line active -> no cli */
+
+          dec syscnt	/* signal that devices is interrupted */
+          cli
+
+          lda #0
+x3	  jsr setscr
+	  jsr do_irq
+	  lda screen
+	  clc
+	  adc #1
+          cmp MAX_ASCREEN
+          bcc x3
+
+xe        sei
+          inc syscnt
+	  lda #E_NOIRQ
+          rts
+#endif /* NOSYSPORT */
+	.)
+          
+do_irq  .(
+	ldy screen
+	DO_IRQ
+	lda status,y
+	and #DC_SW_RX
+	beq nocheck
+
+	ldx outstr,y
+	lda #SC_STAT
+	jsr STRCMD
+	cmp #E_NUL
+	bne nocheck
+	jsr rxoff
+nocheck
+	lda screen	; get keyboard only for visible screen
+	cmp actscr
+	bne notact
+	jsr getkey	; returns x=shiftfl, y=index in keytable, a=ascii code
+	bcs notact
+	cpy #SWITCHKEY
+	bne gotchar
+	jsr crsroff	; must preserve xr
+	jsr do_switch
+	jmp notact
+gotchar	
+	sta zei2
+	ldy screen	; first check if we are receiving (from keyboard)
+	lda status,y
+        and #DC_SW_RX
+        beq notact
+	lda zei2
+	cmp brkkey,y
+	bne nobrk
+	ldx outstr,y
+	lda #SC_SSTAT
+	ldy #SCE_BRK
+	jsr STRCMD
+nobrk
+	ldx zei2
+	ldy screen
+	lda status,y
+	and #DC_SW_RX+DC_SW_TX+DC_SW_MOD
+	cmp #DC_SW_RX+DC_SW_TX+DC_SW_MOD
+	bne direct	; indirect mode -> print char and send line on cr
+	cpx #TC_CR
+	bne print	; no cr, then just print it
+	jsr crsroff
+	jsr sendline	; otherwise send the whole line
+	ldx #TC_CR
+print
+	jsr crsroff
+	txa
+	jsr printchar
+	jmp notact
+          
+direct	and #DC_SW_RX	; direct mode -> send the char directly
+	beq notact
+	txa
+	ldx outstr,y
+	jsr PUTC
+notact			; output stuff
+	ldx screen
+	lda status,x
+	and #DC_SW_TX	; do we send?
+	beq endirq
+
+	lda getstr,x
+	tax
+	lda #SC_STAT
+	jsr STRCMD	; check stream state
+	cmp #E_EOF
+	bne txok
+	jsr txoff
+	jmp endirq
+txok
+	cmp #E_SEMPTY
+	beq endirq
+
+	lda screen
+	cmp actscr
+	bne txloop
+	jsr crsroff
+
+txloop	ldy screen
+	ldx getstr,y
+	jsr GETC
+	bcs endirq
+	jsr printchar
+	jmp txloop
+endirq	
+	lda screen
+	cmp actscr
+	bne end1
+	jsr crsron
+end1
+	BELLIRQ 
+	lda #E_NOIRQ
+	rts
+	.)
+
+do_switch .(
+          dex
+          bpl p1c2       ; without shift or ctrl
+
+p1c1b     ldx actscr	 ; needed to tell setact the old screen number
+	  inc actscr     ; then switch screen
+	  lda actscr
+	  cmp MAX_ASCREEN
+	  bcc p1c1a
+	  lda #0
+	  sta actscr
+p1c1a
+          tay
+          lda status,y
+          and #DC_SW_EXIT
+          bne p1c1b
+          tya
+          jsr setact
+          jmp p1b
+
+p1c2      dex
+          bmi p1b        ; shift only, then ignore
+          dex
+          bpl p1c3       ; Ctrl only, then mode switch
+          ldy screen
+          lda status,y
+          eor #DC_SW_MOD
+          sta status,y
+          jmp p1b
+
+p1c3      dex
+          bpl p1b        ; Ctrl and Shift then close stream
+          jsr rxoff
+          ;jmp p1b
+p1b	rts
+	.)
+
+/*************************************************************************/
+
+p2        .(
+          cmp #DC_TX_ON
+          bne ox1q
+          lda #DC_SW_TX
+          bne ox1q1
+ox1q      cmp #DC_RX_ON
+          bne ox1
+	  ; ldy screen
+	  ; lda #3
+	  ; sta brkkey,y
+          lda #DC_SW_RX
+ox1q1     ldy screen
+          ora status,y
+          sta status,y
+          jmp ok
+ox1       cmp #DC_TX_OFF
+          bne ox2x
+&txoff    ldy screen
+          lda status,y
+          and #DC_SW_TX
+          beq devoff
+          ldx getstr,y
+          lda #SC_NUL
+          jsr STRCMD
+          lda status,y
+          and #255-DC_SW_TX
+          sta status,y
+          jmp ok          
+ox2x      cmp #DC_RX_OFF
+          bne ox2
+&rxoff    ldy screen
+          lda status,y
+          and #DC_SW_RX
+          beq devoff
+          ldx outstr,y
+          lda #SC_EOF
+          jsr STRCMD
+          lda status,y
+          and #255-DC_SW_RX
+          sta status,y
+          jmp ok
+ox2       cmp #DC_EXIT
+          bne ox2a
+          jsr rxoff
+          jsr txoff
+          ldy screen
+          lda #DC_SW_EXIT
+          ora status,y
+          sta status,y
+          bne ok
+ox2a      cmp #DC_ST
+          bne o3
+ok        lda #E_OK
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+notimp    lda #E_NOTIMP
+          cmp #1
+          rts
+o3        cmp #DC_PS
+          bne o4
+          ldx screen
+          lda status,x
+          and #DC_SW_RX
+          bne devon
+          tya
+          sta outstr,x
+          jmp ok
+o4        cmp #DC_SPD
+          bne o5
+          sty rspd
+          beq ok
+o5        cmp #DC_GS
+          bne o6		; notimp
+          ldx screen
+          lda status,x
+          and #DC_SW_TX
+          bne devon
+          tya
+          sta getstr,x
+          jmp ok
+o6	  cmp #DC_BRKKEY
+	  bne notimp
+	  ldx screen
+	  lda brkkey,x
+	  pha
+	  tya
+	  sta brkkey,x
+	  pla
+	  tay
+	  jmp ok
+          .)
+
+/**************************************************************************/
+
+          .(  
+
+	.data
+&spalte   .byt 0
+&zeile    .byt 0
+wx        .byt 0
+wy        .byt 0
+wr        .byt 0
+wh        .byt 0
+hivid     .byt 0
+iz        .byt 0
+is        .byt 0
+#if is-spalte+2 > 12
+#echo Warning: illegal struct length for vtab
+#else
+vtab      .dsb MAX_SCREEN*12
+#endif
+	.zero
+&vzei   .word 0
+
+	.text
+
+&inivscr  .(
+	lda #0
+loop	jsr setscr
+
+	  lda screen
+          jsr iniscr
+
+          lda #TC_FF     ; form feed
+          jsr printchar
+	  jsr setlin
+
+	lda screen
+	clc
+	adc #1
+	cmp MAX_ASCREEN
+	bcc loop
+
+          clc
+          rts
+          .)
+
+setlin    .(
+          lda zeile
+          sta iz
+          lda spalte
+          sta is
+          rts
+          .)
+          
+&sendline .(
+	  SET_MMU
+          ldy zeile
+          cpy iz
+          bne liex
+          ldy is
+          cpy spalte
+          bcc liex2
+          beq liex2
+liex      ldy wx
+liex2     sty spalte
+          sty zei2
+          ldy wr
+lie2      cpy spalte
+          beq lie1
+          dey
+          lda (vzei),y
+          cmp #SCR_SPACE
+          beq lie2
+          iny
+lie1      sty zei2+1
+lie3      ldy zei2
+          cpy zei2+1
+          bcs lie4
+          lda (vzei),y
+	  SCR2ASC
+          ldy screen
+          ldx outstr,y
+          jsr PUTC
+	  SET_MMU
+          inc zei2
+          bne lie3
+lie4      lda #TC_CR
+          ldy screen
+          ldx outstr,y
+          jsr PUTC
+	  lda #SC_SSTAT
+	  ldy #SCE_PUSH
+	  jmp STRCMD
+          .)
+          
+&printchar .(
+	  SET_MMU
+          tay
+          bmi x1
+          cmp #32
+          bcs outc
+          jmp xout
+x1        cmp #128+32
+          bcs outc
+          jmp xcode
+          
+outc      ASC2SCR
+	  ldy spalte
+          sta (vzei),y
+          
+&nextc    ldy spalte
+          iny
+          cpy wr
+          bcc o1
+          jsr nextz
+          ldy wx
+o1        sty spalte
+          rts
+          
+&nextz    ldx zeile
+          inx
+          cpx wh
+          bcc o2
+          jsr scrollup
+          ldx wh
+          dex
+o2        ;stx zeile
+
+&&setzei  stx zeile
+          txa
+          clc
+          adc wy
+          tax
+          lda #0
+          sta vzei
+          sta vzei+1
+          sta zei2+1
+          lda MAXSPAL
+          sta zei2
+szmul     txa
+          beq sz1
+          lsr
+          tax
+          bcc szm1
+          lda zei2:clc:adc vzei:sta vzei
+          lda zei2+1:adc vzei+1:sta vzei+1
+szm1      asl zei2:rol zei2+1
+          jmp szmul
+sz1       ACT_HI_VID
+	  clc
+          adc vzei+1
+          sta vzei+1
+          ldx zeile
+          rts
+        
+scrollup  ldx #0
+          jsr setzei
+
+su2       inx
+          cpx wh
+          bcs su3
+          lda vzei
+          clc
+          adc MAXSPAL
+          sta zei2
+          lda vzei+1
+          adc #0
+          sta zei2+1
+          ldy wx
+su1       lda (zei2),y
+          sta (vzei),y
+          iny
+          cpy wr
+          bcc su1
+          
+          lda zei2
+          sta vzei
+          lda zei2+1
+          sta vzei+1
+          jmp su2     
+
+su3       ldy wx
+          lda #SCR_SPACE
+su4       sta (vzei),y
+          iny
+          cpy wr
+          bcc su4
+          
+&clrli    ldx #<-1
+          stx iz
+          rts
+          .)
+
+iniscr    .(		; screen number in AC
+	  HI_VID
+          sta hivid 
+
+          lda #0
+          sta wx
+          sta wy
+          sta spalte
+          lda MAXSPAL
+          sta wr
+          lda MAXZEIL
+          sta wh
+
+          ldx #0
+          jmp setzei
+          .)
+
+&setscr   .(
+	  ldx screen
+	  cpx #MAX_SCREEN
+	  bcs nosave
+          cmp screen
+          beq setmmu
+          pha
+          lda screen
+          asl
+          asl
+          sta zei2+1          
+          asl
+          clc
+          adc zei2+1
+          tax
+          ldy #0
+s1        lda spalte,y
+          sta vtab,x
+          inx
+          iny
+          cpy #is-spalte+1
+          bcc s1
+          lda vzei
+          sta vtab,x
+          lda vzei+1
+          sta vtab+1,x
+          pla
+nosave	  sta screen
+          asl
+          asl
+          sta zei2+1
+          asl
+          clc
+          adc zei2+1
+          tax
+          ldy #0
+s2        lda vtab,x
+          sta spalte,y
+          inx
+          iny
+          cpy #is-spalte+1
+          bcc s2
+          lda vtab,x
+          sta vzei
+          lda vtab+1,x
+          sta vzei+1
+setmmu   
+	  SET_MMU
+          rts
+          .)
+
+xout      .(
+          cmp #TC_CR
+          bne x1
+          lda wx
+          sta spalte
+          rts
+x1        cmp #TC_LF
+          bne x2
+          jmp nextz
+x2        cmp #TC_BEL
+          bne x3a
+	  TRIGBELL
+	  rts
+x3a       .(
+          cmp #TC_FF
+          bne x3
+&&toclr   ldx #0
+c2b       jsr setzei
+          ldy wx
+          lda #SCR_SPACE
+c2a       sta (vzei),y
+          iny
+          cpy wr
+          bcc c2a
+          inx
+          cpx wh
+          bcc c2b
+          jsr clrli
+&&tohome  lda wx
+          sta spalte
+          ldx #0
+          jmp setzei
+          .)
+x3        .(
+          cmp #TC_BS
+          bne x4
+          ldy spalte
+          cpy wx
+          beq c7
+          dec spalte
+bslp      lda (vzei),y
+          dey
+          sta (vzei),y
+          iny
+          iny
+          cpy wr
+          bcc bslp
+          dey
+          lda #SCR_SPACE
+          sta (vzei),y
+&x4 c7    rts
+          .)
+          .)
+
+xcode     .(
+          and #$7f
+          cmp #maxcode
+          bcs xe
+          asl
+          tax
+          lda xadr+1,x
+          pha
+          lda xadr,x
+          pha
+xe        rts
+
+maxcode   =15
+xadr      .word tocl-1,nextc-1,tocu-1,nextz-1
+          .word tohome-1,toclr-1,todel-1,toins-1
+          .word towlo-1,towru-1,towcl-1
+          .word toeol-1,toclrl-1
+	  .word toecho-1, tonoecho-1
+
+toecho	.(
+	ldx screen
+	lda status,x
+	ora #DC_SW_MOD
+	sta status,x
+	rts
+	.)
+
+tonoecho .(
+	ldx screen
+	lda status,x
+	and #$ff-DC_SW_MOD
+	sta status,x
+	rts
+	.)
+
+todel     .(
+          ldy spalte
+td0       iny
+          cpy wr
+          bcs td1
+          lda (vzei),y
+          dey
+          sta (vzei),y
+          iny
+          bne td0
+td1       dey
+          lda #SCR_SPACE
+          sta (vzei),y
+          rts
+          .)
+
+toins     .(
+          ldy wr
+          dey
+          lda (vzei),y
+          cmp #SCR_SPACE
+          bne tie
+          cpy spalte
+          beq tie
+ti1       dey
+          lda (vzei),y
+          iny
+          sta (vzei),y
+          dey
+          cpy spalte
+          bne ti1
+          lda #SCR_SPACE
+          sta (vzei),y
+tie       rts
+          .)
+
+toeol     .(
+          ldy wr
+l         dey
+          bmi e
+          lda (vzei),y
+          cmp #SCR_SPACE
+          beq l
+e         iny 
+          cpy wr
+          bcs x
+          sty spalte
+x         rts
+          .)
+
+toclrl    .(
+          lda #SCR_SPACE
+          ldy spalte
+c         sta (vzei),y
+          iny
+          cpy wr
+          bcc c
+          rts
+          .)
+          
+tocl      .(
+          ldy spalte
+          cpy wx
+          beq c4
+          dec spalte
+          rts
+c4        ldy wr
+          dey
+          sty spalte
+&tocu     ldx zeile
+          beq c5
+          dex
+c5        jsr setzei
+          rts
+          .)
+          
+towlo     .(
+          lda spalte
+          sta wx
+          lda wh
+          sec
+          sbc zeile
+          sta wh
+          lda zeile
+          clc
+          adc wy
+          sta wy
+          lda #0
+          sta zeile
+          jmp clrli
+          .)
+          
+towru     .(
+          ldy spalte
+          iny
+          sty wr
+          ldx zeile
+          inx
+          stx wh
+          jmp clrli
+          .)
+          
+towcl     .(
+          lda zeile
+          clc
+          adc wy
+          sta zeile
+          lda #0
+          sta wx
+          sta wy
+          lda MAXSPAL
+          sta wr
+          lda MAXZEIL
+          sta wh
+          jmp clrli
+          .)
+          .)
+
+	.)
+devend    .)
+ 

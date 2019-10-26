@@ -1,0 +1,59 @@
+
+lsh v0.1 26dec1997 (c) A.Fachat
+-------------------------------
+
+This is a very first implementation of a simple lib6502 compatible shell.
+It reads the command line, does I/O redirection and starts the called
+program.
+
+The shell can set environment variables, and substitute them in the command
+line.
+
+The internal commands cannot be piped, only redirected. This may
+change in the future (perhaps by threading, at least for pwd and echo)
+
+lsh command line options:
+-------------------------
+
+Usage:
+
+ lsh [options] [file]
+ options:
+  -d 	debug mode - be more verbose
+  --    the following arguments are no options
+ file: 
+  A filename that contains lsh commands. If given, lsh input is read
+  from here instead of stdin and stdout output is suppressed.
+
+Syntax of the lsh commands:
+---------------------------
+
+command [redirection] [ {'|;} command [redirection]] [ {'|;} command... ]]
+
+command is the usual command (with absolute path if not in the current dir)
+with parameter.
+
+redirection is a list of "> file", "< file", or "! file".
+This redirects stdout, stdin or stderr to the given filename.
+A combination "!>" or ">!" redirects stdout and stderr to the same file.
+A ">>" instead of ">" appends to the file instead of overwriting it
+(works for stdout or stdout + stderr only).
+
+A "'" (the lsh pipe symbol) redirects the stdout of the previous task
+to the stdin of the following task.
+
+A ";" at the end of a command waits for the execution before 
+further interpreting the command line.
+
+All redirection chars have to be at the beginning of a 'token'.
+
+builtin commands:
+-----------------
+
+exit		- ends the lsh
+cd path		- changes current directory
+pwd		- print current directory
+set var=value	- sets environment variable
+echo text	- echos text
+uname		- print lib6502/OS ident string
+

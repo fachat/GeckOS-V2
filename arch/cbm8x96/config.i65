@@ -1,0 +1,73 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef _PETCONFIG_
+#define _PETCONFIG_
+
+#echo ******** PET config **********
+
+
+/*        StreamData            */
+
+#define   ANZSTRM   16		/* number of streams */
+
+/*        SemaphoreData         */
+
+#define   ANZSEM    8         	/* number of semaphores - multiple of 8 */
+#define   SYSSEM    8         	/* multiple of 8, no of system semaphores
+				   i.e. sems from -SYSSEM to -1 */
+
+/*        DeviceData            */
+
+#define   MAXDEV    16		/* maximum number of devices */
+
+/*        EnvData               */
+
+#define	  MAXENVS	1	/* one environment only */
+
+#ifndef STACKCOPY
+#define   MAXNTHREADS    5    	/* (Stackpage-56)/40          */
+#define	  MAXNTASKS	 5
+#define	  STACKSIZE      40   	/* (TH_SLEN * 5) */
+#else
+#define	  MAXNTHREADS    12    	/* (up to 16 is possible, if enough memory) */
+#define	  MAXNTASKS	 12
+#define	  STACKSIZE      64   	/* (TH_SLEN * 8) */
+#endif
+#define   ANZXENV   5         	/* number of redirectable task IDs */
+
+/*        TaskData              */
+
+#define   IRQCNT    3		/* default priority for ROM-started tasks */
+
+/*        FileManager           */
+
+#define   MAXFS     4		/* maximum number of fileserver tasks */
+
+/* we don't map any of these memory areas */
+#undef 	  MAP_ZERO
+#undef	  MAP_STACK
+#undef	  MAP_MEM
+
+#endif	/* _PETCONFIG_ */
+

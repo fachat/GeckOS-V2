@@ -1,0 +1,254 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * TCP services for SLIP/TCP A65
+ *
+ */
+
+	.(
+echo_srv
+        .byte 0,0,0,0, 0,0, 7,0, SFL_MULT
+        .word dummy_open-1, tcp_echo_queue-1, 0, tcp_signal-1
+discard_srv
+        .byte 0,0,0,0, 0,0, 9,0, SFL_MULT
+        .word dummy_open-1, tcp_disc_queue-1, 0, tcp_signal-1
+chargen_srv
+        .byte 0,0,0,0, 0,0, 19,0, SFL_MULT
+        .word dummy_open-1, tcp_disc_queue-1, tcp_chargen_loop-1, tcp_signal-1
+
+&tcp_test_init
+        lda #<echo_srv
+        ldy #>echo_srv
+        jsr tcp_listen
+        lda #<discard_srv
+        ldy #>discard_srv
+        jsr tcp_listen
+        lda #<chargen_srv
+        ldy #>chargen_srv
+        jsr tcp_listen
+&dummy_open
+	rts
+	.)
+
+&tcp_chargen_loop .(
+	.bss
+cnt	.byt 0
+	.text
+
+	ldy #TCB_NTXBUF
+	lda (tcbp),y
+	bne end
+
+	lda #<TCP_DOFFSET+64
+	ldy #>TCP_DOFFSET+64
+	jsr balloc
+	bcc gotblock
+end	rts
+gotblock
+	stx tmp
+	sta pp
+	sty pp+1
+
+	ldy #TCP_DOFFSET
+l0	lda cnt
+	sta (pp),y
+	inc cnt
+	lda cnt
+	cmp #$20
+	bcc set
+	cmp #126
+	bcc ok
+set	lda #$20
+	sta cnt
+ok	iny
+	cpy #TCP_DOFFSET+64
+	bcc l0
+
+	ldy #0
+	lda #<TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda #>TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda #64
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+
+	ldx tmp
+	jmp tx_queue_packet
+	.)
+
+&tcp_echo_queue .(
+	jmp tx_queue_packet
+#if 0
+	.zero
+zp      .word 0
+z2      .word 0
+	.bss
+slot    .byt 0
+	.text
+
+        stx slot
+        jsr getbadr
+        sta zp
+        sty zp+1
+
+        ldy #0
+        lda (zp),y
+        clc
+        adc zp
+        sta z2
+        iny
+        lda (zp),y
+        adc zp+1
+        sta z2+1
+        iny
+        lda (zp),y
+        tax
+        iny
+        lda (zp),y
+        sta zp+1
+        stx zp
+
+#ifdef DEBUGTCP
+DB("Data: pos=")
+lda z2+1: jsr EHexout: lda z2: jsr EHexout
+DB(" len= ")
+lda zp+1: jsr EHexout: lda zp: jsr EHexout
+jsr ECrlfout
+
+dloop   ldy #0
+        lda (z2),y
+        jsr EHexout
+        lda #" "
+        jsr ECout
+
+        inc z2
+        bne l0
+        inc z2+1
+l0      lda zp
+        bne l1
+        dec zp+1
+l1      dec zp
+        lda zp
+        ora zp+1
+        bne dloop
+
+        jsr ECrlfout
+
+DB("rx_queue_packet: return slot ")
+lda slot: jsr EHexout: lda " ": jsr ECout
+ldx slot: jsr getbadr: pha: tya: jsr EHexout: pla: jsr EHexout: 
+lda #"[": jsr ECout
+ldx slot: jsr getblen: pha: tya: jsr EHexout: pla: jsr EHexout: 
+DB("]")
+/*jsr printmem*/
+#endif
+
+        ldx slot
+        jsr bfree
+        clc
+        rts
+#endif
+        .)
+
+/***************************************************************************/
+
+&tcp_disc_queue .(
+	jmp bfree
+#if 0
+	.zero
+zp      .word 0
+z2      .word 0
+	.bss
+slot    .byt 0
+	.text
+
+        stx slot
+        jsr getbadr
+        sta zp
+        sty zp+1
+
+        ldy #0
+        lda (zp),y
+        clc
+        adc zp
+        sta z2
+        iny
+        lda (zp),y
+        adc zp+1
+        sta z2+1
+        iny
+        lda (zp),y
+        tax
+        iny
+        lda (zp),y
+        sta zp+1
+        stx zp
+
+#ifdef DEBUGTCP
+DB("Data: pos=")
+lda z2+1: jsr EHexout: lda z2: jsr EHexout
+DB(" len= ")
+lda zp+1: jsr EHexout: lda zp: jsr EHexout
+jsr ECrlfout
+
+dloop   ldy #0
+        lda (z2),y
+        jsr EHexout
+        lda #" "
+        jsr ECout
+
+        inc z2
+        bne l0
+        inc z2+1
+l0      lda zp
+        bne l1
+        dec zp+1
+l1      dec zp
+        lda zp
+        ora zp+1
+        bne dloop
+
+        jsr ECrlfout
+
+DB("rx_queue_packet: return slot ")
+lda slot: jsr EHexout: lda " ": jsr ECout
+ldx slot: jsr getbadr: pha: tya: jsr EHexout: pla: jsr EHexout: 
+lda #"[": jsr ECout
+ldx slot: jsr getblen: pha: tya: jsr EHexout: pla: jsr EHexout: 
+DB("]")
+/*jsr printmem*/
+#endif
+
+        ldx slot
+        jsr bfree
+        clc
+        rts
+#endif
+        .)
+

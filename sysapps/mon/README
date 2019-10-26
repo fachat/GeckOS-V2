@@ -1,0 +1,6 @@
+
+This directory actually contains the old shell and monitor, but with
+the shell disabled. They both use the old stdlib functions for 
+output (which has yet to be changed, as well as the old shell code
+removed when a new one is written)
+

@@ -1,0 +1,42 @@
+<html><head>
+<title> OS/A65 Embedded Application Notes </title>
+</head><body bgcolor="#ffffff">
+<p><h1 align=center> OS/A65 Embedded Application Notes </h1></p>
+<p><h2 align=center> (c) 1989-98 Andre Fachat </h2></p>
+<hr>
+<h3 align=center>OS/A65 Embedded Version 2.0</h3>
+<h4>Introduction</h4>
+<p>
+Embedded applications normally don't have the amount of RAM and ROM
+that a "normal" (whatever this means) system has. Therefore I have tried
+to make some parts of the kernel removable, allowing for a much smaller
+kernel to fit into embedded applications.
+</p><p>
+This way the more interesting features are still available, like
+multithreading, signals and the device code. Some of the more sophisticated
+kernel features can be removed however. For how to do this see
+the <a href="kernel.html#config">config</a> section of the kernel
+description. The application can be tested on a full-featured
+system while the embedded kernel provides compatibility where necessary.
+</p><p>
+Parts of the kernel that can be removed are
+</p><ul>
+<li>streams
+<li>memory management
+<li>file manager
+<li>send/receive
+<li>semaphores
+</ul>
+<p>
+This shortens the kernel to almost 2k in size.
+Also the used amount of RAM is $bc = 188 byte normal RAM,
+plus $e = 14 byte zeropage (not counting the environment, task and
+thread-save 6 bytes from addresses 2-8), also not counting 
+the possible use of PCBUF by fork and devcmd. 
+1k RAM total should now be sufficient for simple applications.
+</p><p>
+Using the PCBUF without locking with a semaphore should be handled with 
+care, however.
+</p>
+</body>
+</html>

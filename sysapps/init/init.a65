@@ -1,0 +1,671 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This process starts other processes from the ROM, using the normal
+ * ROM link chain. It starts PK_PRG and PK_FS types only.
+ *
+ * The difference between PK_INIT type (like this one) and the above 
+ * mentioned is that PK_INIT type processes do _not_ get the SENDBUF
+ * with their command line, because the kernel is unable to alloc
+ * more than one SEM_SENDBUF during startup which can only be released 
+ * by an already started process!
+ *
+ * You can define INIT_VERBOSE if you want init to print out
+ * some debugging/logging info.
+ * If you define INIT_OUTDEV with the device number, this device is used
+ * to print the info, otherwise device 0 is used.
+ * 
+ * If INIT_USE_STDLIB is defined, init uses the STDIO library, otherwise
+ * it will include its own printing routines if INIT_VERBOSE is defined.
+ *
+ * If INIT_MERGE is defined, then files can be started with their STDOUT/STDERR
+ * sent to the same device as the init process.
+ *
+ * If INIT_LIB6502 is defined, then PK_LIB ROM entries are supported and
+ * started with the lib6502 forkto call - or at least with an undocumented
+ * derivate... (argh, horrible code...).
+ */
+
+#include "kernel.i65"
+#include "kdefs.i65"
+
+#ifdef INIT_LIB6502
+#include "lib6502.i65"
+#endif
+
+#ifndef INIT_OUTDEV
+#define INIT_OUTDEV 	0
+#endif
+
+          .(
+
+start     .word ende            ; pointer to end of file in ROM
+          .byt  PK_INIT+$80     ; file type = init task + auto-execute bit
+          .word PRG             ; execution start
+          .byt  3               ; RAM size in 256-byte blocks
+          .byt  >$ff-ROMSTART	; shared mem size in 256-byte blocks
+          .byt  0               ; priority
+          .word 0               ; stdin, stdout/stderr device number
+          .asc  "init",0,0      ; command line
+
+	  .zero
+pz	  .word 0
+s1	  .byt 0
+s2	  .byt 0
+	  .text
+
+#ifdef INIT_RESTART
+
+#ifndef INIT_MAXRESTART
+#define	INIT_MAXRESTART	7
+#endif
+
+	.data
+npid	.byt 0
+kpid	.byt 0			; number of killed tasks
+lpa	.dsb INIT_MAXRESTART
+hpa	.dsb INIT_MAXRESTART
+pid	.dsb INIT_MAXRESTART
+killed	.dsb INIT_MAXRESTART	; this can still overflow - non-restartable
+				; tasks give signals too!
+	.text
+#endif
+
+PRG	  .(
+#ifdef INIT_VERBOSE
+	; first organize stream and set device accordingly
+	jsr GETSTR
+	bcs no_out
+	stx s1
+	ldy s1
+	ldx #INIT_OUTDEV
+	lda #DC_GS
+	jsr DEVCMD
+	ldx #INIT_OUTDEV
+	lda #DC_TX_ON
+	jsr DEVCMD
+	sec
+	ldx #STDOUT
+	lda s1
+	jsr DUP
+no_out
+	ldx #0
+	jsr itout
+#endif
+#ifdef INIT_RESTART
+	lda #<sigadr
+	ldy #>sigadr
+	sec
+	jsr SETSIG
+
+	lda #SIG_CHLD
+	clc
+	jsr SETSIG
+
+	lda #0
+	sta npid
+	sta kpid
+#endif
+
+	  lda #<ROMSTART
+          sta pz
+          lda #>ROMSTART
+          sta pz+1
+
+startloop
+          ldy #0
+          lda (pz),y
+          iny
+          and (pz),y
+          cmp #$ff
+          bne slx1
+endloop   
+#ifdef INIT_RESTART
+	  jmp restarts
+#else
+	  jmp TERM
+#endif
+
+slx1	jsr dostart
+#ifdef INIT_RESTART
+	bcs norestart
+
+	ldy #P_KIND+2
+	lda (pz),y
+	and #$40
+	beq norestart
+	ldy npid
+	cpy #INIT_MAXRESTART
+	bcs norestart
+	lda pz
+	sta lpa,y
+	lda pz+1
+	sta hpa,y
+	txa
+	sta pid,y
+	inc npid
+#ifdef INIT_VERBOSE
+	ldx #9
+	jsr itout
+#endif
+#endif
+norestart
+          ldy #0
+          lda (pz),y
+          tax
+          iny
+          lda (pz),y
+          sta pz+1
+          stx pz
+          jmp startloop
+
+	.)
+
+	.(
+&getserr3 
+	  ldx s2
+	  lda #SC_EOF
+	  jsr STRCMD
+	  lda #SC_EOF
+	  jsr STRCMD
+	  jmp gs2
+
+getserr2 
+	  ldx s2
+	  lda #SC_EOF
+	  jsr STRCMD
+	  jsr FRESTR
+gs2
+#ifdef INIT_VERBOSE
+	  ldx #10
+	  jsr itout
+	  jsr gs
+	  sec
+	  rts
+#endif
+	  
+getserr1  
+#ifdef INIT_VERBOSE
+	  ldx #6
+	  jsr itout
+#endif
+gs
+	  ldx s1
+	  jsr FRESTR
+#ifdef INIT_VERBOSE
+	  sec
+	  rts	;jmp inext
+#endif
+getserr
+#ifdef INIT_VERBOSE
+	  ldx #6
+	  jsr itout
+#endif
+	  sec
+	  rts
+
+
+&getstrs  jsr GETSTR
+          bcs getserr
+          stx s1
+
+#ifdef INIT_MERGE
+#ifdef INIT_VERBOSE
+	  ldy #P_DEV+3
+	  lda (pz),y
+	  cmp #INIT_OUTDEV
+	  bne getnew
+
+	  ldx #STDOUT
+	  lda #SC_REG_WR
+	  jsr STRCMD
+	  lda #SC_REG_WR
+	  jsr STRCMD
+	  stx s2
+	  jmp oldstr
+getnew
+#endif
+#endif
+          jsr GETSTR
+	  bcs getserr1
+getserr3a bcs getserr3
+	  stx s2
+	  lda #SC_REG_WR	; register second writer (for STDERR)
+	  jsr STRCMD
+          ldy #P_DEV+3
+          lda (pz),y
+          tax
+	  pha
+          ldy s2
+          lda #DC_GS
+          jsr DEVCMD
+	  pla
+	  bcs getserr2
+	  tax
+          lda #DC_TX_ON
+          jsr DEVCMD
+oldstr	
+          ldy #P_DEV+2
+          lda (pz),y
+          tax
+	  pha
+          ldy s1
+          lda #DC_PS
+          jsr DEVCMD
+	  pla
+	  bcs getserr3a
+          tax
+          lda #DC_RX_ON
+          jsr DEVCMD
+	  clc
+	  rts
+	  .)
+
+dostart	  .(
+	  jsr YIELD	; give devices time to clear state for restart
+
+          ldy #P_KIND+2
+          lda (pz),y
+          bpl slx2
+          and #$3f
+          cmp #PK_PRG
+          beq iprg
+          cmp #PK_FS
+          beq ifs
+#ifdef INIT_LIB6502
+	  cmp #PK_LIB
+	  bne slx2
+	  jmp execlib
+#endif
+slx2    clc  
+slx2a	jmp inext
+
+ifs
+          ldx #STDNUL
+          stx s1
+          stx s2
+          bne ifs1
+
+iprg	  jsr getstrs
+	  bcs slx2a
+ifs1      
+	  clc
+	  ldx #SEM_SENDBUF
+	  jsr PSEM		; alloc PCBUF - also does serializing, as
+				; forked process releases it
+	  lda s2
+          sta PCBUF+FORK_STDOUT
+          sta PCBUF+FORK_STDERR
+          lda s1
+          sta PCBUF+FORK_STDIN
+          ldy #P_PRIORITY+2
+          lda (pz),y
+          sta PCBUF+FORK_PRIORITY
+
+          ldy #P_RAM+2
+          lda (pz),y
+          sta PCBUF+FORK_SIZE
+          iny
+          lda (pz),y
+          sta PCBUF+FORK_SHARED
+
+          ldy #P_ADDR+2
+          lda (pz),y
+          sta PCBUF+FORK_ADDR
+          iny
+          lda (pz),y
+          sta PCBUF+FORK_ADDR+1
+
+          ldy #P_NAME+2-1
+cmdn      iny
+          lda (pz),y
+          sta PCBUF+FORK_NAME-P_NAME-2,y
+          bne cmdn
+	  cmp PCBUF+FORK_NAME-P_NAME-3,y	; last byte also 0?
+	  bne cmdn
+          iny
+
+#ifdef INIT_VERBOSE
+	tya
+	pha
+	ldx #1
+	jsr itout
+	ldy #0
+ll	lda PCBUF+FORK_NAME,y
+	beq lx
+	jsr putc
+	iny
+	bne ll
+	beq end
+lx	lda PCBUF+FORK_NAME-1,y
+	beq end
+	lda #" "
+	jsr putc
+	iny
+	bne ll
+end
+	ldx #3
+	jsr itout
+	pla
+	tay
+#endif	
+	
+          jsr FORK
+	  bcc inext1
+	 		; on error release streams -> auto-release devices
+#ifdef INIT_VERBOSE
+	  ldx #4
+	  jsr itout
+#endif
+
+	  ldx s1
+	  lda #SC_NUL
+	  jsr STRCMD
+	  ldx s2
+	  lda #SC_EOF
+	  jsr STRCMD
+	  lda #SC_EOF
+	  jsr STRCMD
+
+	  sec
+	  rts
+	  ; jmp inext
+
+inext1
+#ifdef INIT_VERBOSE
+	txa
+	pha
+	ldx #5
+	jsr itout
+	pla
+	tax
+	clc
+#endif
+inext	rts
+	.)
+
+#ifdef INIT_VERBOSE
+
+	.(
+
+m0	.asc "Init V1.0 booting^M^J",0
+m1	.asc "Start ",34,0
+m2=0
+m3	.asc 34,":",0
+m4	.asc " failed!^M^J",0
+m5	.asc " ok!^M^J",0
+m6	.asc "Couldn't alloc streams!^M^J",0
+#ifdef INIT_RESTART
+m7	.asc "^M^JReceived sigchld from ",0
+m8 	=m7-3
+m9	.asc "Prepared restart!^M^J",0
+m10	.asc "Could not set device stream!^M^J",0
+#endif
+
+haddr	.byt >m0, >m1, >m2, >m3, >m4, >m5, >m6
+#ifdef INIT_RESTART
+	.byt >m7, >m8, >m9, >m10
+#endif
+laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
+#ifdef INIT_RESTART
+	.byt <m7, <m8, <m9, <m10
+#endif
+
+&itout	.(
+	lda haddr,x
+	tay
+	lda laddr,x
+
+&itxtout 
+#ifdef INIT_USE_STDLIB
+	jmp Txtout
+
+hexout	=Hexout
+putc	=Putc
+
+#else
+	.zero
+tp	.word
+	.text
+
+	sta tp
+	sty tp+1
+	ldy #0
+tol	lda (tp),y
+	beq tole
+	jsr putc
+	iny
+	bne tol
+	inc tp+1
+	bne tol
+tole	rts
+	.)
+
+&hexout	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibout
+	pla
+	and #$0f
+nibout	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc putc
+	adc #6
+
+&putc	pha
+	ldx #STDOUT
+	jsr PUTC
+	bcc ok
+	cmp #E_NUL
+	beq ok
+	cmp #E_NOSTR
+	beq ok
+	jsr YIELD
+	pla
+	jmp putc
+ok	pla
+	rts
+#endif
+	.)
+#endif
+
+#ifdef INIT_RESTART
+
+restarts .(
+	jsr YIELD
+	ldx kpid
+	beq restarts
+
+	lda killed
+	ldx #0
+l1
+	cmp pid,x
+	beq doit
+	inx
+	cpx #INIT_MAXRESTART
+	bcc l1
+
+rmpid	php
+	sei
+	ldx #0
+ll	lda killed+1,x
+	sta killed,x
+	inx
+	cpx kpid
+	bcc ll
+	dec kpid
+	plp
+	jmp restarts
+
+doit
+	lda hpa,x
+	sta pz+1
+	lda lpa,x
+	sta pz
+	txa
+	sei
+	pha
+	jsr dostart
+	pla
+	tay
+	txa
+	bcc ok
+	lda #<-1
+ok	sta pid,y
+	cli
+	jmp rmpid
+	.)
+
+sigadr	.(
+	txa
+	pha
+	tya 
+	pha
+#ifdef INIT_VERBOSE
+	ldx #7
+	jsr itout
+#endif
+loop	jsr CHECKCHLD
+	bcs end
+	txa 
+#ifdef INIT_VERBOSE
+	pha
+	jsr hexout
+	lda #" "
+	jsr putc
+	pla
+#endif
+	php
+	sei
+	ldx kpid
+	sta killed,x
+	inx
+	cpx #INIT_MAXRESTART
+	bcs l1
+	stx kpid
+l1	plp			/* TODO: give message if overflow */
+	jmp loop
+end
+#ifdef INIT_VERBOSE
+	ldx #8
+	jsr itout
+#endif
+	pla
+	tay
+	pla
+	tax
+	pla
+	rti
+	.)
+
+#endif
+
+#ifdef INIT_LIB6502
+execlib	.(
+	.bss
+libbuf	.dsb 64
+	.text
+
+	jsr getstrs
+	bcs end
+
+	jsr GETSTR
+	bcs end2
+	txa
+	pha
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+	
+	pla
+	sta PCBUF+FORK_NAME
+	pha
+
+	lda s1
+	sta PCBUF+FORK_STDIN
+	lda s2
+	sta PCBUF+FORK_STDOUT
+	sta PCBUF+FORK_STDERR
+
+	lda pz
+	clc
+	adc #P_NAME+2-3		; emulate lib6502 forkto struct
+	sta THREADSAVE
+	lda pz+1
+	adc #0
+	sta THREADSAVE+1
+
+#ifdef INIT_VERBOSE
+	ldx #1
+	jsr itout
+	ldy #3
+ll	lda (THREADSAVE),y
+	beq lx
+	jsr putc
+	iny
+	bne ll
+	beq end1
+lx	cpy #3
+	beq next
+	dey
+	lda (THREADSAVE),y
+	iny
+	cmp #0
+	beq end1
+next	lda #" "
+	jsr putc
+	iny
+	bne ll
+end1
+	ldx #3
+	jsr itout	
+#endif
+	pla
+	jsr init_forkto		; extra jmp-point in lib6502 implementation
+#ifdef INIT_VERBOSE
+	php
+	txa
+	pha
+	bcc ifork_ok
+	ldx #4
+	.byt $2c
+ifork_ok ldx #5
+	jsr itout
+	pla
+	tax
+	plp
+#endif
+	rts
+
+end2	jsr getserr3
+end	rts	;jmp inext
+	.)
+#endif
+
+ende      .)
+

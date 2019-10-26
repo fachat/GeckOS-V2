@@ -1,0 +1,389 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/******************** input loop ************************/
+
+	.(
+	.bss
+islot	.byt 0
+ist	.byt 0		; 0=send data, $80= escaped
+ilen	.word 0
+ihl	.byt 0
+
+	.zero
+ip	.word 0
+
+	.bss
+iend	.word 0
+
+	.text
+
+&iinit	.(
+	lda #<-1
+	sta islot
+	clc
+	rts
+	.)
+
+startin .(
+	.bss
+oopscnt	.byt 0
+	.text
+
+/*DB("startin")*/
+	lda #<MTU
+	ldy #>MTU
+	jsr balloc
+	bcs oops
+
+&iresp	stx islot
+	sta ip			/* reset packet */
+	sty ip+1
+
+	lda #255
+	sta oopscnt
+
+	jsr getblen
+	clc
+	adc ip
+	sta iend
+	tya
+	adc ip+1
+	sta iend+1
+#if 0
+DB("iresp: ip=")
+lda ip+1:jsr EHexout: lda ip:jsr EHexout
+lda #":":jsr ECout:lda slotladr:jsr EHexout
+jsr ECrlfout
+#endif
+	lda #0
+	sta ist
+	clc
+	rts
+
+oops	.(
+
+#ifdef DEBUGMEM
+DB("startin Oops!^m^j")
+jsr printmem
+#endif	
+
+	dec oopscnt
+	bne doret
+	lda #255
+	sta oopscnt
+	jsr tcp_kill	; kill first non-listening connection
+doret	sec
+	rts
+	.)
+
+	.)
+
+&loopin	.(
+	bit islot
+	bpl running
+	jsr startin
+	bcs ende
+running
+
+#ifdef DEBUGSLIP
+ldx islot
+jsr getbadr
+bcc adrok2
+DB("illegal slot# at loopin^m^j")
+adrok2
+#endif
+
+	ldx #STDIN
+	jsr GETC
+	bcc gotbyt
+ende 	rts
+gotbyt
+	cmp #SL_END
+	bne nogotpacket
+	jmp gotpacket
+nogotpacket
+	cmp #SL_ESC
+	bne noesc
+	sta ist
+	beq loopin
+noesc
+	bit ist
+	bpl noescape
+	cmp #SL_ESC_ESC
+	beq isesc
+	cmp #SL_ESC_END
+	bne noescape
+	lda #SL_END
+	.byt $2c
+isesc	lda #SL_ESC
+noescape
+	ldy #0
+	sty ist
+	sta (ip),y
+	inc ip
+	bne l1
+	inc ip+1
+l1
+	lda ip+1
+	cmp iend+1
+	bcc loopin
+	bne discard
+	lda ip
+	cmp iend
+	bcc loopin
+DB("input buffer overflow!^m^j")
+discard
+	ldx islot
+	bpl discok
+DB("discard with invalid islot!^m^j")
+	rts
+discok
+	jsr getbadr
+	bcs boom
+	jmp iresp	; no inloop, because if only SL_ENDs are sent, this
+			; would become an almost infinite loop
+boom	
+DB("illegal slot# in discok^m^j")
+boom1	lda #<-1
+	sta islot
+	rts
+
+gotpacket
+	ldx islot
+	lda ip
+	sta iend
+	ldy ip+1
+	sty iend+1
+	and #1
+	beq even	; fill up with nullbyte if length is odd
+	lda #0
+	tay
+	sta (ip),y
+even
+	jsr getbadr
+	bcc adrok
+DB("illegal slot# in gotpacket^m^j")
+	jmp boom1
+adrok
+	sta ip
+	sty ip+1
+#if 0
+pha:tya:pha
+DB("slot=")
+lda islot:jsr EHexout
+DB("ip=")
+lda ip+1:jsr EHexout: lda ip:jsr EHexout
+lda #":":jsr ECout:lda slotladr:jsr EHexout
+jsr ECrlfout
+pla:tay:pla
+#endif
+	cmp iend
+	bne ok
+	cpy iend+1
+	bne ok
+	jmp discard	; zero length packet received
+ok
+
+#ifdef DEBUGPKT
+	/* so what now? */
+DB("Received Packet: ip=")
+lda ip+1:jsr EHexout:lda ip:jsr EHexout: jsr ECrlfout
+#if 1
+	ldx #ip:lda #48:ldy #0
+	jsr printpacket2
+
+DB("^m^jip=")
+lda ip+1:jsr EHexout:lda ip:jsr EHexout
+DB("^m^jiend=")
+lda iend+1:jsr EHexout:lda iend:jsr EHexout
+#endif
+#endif
+
+	/* sanity checks */
+	/* header length */
+	ldy #IPH_LEN	; length in hi/lo format in IP header
+	lda (ip),y
+	sta ilen+1
+	iny
+	lda (ip),y
+	sta ilen
+
+#if 0 /*def DEBUGPKT*/
+DB("^m^jiph->len=")
+lda ilen+1
+jsr EHexout
+lda ilen
+jsr EHexout
+jsr ECrlfout
+#endif
+	clc
+	lda ilen
+	adc ip
+	php
+	cmp iend
+	bne discp
+	plp
+	lda ilen+1
+	adc ip+1
+	cmp iend+1
+	beq lenok
+	php
+discp	
+#if 0
+DB("discp: ip=")
+lda ip+1:jsr EHexout:lda ip:jsr EHexout
+DB(" ilen=")
+lda ilen+1:jsr EHexout:lda ilen:jsr EHexout
+DB(" iend=")
+lda iend+1:jsr EHexout:lda iend:jsr EHexout
+jsr ECrlfout
+#endif
+	plp
+	jmp discardlen
+lenok
+	/* header checksum */
+	lda #0
+	;sta ipl+1
+	ldy #IPH_VER
+	lda (ip),y
+	and #$0f
+	asl
+	asl
+	sta ihl
+
+	lda ihl
+	ldy #0
+	ldx #ip
+	jsr checksum3
+
+#if 0 /*def DEBUGPKT*/
+php
+pha
+txa
+pha
+DB("Header Checksum=")
+pla
+tay
+jsr EHexout
+pla
+pha
+jsr EHexout
+jsr ECrlfout
+tya
+tax
+pla
+plp
+#endif
+
+	bcs discardcs
+
+	.(		; take our IP address from received packet */
+	lda MyIP
+	bne checkip
+	ora MyIP+1
+	ora MyIP+2
+	ora MyIP+3
+	bne checkip
+
+	/* copy my IP address */
+	ldy #IPH_TRG
+l2 	lda (ip),y
+	sta MyIP-IPH_TRG,y
+	iny
+	cpy #IPH_TRG+4
+	bcc l2	
+checkip	.)
+
+	/* check my IP address */
+	ldy #IPH_TRG
+l2 	lda MyIP-IPH_TRG,y
+	cmp (ip),y
+	beq bla
+	jmp discardip
+bla
+	iny
+	cpy #IPH_TRG+4
+	bcc l2
+
+	ldy #IPH_TTL
+	lda (ip),y
+	bne ttlok
+	jsr putbuf
+	jmp replytrace
+ttlok
+	
+	/**** so that packet is valid -> process it ****/
+	/* ip has a pointer to the packet, ihl the header length */
+	/* ilen has the total packet length */
+
+	ldy #IPH_PROT
+	lda (ip),y
+
+	cmp #1
+	bne noicmp
+	jsr putbuf
+	jmp icmp2
+noicmp
+	cmp #17
+	bne noudp
+	jsr putbuf
+	jmp udprx
+noudp
+	cmp #6
+	bne notcp
+	jsr putbuf
+	jmp tcprx2
+notcp
+	DB("Packet discarded: unknown protocol^m^j")
+	jmp discard
+
+discardcs
+	DB("Packet discarded: IP Header checksum^m^j")
+disc	jmp discard
+
+discardip
+	DB("Packet discarded: wrong IP^m^j")
+	jmp discard
+
+discardlen
+	DB("Packet discarded: length mismatch^m^j")
+	jmp discard
+
+	.)
+
+putbuf	.(
+	ldx islot
+	lda ilen
+	ldy ilen+1
+	jsr btrunc	; cut to size
+	
+	ldx islot
+	lda #<-1
+	sta islot
+	lda ihl
+	rts
+	.)
+
+	.)

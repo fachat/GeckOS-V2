@@ -1,0 +1,84 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This little program starts the Gecko with the builtin ROM when 
+ * it is connected to the emulator board
+ * It does not map anything else. 
+ */
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+#include  "../../csa65/csa65.i65"
+
+          .word $400
+          *=$400
+          
+l1        =$0
+			 	; exit all devices
+          lda #0
+          sta l1
+l2        ldx l1
+          lda #DC_EXIT
+          jsr DEVCMD
+          inc l1
+          lda l1
+          cmp #16
+          bcc l2
+				; disable timer interrupt
+          lda SYSPORT
+          and #$ff-SYS_IRQEN
+          sta SYSPORT
+
+          sei			; remap MMU pages 
+	  ldy #$21
+	  ldx #1
+l3	  tya
+	  sta $eff0,x
+	  inx
+	  iny
+	  cpx #16
+	  bcc l3
+
+          ldx #0		; copy program to valid RAM
+l5        lda data,x
+          sta $1000,x
+          inx
+          bne l5
+          
+          jmp $1000		; and jump there
+          
+data      
+	  lda #$20		; remap page 0
+          sta $eff0
+;	  lda #$0b
+;	  sta $eff7		; map $0e000 to $07000 for ext. I/O
+;	  lda #$2e
+;	  sta $effe
+	  lda SYSPORT
+	  ora #%00100000	; ioinh
+	  and #%11101111	; extio
+	  sta SYSPORT
+
+          jmp RESET
+

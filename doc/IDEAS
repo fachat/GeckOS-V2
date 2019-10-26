@@ -1,0 +1,33 @@
+
+- vt100 control codes for the console
+
+- native C128 port
+
+- use STDIN stream as 'controlling terminal', i.e. when break flag on 
+  STDIN stream is set, send SIG_BRK to task (to be done in scheduler?).
+
+- slipd/rsh should interpret telnet commands and options transparently
+  when telnet port is used. Set the stream break flag for example.
+  This would make slipd the controlling terminal for the remotely started 
+  process.
+
+- map $e8** to some other place when entering the kernel to gain
+  two more kB for CS/A65 architecture
+
+- stream receiver sets special bit to indicate it can receive block 
+  commands -> sender can send parameter for a BLKCPY call where the
+  receiver directly copies data from sender memory.
+  When this bit is not set, sender does not send block but only byte data.
+  Problem: serialization of block command byte sequence read/write,
+  i.e. multiple readers/writers have to content for the stream 
+
+- move the WD1772 stuff from fsibm to some other file and abstract it
+  to a kind of block device interface. Then have some SCSI disk 
+  block device, RAMdisk block device, VC1571 MFM mode block device...
+
+- clean up out-of-band data path, i.e. CTRL-C in terminal, SIGINT,
+  lib6502 kill -> SIG_KILL, ...
+
+- lib6502 call "loader" to load overlays and remove overlays again,
+  including binding etc. Probably in different steps?
+

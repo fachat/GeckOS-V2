@@ -1,0 +1,465 @@
+/****************************************************************************
+
+    OS/A65 Version 2.0.0
+    lib6502 httpd program
+
+    Copyright (C) 1997-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This is a horribly simple www server to show how listen/accept 
+ * should be used.
+ * It can only serve one file at a time, accepting other connections
+ * after finishing a file. 
+ * 
+ * The server built into OS/A65 slipd is much better worked out, although
+ * it also has its flues...
+ */
+
+#include "lib6502.i65"
+
+#define	WWWPORT	8080
+#define	BUFLEN	100
+#define	FBUFLEN	128
+
+#define	DEBUG
+
+	.(
+	.zero
+p	.word 0
+	.bss
+lport	.byt 0
+netfn	.byt 0
+filefn	.byt 0
+buf	.dsb BUFLEN
+	.text
+
++main	.(
+	sta p
+	sty p+1
+
+	lda #0
+	sta lport
+
+	lda #<wwwpath
+	ldy #>wwwpath
+	jsr chdir
+
+	jsr parsepar
+	bcs ret
+
+	lda #<txt1
+	ldy #>txt1
+	jsr txtout
+#ifdef DEBUG
+	ldx #STDIN
+	sec
+	jsr fgetc
+#endif
+	lda #<listenarg
+	ldy #>listenarg
+	ldx #IPV4_TCP
+	clc
+	jsr listen
+	bcs ret
+	stx lport
+
+	lda #<txt2
+	ldy #>txt2
+	jsr txtout
+#ifdef DEBUG
+	ldx #STDIN
+	sec
+	jsr fgetc
+#endif
+aloop
+	sec
+	lda #BUFLEN
+	sta abuf
+	lda #<abuf
+	ldy #>abuf
+	ldx lport
+	jsr accept
+	bcc gotone
+ende	
+	ldx lport
+	sec
+	jsr listen
+
+ret	rts
+
+gotone	stx netfn
+	jsr getline
+	bcs doclose
+	jsr parsereq
+	bcs doclose
+	jsr dofile
+	ldx filefn
+	jsr fclose
+doclose
+	ldx netfn
+	jsr fclose
+	jmp aloop
+	.)
+
+	.data
+txt1	.asc "^m^jhttpd: start listening",0
+txt2	.asc "^m^jhttpd: start accepting",0
+
+/***********************************************************************/
+
+getline	.(
+	ldy #0
+	ldx netfn
+l0	sec
+	jsr fgetc
+	bcs ferr
+	cmp #13
+	beq eol
+	sta buf,y
+	iny
+	cpy #BUFLEN
+	bcc l0
+ferr	
+	; file error or buffer overflow error
+	ldx netfn
+	jsr fclose
+	sec
+	rts
+
+eol	; end of line
+	lda #0
+	sta buf,y
+
+#ifdef DEBUG
+	lda #<lt
+	ldy #>lt
+	jsr txtout
+	lda #<buf
+	ldy #>buf
+	jsr txtout
+	jsr crlfout
+
+	.data
+lt	.asc "httpd: got request: ",0
+	.text
+
+#endif
+	clc
+	rts
+	.)
+
+/**************************************************************************/
+
+dofile	.(
+	.bss
+fpars	.dsb 4
+fbuf	.dsb FBUFLEN
+	.text
+
+	; drain network input, in case it blocks otherwise
+	ldx netfn
+drain	clc
+	jsr fgetc
+	bcc drain
+
+	jsr yield
+
+	; read a block from file
+	lda #<fbuf
+	sta fpars
+	lda #>fbuf
+	sta fpars+1
+	lda #<FBUFLEN
+	sta fpars+2
+	lda #>FBUFLEN
+	sta fpars+3
+
+	lda #<fpars
+	ldy #>fpars
+	ldx filefn
+	clc
+	jsr fread
+	bcs d1
+	lda #E_OK
+d1	pha
+
+	lda #<FBUFLEN
+	sec
+	sbc fpars+2
+	sta fpars+2
+	lda #>FBUFLEN
+	sbc fpars+3
+	sta fpars+3
+	ora fpars+2
+	beq empty
+
+	lda #<fbuf
+	sta fpars
+	lda #>fbuf
+	sta fpars+1
+
+	lda #<fpars
+	ldy #>fpars
+	ldx netfn	
+	sec
+	jsr fwrite
+empty
+	pla
+	cmp #E_EOF
+	bne dofile
+	rts
+	.)
+
+/**************************************************************************/
+
+parsereq .(
+	.zero
+fp	.word 0
+	.text
+
+	ldy #<-1
+n0	iny
+	lda buf,y
+	cmp #" "
+	beq n0
+
+	lda buf,y
+	cmp #"G"
+	bne malformed
+	iny
+	lda buf,y
+	cmp #"E"
+	bne malformed
+	iny
+	lda buf,y
+	cmp #"T"
+	bne malformed
+	
+n1	iny
+	lda buf,y
+	cmp #" "
+	beq n1
+
+	; here we have the address of the filename
+	tya
+	clc
+	adc #<buf
+	sta fp
+	lda #0
+	adc #>buf
+	sta fp+1
+
+	ldy #<-1
+n2	iny
+	lda (fp),y
+	beq ende
+	cmp #" "
+	bne n2		; check for extensions...
+	lda #0
+	sta (fp),y
+ende
+	lda fp
+	ldy fp+1
+	ldx #OPEN_RD
+	jsr fopen
+	bcs notopen
+	stx filefn
+	rts
+
+notopen	ldx #0
+	.byt $2c
+malformed
+	ldx #1
+
+	txa
+	asl
+	asl
+	tay
+	ldx #0
+ll	lda eaddrs,y
+	sta fwpars,x
+	iny
+	inx
+	cpx #4
+	bcc ll
+	lda #<fwpars
+	ldy #>fwpars
+	ldx filefn
+	sec
+	jsr fwrite
+
+	ldx filefn
+	jsr fclose
+	sec
+	rts
+
+	.bss
+fwpars	.dsb 4
+	.data
+eaddrs	.word err0, err1-err0
+	.word err1, err2-err1
+
+err0	.byt "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
+        .asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
+        .asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+        .asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
+        .asc " TCP httpd server error: file not found^m^j"
+        .asc "</BODY>^m^j</HTML>^m^j"
+err1	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
+        .asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
+        .asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+        .asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
+        .asc " TCP httpd server error: malformed request^m^j"
+        .asc "</BODY>^m^j</HTML>^m^j"
+err2
+	.text
+	.)
+
+/**************************************************************************/
+
+	.bss
+digit	.word 0
+	.text
+
+parsepar .(
+	ldy #0
+l1	lda (p),y
+	beq l2
+	iny
+	bne l1
+l2	
+	iny
+	tya
+	clc
+	adc p
+	sta p
+	lda #0
+	adc p+1
+	sta p+1
+
+	ldy #0
+	lda (p),y
+	beq ret
+	lda p
+	ldy p+1
+	jsr chdir
+
+	ldy #0
+l4	lda (p),y
+	beq l3
+	iny
+	bne l4
+l3
+	sta digit
+	sta digit+1
+
+	iny
+	lda (p),y
+	bne pp
+	clc
+	rts
+pp
+        cmp #"0"
+        bcc err
+        cmp #"9"+1
+        bcs err
+
+        jsr nextwdig
+
+        iny
+        lda (p),y
+        bne pp
+
+        lda digit
+        sta wwwport
+        lda digit+1
+        sta wwwport+1
+ret     clc
+        rts
+err     sec
+        rts
+	.)
+
+nextwdig .(
+        pha
+        asl digit
+        rol digit+1
+        lda digit
+        ldx digit+1
+        asl digit
+        rol digit+1
+        asl digit
+        rol digit+1
+        clc
+        adc digit
+        sta digit
+        txa
+        adc digit+1
+        sta digit+1
+        pla
+        and #$0f
+        adc digit
+        sta digit
+        bcc x1
+        inc digit+1
+x1      rts
+        .)
+
+txtout	.(
+	.zero
+p2	.word 0
+	.text
+
+	sta p2
+	sty p2+1
+	ldy #0
+	ldx #STDERR
+l	lda (p2),y
+	beq ret
+	sec
+	jsr fputc
+	iny
+	bne l
+ret
+	rts
+	.)
+
+crlfout	.(
+	ldx #STDERR
+	lda #13
+	sec
+	jsr fputc
+	lda #10
+	sec
+	jmp fputc
+	.)
+
+	.data
+wwwpath	.asc "f:",0
+
+listenarg .byt 3 : wwwport .word WWWPORT
+
+	.bss
+
+abuf	.dsb BUFLEN
+
+	.text
+	.)
+
+

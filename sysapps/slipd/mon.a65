@@ -1,0 +1,135 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * monitor internal variables and print line on change
+ */
+
+	.(
+	.bss
+dlen	.byt 0
+cnt	.byt 0
+buf	.dsb 256
+bufs	.dsb 256
+	.zero
+mp	.word 0
+	.text
+
+&&mon	jsr getdata
+	cpx dlen
+	beq nolen
+	stx dlen
+	jmp printit
+nolen
+	ldx #0
+l0	lda buf,x
+	cmp bufs,x
+	bne printit
+	inx
+	cpx dlen
+	bcc l0
+	rts
+
+printit
+	ldx #0
+l1	lda buf,x
+	sta bufs,x
+	jsr EHexout
+	lda #" "
+	jsr ECout
+	inx
+	cpx dlen
+	bcc l1
+	jmp ECrlfout
+
+getdata	.(
+	ldx #0
+	txa
+ll	sta buf,x
+	inx
+	bne ll
+
+	ldx #0
+
+	lda onslot
+	sta buf,x
+	inx
+/*
+	ldy #0
+l2	lda onslot,y
+	sta buf,x
+	inx
+	iny
+	cpy #MAXOQUEUE+1
+	bcc l2
+*/
+	lda #MAXCONN
+	sta cnt
+	lda #<tcb
+	sta mp
+	lda #>tcb
+	sta mp+1
+l3	ldy #TCB_STATE
+	lda (mp),y
+	beq next
+	sta buf,x
+	inx
+/*
+	ldy #TCB_NTXBUF
+	lda (mp),y
+	sta buf,x
+	inx
+	ldy #TCB_RETRANS
+	lda (mp),y
+	sta buf,x
+	inx
+	ldy #TCB_TXBUF
+	lda (mp),y
+	sta buf,x
+	inx
+*/
+	ldy #TCB_CONN
+	lda (mp),y
+	sta buf,x
+	inx
+next	lda mp
+	clc	
+	adc #TCB_LEN
+	sta mp
+	bcc l4
+	inc mp+1
+l4	dec cnt
+	bne l3
+
+#ifldef thstate
+	lda thstate
+	sta buf,x
+	inx
+#endif
+	
+	rts
+	.)
+
+	.)
+

@@ -1,0 +1,353 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************
+ * Network handling for lib6502
+ * exports
+ * 	Connect, Listen, Accept
+ *
+ */
+
+#ifdef LIB6502_NONET
+
+Accept		jmp notimp
+Listen		jmp notimp
+Connect		jmp notimp
+
+#else
+
+#include "inet.i65"
+
+	.(
+
+&Accept	.(
+	sta zth
+	sty zth+1
+	txa
+	bcc doitnow
+wloop
+	pha
+	jsr doitnow
+	bcc wret
+	cmp #E_NOFILE
+	bne wret
+	pla
+	jsr YIELD
+	jmp wloop
+
+wret	sta zth
+	pla
+	lda zth
+	cmp #1
+	rts
+
+doitnow
+	pha
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	pla
+	sta PCBUF+FSN_PORT
+
+	jsr getfd		; y has fileno + LT_FTAB
+	bcs nofile
+	tya
+	pha
+	
+	ldy #FSN_PORT+1
+	lda #FS_ACCEPT
+	ldx #SEND_NET
+	jsr SEND
+	bcs nosend
+	sec
+	jsr XRECEIVE
+	lda PCBUF+FSN_RET
+	bne reterr
+;.byt 2
+	tya
+	sec
+	sbc #FSN_ADDR-1
+	ldy #0
+	cmp (zth),y	; length of buffer
+	bcc lenok
+	jsr eclose
+	lda #E_NOMEM
+	bne reterr
+lenok
+	tay
+ll	lda PCBUF+FSN_ADDR-1,y
+	sta (zth),y
+	dey
+	bne ll
+
+	pla
+	pha
+	tay
+	lda #3
+	sta (zta),y
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	lda PCBUF+FSN_RXSTR
+	sta (zta),y
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	lda PCBUF+FSN_TXSTR
+	sta (zta),y
+	
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+	sec
+	sbc #LT_FTAB
+	tax
+	lda #E_OK
+	clc
+	rts
+
+nosend	lda #E_NOFILE
+reterr	tax
+	pla
+	tay
+	lda #0
+	sta (zta),y	; free fd - we need not lock that
+	txa
+	.byt $2c
+nofile	lda #E_NOFILE
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+	sec
+	rts
+
+eclose	ldx PCBUF+FSN_RXSTR
+	ldy #SCE_RERRM
+	lda #SC_SSTAT
+	jsr STRCMD
+	lda #SC_NUL
+	jsr STRCMD
+	ldx PCBUF+FSN_TXSTR
+	ldy #SCE_WERRM
+	lda #SC_SSTAT
+	jsr STRCMD
+	lda #SC_EOF
+	jmp STRCMD
+	.)
+
+&Listen .(
+	bcc listenopen
+	txa
+	pha
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	pla
+	sta PCBUF+FSN_PORT
+	
+	ldy #FSN_PORT+1
+	lda #FS_UNLISTEN
+	ldx #SEND_NET
+	jsr SEND
+
+	lda #E_OK
+	clc
+	rts
+
+listenopen
+	sta zth
+	sty zth+1
+	txa
+	pha
+
+	jsr taskinit
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	pla
+	sta PCBUF+FSN_PROT
+
+	ldy #0
+	lda (zth),y
+	tax
+l0	dex
+	beq ende
+	iny
+	lda (zth),y
+	sta PCBUF+FSN_ADDR-1,y
+	jmp l0
+
+ende	tya
+	clc
+	adc #FSN_ADDR
+	tay
+	ldx #SEND_NET
+	lda #FS_LISTEN
+	jsr SEND
+;.byt 2
+	bcs nosend
+	sec
+	jsr XRECEIVE
+;.byt 2
+	lda PCBUF+FSN_RET
+	bne reterr
+
+	lda PCBUF+FSN_PORT
+	pha
+
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	clc
+	pla		; listenport
+	tax
+	lda #E_OK
+	rts
+
+nosend	lda #E_NOFILE
+reterr	pha
+
+	ldx #SEM_SENDBUF
+	jsr VSEM
+
+	pla
+	cmp #1
+	rts
+	.)
+
+/*************************************************************************/
+
+&Connect .(
+	sta zth
+	sty zth+1
+	txa
+	pha
+
+	jsr taskinit
+
+	jsr getrwfd
+	bcc gotfd
+	pla
+	lda #E_NOFILE
+	sec
+	rts
+gotfd
+	txa
+	pha
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	pla
+	pha
+	tax
+	jsr flib2osa_r
+	sta PCBUF+FSN_RXSTR
+	pla
+	pha
+	tax
+	jsr flib2osa_w
+	sta PCBUF+FSN_TXSTR
+
+	tsx
+	lda $0102,x
+	sta PCBUF+FSN_PROT
+
+	ldy #0
+	lda (zth),y
+	tax
+l0	dex
+	beq ende
+	iny
+	lda (zth),y
+	sta PCBUF+FSN_ADDR-1,y
+	jmp l0
+
+ende	tya
+	clc
+	adc #FSN_ADDR
+	tay
+	ldx #SEND_NET
+	lda #FS_CONNECT
+	jsr SEND
+;.byt 2
+	bcs nosend
+	sec
+	jsr XRECEIVE
+;.byt 2
+	lda PCBUF+FSN_RET
+	bne reterr
+
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	clc
+	pla
+	tax		; fd
+	pla		; was protocol
+	lda #E_OK
+	rts
+
+nosend	lda #E_NOFILE
+reterr	sta zth
+
+	ldx #SEM_SENDBUF
+	jsr VSEM
+
+	pla		; fd
+	sta zth+1
+	tax
+	pla		; was protocol
+
+	jsr flib2osa_r
+	lda #SC_EOF
+	jsr STRCMD
+	ldx zth+1
+	jsr flib2osa_w
+	lda #SC_NUL
+	jsr STRCMD
+
+	lda zth
+	pha
+
+	ldx zth+1
+	jsr fclose
+
+	pla
+	cmp #1
+	rts
+	.)
+
+
+	.)
+
+#endif /* LIB6502_NONET */
+

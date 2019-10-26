@@ -1,0 +1,70 @@
+/****************************************************************************
+
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This is a zeropage RAM test routine to be included by kinit, if necessary.
+ * if BATMEM is defined, memory is not erased, rather restored
+ * to the previous state. The memory is then set to MEMINIVAL
+ *
+ * Could probably be made up to check not for the full zeropage,
+ * but only a part of it...
+ */
+
+	  .(
+          ldx #2
+mtl1
+#ifdef BATMEM
+          lda 0,x
+          tay
+#endif
+#ifdef SHORTRAMTEST
+	  lda #MEMINIVAL ^ $ff
+#else
+          lda #$55
+#endif
+          sta 0,x
+          cmp 0,x
+          bne he_zero1
+#ifndef SHORTRAMTEST
+          asl
+          sta 0,x
+          cmp 0,x
+          bne he_zero1
+#endif
+#ifdef BATMEM
+          tya
+#else
+          lda #MEMINIVAL
+#endif
+          sta 0,x
+          cmp 0,x
+          bne he_zero1
+          inx
+          bne mtl1
+	  beq end
+he_zero1  jmp he_zero
+end
+	  .)
+
+
+

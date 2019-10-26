@@ -1,0 +1,161 @@
+<html><head>
+<title> OS/A65 Kernel Filesystem Interface </title>
+</head><body>
+<p><h1 align=center> OS/A65 Kernel Filesystem Interface </h1></p>
+<p> <h2 align=center> (c) 1989-98 Andre Fachat </h2></p>
+<hr>
+The kernel filesystem interface should not be used by normal applications
+anymore. Instead the lib6502 calls should be used.
+<pre>
+
+The interface to the filesystems is handled by the standard send/receive
+and stream routines. To access a file, a message has to be sent to the
+filesystem manager, i.e. to task id SEND_FM.
+To 'mount' a filesystem to a drive, the task has to register itself with
+the filesystem manager. To do this, it sends a message of type FM_REG
+to the filesystem manager. In PCBUF ($0200), the message contains
+the number of drives to register (FM_REG_DRVS) and the task id of
+the filesystem task (FM_REG_ENV).
+
+/*        FileManager              */
+
+#define   SEND_FM        $fe
+
+#define   FM_REG         0
+
+#define   FM_REG_DRVS    0
+#define   FM_REG_ENV     1
+
+
+All other messages to the filesystem manager have to have the drive in
+PCBUF+FM_OPEND_DRV to allow easy redirection. '/' is used to separate 
+dirs from each other in a filename.
+
+#define   FM_OPEN_DRV    0
+
+#define   DIRSIGN        "/"       /* Trennzeichen zwischen Verzeichnissen */
+
+
+The following message types are defined, although not all have been 
+implemented. 
+
+#define   FS_OPEN_RD     1         /* Open file for reading only */
+#define   FS_OPEN_WR     2         /* Open file for writing only (with error
+				      if file exists) */
+#define   FS_OPEN_RW     3         /* Open file for read and write */
+#define   FS_OPEN_OW     4         /* Open file for overwriting */
+#define   FS_OPEN_AP     5         /* Open file for append */
+#define   FS_OPEN_DR     6         /* Open directory for reading */
+#define   FS_RENAME      7         /* rename file */
+#define   FS_DELETE      8         /* remove file */
+#define   FS_FORMAT      9         /* format disk */
+#define   FS_CHKDSK      10        /* check disk */
+#define   FS_CLOSE       11        /* close file (only for FS_OPEN_RW) */
+#define   FS_RMDIR       12        /* remove subdirectory */
+#define   FS_MKDIR       13        /* create subdirectory */
+#define   FS_CHDIR       14        /* ----                                 */
+#define   FS_ASSIGN      15        /* ----                                 */
+
+/* struct, that has to be sent in PCBUF for any FS_OPEN_* message */
+/* after a successful open with FS_OPEN_RD/WR/OW/AP, the filesystem
+tries to read data from stream or write to it. It ends when it
+gets an E_EOF on reading streams or E_NUL on writing streams.
+If a file is read to the end, the filesystem decrements the write
+task counter (thus signaling the end of file) and closes the file
+internally */
+ 
+#define   FS_OPEN_DRV    0         /* drive = FM_OPEN_DRV */
+#define   FS_OPEN_STR    1         /* stream over which the data is 
+				      transfered */
+#define   FS_OPEN_PFAD   2         /* ----                                 */
+#define   FS_OPEN_NAME   3         /* name of the file to be opened */
+
+/* struct to be sent for any message except FS_OPEN_* */
+
+#define   FS_CMD_DRV     0    /* target drive */
+#define   FS_CMD_PFAD    1    /* ---  */
+#define   FS_CMD_FIL     2    /* ---  */
+#define   FS_CMD_NAME    3    /* for rename, the original filename has to
+				 be sent as usual, but after the nullbyte 
+				 at the end of the first name follows the 
+				 name the file has to be renamed to, 
+				 ended with a nullbyte */
+
+/* struct that is sent back by the filesystem task */
+
+#define   FS_X_ERR       0         /* error code, that is also returned 
+				      in the accumulator */
+#define   FS_X_ENV       1         /* task id of filesystem task */
+#define   FS_X_FIL       2         /* file handle (for FS_OPEN_RW only) */
+#define   FS_X_SLEN      3         /* length of this struct (not sent) */
+
+
+A directory is being read as a normal file, but the file has a structrure,
+that is being described here.
+
+/* struct of a directory entry in a directory file */
+
+#define   FS_DIR_LEN     0    /* length of file, 4 byte, lo byte first */
+#define   FS_DIR_YEAR    4    /* year -1900, */
+#define   FS_DIR_MONTH   5    /* month, */
+#define   FS_DIR_DAY     6    /* day, */
+#define   FS_DIR_HOUR    7    /* hour, */
+#define   FS_DIR_MIN     8    /* minute, */
+#define   FS_DIR_SEC     9    /* and second of last change */
+#define   FS_DIR_MODE    10   /* type of file */
+#define   FS_DIR_NAME    11   /* name, ended with a nullbyte */
+
+/* file types */
+
+#define   FS_DIR_MOD_FIL 0    /* normal file */
+#define   FS_DIR_MOD_NAM 1    /* disk name */
+#define   FS_DIR_MOD_FRE 2    /* number of free bytes in FS_DIR_LEN */
+#define   FS_DIR_MOD_DIR 3    /* subdirectory */
+
+
+Now comes the definition of an executable file, as interpreted by the ROM
+startup and by the shell.
+
+/*	Prg-Header		*/
+
+#define	P_KIND		0	/* type of program */
+#define	P_MEM		1	/* memory size in kByte */
+#define	P_RES		2	/* --- */
+#define	P_ADR		4	/* start address of program */
+#define	P_TAB		6	/* memory relocation table: a series of two 
+				   bytes, the first describing the position 
+				   in the MMU map, the second the memory block
+				   to map in this position. This is used
+				   to map the ROM in the memory for 
+				   autostart executables. The table is ended
+				   with a single $ff. */
+
+/*	Prg-types 		*/
+
+#define	PK_PRG		0	/* program executable */
+#define	PK_DEV		1	/* device block - memory size is ignored and
+				   exactly one position in the relocation table
+			    	   has to be set. These values are given to
+				   REGDEV.
+#define	PK_FS		2	/* filesystem - STD* streams are set to 
+				   STDNUL */
+
+
+Appendix
+--------
+
+For the FAT filesystem, several disk sizes have been defined for the 
+format command. The disk size is stored in the FS_CMD_PFAD byte in PCBUF.
+
+dsize   kByte  pages tracks sectors blocksize dd/hd  comment
+------------------------------------------------------------
+  0     360     1     80      9       512      dd	Atari ST single sided
+  1     720     2     80      9       512      dd	3.5"
+  2     1440    2     80     18       512      hd	3.5"
+  3     1200    2     80     15       512      hd       5.25"
+  4     1280    2     80      8      1024      hd       5.25"
+  5     360     2     40      9       512      dd       5.25"
+
+</pre>
+</body>
+</html>

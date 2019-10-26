@@ -1,0 +1,652 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************
+ * Memory management for lib6502
+ * exports
+ * 	binit
+ * 	balloc, bfree, btrunc, bsplit, brealloc
+ *	getbadr, getblen
+ *	bcleanpid, bcleanpida
+ *
+ * The routines are _not_ threadsave!
+ * Alas they use a spin-lock on an environment semaphore.
+ * We use a spin-lock as a memory routine should be fast enough
+ * for that.
+ *
+ * The memory management is initialized when the library is initialized
+ * in an environment. It gets the available memory from the SBRK system
+ * call, and knows the start of the available memory from assemble time.
+ *
+ * The memory list is a linked list of memory blocks. Each memory block
+ * has at its beginning the pointer to the next block, a magic number,
+ * the length of the block, the task id of the owner and a flag if it is
+ * free or not.
+ *
+ * two external variables must be defined,
+ *   	Memstart
+ *	Memend
+ * which hold the start and end addresses of the free RAM
+ */
+
+#define	LM_P		0	/* pointer to next struct */
+#define	LM_MAGIC	2	/* magic number for a valid struct */
+#define	LM_LEN		4	/* length of memory block */
+#define	LM_TASK		6	/* task the block belongs to */
+#define	LM_FL		7	/* 0 = free, 1 = in use */
+#define	LM_SLEN		8	/* length of struct */
+
+#define	LM_MAGIC_VAL	$AF98
+
+#define	MINBUF	8		/* minimum size of memory block */
+#define	MINMASK	%11111000	/* address mask bit of memory block */
+
+#define	MINLEN	(MINBUF+LM_SLEN)
+
+#ifndef MEMINIVAL
+#define	MEMINIVAL 0
+#endif
+
+#undef DEBUGMEM
+#undef DB
+#define	DB(a)
+
+	.(
+
+	.zero
+p1	.word 0
+p2	.word 0
+p3	.word 0
+p4	.word 0
+p5	.word 0
+	.text
+
+&minit	.(
+	lda #<Memstart
+	sta p1
+	lda #>Memstart
+	sta p1+1
+
+	ldy #LM_P
+	lda #<-1
+	sta (p1),y
+	iny
+	sta (p1),y
+	iny
+	lda #<LM_MAGIC_VAL
+	sta (p1),y
+	iny
+	lda #>LM_MAGIC_VAL
+	sta (p1),y
+	iny
+	lda #<Memend-Memstart-LM_SLEN
+	sta (p1),y
+	iny
+	lda #>Memend-Memstart-LM_SLEN
+	sta (p1),y
+	iny
+	lda #<-1
+	sta (p1),y		; no task
+	iny
+	lda #0
+	sta (p1),y		; fl = 0
+	rts
+	.)
+
+&Malloc	.(
+	pha
+	lda #LSEM_MEM
+	jsr llock		; lock memory subsystem
+	pla
+	sta p2			; length of needed memory block
+	sty p2+1
+	sec
+
+&alloc	php			; trick to not unlock when realloc
+
+	lda #<Memstart		; loop over all free memory blocks till
+	sta p1			; we found one larger or equal in size
+	lda #>Memstart
+	sta p1+1
+l0	ldy #LM_FL
+	lda (p1),y
+	bne next
+	ldy #LM_LEN+1
+	lda (p1),y
+	cmp p2+1
+	bcc next
+	bne found
+	dey
+	lda (p1),y
+	cmp p2
+	bcs found
+next	
+	ldy #LM_P
+	lda (p1),y
+	pha
+	iny
+	lda (p1),y
+	sta p1+1
+	pla
+	sta p1
+	and p1+1
+	cmp #$ff
+	bne l0
+
+	plp			; alloc/realloc switch discarded
+	DB("Didn't find appropriate memory block!^m^j")
+	lda #LSEM_MEM
+	jsr lunlock
+	lda #E_NOMEM
+	sec
+	rts
+
+found				; now split memory block in two
+	jsr split
+
+	ldy #LM_FL
+	lda #1
+	sta (p1),y
+	jsr GETPID
+	txa
+	ldy #LM_TASK
+	sta (p1),y
+
+	plp
+	bcc reallocr
+	
+	lda p1
+	clc
+	adc #LM_SLEN
+	pha
+	lda p1+1
+	adc #0
+	tay
+	lda #LSEM_MEM
+	jsr lunlock
+	pla
+reallocr
+	clc
+	rts	
+	.)
+
+&Mfree	.(
+	pha
+	lda #LSEM_MEM
+	jsr llock
+	pla
+	sec
+	sbc #LM_SLEN
+	sta p2
+	sta p1
+	tya
+	sbc #0
+	sta p2+1
+	sta p1+1
+
+	jsr checkblk	; returns only on success, checks (p1)
+
+	sec
+&free	php
+
+	ldy #LM_TASK
+	lda #<-1
+	sta (p2),y
+	iny
+	lda #0
+	sta (p2),y
+	
+	jsr merge	; sees if (p2) can be merged with following block
+			; leaves p1 unchanged
+
+	lda #<Memstart	; see if we can merge with previous block
+	ldx #>Memstart
+	sta p2
+	stx p2+1
+
+	cmp p1
+	bne l1
+	cpx p1+1
+	beq endpm
+l1
+	ldy #LM_P+1
+	lda (p2),y
+	tax
+	dey
+	lda (p2),y
+
+	cmp p1
+	bne next
+	cpx p1+1
+	beq domerge
+next
+	sta p2
+	stx p2+1
+	and p2+1
+	cmp #$ff
+	bne l1
+	beq endpm
+domerge
+	ldy #LM_FL
+	lda (p2),y
+	bne endpm	; if not free, no merge!
+
+	jsr merge
+endpm
+	plp
+	bcc reallocr
+
+	lda #LSEM_MEM
+	jsr lunlock
+	clc
+reallocr
+	rts
+	.)
+
+&Realloc .(
+	pha
+	lda #LSEM_MEM
+	jsr llock
+	pla
+	sec
+	sbc #LM_SLEN
+	sta p1
+	tya
+	sbc #0
+	sta p1+1
+	lda 0,x
+	sta p2
+	lda 1,x
+	sta p2+1
+
+	jsr checkblk	; returns only on success, checks (p1)
+
+	jsr split
+	bcs large 	; now we need a larger array -> call malloc
+
+	;clc
+	lda p1
+	adc #LM_SLEN
+	pha
+	lda p1+1
+	adc #0
+	tay
+	lda #LSEM_MEM
+	jsr lunlock
+	pla
+	clc
+	rts
+large			; call malloc...
+	lda p1
+	pha
+	lda p1+1
+	pha
+	clc
+	jsr alloc
+	bcc found
+	tay
+	pla
+	pla
+	tya
+	rts
+found			; new address in p1
+	pla		; old address in p2
+	sta p2
+	pla
+	sta p2+1
+	ldy #LM_LEN	; length of data to copy to p3
+	lda (p2),y
+	sta p3
+	iny
+	lda (p2),y
+	sta p3
+
+	clc	
+	lda p1
+	adc #LM_SLEN
+	sta p4
+	lda p1+1
+	adc #0
+	sta p4+1
+
+	clc
+	lda p2
+	adc #LM_SLEN
+	sta p5
+	lda p2+1
+	adc #0
+	sta p5+1
+			; copy old block to new block
+	ldy #0
+loop	lda (p5),y
+	sta (p4),y
+	iny
+	bne l1
+	inc p4+1
+	inc p5+1
+l1			; decrease number to copy
+	lda p3
+	bne l2
+	dec p3+1
+l2	dec p3
+	lda p3
+	ora p3
+	bne loop
+
+	clc
+	jsr free	; p1 is preserved, p2 is freed
+	
+	lda p1
+	sec
+	sbc #LM_SLEN
+	pha
+	lda p1+1
+	sbc #0
+	tay
+	
+	lda #LSEM_MEM
+	jsr lunlock
+
+	pla
+	clc
+	rts
+	.)
+
+/********************* internal functions *************************/
+
+checkblk .(
+	ldy #LM_MAGIC
+	lda (p1),y
+	cmp #<LM_MAGIC_VAL
+	bne illaddr
+	iny
+	lda (p1),y
+	cmp #>LM_MAGIC_VAL
+	beq ok
+illaddr	
+	pla
+	pla
+	DB("illegal pointer for free/realloc^m^j")
+	lda #LSEM_MEM
+	jsr lunlock
+	lda #E_ILLADDR
+	sec
+	rts
+ok
+	jsr GETPID
+	txa
+	ldy #LM_TASK
+	cmp (p1),y
+	bne illaddr
+	rts
+	.)
+
+
+/* splits the memory block pointed to by p1 into one the length of p2
+ * and the rest. Returns c=0 on success and c=1 if p2 > length of block.
+ * The second block is set as free.
+ * p2, p3 are overwritten, if p2 is not too large */
+split 	.(
+	ldy #LM_LEN
+	sec
+	lda (p1),y
+	sbc p2
+	iny
+	lda (p1),y
+	sbc p2+1
+	bcs ok		; otherwise p2 > len(p1)
+
+	DB("split: newlen > oldlen^m^j")
+	sec
+	rts
+ok
+	ldy #LM_LEN
+	lda p2
+	sta (p1),y
+	iny
+	lda p2+1
+	sta (p1),y
+			; sets p3 to the end of the memory block
+	ldy #LM_P
+	lda (p1),y
+	sta p3
+	iny
+	lda (p1),y
+	sta p3+1
+	and p3
+	cmp #$ff
+	bne noend
+	lda #<Memend
+	sta p3
+	lda #>Memend
+	sta p3+1
+noend 			; find the address of the possible new block -> p2
+	clc
+	lda p1
+	adc #LM_SLEN
+	sta p2
+	lda p1+1
+	adc #0
+	sta p2+1
+	clc
+	lda p2
+	ldy #LM_LEN
+	adc (p1),y
+	sta p2
+	iny
+	lda p2+1
+	adc (p1),y
+	sta p2+1
+				; check if the length is ok (p3-p2)>MINLEN
+	sec
+	lda p3
+	sbc p2
+	sta p3
+	lda p3+1
+	sbc p2+1
+	sta p3+1
+	bne lok
+	lda p3
+	cmp #MINLEN
+	bcs lok
+	rts
+lok				; yes, then create new block
+	ldy #LM_P
+	lda (p1),y		; pointer to next block
+	sta (p2),y
+	iny
+	lda (p1),y
+	sta (p2),y
+	iny 			; magic number
+	lda (p1),y
+	sta (p2),y
+	iny
+	lda (p1),y
+	sta (p2),y
+	iny
+	sec			; length of memory block 
+	lda p3
+	sbc #LM_SLEN
+	sta (p2),y
+	iny
+	lda p3+1
+	sbc #0
+	sta (p2),y
+	iny			; task
+	lda #<-1
+	sta (p2),y
+	iny			; flag = 0 -> free
+	lda #0
+	sta (p2),y
+
+	ldy #LM_P
+	lda p2
+	sta (p1),y
+	iny
+	lda p2+1
+	sta (p1),y
+				; now check if we can merge with following block
+&merge	ldy #<LM_P
+	lda (p2),y
+	sta p3
+	iny
+	lda (p2),y
+	sta p3+1
+	and p3
+	cmp #$ff
+	bne mok
+	clc
+	rts
+mok
+	ldy #LM_FL
+	lda (p3),y
+	beq isfre
+	clc
+	rts
+isfre	
+	ldy #LM_P		; next pointer from following block
+	lda (p3),y
+	sta (p2),y
+	pha
+	iny
+	lda (p3),y
+	sta (p2),y
+	pha
+	iny
+	lda #0			; destroy magic number 
+	sta (p3),y
+	iny
+	sta (p3),y
+	pla
+	sta p3+1
+	pla
+	sta p3
+	and p3+1
+	cmp #$ff
+	bne notend
+	lda #<Memend
+	sta p3
+	lda #>Memend
+	sta p3+1
+notend				; get length of block
+	sec
+	lda p3
+	sbc p2
+	sta p3
+	lda p3+1
+	sbc p2+1
+	sta p3+1
+	sec
+	ldy #LM_LEN
+	lda p3
+	sbc #LM_SLEN
+	sta (p2),y
+	iny
+	lda p3+1
+	sbc #0
+	sta (p2),y
+	clc
+	rts
+	.)
+
+&bcleanpida .(
+	.data	;.bss
+taddr	.word 0
+fl	.byt 0
+pid	.byt 0
+	.text
+
+	clc
+	.byt $24
+
+&&bcleanpid 			; clean all memory blocks of PID in xr.
+	sec
+	php
+	pha
+	lda #LSEM_MEM
+	jsr llock		; lock memory subsystem
+	stx pid
+	pla
+	sta taddr
+	sty taddr+1
+	lda #0
+	sta fl
+	plp
+	ror fl			; put carry to bit 7 of fl
+l1
+	lda #<Memstart		; loop over all memory blocks
+	sta p1
+	lda #>Memstart
+	sta p1+1
+
+l0	ldy #LM_FL
+	lda (p1),y
+	beq next
+	lda pid
+	ldy #LM_TASK
+	cmp (p1),y
+	beq found
+next	
+	ldy #LM_P
+	lda (p1),y
+	pha
+	iny
+	lda (p1),y
+	sta p1+1
+	pla
+	sta p1
+	and p1+1
+	cmp #$ff
+	bne l0
+
+	lda #LSEM_MEM
+	jsr lunlock
+	rts
+
+found	bit fl
+	bmi notest
+	lda p1
+	clc
+	adc #<LM_SLEN
+	pha
+	lda p1+1
+	adc #>LM_SLEN
+	tay
+	pla
+	cmp taddr
+	bne notest
+	cpy taddr+1
+	beq next
+notest
+	ldx p1
+	ldy p1+1
+	stx p2
+	sty p2+1
+	clc
+	jsr free
+	jmp l1
+	.)
+
+	.)
+
+

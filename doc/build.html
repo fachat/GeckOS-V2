@@ -1,0 +1,101 @@
+<html><head>
+<title> OS/A65 Building Procedure </title>
+</head><body>
+<p><h1 align=center> OS/A65 Building Procedure </h1></p>
+<p> <h2 align=center> (c) 1989-98 Andre Fachat </h2></p>
+<hr><p>
+
+Building the object files for use on an OS/A65 machine should really 
+be only a 'make', as long as my cross assembler 
+<a href="http://www.tu-chemnitz.de/~fachat/8bit/cross/index.html">xa</a>
+is in the path. 
+If there weren't these many options one can change.
+</p><p>
+The options below can be set in the appropriate files. But if the
+programs are assembled as part of a ROM, then "ROM" is defined and
+the 'local' options are ignored and overwritten by the ones defined
+in stdrom/rom.a65 or c64rom/c64rom.a65. These two files are
+the files to build a rom for a CS/A computer with MMU or the C64 
+respectively.
+<hr><pre>
+global options, to be set in stdrom/rom.a65 or c64rom/c64rom.a65:
+
+ROM		mandatory for a rom build. All local options are ignored.
+
+ROMSTART	Where in CPU memory (with MMU with the upper 4 bits set
+		to zero, i.e. $00000-$0ffff) starts the ROM.
+
+</pre><hr><pre>
+
+C64 specific options, to be set in arch/c64//c64rom.a65:
+
+CLEARMEM	if defined, the memory is set to the value CLEARMEM is defined
+		to when booting.
+C64NEEDCIA1	if defined, disables reading the CIA1 icr in the kernel.
+		Therefore it has to be assured that a device reads this 
+		register to clear the interrupt line again.
+		Undefine this for use with the fast RS232 driver.
+
+C64_BGND_COL
+C64_TEXT_COL
+C64_BORDER_COL	colors to use
+
+C64SWITCH	The terminal switch key, 61= C= key, 4= F1
+
+C64NMIRESET	makes the Restore key a RESET key. Doesn't work with fast
+		serial driver!
+STACKCOPY	If defined in non-MMU systems, save stack area somewhere else
+		when doing a task switch. If a task switch is done, the stack
+		is copied back. If not defined, divide the 6502 stack
+		from $100 to $1ff into pieces, one for each task and one
+		for the system. It's faster without, but with this option
+		there is much more stack space per task and more tasks 
+		are available.
+
+</pre><hr><pre>
+
+kernel options in kernel/kernel.a65:
+
+ROM		with ROM all options are set globally or somewhere else
+ROMTEST		with ROMTEST the MMU is not loaded, but the contents of
+		the MMU registers secured with GETBLK. Also memory is
+		not tested (to test a new system ROM)
+CMOSCPU		for (Rockwell) CMOS CPU
+NOMMU		system for a computer without MMU 
+NOSYSPORT	system has no SYSPORT (at $efe0)
+NOSINPORT	system has no SYSPORT, but LED is driven, if a board is
+		plugged in
+NOENVIRQ	to build system where tasks cannot have an own irq routine
+BATMEM		main memory is not erased at memory test (for battery buffered
+		RAM)
+NOMIRRORMEM	if the memory chip is definitely not mirrored (i.e. no 
+		unconnected CPU address lines), one can 
+		disable the test for this.
+CLK2MHZ		if NOSYSPORT or NOSINPORT, the CPU clock has to be set here
+NMIDEV		enables NMI routine (without MMU only)
+</pre><hr><pre>
+
+shell options in oash/sh.a65:
+
+SHORTMON	no assembler/disassembler in monitor
+NOSYSFKT	no file/system calls in monitor
+NOMON		no monitor
+NOSH		no shell
+NOPRG		without PRG header
+SHORTLINE	use 40 columns instead of 80
+</pre><hr><pre>
+
+fsiec options in oafs/fsiec.a65
+
+INVERT		parallel IEEE488 port output lines are inverted
+PARALLEL	do it for IEEE488 interface, not serial interface
+		(works for CS/A computer and C64). NOLOOP has then 
+		to be defined also.
+NOCMD		do not interpret other fs commands than FS_OPEN_*
+NOFS		do not register as fs - listen on bus only
+NOLOOP		do not listen on bus - register as fs only
+STDTST		include STDIO lib if needed.
+NOPRG		without PRG header
+</pre>
+</body>
+</html>

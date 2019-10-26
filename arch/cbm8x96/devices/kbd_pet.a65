@@ -1,0 +1,313 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/**************************************************************************
+ * Cursor handling
+ */
+
+          .(
+        .data
+crsrfl  .byt 0
+crsrcnt .byt 0
+        .text
+
+&inicrsr
+        lda #0
+        sta crsrfl
+        sta crsrcnt
+        rts
+
+&&crsroff .(                    ; disable cursor
+          bit crsrfl
+          bpl ret               ; not enabled
+
+          bit crsrfl
+          bvc clr               ; not inversed
+          ldy spalte
+          lda (vzei),y
+          eor #$80
+          sta (vzei),y
+clr       lda #0
+          sta crsrfl
+&ret      rts
+        .)
+
+&&crsron .(                     ; enable cursor
+          bit crsrfl
+          bmi irq               ; already enabled
+          lda #0                ; inverse cursor next crsrirq
+          sta crsrcnt
+          lda #128              ; enabled, but not invers
+          sta crsrfl
+
+&irq
+          dec crsrcnt
+          bpl ret               ; not this time
+          lda #10
+          sta crsrcnt
+
+          ldy spalte
+          lda (vzei),y
+          eor #$80
+          sta (vzei),y
+          lda crsrfl
+          eor #$40
+          sta crsrfl
+
+          rts
+          .)
+
+	.)
+
+/**************************************************************************
+ * Bell handling
+ */
+
+          .(
+          
+	.data
+pnt       .byt 0
+cnt       .byt 0
+	.text
+
+&inibell  
+	  lda #%00100100
+          sta VIA1+VIA_IER
+          lda VIA1+VIA_ACR
+          and #%11000011
+          ora #%00010000
+          sta VIA1+VIA_ACR
+&&trigbell 
+	  lda #0
+          sta pnt
+          sta cnt
+          lda #15
+          sta VIA1+VIA_SR
+&&bellirq  
+	  lda cnt
+          bne endirq
+          ldy pnt
+          lda tcnt,y
+          beq endbell
+          sta cnt
+          lda tfrq,y
+          sta VIA1+VIA_T2CL
+          lda #0
+          sta VIA1+VIA_T2CH
+          inc pnt
+endirq    dec cnt
+          rts
+endbell   lda #0
+          sta VIA1+VIA_SR
+          rts
+          
+tcnt      .byt 2,2,2,2,2,2,2,0
+tfrq      .byt 32,64,128,32,64,128,32
+
+          .)
+ 
+/**************************************************************************
+ * keyboard handling for PET
+ */
+
+          .(
+
+kcnt       =zei2
+	.data
+rcnt      .byt 0
+shiftfl   .byt 0
+prev      .byt 0
+	.zero
+tzei      .word 0
+	.text
+
+&inikbd   .(
+          lda PIO+PIA_CRA
+          and #255-4
+          sta PIO+PIA_CRA
+          ldx #15
+          stx PIO+PIA_PA
+          ora #4
+          sta PIO+PIA_CRA
+          lda PIO+PIA_CRB
+          and #255-4
+          sta PIO+PIA_CRB
+          ldx #0
+          stx PIO+PIA_PB
+          ora #4
+          sta PIO+PIA_CRB 
+	  lda #4
+          sta rcnt
+          sta rspd
+          rts
+          .)
+
+&&getkey   .(
+          lda PIO
+          and #$f0
+          ora #6	; 8 for graphics
+          sta PIO
+ix1       
+	  lda PIO+2
+          cmp PIO+2
+          bne ix1   
+          ldy #0
+          and #%01000001
+          cmp #%01000001
+          beq nshift
+          iny
+nshift    inc PIO
+x0        lda PIO+2
+          cmp PIO+2
+          bne x0
+          and #%00000001
+          bne nctrl
+          iny
+          iny
+nctrl     sty shiftfl
+
+          tya
+          asl
+          tax
+          lda ttab+1,x
+          tay
+          lda ttab,x
+          sta tzei
+          sty tzei+1   
+          ldy #0
+          ldx #0
+lx1       stx kcnt
+          lda PIO
+          and #$f0
+          ora kcnt
+          sta PIO
+          ldx #8
+l2        lda PIO+2
+          cmp PIO+2
+          bne l2
+l3        asl
+          bcs lc
+          pha
+          lda (tzei),y
+          bne le
+          pla
+lc        iny
+          dex
+          bne l3
+          ldx kcnt
+          inx
+          cpx #10
+          bcc lx1
+
+          ldy #<-1
+          sty prev
+nokey     
+/* TODO: check keyboard code - C64 works different */
+;	  ldx #KEY_START
+;	  stx rcnt
+	  ldx shiftfl
+          sec
+          rts
+
+le        tax
+          pla
+          txa
+          cpy prev
+          sty prev
+          bne lx
+
+          dec rcnt
+          bne nokey
+          ldx rspd
+          .byt $2c
+
+lx        ldx #KEY_START
+          stx rcnt
+
+          ldx shiftfl
+          clc
+          rts
+          .)
+
+ttab      .word ktab,stab,ctab,sctab
+
+#ifndef PET_KEYB_GRAPHICS
+
+				/* business keyboard */
+
+ktab      .asc ".", 0, TC_CRGT, "8",0, "8529",0,"^^70741"
+	  .asc "5;k]hfs",TC_ESC,"6@l",TC_CR,"jgda"
+	  .asc TC_BS,"pi\yrw",0, "4[o", TC_CDWN, "uteq"
+	  .asc "3",0,0,"..bc",0,"2",0,0,"0,nvz"
+	  .asc "1/",0,TC_HOME,"m x",0,0,0,":",3,"963_"
+
+stab      .asc 0, 0, TC_CLFT, "8",0, "(%",34,"9^^",0,"70'$!"
+	  .asc "5+K]HFS",TC_ESC,"6@L",TC_CR,"JGDA"
+	  .asc TC_INS,"PI\YRW",0, "4[O", TC_CUP, "UTEQ"
+	  .asc "3",0,0,".>BC",0,"2",0,0,"0<NVZ"
+	  .asc "1?",0,TC_CLR,"M X",0,0,0,"*",0,")&#_"
+
+ctab      .asc ".", 0, TC_WRU, "8",0, "8529",0,"^^70741"
+	  .asc "5;^k]^h^f^s",TC_ESC,"6@^l",TC_CR,"^j^g^d^a"
+	  .asc TC_DEL,"^p^i\^y^r^w",0, "4[^o", TC_WLO, "^u^t^e^q"
+	  .asc "3",0,0,"..^b^c",0,"2",0,0,"0,^n^v^z"
+	  .asc "1/",0,TC_WCLS,"^m ^x",0,0,0,":",3,"963_"
+
+sctab     .asc 0, 0, TC_CLFT, "8",0, "(%",34,"9^^",0,"70'$!"
+	  .asc "5+^K]^H^F^S",TC_ESC,"6@^L",TC_CR,"^J^G^D^A"
+	  .asc TC_INS,"^P^I\^Y^R^W",0, "4[^O", TC_CUP, "^U^T^E^Q"
+	  .asc "3",0,TC_CUP,".>^B^C",0,"2",0,0,"0<^N^V^Z"
+	  .asc "1?",0,TC_CLR,"^M ^X",0,0,0,"*",0,")&#_"
+
+
+#else 				/* graphics keyboard */
+
+ktab      .asc TC_CRGT,TC_HOME,"~(&%#!",TC_BS,TC_CDWN,"^@)\'$":.byt $22
+          .asc "97^^outeq/8^@piyrw"
+          .asc "64^@ljgda*5^@:khfs"
+          .asc "31",TC_CR,";mbcz+2^@?,nvx"
+          .asc "-0^@>^@]@^@=.^@",3,"< [^@"
+
+stab      .asc TC_CLFT,TC_CLR,"|(&%#!",TC_INS,TC_CUP,"^@)\'$":.byt $22
+          .asc "97^^OUTEQ/8^@PIYRW"
+          .asc "64^@LJGDA*5^@:KHFS"
+          .asc "31",TC_LF,";MBCZ+2^@?,NVX"
+          .asc "-0^@>^@}@^@=.^@",TC_ESC,"< {^@"
+
+ctab      .asc TC_WRU,TC_WCLS,"~(&%#!",TC_DEL,TC_WLO,"^@)\'$",$22
+          .asc "97^^^o^u^t^e^q/8^@^p^i^y^r^w"
+          .asc "64^@^l^j^g^d^a*5^@:^k^h^f^s"
+          .asc "31",TC_EOL,";^m^b^c^z+2^@?,^n^v^x"
+          .asc "-0^@>^@]@^@=.^@",TC_CLL,"< [^@"
+
+sctab     .asc "^@^@|(&%#!^H^@^@)\'$":.byt $22
+          .asc "97^^O^U^T^E^Q/8^@^P^I^Y^R^W"
+          .asc "64^@^L^J^G^D^A*5^@:^K^H^F^S"
+          .asc "31^m;^M^B^C^Z+2^@?,^N^V^X"
+          .asc "-0^@>^@}@^@=.^@@< {^@"
+
+#endif
+
+	.)
+

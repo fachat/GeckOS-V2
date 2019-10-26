@@ -1,0 +1,58 @@
+
+This is the release note for the GeckOS/A65 operating system for
+6502 computers, version 2.0.0. This is a new major release
+as the kernel has been partly rewritten, a complete new lib6502
+implementation has been done and the o65 relocatable fileformat
+is now supported, as well as multithreading.
+
+Also a sophisticated "slipd" daemon supports internet connectivity
+by using a SLIP connection, with a telnetd, a WWW server and related 
+programs. The lib6502 network connectivity is supported, although 
+this seems to be the only buggy part left...
+
+What's new:
+
+	- major kernel rewrite: 
+ 	  improved speed, now supports threads and task priorites. 
+	  Signals are now unix-like (they even can interrupt blocking 
+	  system calls :-)
+
+	- much improved porting ability:
+	  _all_ system dependend stuff has been moved to a directory
+	  in an "arch" subdirectory. Currently there are
+	  "arch/csa65", "arch/gecko" and "arch/c64" subdirectories
+	  (waiting for more contributions, hint, hint!)
+
+	- better kernel doc in "doc/kernel.html"
+
+        - lib6502 implementation
+
+        - dynamic memory management with lib6502
+
+        - relocatable fileformat 
+
+        - telnet in and out from OS/A65
+
+        - stable WWW server (built into slipd daemon)
+
+What's still to do:
+
+	- Tons of bugfixes - but in general quite stable already.
+
+What do I want from you:
+
+	- Comments: How do you like it?
+
+	- new lib6502 applications!
+
+	- new ports! 
+	  If you want to port the kernel to a new system without
+	  real memory management, it's almost only copying two files,
+	  editing one of them and then writing the device drivers.
+	  Taking the existing C64 stuff, that shouldn't be difficult.
+
+Any comments welcome!
+
+Thanks!
+Andre
+

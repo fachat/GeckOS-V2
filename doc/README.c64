@@ -1,0 +1,139 @@
+
+                         OS/A65  v2.0.0
+                      ---  C64 version  ---
+			
+
+These are the instructions how to load and run OS/A65 on a C64.
+
+
+At the moment the main development takes place on the C64 emulator
+VICE. I did not have the time to test everything on the real machine.
+So beware (but VICE has become quite accurate in the meantime!)
+
+I have an original C64 parallel IEEE488 expansion board, so that
+I use this for better performance. I also implemented the hardware 
+emulation for the CBM IEEE488 interface for the C64 in the VICE 
+Commodore emulator (from version 0.11 on). So if you have this interface,
+use it for better file transfer performance on the real C64 or
+for file access in VICE. Change the line in c64rom/c64rom.a65 from 
+'#undef PARALLEL' to '#define PARALLEL'. For the C64, the 
+devices 9 to 11 are mapped to the drives c: to f:
+
+As the C64 doesn't have an MMU, there are other restrictions.
+If you don't want to have the application stack being copied
+to a save area at every thread switch the stack can be parted 
+amongst the threads, allowing a maximum of 5 threads running 
+concurrently. But then if you allow copying, you can have up
+to 16 threads running. The main configuration file (arch/c64/config.a65)
+has the definitions for that.
+
+If you change something there and reassemble, check from the file65
+output that the data and bss segments don't overlap. Also the 
+memory that is dynamically allocated starts at $1600 (see
+arch/c64/c64rom.a65). Only if nothing overlaps there is no danger.
+
+I don't think I can get the BASIC to work - it wants
+too much stack space to run without MMU.
+
+The programs have to use the PCBUF to send and receive messages.
+If two or more programms access this 'shared' memory without 
+protection, bad things can happen. Imagine one task preparing a
+FORK call and then getting interrupted. Another task is then 
+scheduled and using the buffer for something else, causing the
+FORK of the first task to go bad...
+Because of this, a system semaphore is defined that has to be
+allocated (PSEM) before accessing the send buffer and released
+(VSEM) after using it. More on this issue in doc/nommu.html.
+
+There still are some glitches, but the system itself is stable. Some
+things might happen, because there's no MMU. I have tried to
+fix all this, but remnants are there...
+(When you have a 'virtual machine' for a program, you get some kind
+of lazy about where to put the variables sometimes...)
+
+How to get started
+------------------
+
+To build the program, you have to have my 6502 cross assembler 'xa-2.1.4e'
+Current testing takes place on 'VICE' (x64), the versatile Commodore emulator.
+Better get the newest version because the IEEE488 interface is not
+yet in vice-0.10.0.
+
+In the file c64rom/c64rom.a65, a few options can be set by setting
+the defines appropriately. See doc/build.html.
+
+Go to the arch/c64/boot directory and type "make" this will build
+all necessary files in this directory, including links to all 
+important applications. Typing "make osa.d64" will produce a 
+d64 disk image with all necessary files. This disk image can be
+transfered to a C64 and used.
+
+In VICE (i.e. x64) or on the C64 load the (BASIC) program 'loader', which 
+is in the boot directory and the osa.d64 disk image. When run, this 
+program loads the charom, the program ROM and
+a small machine language program (boot.obj, which is made from
+boot.a65). It then starts the boot routine that copies the ROMs to
+their places and jumps to the kernel RESET routine.
+
+When using osa.d64 in VICE, you have to enable the true1541 emulation.
+
+The current ROM contains the video device, the device filesystem, an
+IEC filesystem and a 'small' monitor. 
+The video device is able to handle up to four screen output windows.
+The F1 key switches between the different windows (You can change the
+switch key in arch/c64/devices/con_c64.a65, but when you're using 
+the "C=" key, don't try to use the Ctrl-Alt-Fx keys in XFree when the 
+mouse cursor is in the vice window. OS/A will detect a Ctrl-Switchkey 
+and therefore send an EOF to the program....)
+On the first window, a lib6502  "lsh" is started. On the second one, the 
+small monitor is started. As the C64 has no MMU, these two programs
+have to use different memory locations. The monitor is assembled into the
+ROM and can be started only once from the ROM. The lsh is a lib6502
+program and is loaded by the init process. The ROM only contains a 
+command to the init process to start the lib6502 program. It uses
+a relocatable fileformat and can thus started more than once.
+
+In the shell you can use "c:ls" on drives a: (registered devides) and 
+b: (rom inventory). If the iec bus works, then drive c: is disk unit 8
+and drive d: is disk unit 9, till drive f: is device 11.
+ 
+For the shell/monitor commands see the docs.
+The memory map is described below. When writing and using lib6502
+programs they are relocated automagically.
+
+Internals:
+----------
+
+The arch/c64/devices and arch/c64/kernel directories contain the only
+C64 specific stuff.
+
+fsiec uses CIA2 timer b as serial bus timer.
+
+Due to the deficiencies of the C64 hardware, the C64 cannot serve as
+a disk drive on the bus, giving access to its devices to other
+computers (as my selfbuilt one does).
+
+Memory Map.
+-----------
+
+The area below $70 is used by the ROM. The same holds true between
+$300 and $1600. The exact values can be seen in the assembler screen
+output (file65 - comes with xa) 
+
+$1600-$8000 free memory - i.e. lib6502 malloc-able
+$8000-$d000 ROM (well, the RAM contains what should be in the ROM of 
+	a CS/A computer...)
+$d000-$e000 I/O area and the RAM under it contains the charrom
+$e000-$e400 screen buffer 1
+$e400-$e800 screen buffer 2
+$e800-$ec00 screen buffer 3
+$ec00-$f000 screen buffer 4
+$f000-$10000 OS/A65 kernel.
+
+The kernel and lib6502 addresses are automatically relocated
+when loading a lib6502 program.
+
+--------------
+Any suggestions and comments welcome
+Andre Fachat (a.fachat@physik.tu-chemnitz.de)
+

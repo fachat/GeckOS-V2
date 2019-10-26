@@ -1,0 +1,387 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/**********************************************************************/
+/* 			     SLIP/TCP				      */
+/*		Serial Line Internet Protocol Driver		      */
+/*								      */
+/* Driver connects STDIN/OUT with a serial line internet protocol     */
+/* 								      */
+/* Options:							      */
+/*   ROM							      */
+/*   NOPRG							      */
+/* 								      */
+/**********************************************************************/
+
+#define	NOMMU
+
+#ifndef MY_IP
+#define	MY_IP			192,168,0,64
+/* #define	MY_IP			193,197,89,64 */
+/* #define		MY_IP			0,0,0,0	*/	/* auto-detect */
+#endif
+
+#ifndef FSTCP_SERVER_IP
+#define FSTCP_SERVER_IP		192,168,0,13
+#endif
+
+#ifndef FSTCP_SERVER_PORT
+#define FSTCP_SERVER_PORT 	8090
+#endif
+
+#define WWW_DRV			2
+#define	WWW_DEFAULT		"index.html"
+#define	WWW_PATH		0
+
+#ifndef RSH_PORT
+#define	RSH_PORT		23
+#endif
+
+#ifndef RSHNAME
+#define	RSHNAME			"f:tlogin"
+#endif
+
+/* One of these two _must_ be defined. They don't work together! */
+#define	NO_FSTCP	/* if defined, do not use fstcp */
+#undef	NO_WWW		/* if defined, do not use internal www server */
+#define	NO_TEST		/* if defined no echo, discard, chargen ports */
+#undef	NO_RSH		/* if defined no telnet port */
+#undef	NO_LIBIP	/* if defined no lib6502 ip connections */
+
+#define	MAXOQUEUE	2
+#define	INBUF		64
+#define	MTU		1024
+#define	MAXSLOT		24
+#define	IPBUFFER	32*256	/* must be within one (4k) page for MMU! */
+
+#define	DEBUGMEM
+
+/**********************************************************************/
+
+/* RECEIVE_CHECK is the RECEIVE call to get filesystem or network calls */
+
+#ifndef NO_FSTCP
+#define	RECEIVE_CHECK
+#else
+#ifndef NO_LIBIP
+#define	RECEIVE_CHECK
+#endif
+#endif
+
+/* RSH_BIN is the rsh stuff that is also used by LIBIP */
+
+#ifndef NO_RSH
+#define	RSH_BIN
+#else
+#ifndef NO_LIBIP
+#define	RSH_BIN
+#endif
+#endif
+
+/**********************************************************************/
+
+#ifndef ROM
+
+/* #define	DEBUG */
+/* #define	DEBUGMEM*/
+/* #define	DEBUGPKT*/
+/* #define	DEBUGTCP*/
+/* #define	DEBUGTCP2*/
+/* #define	DEBUGICMP*/
+/* #define	DEBUGSLIP*/
+/* #define	DEBUGWWW*/
+/* #define	DEBUGUDP*/
+
+#if 1
+#define	DB(A)	.(:.data:ll1 .byt A,0:.text:php:lda #<ll1:ldy #>ll1:jsr ETxtout:plp:.):
+#else
+#define	DB(a)
+#endif
+
+
+#include "kernel.i65"
+#include "kdefs.i65"
+#include "fdefs.i65"
+#include "lib6502.i65"
+
+#endif	/* ROM */
+
+#ifndef SLIPDEV
+#define	SLIPDEV	0
+#endif
+
+/**********************************************************************/
+
+          .(
+#ifdef ROM
+
+          .word PRGEND
+          .byt  PK_PRG
+	  .word PRG
+          .byt  128,0,0
+          .byt  SLIPDEV,SLIPDEV
+          .byt  "slipd",0,0
+
+#else /* no ROM */
+
++main
+	jmp PRG
+
+#endif /* ROM */
+
+/**********************************************************************/
+
+	.bss
+owntask	.byt 0
+sendbuf	.byt 0	 ; !=0 when WWW server reads file -> filesystem doesn't listen
+www_drv	.byt 0	 ; disk drive from which to read for www server
+
+	.zero
+argp	.word 0
+	.text
+
+PRG	.(
+	sta argp
+	sty argp+1
+;.byt 2
+	; default params
+	lda #WWW_DRV
+	sta www_drv
+
+#ifndef NO_RSH
+	; default login name
+	clc
+	jsr setlogin
+#endif
+
+	; if stdout == stderr, replace stderr with stdnul
+	ldx #STDOUT
+	clc
+	jsr DUP
+	sta sendbuf
+	ldx #STDERR
+	clc
+	jsr DUP
+	cmp sendbuf
+	bne noclose
+	ldx #STDERR
+	lda #STDNUL
+	sec
+	jsr DUP
+noclose
+
+	; parse command line parameter
+
+	ldy #<-1
+l0	iny
+	lda (argp),y	; skip filename
+	bne l0
+	iny
+	lda (argp),y	; next arg or nothing?
+	beq endarg
+
+	cmp #"-"
+	beq nextarg2
+	tya
+	pha
+	clc
+	adc argp
+	pha
+	lda argp+1
+	adc #0
+	tay
+	pla
+	ldx #OPEN_WR
+	jsr fopen
+	bcs nextarg
+	txa
+	tay
+	ldx #STDERR
+	jsr stddup
+	bcs nextarg
+	jsr fclose
+nextarg	pla
+	tay
+nextarg2
+
+l2	iny
+	lda (argp),y	; skip arg
+	bne l2
+	iny
+	lda (argp),y
+	beq endarg
+
+	sec
+	sbc #"a"
+	and #$0f
+	sta www_drv
+
+	tya
+	pha
+	clc
+	adc argp
+	pha
+	lda argp+1
+	adc #0
+	tay
+	pla
+;.byt 2
+	jsr chdir
+	pla
+	tay
+
+l1	iny		; skip www drive
+	lda (argp),y
+	bne l1
+	iny
+	lda (argp),y
+	beq endarg
+
+#ifndef NO_RSH
+	tya
+	pha
+	clc
+	adc argp
+	pha
+	lda argp+1
+	adc #0
+	tay
+	pla
+	sec
+	jsr setlogin
+	pla
+	tay
+#endif
+
+endarg
+
+	jsr GETPID
+	stx owntask
+/*
+.byt 2
+lda #<MTU:ldy #>MTU:jsr balloc:stx sendbuf
+.byt 2
+lda #<60:ldy #>60:jsr btrunc
+.byt 2
+ldx sendbuf:jsr bfree
+.byt 2
+*/
+
+	lda #0
+	sta sendbuf
+
+	jsr binit
+DB("binit ")
+
+	jsr oinit
+	bcs exit
+DB("oinit ")
+
+	jsr iinit
+	bcs exit
+DB("iinit ")
+	jsr tcpinit
+	bcs exit
+DB("tcpinit^m^j")
+	jsr udpinit
+	bcs exit
+DB("udpinit^m^j")
+
+	jmp doloop
+
+exit	rts
+
+doloop
+	jsr mon
+	jsr loopin
+	jsr loopout
+	jsr tcploop
+#ifndef NO_FSTCP
+	jsr fstcp_mloop
+#endif
+#ifndef NO_LIBIP
+	jsr libip_mloop
+#endif
+#ifdef RECEIVE_CHECK
+	jsr mloop
+#endif
+	jsr YIELD
+	jmp doloop
+	.)
+
+#ifdef RECEIVE_CHECK
+mloop	.(
+	lda sendbuf
+	bne norx
+	clc
+	jsr RECEIVE
+	bcc ok
+norx	rts
+ok
+#ifndef NO_FSTCP
+	cmp #FS_ASSIGN
+	bcs nofstcp
+	jmp fstcp_rxmess
+nofstcp
+#endif
+#ifndef NO_LIBIP
+	/* TODO: check network calls */
+	jmp libip_rxmess
+#endif
+	.)
+#endif
+
+	.data
+MyIP	.byt MY_IP
+	.text
+
+#include "sltcp.def"
+
+#include "slipi.a65"
+#include "slipo.a65"
+
+/* protocols can share same variables */
+	.(
+	.zero
+pp	.word 0
+pd	.word 0
+	.bss
+pslot	.byt 0
+phl	.byt 0
+ppl	.word 0
+pdl	.word 0
+	.text
+
+#include "mon.a65"
+#include "icmp.a65"
+#include "tcp.a65"
+#include "udp.a65"
+#include "putil.a65"
+	.)
+
+#include "mem.a65"		/* now emulates old stdlib with lib6502 */
+#include "util.a65"
+
+PRGEND    .)
+

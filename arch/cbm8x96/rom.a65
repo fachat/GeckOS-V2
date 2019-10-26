@@ -1,0 +1,184 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/***************************************************************************/
+/*			These defines control the ROM build		   */ 
+/*									   */ 
+
+#define   ROM
+#undef   EMUTEST
+
+/* These are necessary for PET kernel **************************************/
+
+#define   NOMMU   
+#define   NOSYSPORT
+#undef 	  CLK2MHZ		/* we only have approx. 1 MHz ... */
+#undef 	  CMOSCPU		/* ... and no CMOS cpu */
+#define	  VIDPAGE 8
+#undef	  SHORTLINE		/* prepare for 80 col screen */
+
+#define	  RAMTEST
+#define	  RAMSTART 128
+#define	  RAMEND $e8
+#define	  NOMIRRORMEM
+
+#define   MIN_MEM $e8		/* RAM up to I/O -> 8x96 */
+
+#undef    NMIDEV		/* there is no NMI in the PET machine */
+#define   EOK_NOFILL		/* do not fill kernel to end of mem */
+
+#define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
+
+#define	  OSA_CPU	"6502"
+#define   OSA_ARCH	"PET"
+
+/* These are changeable ****************************************************/
+
+#define ROMSTART        $0b03   /* where the ROM starts */
+
+#define	MEMINIVAL	$0	/* Clear memory to 0 on boot */
+
+#define	STACKCOPY		/* if defined, save stack area in memory
+				   when context switching, otherwise divide
+				   stack area and give each task a part.
+				   It's faster without, but allows more
+				   tasks with */
+
+#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
+				   lib6502 */
+#define	NEED_GETINFO
+#define	NEED_SLOCK
+#define	NEED_RENICE
+
+#define	BOOTDRV		"c"	/* where are the boot files (IEC device 8) */
+
+
+/***************************************************************************
+ * 
+ * Here comes the ROM content
+ */
+ 
+#include  "config.i65"
+#include  "kdefs.i65"
+#include  "fdefs.i65"
+#include  "petdef.i65"
+
+#include  "kernel.i65"
+
+#define SEM_VIAE840_T1  SEM_SERIEC
+#undef  SEM_SERIEC
+#undef  SEM_PARIEC
+
+          .word *+2		/* load address */
+	  jmp RESET
+	  ; ROMSTART is here!
+.(
+
+/************* ROM entries 				*/
+
+/************* devices	 				*/
+
+#include  "devices/devices.a65"
+
+/************* init process 				*/
+
+
+#define	INIT_VERBOSE
+#define	INIT_RESTART
+#define	INIT_MERGE
+#define	INIT_LIB6502
+/* #define	INIT_USE_STDLIB */
+/* #define	INIT_OUTDEV	2*/
+#include  "sysapps/init/init.a65"
+
+
+/************* fsdev - converts devices into files 	*/
+
+
+#include  "sysapps/fs/fsdev.a65"
+
+
+/************* fsiec - IEEE488/IEC bus filesystem 	*/
+
+/* both, the parallel and serial iec bus use the same timer */
+#define	SEM_CIA2TB	SEM_SERIEC
+#undef SEM_PARIEC
+#undef SEM_SERIEC
+
+#define	NOLOOP
+#define	FSIEC_DEVICE	"devices/piec_pet.a65"
+#include  "sysapps/fs/fsiec.a65"
+#undef	FSIEC_DEVICE
+#print *
+
+
+/************* mon - OS/A 1 old style monitor/shell	*/
+
+#define	MON_SHEXE $c0		/* ROM executable flag */
+#define	MON_MONEXE 0		/* ROM executable flag */
+#define	MON_SHDEV 1		/* start on device 0 = video1 */
+#define	SHORTMON		/* no assembler/disassembler */
+#undef	NOSH
+#include  "sysapps/mon/mon.a65"
+
+
+/************* boot lsh from BOOTDRV			*/
+
+#if 1
+	/* add autostart of lib6502 program 'lsh' */
+
+	.(
+	.word end_auto
+	.byt PK_LIB+PK_AUTOEXEC+PK_RESTART	; is lib6502 program
+	.word 0		; P_ADDR ignored
+	.byt 16		; P_RAM
+	.byt 128	; P_SHARED
+	.byt 0		; P_PRIORITY
+	.byt 0,0	; P_DEV
+	.byt BOOTDRV,":lsh",0,"-d",0,0
+end_auto
+	.)
+
+#endif
+
+/************* end of ROM executables			*/
+
+          .word -1
+
+/************* lib6502 code				*/
+
+#include  "lib6502/lib6502.a65"
+
+/************* Kernel					*/
+
+#include  "kernel\kernel.a65"
+
+/************* Constants for lib6502 memory handling	*/
+
+Memstart  =$6800
+Memend	  =$ff00
+Zerostart =$70
+
+.)
+

@@ -1,0 +1,100 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef NO_FSM
+
+          .(
+
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+anzfs     .byt 0
+
+	.data
+   
+fstab     .dsb MAXFS+1
+fstask    .dsb MAXFS+1
+
+	.text
+
+&fminit   lda #0
+          sta anzfs
+          sta fstab
+          clc
+          rts
+
++fm       
+#ifdef MAPSYSBUF
+	  pha
+	  MAPSYSBUF
+	  pla
+#endif
+	  cmp #FM_REG
+          bne fm1
+
+          ldy anzfs
+          lda SYSBUF+FM_REG_DRVS
+	  bne fmreg
+	  lda fstab,y
+	  sec
+	  rts
+fmreg
+	  cpy #MAXFS
+	  bcs fme1
+          ; clc
+          adc fstab,y
+          sta fstab+1,y
+          inc anzfs
+	  txa
+          sta fstask,y
+          lda #E_OK
+          .byt $2c
+fme1      lda #E_NOMEM
+          .byt $2c
+fme2      lda #E_NODEV
+          sec
+          rts
+
+fm1
+          lda SYSBUF+FM_OPEN_DRV
+          ldy #0
+fm2       cpy anzfs
+          bcs fme2
+          cmp fstab+1,y
+          bcc fmok
+          iny
+          bne fm2
+
+fmok      sec
+          sbc fstab,y
+          sta SYSBUF+FM_OPEN_DRV
+          lda fstask,y
+          tax
+          clc
+          rts
+          .)
+
+#endif	/* NO_FSM */
+

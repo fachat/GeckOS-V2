@@ -1,0 +1,325 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.3.3
+    Multitasking Operating System for 6502 Computers
+    ACIA 6551 device
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * WARNING! WARNING! WARNING! WARNING! WARNING! WARNING!
+ *
+ * This device lacks the BRKKEY feature of the 1.4 kernel
+ *
+ * It also doesn't handle the broken handshaking of the 6551
+ */
+
+/*
+ * This is a ACIA 6551 serial line driver for CS/A65. It uses the 
+ * hardware installed in my personal C64. The 6551 is at address $d600.
+ *
+ * The ACIA 6551 has a real bad 'feature'. The RTS/CTS lines are not
+ * independent from the transmitter and receiver. Instead, making
+ * RTS high automatically disables receiver _and_ transmitter!
+ * Also an incoming CTS high immediately disables the transmitter.
+ * That's why I use the DSR input for the CTS modem line. This line
+ * can be checked independently.
+ */
+
+#include "chips/acia6551.i65"
+
+#ifdef C64ACIA
+#define	ACIA	C64ACIA
+#else
+#define ACIA	$d600
+#endif
+
+#define	Anzdev	1
+
+          .(
+	  .word devend2
+	  jmp prg1
+	  .asc "ser", sernr ,0
+-sernr += 1
+
+/*
+ * status: Bit 	0 = 1= handshake enabled
+ *		1 : 1= no ACIA found
+ * 		5 : 1= set RTS hi
+ *		6 : 1= we are transmitting
+ *	  	7 : 1= we are receiving
+ *
+ */
+
+	.bss
+dev       .byt 0
+div       .byt 0
+status    .dsb Anzdev
+instr     .dsb Anzdev
+outstr    .dsb Anzdev
+	.text
+
+prg1      ldx #0
+
+          stx dev
+          cmp #DC_RES
+          beq devini
+          pha
+          lda status,x
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq
+          jmp others
+
+devini    
+	  lda #0
+          sta status,x
+          sta instr,x
+          sta outstr,x
+
+          STA ACIA+ACIA_SR		; programmed reset
+          LDA #%00011000		; 1200 BAUD, 1 stop bit, 8 data bits
+          STA ACIA+ACIA_CTRL
+          cmp ACIA+ACIA_CTRL
+          bne devx
+          LDA #%00000101		; no parity, normal receiver mode,
+					; RTS low, Tx interrupt enabled
+          STA ACIA+ACIA_CMD
+          cmp ACIA+ACIA_CMD
+          bne devx
+          LDA ACIA+ACIA_SR		; clear interrupt
+
+          clc
+          rts
+
+devx      lda status,x
+          ora #2
+          sta status,x
+          lda #E_NOTIMP
+          sec
+          rts
+          
+devirq    
+          .(
+          lda ACIA+ACIA_SR
+          bpl irqend		; not this ACIA
+          tay
+          bit status		; check if receiving
+          bpl tx		; no -> tx
+          and #%00001000	; Rx data register full?
+          beq nobyt		; no -> nobyt
+          ldx outstr
+          lda ACIA
+          jsr PUTC
+          bcs test
+
+nobyt     ldx outstr
+          lda #SC_STAT
+          jsr STRCMD
+test      bcc tx
+          cmp #E_NUL
+          bne tstwater
+          jsr rxoff
+          jmp tx
+tstwater  cmp #E_SEMPTY
+          beq wl
+          tax
+          lda status
+          and #1
+          bne wh
+          txa
+          cmp #E_SFULL
+          beq wh
+          cmp #E_SHWM
+          bne twl
+wh      ldx #0  
+	jsr rtshi
+          jmp tx         ; unbedingt
+twl       cmp #E_SLWM
+          bne tx
+wl      ldx #0  
+	jsr rtslo
+
+tx        bit status
+          bvc irqhs
+          tya
+	and #%00010000		; transmit data register empty?
+	beq irqhs		; no then -> irqhs
+
+	lda #32
+	bit status
+	bne endsend		; do not send any more to make RTS high.
+
+	tya
+	and #%01000000		; DSR high?
+	bne irqhs		; -> irqhs
+
+          ldx instr		; send new data byte
+          jsr GETC
+          bcs test2
+          sta ACIA
+          bcc irqhs
+test2     cmp #E_EOF
+          bne irqhs
+          jsr txoff
+
+irqhs     lda ACIA+ACIA_SR
+	  lda #E_OK		; irq source removed
+	  rts
+irqend    lda #E_NOIRQ		; no irq source found
+	  rts
+
+endsend
+	lda ACIA+ACIA_CMD
+	and #%11110011
+	sta ACIA+ACIA_CMD
+	jmp irqhs
+
+          .)
+
+rtshi
+	lda status,x
+	ora #%00100000
+	sta status,x
+	rts
+
+rtslo
+	lda ACIA+ACIA_CMD
+	ora #%00000100
+	sta ACIA+ACIA_CMD
+	lda status,x
+	and #%11011111
+	sta status,x
+	rts
+
+others    cmp #DC_GS
+          bne o1
+          lda status,x
+          and #DC_SW_TX
+          bne devonx
+          tya
+          sta instr,x
+          jmp ok
+devonx    jmp devon
+o1        cmp #DC_PS
+          bne o2
+          lda status,x
+          and #DC_SW_RX
+          bne devonx
+          tya
+          sta outstr,x
+okx       jmp ok
+o2        cmp #DC_RX_ON
+          bne o3
+	jsr rtslo
+          lda #DC_SW_RX
+          bne o2a
+o3        cmp #DC_TX_ON
+          bne o4
+          lda #DC_SW_TX
+o2a       ora status,x
+          sta status,x
+          bne okx
+o4        cmp #DC_RX_OFF
+          bne o5
+rxoff     ldx dev
+          lda status,x
+          and #DC_SW_RX
+          beq devoffx
+          lda outstr,x
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_RX
+          sta status,x
+
+rx1off    ;jsr rts1hi
+          ;bcc okx
+	jmp okx
+devoffx   jmp  devoff
+o5        cmp #DC_TX_OFF
+          bne o6
+txoff     ldx dev
+          lda status,x
+          and #DC_SW_TX
+          beq devoffx
+          lda instr,x
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_TX
+          sta status,x
+          jmp ok
+o6        cmp #DC_HS
+          bne o6a
+          lda status,x
+          and #255-1
+          sta status,x
+          tya
+          and #1
+          ora status,x
+          sta status,x
+          jmp ok
+o6a       cmp #DC_SPD
+          bne o7
+          tya
+          and #%00001111
+          sta div
+
+          lda ACIA+ACIA_CTRL
+          and #%11110000
+          ora div
+          sta ACIA+ACIA_CTRL
+          jmp ok
+
+o7        cmp #DC_ST
+          beq ok 
+          cmp #DC_EXIT
+          bne onotimp
+          jsr rxoff
+          jsr txoff
+          ldx dev 
+          lda status,x
+          ora #2
+          sta status,x
+          sta ACIA+ACIA_SR	; programmed reset
+	  bne ok
+          
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+devend2   .)
+

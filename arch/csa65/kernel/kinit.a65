@@ -1,0 +1,211 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************
+ *
+ * This file is included in the RESET routine of the kernel,
+ * after the "sei:cld". The routine starting at the bginning
+ * of this file must initialize the hardware to the system RAM
+ * in the beginning and the system ROM in the end of the memory
+ * map. Also the system stack (pointer) is setup.
+ *
+ * In addition to that the system interrupt timer (needed for
+ * task preemtion) must be setup.
+ *
+ * After that the file must define the following macros:
+ *
+ * GETFREQ()            returns a=0 for 1Mhz, a=128 for 2MHz
+ * LEDPORT              address of LED port to signal hardware failures
+ * LED_LED              bit of LED bit in LEDPORT address
+ * H_ERROR()            if LEDPORT is not defined, then H_ERROR replaces
+ *                      the LED toggle routine if needed.
+ * CLRTIMER()           clear the system interrupt timer interrupt
+ * KERNELIRQ()          returns if an interrupt occured in the kernel
+ *                      or outside. Is checked by "BNE IRQ_in_Kernel"
+ * SAVEMEM()            save system mem config for interrupt
+ * RESTOREMEM()         restore system mem config after interrupt
+ * STARTMEM()		This is used to alloc/enable memory pages found
+ *			during kernel init. Takes mem size in AC as given
+ *			by the kernel init. It is called _after_ inimem!
+ */
+
+/*
+ * init stack pointer for system stack
+ */
+          ldx #<-1
+          txs
+
+/*
+ * init memory configuration
+ */
+	.(
+#ifdef ROMTEST
+	ldx #7		; only set RAM mapping, keep running ROM mapping
+#else
+        ldx #15
+#endif
+res1    txa		;lda mmu,x
+        sta MMU,x
+        dex
+#if SYSPAGE
+        bne res1
+	lda #SYSPAGE
+	sta MMU
+#else
+	bpl res1
+#endif	/* SYSPAGE */
+	.)
+
+/*
+ * CSA65 specific irq timer init, 50 Hz irq (well, i.e. line freq. irq)
+ * We assume that the reset - or a loader program has disabled all irq
+ */
+	lda #SYS_IRQEN+SYS_EXTIO
+	sta SYSPORT
+
+/*
+ * check zeropage RAM, jump to he_zero if failure
+ */
+#include "kernel/zerotest.a65"
+
+/*
+ * check system RAM up to ROMSTART, jump to he_ram if failure
+ * returns available RAM in 256 byte blocks in AC
+ */
+	.(
+	.zero
+&cnt	.byt 0
+	.text
+#include "kernel/ramtest.a65"
+        cmp #MIN_MEM ; memory size at least needed
+        bcc he_ram
+	sta cnt
+	.)
+
+	jmp endmem
+
+/*
+ * here we enable the memory pages found to be mapped by the MMU
+ * TODO: currently maximum 32k!!!!
+ */
+startmem .(
+	lsr
+	lsr
+	lsr
+	lsr
+	sta cnt
+xl      dec cnt
+        ldx cnt
+#if SYSPAGE
+        cpx #SYSPAGE
+        beq x1
+#else
+        bmi x1
+#endif
+/*
+#ifdef ROMTEST
+	txa
+	ora #$10
+	tax
+#endif
+*/
+        jsr ENMEM
+        jmp xl
+x1
+	rts
+	.)
+
+#define	STARTMEM()	jsr startmem
+
+/*
+ * determine the speed the CPU is running with. We use the 50 Hz toggle
+ * line for it.
+ */
+getfreq	  .(        
+          sei
+          lda #SYS_IRQEN
+          sta SYSPORT
+gf1       lda SYSPORT
+          bpl gf1
+          sta SYSPORT
+          bit SYSPORT
+          bmi gf1
+          lda #0
+          tay
+          tax
+gf2       bit SYSPORT
+          bmi gfe
+          clc
+          adc #1
+          bne gf2
+          inx
+          bne gf2
+          iny
+          bne gf2
+gfe       cpx #8	; more, then 2 MHZ
+          bcc gf3
+          lda #128	; 2 MHz
+          rts
+gf3	  lda #0	; 1 MHz
+	  rts
+	  .) 
+
+#define	GETFREQ()	jsr getfreq
+
+/*
+ * system LED to indicate hardware failures
+ */
+#ifndef LEDPORT
+#define LEDPORT SYSPORT
+#define LED_LED SYS_LED
+#endif
+
+/*
+ * clear the scheduler preemption timer
+ */
+#define	CLRTIMER()	lda SYSPORT:sta SYSPORT
+
+/*
+ * MMU systems may map task pages into kernel mem to make copying
+ * easier. This mapping has to be preserved during interrupt.
+ * SAVEMEM() saves the memory configuration, while RESTOREMEM()
+ * restores it, obviously.
+ * These routines are called _after_ "jsr memsys", so this routine
+ * has to preserve this mapping when called from kernel space,
+ * and so must memtask.
+ */
+/*
+#define SAVEMEM		lda MMU+1:pha:lda MMU+2:pha
+#define RESTOREMEM()	pla:sta MMU+2:pla:sta MMU+1
+*/
+#undef SAVEMEM
+#undef RESTOREMEM
+
+/*
+ * Check if we have an interrupt in the kernel
+ */
+
+#define KERNELIRQ()     lda Syscnt:cmp #1
+
+endmem
+

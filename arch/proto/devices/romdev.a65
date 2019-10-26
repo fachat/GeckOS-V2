@@ -1,0 +1,87 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef ROM
+
+#include  "kdefs.def"
+#include  "kernel.i65"
+
+          ;.word $700
+          *=$700
+          
+#endif
+
+          
+/*        Device-Block        */
+
+          .(
+
+#ifdef ROM
+          .word endd
+          .byt PK_DEV+$80
+          .word devstart
+	  .dsb P_NAME - P_RAM, $ff
+          .asc "devices",0
+#else
+/* Note: this is obsolete! */
+#ifndef NOPRG
+          .word 0
+          .byt PK_DEV
+          .byt 0
+          .word 0
+          .word devstart
+          .byt 0,0,<-1
+#endif
+#endif
+
+devstart
+
+-sernr = "1"
+
+/* 
+
+#define	CONSOLE_DEVICE	"devices/con_c64.a65"
+#include  "devices/console.a65"	; video device is merged with OS/A now...
+
+#include  "devices/oa1dnl.a65"	; null device
+#include  "devices/oa1dsp.a65"	; spooler device
+#include  "devices/ser_9600.a65" ; fast serial interface by Daniel Dallmann
+
+#ifdef UARTBASE
+#include  "devices/ser_uart.a65"	; standard UART 16550A driver
+#endif
+
+*/
+
+#include "devices/oa1std.a65"
+
+          .word $ffff
+
+#if 0
+#print sysmem
+#print syszp 
+#endif
+
+endd      .)
+

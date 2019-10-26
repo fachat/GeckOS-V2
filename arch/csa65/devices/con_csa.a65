@@ -1,0 +1,384 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#define   PIO       $e810
+#define   VIA1      $e840
+#define   vdcctrl   $e888
+#define   vdc       $e880
+#define   VIDPAGE   4
+
+#define	MAX_SCREEN	4		/* hard limit for tables */
+
+#define	MAX_ASCREEN	maxscr		/* soft limit */
+
+#define	SWITCHKEY	$46
+
+#define	SET_MMU		ldy #$10:sty MMU+VIDPAGE
+
+#define	BELLIRQ		jsr bellirq
+
+#define	TRIGBELL	jsr trigbell
+
+#define	MAXSPAL		maxspal
+
+#define	MAXZEIL		#25
+
+#define	KEY_START	16	/* when does key repetition start */
+
+#define	SCR_SPACE	" "
+
+				/* screen# -> hi byte of base address in AC */
+#define	HI_VID	        asl:asl:bit freq:bpl l1:asl:l1 clc:adc #VIDPAGE<<4
+
+#define	ACT_HI_VID      lda hivid
+
+	.data
+&maxspal .byt 0
+&maxscr .byt 0
+	.text
+
+&console_init .(
+	ldx #4
+	bit freq
+	bpl c1mhz
+	ldx #2
+c1mhz	stx maxscr
+
+	jsr inimem
+	jsr inivid
+	jsr inikbd
+	jsr inibell
+	rts
+	.)
+
+inimem    .(
+#ifdef ROM
+          ldx #$11
+l1m       stx maxspal
+          stx MMU+1
+          
+          lda #16
+          sta zei2+1
+          ldy #0
+          sty zei2
+          ldx #>BLKSIZ
+im1       lda (zei2),y
+          pha
+          lda #$55
+          sta (zei2),y
+          cmp (zei2),y
+          bne next
+          asl
+          sta (zei2),y
+          cmp (zei2),y
+          bne next
+          lda #0
+          sta (zei2),y
+          cmp (zei2),y
+          bne next
+          pla
+          sta (zei2),y
+          inc zei2+1
+          dex
+          bne im1
+    
+          ldx maxspal      
+          jsr ENMEM
+          pha
+next      pla
+          ldx maxspal
+          inx
+#ifndef ROMTEST
+          cpx #$20
+#else
+          cpx #$18
+#endif
+          bcc l1m
+#endif /* ROM */
+          clc
+          rts
+          .)
+
+&inivid   .(   
+          lda screen
+          bne ix
+
+	  lda #$0c		; set charrom and video base
+	  sta vdcctrl
+
+          ldx #0
+i1        bit freq
+          bpl onemhz
+          lda vdc8tab,x
+          jmp nex
+onemhz    lda vdc4tab,x
+nex       stx vdc
+          sta vdc+1
+          inx
+          cpx #16
+          bcc i1
+ix
+          lda #40
+          bit freq
+          bpl i2
+          lda #80
+i2	  sta maxspal
+	  rts
+
+vdc8tab   .byt $7e,$50,$64,6,$29,0,$19,$21,0,7,$60,7,0,0,0,0
+
+vdc4tab   .byt $3f,$28,$32,3,$29,0,$19,$21,0,7,$60,7,0,0,0,0
+
+	  .)
+
+&setact   .(
+          sta actscr
+          asl
+          asl
+          bit freq
+          bpl s1
+          asl
+s1        and #%00001111
+          ldx #12
+          stx vdc
+          sta vdc+1
+	  rts
+	  .)
+
+/**************************************************************************
+ * Cursor handling
+ */
+
+&crsron  .(
+          ldx #15
+          lda spalte
+          clc
+          adc vzei
+          stx vdc
+          sta vdc+1
+          lda vzei+1
+          adc #0
+          dex
+          stx vdc
+          and #%00001111
+          sta vdc+1
+&&crsroff rts
+	  .)
+
+/**************************************************************************
+ * Bell handling
+ */
+
+          .(
+          
+	.data
+pnt       .byt 0
+cnt       .byt 0
+	.text
+
+&inibell  
+	  lda #%00100100
+          sta VIA1+VIA_IER
+          lda VIA1+VIA_ACR
+          and #%11000011
+          ora #%00010000
+          sta VIA1+VIA_ACR
+&&trigbell 
+	  lda #0
+          sta pnt
+          sta cnt
+          lda #15
+          sta VIA1+VIA_SR
+&&bellirq  
+	  lda cnt
+          bne endirq
+          ldy pnt
+          lda tcnt,y
+          beq endbell
+          sta cnt
+          lda tfrq,y
+          sta VIA1+VIA_T2CL
+          lda #0
+          sta VIA1+VIA_T2CH
+          inc pnt
+endirq    dec cnt
+          rts
+endbell   lda #0
+          sta VIA1+VIA_SR
+          rts
+          
+tcnt      .byt 2,2,2,2,2,2,2,0
+tfrq      .byt 32,64,128,32,64,128,32
+
+          .)
+ 
+/**************************************************************************/
+
+          .(
+
+kcnt       =zei2
+	.data
+rcnt      .byt 0
+shiftfl   .byt 0
+prev      .byt 0
+	.zero
+tzei      .word 0
+	.text
+
+&inikbd   .(
+          lda PIO+PIA_CRA
+          and #255-4
+          sta PIO+PIA_CRA
+          ldx #15
+          stx PIO+PIA_PA
+          ora #4
+          sta PIO+PIA_CRA
+          lda PIO+PIA_CRB
+          and #255-4
+          sta PIO+PIA_CRB
+          ldx #0
+          stx PIO+PIA_PB
+          ora #4
+          sta PIO+PIA_CRB 
+	  lda #4
+          sta rcnt
+          sta rspd
+          rts
+          .)
+
+&&getkey   .(
+          lda PIO
+          and #$f0
+          ora #8
+          sta PIO
+ix1       
+	  lda PIO+2
+          cmp PIO+2
+          bne ix1   
+          ldy #0
+          and #%00100001
+          cmp #%00100001
+          beq nshift
+          iny
+nshift    inc PIO
+x0        lda PIO+2
+          cmp PIO+2
+          bne x0
+          and #%00000001
+          bne nctrl
+          iny
+          iny
+nctrl     sty shiftfl
+
+          tya
+          asl
+          tax
+          lda ttab+1,x
+          tay
+          lda ttab,x
+          sta tzei
+          sty tzei+1   
+          ldy #0
+          ldx #0
+lx1       stx kcnt
+          lda PIO
+          and #$f0
+          ora kcnt
+          sta PIO
+          ldx #8
+l2        lda PIO+2
+          cmp PIO+2
+          bne l2
+l3        asl
+          bcs lc
+          pha
+          lda (tzei),y
+          bne le
+          pla
+lc        iny
+          dex
+          bne l3
+          ldx kcnt
+          inx
+          cpx #10
+          bcc lx1
+
+          ldy #<-1
+          sty prev
+nokey     
+/* TODO: check keyboard code - C64 works different */
+;	  ldx #KEY_START
+;	  stx rcnt
+	  ldx shiftfl
+          sec
+          rts
+
+le        tax
+          pla
+          txa
+          cpy prev
+          sty prev
+          bne lx
+
+          dec rcnt
+          bne nokey
+          ldx rspd
+          .byt $2c
+
+lx        ldx #KEY_START
+          stx rcnt
+
+          ldx shiftfl
+          clc
+          rts
+          .)
+          
+ttab      .word ktab,stab,ctab,sctab
+
+ktab      .asc TC_CRGT,TC_HOME,"~(&%#!",TC_BS,TC_CDWN,"^@)\'$":.byt $22
+          .asc "97^^outeq/8^@piyrw"
+          .asc "64^@ljgda*5^@:khfs"
+          .asc "31",TC_CR,";mbcz+2^@?,nvx"
+          .asc "-0^@>^@]@^@=.^@@< [^@"
+
+stab      .asc TC_CLFT,TC_CLR,"|(&%#!",TC_INS,TC_CUP,"^@)\'$":.byt $22
+          .asc "97^^OUTEQ/8^@PIYRW"
+          .asc "64^@LJGDA*5^@:KHFS"
+          .asc "31",TC_LF,";MBCZ+2^@?,NVX"
+          .asc "-0^@>^@}@^@=.^@",TC_ESC,"< {^@"
+
+ctab      .asc TC_WRU,TC_WCLS,"~(&%#!",TC_DEL,TC_WLO,"^@)\'$",$22
+          .asc "97^^^o^u^t^e^q/8^@^p^i^y^r^w"
+          .asc "64^@^l^j^g^d^a*5^@:^k^h^f^s"
+          .asc "31",TC_EOL,";^m^b^c^z+2^@?,^n^v^x"
+          .asc "-0^@>^@]@^@=.^@",TC_CLL,"< [^@"
+
+sctab     .asc "^@^@|(&%#!^H^@^@)\'$":.byt $22
+          .asc "97^^O^U^T^E^Q/8^@^P^I^Y^R^W"
+          .asc "64^@^L^J^G^D^A*5^@:^K^H^F^S"
+          .asc "31^m;^M^B^C^Z+2^@?,^N^V^X"
+          .asc "-0^@>^@}@^@=.^@@< {^@"
+
+
+	.)
+

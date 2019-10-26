@@ -1,0 +1,140 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/***************************************************************************/
+/*			These defines control the ROM build		   */ 
+/*									   */ 
+
+#define   ROM
+
+/* These are necessary for ??? kernel **************************************/
+
+#define   NOMMU   
+#define   NOSYSPORT
+#undef 	  CLK2MHZ		/* we only have approx. 1 MHz ... */
+#undef 	  CMOSCPU		/* ... and no CMOS cpu */
+#define	  VIDPAGE 14
+#define	  SHORTLINE		/* prepare for 40 col screen */
+#define	  RAMTEST
+#define	  NOMIRRORMEM
+
+/* These are changeable ****************************************************/
+
+#define	RAMSIZE		$80	/* The size of the RAM we allow to be used.
+				   Size in pages (256 bytes). Must be below
+				   ROMSTART */
+
+#define	MIN_MEM		$80	/* minimum memory we need in system env. to 
+				   work ok, in pages */
+
+#define	ROMSTART	$8000	/* where the ROM starts */
+
+#define	MEMINIVAL	0	/* Clear memory to 0 on boot */
+
+#define	STACKCOPY		/* if defined, save stack area in memory
+				   when context switching, otherwise divide
+				   stack area and give each task a part.
+				   It's faster without, but allows more
+				   tasks with */
+
+#define NMIDEV			/* necessary for fast RS232 */
+				
+/***************************************************************************/
+/* 			Better not change anything below                   */
+/*									   */ 
+
+#include  "config.i65"
+#include  "kdefs.i65"
+#include  "fdefs.i65"
+
+#include  "kernel.i65"
+
+          .word $2000
+
+.(
+
+
+#include  "devices/romdev.a65"
+
+
+#define	INIT_VERBOSE
+#define	INIT_MERGE
+/* #define	INIT_USE_STDLIB */
+/* #define	INIT_OUTDEV	2*/
+#include  "sysapps/init/init.a65"
+
+#include  "sysapps/fs/fsdev.a65"
+
+#if 0
+
+/* both, the parallel and serial iec bus use the same timer */
+#define	SEM_CIA2TB	SEM_SERIEC
+#undef SEM_PARIEC
+#undef SEM_SERIEC
+
+#define	NOLOOP
+#ifdef PARALLEL
+#define	FSIEC_DEVICE	"devices/piec_c64.a65"
+#else
+#define	FSIEC_DEVICE	"devices/siec_c64.a65"
+#endif
+#include  "sysapps/fs/fsiec.a65"
+#undef	FSIEC_DEVICE
+#print *
+
+#define	MON_SHEXE $80		/* ROM executable flag */
+#define	MON_MONEXE 0		/* ROM executable flag */
+#define	MON_SHDEV 0			/* start on device 0 = video1 */
+/* #define	MON_USE_STDLIB */
+#include  "sysapps/mon/sh.a65"
+
+#if 0
+#define	NOSH
+#undef MON_MONEXE
+#define	MON_MONEXE $80		/* ROM executable flag */
+#undef MON_MONDEV
+#define	MON_MONDEV 1		/* start on device 1 = video2 */
+#include  "apps/sh/sh.a65"
+#undef MON_NOSH
+#endif
+	.text
+          .word -1
+
+/* relocated STDIO to get more space (because I/O is at $d000 */
+/*
+#define	STDIOADDR	$d000
+#include  "stdlib/stdio.a65"
+*/
+
+#endif
+
+.dsb $d000-*,<-1
+.dsb $2000, <-1			/* from d000 to f000 */
+
+          .dsb $f000-*,<-1
+          
+#include  "kernel\kernel.a65"
+
+.)
+

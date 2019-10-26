@@ -1,0 +1,323 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************/
+/*                      These defines control the ROM build                */
+/*                                                                         */
+
+#define   ROM
+
+/* These are necessary for CS/A65 kernel ***********************************/
+
+#define	OSA_ARCH	"CS/A65"
+
+/* These are changeable ****************************************************/
+
+#define	FSIEC_PARALLEL
+#undef	FSIEC_SERIAL
+#undef	FSIBM
+#define	USE_LIB6502
+
+#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
+				   lib6502 */
+#define	NEED_GETINFO
+
+/* #define   ROMTEST */		/* debug option */
+/* #define   EMUTEST */		/* debug option */
+/* #define   SYSPAGE	$12 */	/* debug option */
+
+#define	NOMIRRORMEM		/* ramtest kernel options */
+#define	SHORTRAMTEST
+
+#define	NMIRESET
+
+#undef	CMOSCPU
+#undef	NOSYSPORT
+
+#define	RAMEND		$80	/* 32k in bank 0 */
+
+/***************************************************************************
+ * 
+ * Better not change anything below 
+ */
+
+#ifdef CMOSCPU
+#define	OSA_CPU		"6502"
+#else
+#define	OSA_CPU		"65C02"
+#endif
+
+/***************************************************************************
+ *
+ * Here comes the ROM content
+ */
+
+#include  "config.i65"
+#include  "kdefs.i65"
+#include  "fdefs.i65"
+#include  "kernel.i65"
+
+#define	SEM_VIAE840_T1	SEM_SERIEC
+#undef	SEM_SERIEC
+#undef	SEM_PARIEC
+
+#define	ROMSTART	$8000
+#define	RAMSIZE		(ROMSTART>>8)
+#define	MIN_MEM		$20		/* 8 kbyte */
+
+	.(
+;          .word $2000		; load address 
+          *=ROMSTART
+
+/************* ROM entries                              */
+/*
+
+  The lib6502 needs to use addresses in each of the environments. 
+  Devices (normally) use the kernel address space.
+  All other tasks, including the kernel have their own environment.
+  Therefore they all get their own zero, data and bss addresses.
+
+*/
+/************* devices                                  */
+
+#echo ############ devices
+.data:*=$f00:.zero:*=$d0:.bss:*=$400:.text
+.zero
+#echo zero:
+#print *
+.data
+#echo data:
+#print *
+.bss 
+#echo bss:
+#print *
+.text
+
+#include  "devices/csadev.a65"
+.zero
+#echo zero:
+#print *
+.data
+#echo data:
+#print *
+.bss 
+#echo bss:
+#print *
+.text
+
+/************* init process                             */
+
+.data:*=$300:.zero:*=$10:.bss:*=$400:.text
+#define	INIT_VERBOSE
+#define	INIT_MERGE
+#define	INIT_RESTART
+#echo ############ init:
+#include  "sysapps/init/init.a65"
+.data
+#echo data (<1024):
+#print *
+.bss
+#echo bss:
+#print *
+.text
+
+/************* fsdev - converts devices into files      */
+
+.data:*=$300:.zero:*=$10:.bss:*=$400:.text
+#echo ############ fsdev:
+#include  "sysapps/fs/fsdev.a65"
+.data
+#echo data (<=1024):
+#print *
+.bss
+#echo bss:
+#print *
+.text
+
+/************* fsiec - as IEEE488 bus filesystem        */
+
+#ifdef FSIEC_PARALLEL
+
+#undef	NOLOOP
+#undef	NOFS
+#undef	NOCMD
+
+.data:*=$300:.zero:*=$10:.bss:*=$500:.text
+#echo ############ fsiec:
+
+#undef FSIEC_AS_INIT
+#define	FSIEC_DEVICE	"devices/piec_csa.a65"
+
+#include  "sysapps/fs/fsiec.a65"
+
+.data
+#echo data (<=1280):
+#print *
+.bss
+#echo bss:
+#print *
+.text
+
+#endif
+
+/************* fsiec - as IEC bus filesystem            */
+
+#ifdef FSIEC_SERIAL
+
+#define	NOLOOP
+#undef	NOFS
+#undef	NOCMD
+
+.data:*=$300:.zero:*=$10:.bss:*=$400:.text
+#echo ############ fsiec:
+
+#undef FSIEC_AS_INIT
+#define	FSIEC_DEVICE	"devices/siec_csa.a65"
+
+#include  "sysapps/fs/fsiec.a65"
+
+.data
+#echo data (<=1024):
+#print *
+.bss
+#echo bss:
+#print *
+.text
+
+#endif
+
+/************* fsibm - PC-style disks filesystem        */
+
+#ifdef FSIBM
+
+.data:*=$300:.zero:*=$10:.bss:*=$500:.text
+#echo ############ fsibm:
+
+#include  "sysapps/fs/fsibm.a65"
+
+.data
+#echo data (<=1280):
+#print *
+.bss 
+#echo bss:
+#print *
+.text
+
+#endif
+
+/************* mon - OS/A 1 old style monitor/shell     */
+
+.data:*=$500:.zero:*=$30:.bss:*=$400:.text
+#echo ############ shell:
+
+#ifdef CLK1MHZ
+#define   SHORTMON
+#else
+#undef	  SHORTMON
+#endif
+
+/*
+#define   NOSH
+#define   NOSYSFKT
+*/
+
+#define MON_SHDEV	0 
+#define	MON_MONDEV	7
+#define	MON_SHEXE	$c0
+#define	MON_MONEXE	$80
+#include  "sysapps/mon/mon.a65"
+
+.zero
+#echo zero
+#print *
+.data
+#echo data:
+#print *
+.bss 
+#echo bss:
+#print *
+.text
+
+/************* end of ROM executables                   */
+
+          .word -1
+
+/************* lib6502 code                             */
+
+#ifdef USE_LIB6502
+
+/* lib6502 jmp table is below STDIOADDR */
+
+#echo "############ lib6502"
+.data:*=$300:.zero:*=8:.bss:*=$400:.text
+
+#include  "lib6502/lib6502.a65"
+/* #include  "stdlib/stdio.a65" */
+
+.zero
+#echo zero:
+#print *
+Zerostart =*	; only lib6502 and prg - that's it
+.data
+#echo data:
+#print *
+.bss 
+#echo bss:
+#print *
+Memstart =*	; only lib6502 and prg
+.text
+
+Memend = $1000
+
+#endif
+
+/************* fill not used area (I/O, screens)        */
+
+#if *>$e7ff
+#echo "program too long!, should be $e800 (59392), is"
+#print *
+ldx ,x
+#endif
+          .dsb $f000-*,<-1
+
+/************* Kernel                                   */
+          
+.data:*=$300:.zero:*=8:.bss:*=$600:.text
+#echo ############ kernel:
+
+#include  "kernel/kernel.a65"
+
+.zero
+#echo zero:
+#print *
+.data
+#echo data:
+#print *
+.bss 
+#echo bss:
+#print *
+.text
+
+	.)
+
+

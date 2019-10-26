@@ -1,0 +1,1317 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 lsh shell program
+
+    Copyright (C) 1997-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+
+/* #define	LSH_DEBUG */
+
+#define	BUFLEN 	255
+
+#define	MAXVAR	16
+
+#define	MAXCHLD	8
+/*
+ * lib6502 programs are started at the address of the 'main' subroutine.
+ * The first implementation, however, starts the programs at the start
+ * of the text segment - which we now make the address of 'main'...
+ */
+	.(
+	.zero
+argp	.word 0
+
+	.bss
+shin	.byt 0
+debug	.byt 0
+quiet	.byt 0		; bit 7 set -> no shell output
+waitfl	.byt 0		; bit 7 set -> wait for process termination
+
+piperd	.byt 0
+pipewr	.byt 0
+ispiped	.byt 0
+
+buf	.dsb BUFLEN
+
+	.data
+version	.asc 13,10,"sh v0.1 21dec1997 (c) A. Fachat",13,10,0
+	.text
+
+&main 	.(
+	sta argp
+	sty argp+1
+
+	jsr instsig
+	; install signal handler
+
+	ldx #STDIN
+	jsr dup
+	stx shin
+
+	ldx #0
+	stx quiet
+
+	lda argp
+	ldy argp+1
+
+	jsr parse_myopts	/* needs argp in a/y */
+
+	lda debug
+	beq loop
+	lda #<version
+	ldy #>version
+	jsr txtout
+
+	lda #0
+	sta ispiped	; init getcmd
+
+	/* command loop */
+loop
+	jsr checksig
+
+	jsr getcmd
+	sta argp
+	sty argp+1
+	bcs errclr
+
+	; do commands
+#ifdef LSH_DEBUG
+	lda #<runtxt
+	ldy #>runtxt
+	jsr txtout
+
+	ldy #0
+x1	lda (argp),y
+	beq next
+	jsr putc
+	iny
+	bne x1
+next	lda #" "
+	jsr putc
+	iny
+	lda (argp),y
+	bne x1
+
+	lda #13
+	jsr putc
+	lda #10
+	jsr putc
+#endif
+	jsr execfork
+	stx argp
+	sty argp+1
+	php
+	jsr clear
+	plp
+	bcs loop	; no task forked, x/y invalid
+	bit waitfl
+	bpl loop	; no wait
+	ldx argp
+	ldy argp+1
+	jsr waitpid
+	jmp loop
+
+errclr
+	cmp #E_OK
+	bne terminate
+	lda #0
+	sta ispiped
+	jsr clear
+	jmp loop
+
+clear	.(
+	ldx buf+0
+	jsr fclose
+	ldx buf+1
+	jsr fclose
+	ldx buf+2
+	jsr fclose
+#ifdef LSH_DEBUG
+	lda #13
+	jsr putc
+	lda #10
+	jsr putc
+#endif
+	rts
+	; jmp loop
+	.)
+
+terminate
+	pha
+	ldx shin
+	cpx #STDIN
+	beq nofile
+	jsr fclose
+nofile	pla
+	rts
+	.)
+
+crlfout	lda #13
+	jsr putc
+	lda #10
+putc	.(
+	bit quiet
+	bmi end
+	ldx #STDOUT
+	sec
+	jmp fputc
+end	rts
+	.)
+/*
+ * read and execute a command 
+ */
+getcmd	.(
+	.bss
+tx	.byt 0
+ty	.byt 0
+ta	.byt 0
+	.zero
+&ap	.word 0
+	.text
+
+	ldx #<-1
+	stx waitfl
+
+	bit ispiped
+	bmi pipe2	; ok, piped
+	bvs dostdin	; last command ended with ";"
+
+	ldx shin
+	jsr readline
+	bcc docmd
+	pha
+	cmp #E_EOF
+	beq cmdend
+	ldx #3
+	jsr errout
+cmdend	pla
+	.byt $2c
+perr
+werr	lda #E_OK
+;	.byt $2c
+;perr	lda #E_FNOFIL
+	sec
+	rts
+docmd	; pass a/y	; warning, argp is used outside loop
+	jsr tokenize
+	sta ap
+	sty ap+1
+
+#ifdef LSH_DEBUG
+	lda #10
+	jsr putc
+	ldy #0
+d0	lda (ap),y
+	beq next
+	jsr putc
+	iny
+	bne d0
+next	jsr crlfout
+	iny
+	lda (ap),y
+	bne d0
+#endif
+
+	/* 
+	 * now we have to parse the command line for I/O redirection and
+	 * piping, starting the right programs along the way.
+	 */
+
+	/* prepare stdio for started task */
+
+	lda #0
+	sta ty
+
+dostdin
+	ldx #STDIN
+	jsr dup
+	stx buf+0	; stdin
+	jmp nopipe
+
+pipe2			; BUG - when only "|" then no files are opened 
+	lda piperd
+	sta buf+0	; stdin
+nopipe
+	ldx #STDOUT
+	jsr dup
+	stx buf+1	; stdout
+	ldx #STDERR
+	jsr dup
+	stx buf+2	; stderr
+
+	lda ispiped
+	beq nopipew
+	lda #0
+	sta ispiped
+	ldy ty
+	lda (ap),y
+	bne nopipew
+	iny
+	lda (ap),y
+	beq perr
+	sty ty
+nopipew
+	/* parse command line, from (ap) to buf+3 */
+	/* TODO: interpret "\" escape codes, shell variables */
+
+	/* copy the filename */
+	ldy ty
+	ldx #3
+f0	lda (ap),y
+	sta buf,x
+	jsr checkesc
+	inx
+	iny
+	cmp #0
+	bne f0
+pars	
+	lda (ap),y
+	sta buf,x
+	beq ende
+	cmp #">"
+	beq out1
+	cmp #"<"
+	beq in1
+	cmp #"!"
+	beq err1
+	cmp #"'"
+	beq pipe1
+	cmp #"&"
+	beq back1
+	cmp #";"
+	beq wait1
+f1
+	/* TODO: interpret "\" escape codes, shell variables */
+
+	lda (ap),y
+	sta buf,x
+	jsr checkesc
+	inx
+	iny
+	cmp #0
+	bne f1
+	jmp pars
+
+in1	jmp redir_in
+
+out1	jmp redir_out
+
+err1	jmp redir_err
+
+ende	
+	lda #<buf
+	ldy #>buf
+	clc
+	rts
+
+back1	.(
+	lda #0
+	sta waitfl
+	sta ispiped
+	sta buf,x
+	sta buf+1,x
+	jmp ende
+	.)
+
+wait1	.(
+	iny
+	sty ty
+	stx tx
+	lda #$40
+	sta ispiped
+	asl
+	sta waitfl
+	lda #0
+	jmp pipe3
+	.)
+
+pipe1	.(
+	iny
+	sty ty
+	stx tx
+
+	jsr pipe
+	bcs pipend
+	stx piperd
+	sty pipewr
+
+	ldx buf+2	; stdout
+	jsr fclose
+	ldx pipewr
+	stx buf+2
+
+	lda #$80
+	sta ispiped	; set flag for piping
+	lda #0
+	sta waitfl	; background starting
+&pipe3
+	;lda #0
+	ldx tx
+	sta buf,x
+	sta buf+1,x
+
+	lda #<buf
+	ldy #>buf
+	clc
+	rts
+
+pipend
+	lda #"?"
+	jsr putc
+
+	lda #E_OK	; only close streams
+	sec
+	rts
+	.)
+
+
+redir_err .(
+	stx tx
+#ifdef LSH_DEBUG
+	sty ty
+	lda #<errtxt
+	ldy #>errtxt
+	jsr txtout
+	ldy ty
+	ldx tx
+#endif
+	lda #1
+	sta ta		; ta bit 0 = error out
+	iny
+	lda (ap),y
+	cmp #">"
+	bne nocombine
+	lda #3		; ta bit 1 = std out
+	sta ta
+	iny
+	lda (ap),y
+	cmp #">"
+	bne nocombine
+	lda #7		; ta bit 2 = no create but append
+	sta ta
+	iny
+&nocombine
+	lda (ap),y
+	bne inok
+	iny
+	lda (ap),y
+	beq openend
+inok 	sty ty
+	tya
+	clc
+	adc ap
+	pha
+	lda #0
+	adc ap+1
+	tay
+	; pla
+#ifdef LSH_DEBUG
+	pla
+	pha
+	tax
+	tya
+	pha
+	txa
+	jsr txtout
+	jsr crlfout
+	pla
+	tay
+	; pla
+#endif
+	; pha
+	lda ta
+	and #4
+	beq noap
+	ldx #OPEN_AP
+	.byt $2c
+noap
+	ldx #OPEN_WR
+	pla
+	jsr fopen
+	bcs openend
+	txa
+	pha
+	lsr ta
+	bcc noerr	; no stderr
+
+	jsr dup		; dups xr fileno
+	bcs noerr
+	txa
+	pha
+	ldx buf+2	; stderr
+	jsr fclose
+	pla
+	sta buf+2	; stderr
+noerr
+	lsr ta
+	bcc nostd
+	ldx buf+1
+	jsr fclose
+	pla
+	sta buf+1
+	jmp in0
+nostd	pla
+	tax
+	jsr fclose
+in0
+	ldx tx
+	ldy ty
+in2	lda (ap),y
+	iny
+	cmp #0
+	bne in2
+	jmp pars
+openend	
+	lda #"?"
+	jsr putc
+
+	lda #E_OK
+	sec
+	rts
+	.)
+
+redir_out .(
+	stx tx
+#ifdef LSH_DEBUG
+	sty ty
+	lda #<outxt
+	ldy #>outxt
+	jsr txtout
+	ldy ty
+	ldx tx
+#endif
+	lda #2
+	sta ta		; std out
+	iny
+	lda (ap),y
+	cmp #">"
+	bne noappend
+	lda #6
+	sta ta
+	iny
+noappend
+	lda (ap),y
+	cmp #"!"
+	bne nocomb1
+	inc ta
+	iny
+nocomb1	jmp nocombine
+	.)
+
+redir_in .(
+	stx tx
+#ifdef LSH_DEBUG
+	sty ty
+	lda #<intxt
+	ldy #>intxt
+	jsr txtout
+	ldy ty
+	ldx tx
+#endif
+	iny
+	lda (ap),y
+	bne inok
+	iny
+	lda (ap),y
+	beq openend
+inok 	sty ty
+	tya
+	clc
+	adc ap
+	pha
+	lda #0
+	adc ap+1
+	tay
+	pla
+#ifdef LSH_DEBUG
+	pha
+	tax
+	tya
+	pha
+	txa
+	jsr txtout
+	jsr crlfout
+	pla
+	tay
+	pla
+#endif
+	ldx #OPEN_RD
+	jsr fopen
+	bcs openend
+	txa
+	pha
+	ldx buf+0;	stdin
+	jsr fclose
+	pla
+	sta buf+0;	stdin
+	ldx tx
+	ldy ty
+in2	lda (ap),y
+	iny
+	cmp #0
+	bne in2
+	jmp pars
+openend	
+	lda #"?"
+	jsr putc
+
+	lda #E_OK
+	sec
+	rts
+	.)
+
+#ifdef LSH_DEBUG
+	.data
+intxt	.byt 13,10,"stdin from ",0
+outxt	.byt 13,10,"stdout from ",0
+errtxt	.byt 13,10,"stderr from ",0
+&runtxt	.byt 13,10,"run: ",0
+	.text
+#endif
+	.)
+
+/* 
+ * readline reads a line from shin and puts it into buf. It returns a
+ * pointer to the command line in a/y.
+ * Later command line history / command line editing will go here
+ * For now we ignore codes > 127, and most control codes <32
+ */
+readline .(
+	.bss
+instr	.byt 0
+	.data
+promptxt .byt 13,10,">",0
+	.text
+
+	stx instr
+
+	lda #<promptxt
+	ldy #>promptxt
+	jsr txtout
+
+	ldy #0
+l0
+	ldx instr
+	sec
+	jsr fgetc
+	bcs end
+	cmp #13
+	beq endline
+	cmp #8
+	beq backspace
+
+	cmp #128
+	bcs l0
+	cmp #32
+	bcc l0
+
+	jsr putc
+	sta buf,y
+	iny
+	cpy #BUFLEN
+	bcc l0
+	/* cmdline too long */
+	rts
+
+backspace
+	cpy #0
+	beq l0
+	dey
+	jsr putc
+	jmp l0
+
+endline	lda #0
+	sta buf,y
+
+	lda #<buf
+	ldy #>buf
+	clc
+end
+	rts
+	.)
+
+/*
+ * Print the error string of the number given in xr
+ */
+#define	NUMERR	6
+
+errout	.(
+	cpx #NUMERR
+	bcc e1
+	ldx #0
+e1
+	lda errh,x
+	tay
+	lda errl,x
+	jsr etxtout
+
+	lda #<errortxt
+	ldy #>errortxt
+	jmp etxtout
+
+	.data
+errh	.byt >t0, >t1, >t2, >t3, >t4, >t5
+errl	.byt <t0, <t1, <t2, <t3, <t4, <t5
+
+t0	.asc "Unknown",0
+t1	.asc " : Command line syntax",0
+t2	.asc " : Unknown option",0
+t3	.asc "Input I/O",0
+t4	.asc " : File",0
+t5	.asc " : Received sigchld",0
+
+errortxt .asc " error",10,13,0
+	.text
+	.)
+
+/* 
+ * print a null-terminated string (up to 254 char), addr in a/y, fileno in xr
+ */
+txtout	.(
+	.zero
+tp	.word 0
+	.text
+
+	bit quiet
+	bpl doit
+	rts
+doit	ldx #STDOUT
+	.byt $2c
+&etxtout
+	ldx #STDERR
+&xtxtout
+	sta tp
+	sty tp+1
+	ldy #0
+t1	lda (tp),y
+	beq te
+	sec
+	jsr fputc
+	iny
+	bne t1
+te	rts
+	.)
+
+ehexout	.(
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibout
+	pla
+nibout	and #$0f
+	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc ok
+	adc #"a"-"9"-2
+ok	ldx #STDERR
+	sec
+	jmp fputc
+	.)
+/*
+ * This interprets the command line options for the shell.
+ * Currently only the debug print "-d" is supported. 
+ * More important is the "-c" option to read the input from 
+ * another file.
+ */
+#define	NUMOPTS	2
+
+parse_myopts .(
+	sta argp
+	sty argp+1
+	; ignore the filename
+	ldy #0
+l0	lda (argp),y
+	beq arg1
+	iny
+	bne l0
+	beq error
+arg1	iny
+	tya
+	clc
+	adc argp
+	pha
+	lda #0
+	adc argp+1
+	tay
+	pla
+
+parse_loop
+	sta argp
+	sty argp+1
+
+	ldy #0
+	lda (argp),y
+	bne noend
+	clc
+	rts
+noend
+	cmp #"-"
+	bne argfile
+
+	iny
+	lda (argp),y
+	beq error
+
+	ldx #0
+pl	cmp optlist,x
+	beq found
+	inx
+	cpx #NUMOPTS
+	bcc pl
+	bcs unknown
+
+found	txa			; when jumping to an option, y holds the
+	asl			; offset of the command to argp. To return
+	tax			; either jmp to parse_loop or rts to
+	lda optaddr+1,x		; the main routine ("--" option)
+	pha
+	lda optaddr,x
+	pha
+	rts
+
+ferror	lda #4
+	.byt $2c
+error	lda #1
+	.byt $2c
+unknown	lda #2
+	pha
+	lda argp
+	ldy argp+1
+	jsr etxtout
+	pla
+	tax
+	jmp errout
+
+	.data
+
+optlist	.byt "d-"
+optaddr	.word opt_debug-1, opt_end-1
+
+	.text
+
+/* 
+ * This routine increments the argp pointer to the next argument -> a/y
+ */
+next	lda (argp),y
+	beq n1
+	iny
+	bne next
+n1	iny
+	tya
+	clc
+	adc argp
+	pha
+	lda #0
+	adc argp+1
+	tay
+	pla
+	rts
+
+/*
+ * Here are the command line options 
+ */
+opt_debug .(
+	lda #<-1
+	sta debug
+	jsr next
+	jmp parse_loop
+	.)
+
+opt_end	.(
+	jsr next
+	sta argp
+	sty argp+1
+
+&argfile
+	ldy #0
+	lda (argp),y
+	bne dofile
+	clc
+	rts
+dofile	lda argp
+	ldy argp+1
+	ldx #OPEN_RD
+	jsr fopen
+	bcs ferror
+	txa
+	pha
+	ldx shin
+	jsr fclose
+	pla
+	sta shin
+	lda #<-1
+	sta quiet
+	clc
+	rts
+	.)
+
+	.)	; end of parse_myopts
+
+/*
+ * tokenize takes the one-string command line and generates 
+ * the tokenized command line. The prompt is removed, too.
+ */
+tokenize .(
+	.bss
+tbuf	.dsb BUFLEN
+hk	.byt 0
+	.text
+
+	sta argp
+	sty argp+1
+
+	ldx #0
+	ldy #<-1
+kx	iny
+	lda (argp),y
+	beq ende
+	cmp #" "
+	beq kx
+	cmp #">"
+	beq kx
+
+	.byt $24	; ldy #<-1
+k0	iny
+	lda (argp),y
+	beq ende
+	cmp #" "
+	beq k0
+
+	cmp #34
+	beq starthk
+	lda #" "
+	.byt $24
+starthk	iny
+	sta hk
+
+k1	lda (argp),y
+	sta tbuf,x
+	beq ende
+	cmp hk
+	beq next
+	inx
+	iny
+	bne k1
+
+next	lda #0
+	sta tbuf,x
+	inx
+	jmp k0
+
+ende	lda #0
+	sta tbuf,x
+	sta tbuf+1,x
+	lda #<tbuf
+	ldy #>tbuf
+	rts
+	.)
+
+/*
+ * we get the three streams in buf+0,+1 and +2 and the command line in
+ * buf+3. We now check for builtin commands, and if not found, 
+ * fork a process.
+ */
+stdin	=buf
+stdout	=buf+1
+stderr	=buf+2
+cmdline	=buf+3
+
+execfork .(
+	.zero
+&cp	.word 0
+	.bss
+cnt	.byt 0
+	.text
+
+	/* search builtin table */
+	lda #<bictbl
+	sta cp
+	lda #>bictbl
+	sta cp+1
+
+	lda cmdline
+	beq sret	; E_OK == 0
+
+	ldy #0
+	sty cnt
+e1	ldx #0
+e0	lda (cp),y
+	beq found
+	cmp cmdline,x
+	bne nextw
+	inx
+	iny
+	bne e0
+nextw	iny
+	lda (cp),y
+	bne nextw
+nextw2	inc cnt
+	iny
+	lda (cp),y
+	bne e1
+
+	; no internal command
+	lda #<buf
+	ldy #>buf
+	jsr forkto
+	bcc ok
+	lda #"?"
+	jsr putc
+sret	sec
+ok	rts 
+
+found	cmp cmdline,x	; cmdline token must be at end too
+	bne nextw2
+
+	lda #E_ILLPAR
+	bit waitfl
+	bpl sret		; internal commands cannot go background
+
+	lda cnt
+	asl
+	tay
+	lda bicaddr+1,y
+	sta cp+1
+	lda bicaddr,y
+	sta cp
+	lda #<buf+3
+	ldy #>buf+3
+	jsr doit
+	sec	; means to close the stdio streams; ac gives return code
+	rts
+doit	jmp (cp)
+	.)
+
+	.data
+bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname
+bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0
+	.byt 0
+	.text
+
+xcrlfout .(
+	ldx buf+1	; stdout
+	lda #13
+	sec
+	jsr fputc
+	lda #10
+	sec
+	jmp fputc
+	.)
+
+bic_uname .(
+	jsr xcrlfout
+	jsr getos
+	ldx buf+1
+	jsr xtxtout
+	jmp xcrlfout
+	.)
+
+bic_set	.(
+	inx
+	txa
+	clc
+	adc #<buf+3
+	pha
+	lda #0
+	adc #>buf+3
+	tay
+	pla
+	jmp putenv
+	rts
+	.)
+
+bic_exit .(
+	jmp term
+	.)
+
+bic_echo .(
+	inx
+	txa
+	clc
+	adc #<buf+3
+	pha
+	lda #0
+	adc #>buf+3
+	tay
+	pla
+	sta cp
+	sty cp+1
+
+	jsr xcrlfout
+	ldx buf+1	; stdout
+
+	ldy #0
+l0	lda (cp),y
+	beq n1
+	sec
+	jsr fputc
+	iny
+	bne l0
+n1
+	lda #" "
+	sec
+	jsr fputc
+	iny
+	lda (cp),y
+	bne l0
+	rts
+	.)
+
+bic_cd	.(
+	inx
+	txa
+	clc
+	adc #<buf+3
+	pha
+	lda #0
+	adc #>buf+3
+	tay
+	pla
+	jmp chdir
+	.)
+
+bic_pwd	.(
+	jsr crlfout
+	lda #<buf+3
+	ldy #>buf+3
+	ldx #BUFLEN-3
+	jsr cwd
+	bcs ende
+	lda #<buf+3
+	ldy #>buf+3
+	ldx buf+1
+	jsr xtxtout
+	lda #0
+ende	rts
+	.)
+
+	.(
+	.bss
+wpid	.word 0
+cnum	.byt 0
+ctabl	.dsb MAXCHLD
+ctabh	.dsb MAXCHLD
+ctabr	.dsb MAXCHLD
+	.text
+
+&sigrchld .(
+	php
+	sei
+	pha
+	tya
+	ldy cnum
+	sta ctabh,y
+	txa
+	sta ctabl,y
+	pla
+	sta ctabr,y
+	cpy #MAXCHLD-1
+	bcs noinc
+	inc cnum
+noinc	plp
+	rts
+	.)
+
+&instsig .(
+	lda #0
+	sta cnum
+	lda #<sigrchld
+	ldy #>sigrchld
+	ldx #SIG_CHLD
+	jmp signal
+	.)
+
+&checksig .(
+	lda cnum
+	bne found
+	rts
+found	jsr crlfout
+	lda ctabh
+	jsr ehexout
+	lda ctabl
+	jsr ehexout
+	lda #","
+	ldx #STDERR
+	sec
+	jsr fputc
+	lda ctabr
+	jsr ehexout
+	ldx #5
+	jsr errout
+	jsr decnum
+	jmp checksig
+	.)
+
+decnum	.(
+	sei
+	ldy #0
+f1	lda ctabl+1,y
+	sta ctabl,y
+	lda ctabh+1,y
+	sta ctabh,y
+	lda ctabr+1,y
+	sta ctabr,y
+	iny
+	cpy cnum
+	bcc f1
+	dec cnum
+	cli
+	rts
+	.)
+
+&waitpid .(
+	stx wpid
+	sty wpid+1
+loop	lda cnum
+	bne gotone
+	jsr yield
+	jmp loop
+gotone	lda wpid
+	cmp ctabl
+	bne notthis
+	lda wpid+1
+	cmp ctabh
+	beq found
+notthis	jsr decnum
+	jmp loop
+found	jmp decnum
+	.)
+
+	.)	; signal handling
+
+checkesc .(	; command line escape handling
+	.bss
+i1	.byt 0
+i2	.byt 0
+br	.byt 0
+vbuf	.dsb MAXVAR
+	.zero
+p2	.word 0
+	.text
+
+	cmp #"$"
+	beq varsub
+	rts
+
+varsub	.(		; first filter variable name from command line
+	; dex
+	stx i1
+	lda #0
+	sta br
+
+	ldx #0
+	iny
+	sty i2
+
+	ldx #0
+	; iny
+	lda (ap),y
+	cmp #"{"
+	beq br1
+	cmp #"("
+	bne nobr
+	lda #")
+	.byt $2c
+br1	lda #"}"
+	sta br
+	iny
+nobr
+	lda (ap),y
+	sta vbuf,x
+	beq endname
+	cmp br
+	beq endn2
+	cmp #"a"
+	bcc noasc1
+	cmp #"z"+1
+	bcc nextc
+noasc1	cmp #"A"
+	bcc endname
+	cmp #"Z"+1
+	bcc nextc
+	cmp #"_"
+	beq nextc
+	cmp #"0"
+	bcc endname
+	cmp #"9"+1
+	bcs endname
+nextc
+	inx
+	iny
+	jmp nobr
+
+endn2   iny
+endname	lda #0
+	sta vbuf,x
+	dey
+	sty i2
+
+#ifdef ENVTEST
+lda #<fvar:ldy #>fvar:jsr txtout:lda #<vbuf:ldy #>vbuf:jsr txtout
+lda #<cvar:ldy #>cvar:jsr txtout
+#endif
+
+	; now substitute variable in vbuf -> a/y pointer to new value
+
+	lda #<vbuf
+	ldy #>vbuf
+	jsr getenv
+	sta p2
+	sty p2+1
+	ora p2+1
+	beq notfound
+
+#ifdef ENVTEST
+lda #<evar:ldy #>evar:jsr txtout:lda p2:ldy p2+1:jsr txtout
+lda #<cvar:ldy #>cvar:jsr txtout
+#endif
+	ldy #0
+	ldx i1
+lo	lda (p2),y
+	sta buf,x
+	beq loe
+	iny
+	inx
+	bne lo
+loe	dex
+	stx i1
+
+notfound
+	ldx i1
+	ldy i2
+	lda (ap),y
+	rts
+
+#ifdef ENVTEST
+	.data
+fvar	.asc "^m^jfound var :",0
+cvar	.asc "^m^j",0
+evar	.asc "^m^jgot var :",0
+	.text
+#endif
+	.)
+
+	.)	; command line escape handling
+	
+	.)

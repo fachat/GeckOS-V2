@@ -1,0 +1,13 @@
+
+The chips directory keeps the register definitions
+for the several used chips.
+
+Other include files are OS structures that are used by other
+programs.
+
+Here also go include files from programs that need their stuff
+exported to other programs.
+
+Architecture dependent stuff goes to the arch directories
+
+

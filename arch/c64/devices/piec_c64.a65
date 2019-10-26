@@ -1,0 +1,460 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************
+ * 
+ * C64 parallel IEC bus 
+ * hardware routines for fsiec
+ *
+ */
+
+
+#define   TPI       $df00
+#define   CIA2      $dd00
+
+#include "chips/tpi6525.i65"
+#include "chips/cia6526.i65"
+
+	.data
+byte      .byt 0
+bytfl     .byt 0
+eoifl     .byt 0
+	.text
+
+        /* when we get the IEC semaphore, we have nothing to do left,
+           assuming that no other program changes the I/O lines. 
+           The timer is configured correctly in setti every time it
+           is needed. We also assume that any timer interrupt is 
+           disabled by other devices when releasing the interface. */
+&getif  .(
+        clc
+        ldx #SEM_CIA2TB
+        jsr PSEM
+#ifdef NMIDEV
+	lda #NMI_OFF
+	jmp CTRLNMI
+#else
+	rts
+#endif
+        .)
+
+&freif  .(
+#ifdef NMIDEV
+	lda #NMI_ON
+	jsr CTRLNMI
+#endif
+        ldx #SEM_CIA2TB
+        jmp VSEM
+        .)
+
+&IECINIT  .(
+	jsr getif
+	  ; the following lines are from the original code 
+	  lda #%00011100
+	  sta TPI+TPI_DDPC
+	  cmp TPI+TPI_DDPC
+	  bne inix
+	  lda #0
+	  sta TPI+TPI_PC
+
+	  sta TPI+TPI_DDPB
+	  cmp TPI+TPI_DDPB
+	  bne inix
+
+	  lda #%00111010
+	  sta TPI+TPI_PA
+	  lda #%00111111
+	  sta TPI+TPI_DDPA
+	  cmp TPI+TPI_DDPA
+	  bne inix
+
+	  lda TPI+TPI_PC
+	  and #%11111110
+	  sta TPI+TPI_PC
+	  ldy #255
+l0	  dey
+	  nop
+	  bne l0
+	  lda TPI+TPI_PC
+	  ora #1
+	  sta TPI+TPI_PC
+
+	  lda #%00111001
+	  sta TPI+TPI_PA
+
+          lda #0
+          sta byte
+          sta bytfl
+          sta eoifl
+          clc
+	  .byt $24
+inix      sec
+	php
+	jsr freif
+	plp
+          rts
+          .)
+
+/* Blocktiefe 2 */
+
+aout=atnout
+/*
+aout      
+	sei
+	  pha
+	  jsr iecsetoutput
+          lda #0
+          sta status
+;          jsr nrfdhi
+;          jsr ndachi
+;jsr eoilo         
+
+          lda bytfl
+          beq oo1
+          sec
+          ror eoifl
+          jsr iecout
+          lda #0
+          sta bytfl
+;jsr eoihi
+
+oo1       
+	  pla
+          sta byte
+*/
+iec0out	
+	jsr iecsetoutput
+          jsr waitdavhi
+          jsr atnlo
+
+iecout    .(
+          sei
+;          jsr davhi
+lda #%00010010
+ora TPI+TPI_PA
+sta TPI+TPI_PA
+;          jsr iecsetoutput
+          jsr tstdev     ;nrfdhi & ndachi = z
+          beq devnotpr
+          lda byte
+          jsr out
+ox1       JSR setti
+ox1a      JSR fragti
+          BNE XTO
+          ;lda VIA1+VIA_DRB
+	  lda TPI+TPI_PA
+          bpl ox1a       ; wait nrfd hi
+          lda eoifl
+          bpl o0
+          jsr eoilo
+o0        jsr davlo
+          jsr setti
+o1        jsr fragti
+          bne timeout
+          jsr fragndac   ; wait ndac hi
+          bcc o1
+          jsr davhi
+          jsr eoihi
+          lsr eoifl
+          jsr clrdata    ; alle data hi
+ox2       ;lda VIA1+VIA_DRB
+	  lda TPI+TPI_PA
+          ;lsr
+          ;bcs ox2        ; wait ndaclo
+	  asl
+	  bmi ox2
+          clc
+          cli
+          rts
+          
+XTO       JSR YIELD
+          SEI
+          JMP ox1
+          .)
+          
+&seclisten sta byte
+          jsr iecout
+          jsr atnhi
+          cli
+          rts
+
+timeout   lda #1
+          .byt $2c
+devnotpr  lda #128
+          jsr seterror
+          jsr eoihi
+          jsr davhi
+          jsr ndachi
+          sec
+          cli
+          rts
+          
+&sectalk   sta byte
+          jsr iecout
+;          jsr nrfdlo
+;          jsr ndaclo    
+;          jsr atnhi
+;	  jsr iecsetinput
+sectalkend
+lda #%00111101
+and TPI+TPI_PA
+sta TPI+TPI_PA
+lda #%11000011
+sta TPI+TPI_DDPA
+lda #0
+sta TPI+TPI_DDPB
+jmp atnhi
+          rts
+
+/*
++IECOUT   bit bytfl
+          bmi oo2
+          dec bytfl
+          clc
+          bne oo3
+oo2       pha
+          jsr iecout
+          pla
+oo3       sta byte
+          lda status
+          cmp #1         ; ungleich 0 = c
+          rts
+*/
+
+&UNTALK   jsr atnlo
+          lda #95
+          .byt $2c
+&UNLISTEN lda #63
+          jsr aout
+;          jsr atnhi
+jsr sectalkend
+/*
+.(
+lda TPI+TPI_PA
+cmp #$38
+bne err
+lda TPI+TPI_PB
+beq ok
+err .byt 2
+ok
+.)
+*/
+lda #%11111101
+ora TPI+TPI_PA
+sta TPI+TPI_PA
+
+;	  lda #%00111111
+;	  sta TPI+TPI_DDPA
+;	  lda #%00111001
+;	  sta TPI+TPI_PA
+
+          cli
+          rts
+          
+timeoutx  jmp timeout
+
+&IECIN    .(
+          sei
+          jsr ndaclo
+          jsr nrfdhi
+i1        ;lda VIA1+VIA_DRB
+          ;cmp VIA1+VIA_DRB
+	  lda TPI+TPI_PA
+	  cmp TPI+TPI_PA
+          bne i1
+          asl
+          bcc i1		; wait nrfd hi
+          jsr setti
+o11       jsr fragti
+          bne timeoutx    ; c= abgelaufen
+          jsr fragdav    ; wait dav lo
+          bcs o11
+          jsr nrfdlo
+          jsr frageoi
+          bcs o12
+          lda #64
+          jsr seterror
+o12       jsr bytin
+          pha
+          jsr ndachi
+o12a      jsr fragdav
+          bcc o12a 
+          jsr ndaclo
+          lda status
+          bne o12c
+          pla
+          clc
+          cli
+          rts
+o12c      pla
+          sec
+          cli
+          rts
+          .)
+
+iecsetinput 
+	  lda TPI+TPI_PA
+	  and #%00111101	;61
+	  sta TPI+TPI_PA
+	  lda #%11000011	;195
+	  sta TPI+TPI_DDPA
+	  lda #0
+	  sta TPI+TPI_DDPB
+	  rts
+	
+iecsetoutput
+	  lda #%00111011
+	  sta TPI+TPI_DDPA
+	  lda #$ff
+	  sta TPI+TPI_PB
+	  sta TPI+TPI_DDPB
+	  lda #%11111010	; ?
+	  sta TPI+TPI_PA	; ?
+	  rts
+
+atnhi     lda TPI+TPI_PA
+          ora #%00001000
+          sta TPI+TPI_PA
+          rts
+atnlo     lda TPI+TPI_PA
+          and #%11110111
+          sta TPI+TPI_PA
+          rts
+
+eoihi     lda TPI+TPI_PA
+          ora #%00100000
+          sta TPI+TPI_PA
+          rts
+eoilo     lda TPI+TPI_PA
+          and #%11011111
+          sta TPI+TPI_PA
+          rts
+
+ndachi    lda TPI+TPI_PA
+          ora #%01000000
+          sta TPI+TPI_PA
+          rts
+ndaclo    lda TPI+TPI_PA
+          and #%10111111
+          sta TPI+TPI_PA
+          rts
+
+nrfdhi    lda TPI+TPI_PA
+          ora #%10000000
+          sta TPI+TPI_PA
+          rts
+nrfdlo    lda TPI+TPI_PA
+          and #%01111111
+          sta TPI+TPI_PA
+          rts
+
+davhi     lda TPI+TPI_PA
+          ora #%00010000
+          sta TPI+TPI_PA
+          rts
+davlo     lda TPI+TPI_PA
+          and #%11101111
+          sta TPI+TPI_PA
+          rts
+
+waitdavhi lda TPI+TPI_PA
+          cmp TPI+TPI_PA
+          bne waitdavhi
+          and #%00010000
+          beq waitdavhi
+          rts
+
+tstdev    lda TPI+TPI_PA
+          cmp TPI+TPI_PA
+          bne tstdev
+          and #%11000000
+          cmp #%11000000
+          rts
+
+clrdata   lda #<-1
+          sta TPI+TPI_PB
+          rts
+
+out       eor #$ff
+          sta TPI+TPI_PB
+          rts
+
+waitnrfdhi
+          lda TPI+TPI_PA
+          cmp TPI+TPI_PA
+          bne waitnrfdhi
+          asl
+          bcc waitnrfdhi
+          rts
+
+fragndac  lda TPI+TPI_PA
+          cmp TPI+TPI_PA
+          bne fragndac
+          ;lsr
+	  asl
+	  asl
+          rts
+
+fragdav   lda TPI+TPI_PA
+          cmp TPI+TPI_PA
+          bne fragdav
+          asl
+          asl
+          asl
+          asl
+          rts
+
+bytin     lda TPI+TPI_PB
+          eor #$ff
+          rts
+
+&setti    lda CIA2+CIA_CRB
+	  and #%11111110
+	  sta CIA2+CIA_CRB
+	  lda #<65000
+          ;sta VIA1+VIA_T1CL
+	  sta CIA2+CIA_TBL
+          lda #>65000     
+          ;sta VIA1+VIA_T1CH
+	  sta CIA2+CIA_TBH
+	  lda CIA2+CIA_ICR	; clear overflow flag
+	  lda #%00010001
+	  sta CIA2+CIA_CRB
+          rts
+	
+&fragti   lda CIA2+CIA_ICR
+          and #%00000010
+          rts
+
+frageoi   lda TPI+TPI_PA
+          cmp TPI+TPI_PA
+          bne frageoi
+          asl
+          asl
+          asl
+          rts
+
+#undef TPI
+#undef CIA2
+
+

@@ -1,0 +1,66 @@
+
+#include "include/kdefs.i65"
+#include "include/kernel.i65"
+
+	.word $2000
+	*=$2000
+
+/* TEST1
+	lda #<thread1
+	ldy #>thread1
+	jsr FORKT
+	rts
+
+thread1	inc $d020
+	jsr YIELD
+	jmp thread1
+*/
+
+/* TEST2 */
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	lda #STDIN
+	sta PCBUF+FORK_STDIN
+	lda #STDOUT
+	sta PCBUF+FORK_STDOUT
+	lda #STDERR
+	sta PCBUF+FORK_STDERR
+
+	lda #<forkaddr
+	sta PCBUF+FORK_ADDR
+	lda #>forkaddr
+	sta PCBUF+FORK_ADDR+1
+	
+	jsr FORK
+	rts
+forkaddr
+	lda #<sigaddr
+	ldy #>sigaddr
+	sec
+	jsr SETSIG
+	lda #$81
+	clc
+	jsr SETSIG
+
+	/* if not commented, keep thread in kernel call */
+/*
+repeat	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+	bcc task1
+	cmp #E_INT
+	beq ok
+	brk
+ok	inc $d021
+	jmp repeat
+*/
+task1	
+	jsr YIELD
+	jmp task1
+
+sigaddr	inc $d020
+	pla
+	rti
+

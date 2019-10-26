@@ -1,0 +1,166 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/***************************************************************************/
+/*                      These defines control the ROM build                */
+/*                                                                         */
+
+#define   ROM
+
+/* These are necessary for Gecko kernel ************************************/
+
+#define	NOSYSPORT
+/*#define	  SYSPORT	$7fe0*/		/* if mapped */
+
+#define	OSA_CPU		"6502"
+#define	OSA_ARCH	"Gecko"
+
+/* These are changeable ****************************************************/
+
+#define	GECKO_CSAEMU		/* use CSA 6551 serial... */
+#define	DEBUG
+
+#undef	STACKCOPY
+
+#define	  RAMEND	$80
+#define	  MIN_MEM	$20
+
+#define	  CLK2MHZ
+
+#undef    CMOSCPU
+
+#define NEED_CHECKCHLD          /* this is necessary if using "init" or
+                                   lib6502 */
+#define NEED_GETINFO
+#define NEED_SLOCK
+#define NEED_RENICE
+
+#define BOOTDRV         "c"     /* where are the boot files */
+
+#define	ROMSTART	$8000
+
+/***************************************************************************/
+/*                      Better not change anything below                   */
+/*                                                                         */
+
+#include  "kdefs.i65"
+#include  "fdefs.i65"
+#include  "config.i65"
+#include  "kernel.i65"
+
+#define	STDIOADDR $e000
+
+/* Semaphore is needed to keep irtx and fsiec from interfering */
+#define	SEM_T1		SEM_SERIEC
+
+	.(
+
+/************* ROM entries                              */
+
+/************* devices                                  */
+
+#include  "devices/oadev.a65"
+
+/************* fsdev - converts devices into files      */
+
+#define	FSDEV_AS_INIT
+#include  "sysapps/fs/fsdev.a65"
+
+/************* fsiec - IEEE488/IEC bus filesystem       */
+
+#define	FSIEC_AS_INIT
+#define	FSIEC_DEVICE	"devices/siec_gecko.a65"
+#define   NOLOOP
+/*
+#define   NOFS
+#define   INVERT
+#define   NOCMD
+*/
+#include  "sysapps/fs/fsiec.a65"
+
+/************* mon - OS/A 1 old style monitor/shell     */
+
+#define	  MON_MONDEV	3
+#define	  MON_MONEXE	$83	/* init-like, autostart */
+#define	  MON_SHDEV	0
+#define	  MON_SHEXE	0
+#undef   SHORTMON
+#undef   NOSYSFKT
+#define   NOSH
+
+#include  "sysapps/mon/mon.a65"
+
+/************* mon - OS/A 1 old style monitor/shell     */
+
+#ifdef DEBUG
+
+#define	  MON_MONDEV	5
+#define	  MON_MONEXE	$83	/* init-like, autostart */
+#define	  MON_SHDEV	0
+#define	  MON_SHEXE	0
+#undef   SHORTMON
+#undef   NOSYSFKT
+#define   NOSH
+
+#include  "sysapps/mon/mon.a65"
+
+#endif
+
+/************* payload - irtx stereo control menu.. :-) */
+
+#if 0
+
+#define	VIA	$ec10		/* VIA for irtx */
+#include  "sysapps/irtx/irtx.a65"
+
+#endif
+
+/************* end of ROM executables                   */
+
+          .word -1
+
+/************* lib6502 code                             */
+
+/* lib6502 jmp table is below STDIOADDR */
+
+#include  "lib6502/lib6502.a65"
+
+/*#include  "oldlib/stdio.a65"*/
+
+/************* fill not used area (I/O, screens)        */
+
+          .dsb $f000-*,<-1
+
+/************* Kernel                                   */
+
+#include  "kernel/kernel.a65"
+
+/************* Constants for lib6502 memory handling    */
+
+Memstart = $1000
+Memend	 = ROMSTART
+Zerostart= $60
+
+	.)
+

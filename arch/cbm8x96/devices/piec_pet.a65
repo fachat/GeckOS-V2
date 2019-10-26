@@ -1,0 +1,366 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#define   VIA1      $e840
+#define   PIA2      $e820
+#define   PIA1      $e810
+
+#include "chips/via6522.i65"
+#include "chips/pia6521.i65"
+
+#ifdef FSIEC_USE_STDLIB
+#define	CHDIR	Chdir
+#define	ASSIGN	Assign
+#endif
+
+	.data
+byte      .byt 0
+bytfl     .byt 0
+eoifl     .byt 0
+	.text
+
+&getif  clc
+	ldx #SEM_VIAE840_T1
+	jmp PSEM
+&freif	ldx #SEM_VIAE840_T1
+	jmp VSEM
+ 
+&IECINIT  .(
+          lda #%00111000
+          sta PIA2+PIA_CRA
+          lda #0
+          sta PIA2+PIA_PA          ; DDRA
+          cmp PIA2+PIA_PA
+          bne inix
+          lda #%00111100           ; CA2 = NDAC hi
+          sta PIA2+PIA_CRA
+          
+          lda #%00111000
+          sta PIA2+PIA_CRB
+          lda #$ff
+          sta PIA2+PIA_PB          ; DDRB
+          cmp PIA2+PIA_PB
+          bne inix
+          lda #%00111100           ; CB2 = DAV hi
+          sta PIA2+PIA_CRB
+          lda #<-1                 ; DRB
+          sta PIA2+PIA_PB
+
+          lda #%00111000
+          sta PIA2+PIA_CRA
+          lda PIA2+PIA_PA          ; DDRA
+	  and #%10111111
+          sta PIA2+PIA_PA          ; DDRA
+          cmp PIA2+PIA_PA
+          bne inix
+          lda #%00111100           ; CA2 = NDAC hi
+          sta PIA2+PIA_CRA
+
+	  lda PIA1+PIA_CRA
+          ora #%00111100           ; CA2 = EOI hi
+	  sta PIA1+PIA_CRA
+	 
+	  lda VIA1+VIA_DDRB
+	  and #%00111110 
+          ora #%00000110
+          sta VIA1+VIA_DDRB
+          cmp VIA1+VIA_DDRB
+          bne inix
+	  lda VIA1+VIA_DRB
+	  ora #%00000110
+          sta VIA1+VIA_DRB         ; alle ausgaenge hi
+
+          lda VIA1+VIA_ACR
+          and #%00111101           ; PB2 Latch off, T1 timed IRQ
+          sta VIA1+VIA_ACR
+          lda VIA1+VIA_PCR
+          ora #%11100000           ; cb2 hi out (Piezo)
+          sta VIA1+VIA_PCR
+          lda #%01011000           ; T1, CB1, CB2 -IRQ off 
+          sta VIA1+VIA_IER
+          lda #0
+          sta byte
+          sta bytfl
+          sta eoifl
+          clc
+          rts
+inix      sec
+          rts
+          .)
+
+/* Blocktiefe 2 */
+
+#ifndef NOFS
+
+aout	=atnout
+/*
+aout      pha
+          lda #0
+          sta status
+          jsr nrfdhi
+          jsr ndachi
+         
+          lda bytfl
+          beq oo1
+          sec
+          ror eoifl
+          jsr iecout
+          lda #0
+          sta bytfl
+
+oo1       pla
+          sta byte
+*/
+iec0out   sei
+          jsr waitdavhi
+          jsr atnlo
+
+iecout    .(
+          sei
+jsr nrfdhi
+jsr ndachi
+          jsr davhi
+          jsr tstdev     ;nrfdhi & ndachi = z
+          beq devnotpr
+          lda byte
+          jsr out
+ox1       JSR setti
+ox1a      JSR fragti
+          BNE XTO
+          bit VIA1+VIA_DRB
+          bvc ox1a       ; wait nrfd hi
+          lda eoifl
+          bpl o0
+          jsr eoilo
+o0        jsr davlo
+          jsr setti
+o1        jsr fragti
+          bne timeout
+          jsr fragndac   ; wait ndac hi
+          bcc o1
+          jsr davhi
+          jsr eoihi
+          lsr eoifl
+          jsr clrdata    ; alle data hi
+ox2       lda VIA1+VIA_DRB
+          lsr
+          bcs ox2        ; wait ndaclo
+          clc
+;          cli
+          rts
+          
+XTO       JSR YIELD
+          SEI
+          JMP ox1
+          .)
+          
+&seclisten sta byte
+          jsr iecout
+          jsr atnhi
+          cli
+          rts
+#endif
+
+timeout   lda #1
+          .byt $2c
+devnotpr  lda #128
+          jsr seterr
+          jsr eoihi
+          jsr davhi
+          jsr ndachi
+          sec
+          cli
+          rts
+          
+#ifndef NOFS
+
+&sectalk   sta byte
+          jsr iecout
+          jsr nrfdlo
+          jsr ndaclo    
+          jsr atnhi
+	  cli
+          rts
+
+&UNTALK   jsr atnlo
+          lda #95
+          .byt $2c
+&UNLISTEN lda #63
+          jsr aout
+          jsr atnhi
+          cli
+          rts
+          
+timeoutx  jmp timeout
+
+&IECIN    .(
+          sei
+          jsr ndaclo
+          jsr nrfdhi
+i1        lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne i1
+          asl
+	  asl
+          bcc i1
+          jsr setti
+o11       jsr fragti
+          bne timeoutx    ; c= abgelaufen
+          jsr fragdav    ; wait dav lo
+          bcs o11
+          jsr nrfdlo
+          jsr frageoi
+          bcs o12
+          lda #64
+          jsr seterr
+o12       jsr bytin
+          pha
+          jsr ndachi
+o12a      jsr fragdav
+          bcc o12a 
+          jsr ndaclo
+          lda status
+          bne o12c
+          pla
+          clc
+          cli
+          rts
+o12c      pla
+          sec
+          cli
+          rts
+          .)
+
+atnhi     lda VIA1+VIA_DRB
+          ora #%00000100
+          sta VIA1+VIA_DRB
+          rts
+atnlo     lda VIA1+VIA_DRB
+          and #%11111011
+          sta VIA1+VIA_DRB
+          rts
+#endif
+
+eoihi     lda #60
+          sta PIA1+PIA_CRA
+          rts
+eoilo     lda #52
+          sta PIA1+PIA_CRA
+          rts
+
+ndachi    lda #60
+          sta PIA2+PIA_CRA
+          rts
+ndaclo    lda #52
+          sta PIA2+PIA_CRA
+          rts
+
+nrfdhi    lda VIA1+VIA_DRB
+	  ora #%00000010
+          sta VIA1+VIA_DRB
+          rts
+nrfdlo    lda VIA1+VIA_DRB
+	  and #%11111101
+          sta VIA1+VIA_DRB
+          rts
+
+davhi     lda #60
+          sta PIA2+PIA_CRB
+          rts
+davlo     lda #52
+          sta PIA2+PIA_CRB
+          rts
+
+waitdavhi lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne waitdavhi
+          and #$80
+          beq waitdavhi
+          rts
+
+tstdev    lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne tstdev
+          and #%01000001
+          cmp #%01000001
+          rts
+
+clrdata   lda #<-1
+          sta PIA2+PIA_PB
+          rts
+
+out       eor #$ff
+          sta PIA2+PIA_PB
+          rts
+
+waitnrfdhi
+          lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne waitnrfdhi
+          asl
+	  asl
+          bcc waitnrfdhi
+          rts
+
+fragndac  lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne fragndac
+          lsr
+          rts
+
+fragdav   lda VIA1+VIA_DRB
+          cmp VIA1+VIA_DRB
+          bne fragdav
+          asl
+          rts
+
+seterr    ora status
+          sta status
+          rts
+
+bytin     lda PIA2+PIA_PA
+          eor #$ff
+          rts
+
+&setti    lda #<65000
+          sta VIA1+VIA_T1CL
+          lda #>65000     
+          sta VIA1+VIA_T1CH
+          rts
+&fragti   lda VIA1+VIA_IFR
+          and #%01000000
+          rts
+
+frageoi   lda PIA1+PIA_PA
+          cmp PIA1+PIA_PA
+          bne frageoi
+          asl
+          asl
+          rts
+
+
+#undef PIA1
+#undef PIA2
+#undef VIA1
+

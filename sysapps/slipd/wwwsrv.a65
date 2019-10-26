@@ -1,0 +1,949 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+	.(
+
+#define	TCB_WS		TCB_CONN
+#define	TCB_WSLOT	(TCB_CONN+1)
+#define	TCB_WSTR	(TCB_CONN+2)
+#define	TCB_WTASK	(TCB_CONN+3)
+#define	TCB_WCNT	(TCB_CONN+4)
+#define	TCB_WPREFIX	(TCB_CONN+5)
+
+#define	WS_FREE		0
+#define	WS_RXD		1	/* filename received */
+#define	WS_FSENT	2	/* filename sent to filesystem */
+#define	WS_WR		3	/* get data and send it */
+#define	WS_WR_WAIT	4	/* send prepared data block */
+#define	WS_WR_WEOF	5	/* send last data block */
+#define	WS_CLOSING	6	/* closing */
+#define	WS_CLOSED	7	/* closed */
+
+#define	WE_ILLFORMED	1	/* illformed request */
+#define	WE_TRYAGAIN	2	/* temporary resource shortage */
+#define	WE_NOTFOUND	3	/* file not found */
+
+www_srv	.byte 0,0,0,0, 0,0, 80,0, SFL_MULT
+        .word wwwsrv_open-1, wwwsrv_queue-1, wwwsrv_loop-1, wwwsrv_signal-1
+
+	.zero
+zp	.word 0
+	.text
+
+&wwwsrv_init .(
+	lda #<www_srv
+	ldy #>www_srv
+	jmp tcp_listen
+	.)
+
+wwwsrv_open
+	rts
+
+wwwsrv_queue .(
+	stx pslot
+	jsr getbadr
+	sta pp
+	sty pp+1
+
+#ifdef DEBUGWWW
+DB("wwwsrv_queue: tcbp=")
+lda tcbp+1:jsr EHexout:lda tcbp:jsr EHexout:jsr ECrlfout
+#endif
+
+	ldy #TCB_WS
+	lda (tcbp),y
+	cmp #WS_FREE
+	beq noclose
+	jmp close
+noclose
+	ldy #TCB_WPREFIX
+	lda #<-1
+	sta (tcbp),y
+
+	ldy #0
+	lda (pp),y
+	clc
+	adc pp
+	sta pd
+	iny
+	lda (pp),y
+	adc pp+1
+	sta pd+1
+	iny
+	lda (pp),y
+	sta pdl
+	iny
+	lda (pp),y
+	sta pdl+1
+#ifdef DEBUGWWW
+ldy #0:x4 lda (pd),y:jsr ECout:iny:cpy pdl:bcc x4
+#endif
+
+	lda pdl+1
+	bne oklen
+	lda pdl
+	cmp #5		/* at least GET + space + one_char_URL */
+	bcc noget1
+oklen
+	ldy #0
+	lda (pd),y
+	cmp #"G"
+	beq get2
+	cmp #"g"
+	bne noget1
+get2	iny
+	lda (pd),y
+	cmp #"E"
+	beq get3
+	cmp #"e"
+	bne noget1
+get3	iny
+	lda (pd),y
+	cmp #"T"
+	beq get4
+	cmp #"t"
+	beq get4
+noget1	jmp noget
+get4	
+	iny
+	beq noget1	/* length overflow */
+	cpy pdl
+	bcc ok		/* low counter below length */
+	lda pdl+1
+	beq noget1	/* gotten to end length */
+ok
+	lda (pd),y
+	cmp #" "
+	beq get4
+
+	tya
+	sta ppl		/* well, we need temp. storage... */
+	clc
+	adc pd
+	sta pd
+	bcc a0
+	inc pd+1
+a0	lda pdl
+	sec
+	sbc ppl
+	sta pdl
+	bcs a1
+	dec pdl+1
+a1	
+	ldy #0
+	beq a2a
+a2	iny
+	beq noget1	/* length overflow */
+a2a	cpy pdl
+	bcc ok1		/* low counter below length */
+	lda pdl+1
+	beq noget1	/* gotten to end length */
+ok1
+	lda (pd),y
+	cmp #32
+	bcc end
+	cmp #" "
+	beq end
+	cmp #"#"
+	beq end
+	cmp #"/"
+	bne a2
+	lda #DIRSIGN
+	sta (pd),y
+	jmp a2
+end	sty pdl
+	lda #0
+	sta pdl+1
+
+	cpy #64		/* filename too long! */
+	bcs noget	
+
+#ifdef DEBUGWWW
+DB("GET detected:")
+ldy #0:x3 lda (pd),y:jsr ECout:iny:cpy pdl:bcc x3
+DB(", len=")
+lda pdl:jsr EHexout:jsr ECrlfout
+#endif
+
+	ldy #0
+	lda pd
+	sec
+	sbc pp
+	sta (pp),y
+	iny
+	lda pd+1
+	sbc pp+1
+	sta (pp),y
+	iny
+	lda pdl
+	sta (pp),y
+	iny
+	lda pdl+1
+	sta (pp),y
+
+	lda pslot
+	ldy #TCB_WSLOT
+	sta (tcbp),y
+	ldy #TCB_WS
+	lda #WS_RXD
+	sta (tcbp),y
+	ldy #TCB_WCNT
+	lda #100
+	sta (tcbp),y
+	clc
+	rts
+
+noget	lda pslot
+	pha
+	ldx #WE_ILLFORMED
+	jsr senderr
+	pla
+	sta pslot
+	lda #WS_CLOSING
+set
+	ldy #TCB_WS
+	sta (tcbp),y
+close 
+	ldx pslot
+	jsr bfree
+
+	clc
+	rts
+	.)
+
+senderr	.(
+	dex
+	txa
+	asl
+	tax
+
+	lda msgtab,x
+	sta zp
+	lda msgtab+1,x
+	sta zp+1
+
+	lda lentab+1,x
+	tay
+	lda lentab,x
+	sec
+
+&sendprefix
+	php
+	clc
+	adc #TCP_DOFFSET
+	pha
+	tya
+	adc #0
+	tay
+	pla
+	jsr balloc
+	bcc xerrp
+	jmp errp
+xerrp
+	lda #TCP_DOFFSET
+	jsr getpinfo
+/*
+DB("sendprefix: pd=")
+lda pd+1:jsr EHexout:lda pd:jsr EHexout
+DB(" pp=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout
+jsr ECrlfout
+*/
+	ldy #0
+	lda pd
+	sec
+	sbc pp
+	sta (pp),y
+	iny
+	lda pd+1
+	sbc pp+1
+	sta (pp),y
+	iny
+	lda pdl
+	sta (pp),y
+	iny
+	lda pdl+1
+	sta (pp),y
+
+	ldy #0
+loop	cpy pdl
+	bcc okl
+	lda pdl+1
+	beq end
+okl	
+	lda (zp),y
+	sta (pd),y
+	iny
+	bne loop
+	dec pdl+1
+	jmp loop
+
+end
+/*
+DB("sendprefix: pd=")
+lda pd+1:jsr EHexout:lda pd:jsr EHexout
+DB(" pp=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout
+jsr ECrlfout
+*/
+	ldx pslot
+	plp
+	bcc notx
+
+	jmp tx_queue_packet
+errp
+	plp
+	sec
+notx	lda #<-1
+	sta pslot
+	rts
+
+	.data
+
+msgtab	.word m_illf, m_again, m_notf
+lentab	.word e_illf-m_illf, e_again-m_again, e_notf-m_notf
+
+m_illf	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
+	.asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
+	.asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+	.asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
+	.asc " TCP simple WWW server error: malformed request^m^j"
+	.asc "</BODY>^m^j</HTML>^m^j"
+e_illf
+m_again	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
+	.asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
+	.asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+	.asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
+	.asc " TCP simple WWW server error: try again^m^j"
+	.asc "</BODY>^m^j</HTML>^m^j"
+e_again
+m_notf	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
+	.asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
+	.asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+	.asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
+	.asc " TCP simple WWW server error: file not found^m^j"
+	.asc "</BODY>^m^j</HTML>^m^j"
+e_notf
+	.text
+
+	.)
+
+wwwsrv_loop .(
+	ldy #TCB_WS
+	lda (tcbp),y
+	cmp #WS_CLOSED+1
+	bcc noerr
+	jmp err
+noerr
+	asl
+	tay
+	lda looptab+1,y
+	pha
+	lda looptab,y
+	pha
+	rts
+
+looptab	.word loop_free-1, loop_rxd-1, loop_sent-1, loop_wr-1
+	.word loop_wait-1, loop_wait-1, loop_close-1, loop_closed-1
+
+loop_rxd .(
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr getbadr
+	sta pp
+	sty pp+1
+	ldy #0
+	lda (pp),y
+	clc
+	adc pp
+	sta pd
+	iny
+	lda (pp),y
+	adc pp+1
+	sta pd+1
+	iny
+	lda (pp),y
+	sta pdl
+	iny
+	lda (pp),y
+	sta pdl+1
+
+#if 1  /* def NOMMU */
+	ldx #SEM_SENDBUF
+	sec
+	jsr PSEM
+	bcc semerrok
+	jmp semerr
+semerrok
+#endif
+	inc sendbuf
+
+	lda www_drv
+	sta PCBUF+FS_OPEN_DRV
+	lda #0
+	sta PCBUF+FS_OPEN_PFAD
+	
+	jsr GETSTR
+	bcs strerr
+
+	txa
+	sta PCBUF+FS_OPEN_STR
+	ldy #TCB_WSTR
+	sta (tcbp),y
+
+	ldx #0
+l0	lda wwwpath,x
+	beq l1
+	sta PCBUF+FS_OPEN_NAME,x
+	inx
+	bne l0
+l1
+	ldy #0
+	lda (pd),y
+	cmp #"/"	;DIRSIGN
+	bne l2
+	iny
+l2
+	cpy pdl
+	bcs l3
+	lda (pd),y
+	cmp #" "
+	beq l3
+	sta PCBUF+FS_OPEN_NAME,x
+	iny
+	inx
+	bne l2
+l3
+	txa
+	beq def
+	lda PCBUF+FS_OPEN_NAME-1,x
+	cmp #DIRSIGN
+	bne l4
+def
+	ldy #0
+l5	lda wwwdef,y
+	beq l4
+	sta PCBUF+FS_OPEN_NAME,x
+	iny
+	inx
+	bne l5
+l4
+	lda #0
+	sta PCBUF+FS_OPEN_NAME,x
+	inx
+	txa
+	clc
+	adc #FS_OPEN_NAME
+
+	jsr send_filetype
+
+	tay
+	lda #FS_OPEN_RD
+	ldx #SEND_FM
+	jsr SEND	/* warning: this blocks if own task or weird confs! */
+	bcs send_err
+
+	txa
+	ldy #TCB_WTASK
+	sta (tcbp),y
+
+	lda #WS_FSENT
+	ldy #TCB_WS
+	sta (tcbp),y
+
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr bfree
+
+	clc
+	rts
+
+send_err
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax
+	jsr FRESTR
+strerr	
+	dec sendbuf
+#if 1 /* def NOMMU */
+	ldx #SEM_SENDBUF
+	jsr VSEM
+semerr
+#endif
+	ldy #TCB_WCNT
+	lda (tcbp),y
+	sec
+	sbc #1
+	sta (tcbp),y
+	bne end
+
+	ldx #WE_TRYAGAIN
+	jsr senderr
+
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr bfree
+
+	ldy #TCB_WS
+	lda #WS_CLOSING
+	sta (tcbp),y
+
+end	rts
+
+wwwpath	.byte WWW_PATH,0
+wwwdef	.byte WWW_DEFAULT,0
+	.)
+
+send_filetype .(
+	.bss
+cnt	.byt 0
+	.text
+
+	pha
+/*
+DB("filtetype for ")
+lda #<PCBUF+FS_OPEN_NAME:ldy #>PCBUF+FS_OPEN_NAME:jsr ETxtout
+DB("^m^jprefix=")
+ldy #TCB_WPREFIX:lda (tcbp),y:jsr EHexout:jsr ECrlfout
+*/
+	jsr clrprefix
+fo
+	pla
+	pha
+	tax
+	ldy #TCB_WPREFIX
+	lda #<-1
+	sta (tcbp),y
+
+	ldy #0
+	sty cnt
+l0	lda types,y
+	beq found
+	cmp PCBUF-2,x
+	bne next
+	dex
+	iny
+	bne l0
+
+next	pla
+	pha
+	tax
+	inc cnt
+n2	iny
+	lda types,y
+	bne n2
+	iny
+	lda types,y
+	bne l0
+	pla
+	rts
+
+found	asl cnt
+	ldx cnt
+	lda tadrs,x
+	sta zp
+	lda tadrs+1,x
+	sta zp+1
+/*
+DB("header="):lda zp:ldy zp+1:jsr ETxtout:jsr ECrlfout
+DB("len="):lda tlens+1,x:jsr EHexout:lda tlens:jsr EHexout:jsr ECrlfout
+*/
+	lda tlens+1,x
+	tay
+	lda tlens,x
+	clc		; do not send, just get slot
+	jsr sendprefix
+	ldy #TCB_WPREFIX
+	txa
+	sta (tcbp),y
+/*
+DB("send packet:")
+.( :ldy #0: lll lda (pp),y:jsr EHexout:iny: cpy #4:bcc lll: .): jsr ECrlfout
+*/
+ret
+	pla
+	rts
+
+types	.asc "lmth.",0, "fig.",0, "gpj.",0, 0
+tadrs	.word tt0,       tt1,       tt2
+tlens	.word tt1-tt0-1, tt2-tt1-1, tt3-tt2-1
+
+tt0	.asc "HTTP/1.0 200 OK^m^jContent-Type: text/html^m^j^m^j",0
+tt1	.asc "HTTP/1.0 200 OK^m^jContent-Type: image/gif^m^j^m^j",0
+tt2	.asc "HTTP/1.0 200 OK^m^jContent-Type: image/jpg^m^j^m^j",0
+tt3
+	.)
+
+&clrprefix .(
+	ldy #TCB_WPREFIX
+	lda (tcbp),y
+	tax
+	lda #<-1
+	sta (tcbp),y
+	cpx #<-1
+	beq nopr
+	jsr bfree
+nopr	rts
+	.)
+
+loop_sent .(
+	ldy #TCB_WTASK
+	lda (tcbp),y
+	tax
+	clc
+	jsr XRECEIVE
+	bcc gotit
+	rts
+gotit
+	dec sendbuf
+#if 1 /* def NOMMU */
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+#endif
+	cmp #0
+	bne err1
+
+	ldy #TCB_WPREFIX
+	lda (tcbp),y
+
+	cmp #<-1
+	beq ll
+	tax
+	lda #<-1
+	sta (tcbp),y
+	; jsr tx_queue_packet
+	txa
+	ldy #TCB_WSLOT
+	sta (tcbp),y
+	jmp qslot
+ll	
+	lda #WS_WR
+set
+	ldy #TCB_WS
+	sta (tcbp),y
+	rts
+
+err1	jsr clrprefix
+
+	ldx #WE_NOTFOUND
+	jsr senderr
+
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax
+	jsr FRESTR
+
+	lda #WS_CLOSING
+	jmp set
+	.)
+
+loop_wr	.(
+/*
+DB("loop_wr:")
+jsr printlist:jsr printmem
+*/
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax
+	lda #SC_STAT
+	jsr STRCMD
+	cmp #E_SFULL
+	beq send2
+	cmp #E_SHWM
+	beq send2
+	lda #SC_RWANZ
+	jsr STRCMD
+	cmp #0
+	beq send2
+l0c1	rts
+send2
+        lda #TCP_DOFFSET+64
+        ldy #0
+        jsr balloc
+        bcs l0c1
+	;stx pslot
+	;sta pp
+	;sty pp+1
+        txa
+        ldy #TCB_WSLOT
+        sta (tcbp),y
+        lda #TCP_DOFFSET
+	jsr getpinfo
+/*
+DB("Write block to pp=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout:DB(", pd=")
+lda pd+1:jsr EHexout:lda pd:jsr EHexout
+jsr ECrlfout
+
+DB("sadr=") 
+ldy #TCB_WSLOT: lda (tcbp),y: tax: jsr getbadr: pha: tya: jsr EHexout: pla: jsr EHexout: jsr ECrlfout
+*/
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax
+	ldy #0
+wrl	jsr GETC
+	bcs wrle
+	sta (pd),y
+	iny
+	cpy #64
+	bcc wrl
+	lda #E_OK
+wrle	pha
+	tya
+
+	pha
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+/*
+DB("pd=")
+lda pd+1:jsr EHexout:lda pd:jsr EHexout:jsr ECrlfout
+DB("sadr=")
+ldy #TCB_WSLOT:lda (tcbp),y:tax:jsr getbadr:pha:tya:jsr EHexout:pla:jsr EHexout:jsr ECrlfout
+*/
+	pla
+
+	sta pdl
+        ldy #0
+        clc
+        adc #TCP_DOFFSET
+        bcc w2
+        iny
+w2      jsr btrunc
+/*
+DB("pp=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout
+DB("sadr=")
+ldy #TCB_WSLOT:lda (tcbp),y:tax:jsr getbadr:pha:tya:jsr EHexout:pla:jsr EHexout:jsr ECrlfout
+*/
+        ldy #0
+        lda #<TCP_DOFFSET
+        sta (pp),y
+        iny
+        lda #>TCP_DOFFSET
+        sta (pp),y
+        iny
+        lda pdl
+        sta (pp),y
+        iny
+        lda #0
+        sta (pp),y
+        pla
+
+        cmp #E_EOF
+        beq wend
+&qslot  lda #WS_WR_WAIT
+	.byt $2c
+wend    lda #WS_WR_WEOF
+	ldy #TCB_WS
+	sta (tcbp),y
+
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+/*pha:DB("slot="):pla:pha:jsr EHexout:jsr ECrlfout:pla*/
+	tax
+	jsr incownr
+	jsr tx_queue_packet
+	bcc send_ok
+	cmp #0
+	bne error
+	rts
+error	lda #TE_SIG_RESET
+	jmp wwwsrv_signal
+	.)
+
+loop_wait .(
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr incownr
+/* DB("requeue^m^j") */
+	jsr tx_requeue_packet
+	bcs end
+&send_ok
+;jsr wwwprint
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr bfree
+
+	ldy #TCB_WS
+	lda (tcbp),y
+	cmp #WS_WR_WEOF
+	bne noeof
+
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+
+	lda #WS_CLOSING
+	.byt $2c
+noeof	lda #WS_WR
+	ldy #TCB_WS
+	sta (tcbp),y
+end	rts
+	.)
+	
+loop_close
+err	ldy #TCB_WS
+	lda #WS_CLOSED
+	sta (tcbp),y
+
+	ldx conn
+	jsr tcp_close
+loop_closed
+loop_free rts
+	.)
+
+wwwsrv_signal .(
+#ifdef DEBUGTCP2
+pha:
+DB("wwwsrv_signal = "):pla:pha:jsr EHexout
+DB(", tcbp="):lda tcbp+1:jsr EHexout:lda tcbp:jsr EHexout:jsr ECrlfout
+pla
+;inc $d020
+#endif
+	pha
+
+	jsr clrprefix
+
+	ldy #TCB_WS
+	lda (tcbp),y
+	cmp #WS_FSENT
+	bne nosent
+
+	ldy #TCB_WTASK		/* unlock filesystem by receiving msg */
+	lda (tcbp),y
+	tax
+	sec
+	jsr XRECEIVE
+
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax	
+	lda PCBUF+FS_X_ERR
+	beq relbuf
+	lda #SC_EOF
+	jsr STRCMD
+relbuf
+	dec sendbuf
+#if 1 /* def NOMMU */
+	ldx #SEM_SENDBUF
+	jsr VSEM
+#endif
+	jmp checkstr
+
+nosent	cmp #WS_WR_WAIT
+	beq wait
+	cmp #WS_WR_WEOF
+	bne nowait
+wait	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr bfree
+nowait	
+checkstr
+	ldy #TCB_WS
+	lda (tcbp),y
+	cmp #WS_FSENT
+	bcc end1
+	cmp #WS_CLOSING
+	bcc end1
+	ldy #TCB_WSTR
+	lda (tcbp),y
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+
+end1	lda #WS_CLOSED
+	ldy #TCB_WS
+	sta (tcbp),y
+
+	pla
+	jmp tcp_signal
+	.)
+
+#iflused wwwprint
+wwwprint .(
+	.zero
+wp	.word 0
+l	.word 0
+	.text
+
+;	lda tcbp
+;	cmp #<tcb+TCB_LEN
+;	beq print
+;	rts
+;print
+	DB("www sent:")
+	ldy #TCB_WSLOT
+	lda (tcbp),y
+	tax
+	jsr getbadr
+	sta wp
+	sty wp+1
+	jsr getblen
+	clc
+	adc wp
+	sta l
+	tya
+	adc wp+1
+	sta l+1
+
+	lda #TCP_DOFFSET
+	clc
+	adc wp
+	sta wp
+	lda #0
+	adc wp+1
+	sta wp+1
+
+loop	lda wp+1
+	cmp l+1
+	bcc doit
+	bne end
+	lda wp
+	cmp l
+	bcs end
+doit
+	ldy #0
+	lda (wp),y
+	jsr ECout
+	inc wp
+	bne loop
+	inc wp+1
+	bne loop
+end	jmp ECrlfout
+	.)
+#endif
+
+	.)
+

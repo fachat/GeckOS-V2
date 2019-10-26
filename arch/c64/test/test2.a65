@@ -1,0 +1,52 @@
+
+	*=$2000
+
+#include "include/kdefs.i65"
+#include "include/fdefs.i65"
+
+	ldx #SEM_SENDBUF
+	sec
+	jsr PSEM
+
+	ldy #0
+
+	lda #5
+	sta PCBUF,y
+	iny
+
+	jsr GETSTR
+	bcs err
+	stx str
+	txa
+	sta PCBUF,y
+
+	iny
+	lda #0
+	sta PCBUF,y
+
+l0	iny
+	lda name-FS_OPEN_NAME,y
+	sta PCBUF,y
+	bne l0
+
+	iny
+	lda #FS_OPEN_RD
+	ldx #SEND_FM
+	jsr SEND
+
+	jsr XRECEIVE
+
+	cmp #1
+	bcs err
+
+	ldx str	
+	jsr Loader
+err
+	rts
+
+str	.byt 0
+name	.asc "test",0
+
+#include "stdlib/stdio.a65"
+#include "include/kernel.i65"
+	

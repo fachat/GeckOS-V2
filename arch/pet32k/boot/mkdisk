@@ -1,0 +1,24 @@
+#!/bin/sh
+
+echo "set tmpfile"
+tmpfile=/tmp/mkdisk.$user.$$
+
+#echo "get files"
+#files=`ls *` 
+
+files="$*"
+
+echo "files=$files"
+
+echo "format osa.x64 'osa,65'" > $tmpfile
+
+for i in $files; do
+  if test "$i" != "mkdisk" -a "$i" != "osa.d64" ; then
+    echo "write $i" >> $tmpfile
+  fi
+done
+
+cat $tmpfile | c1541 > /dev/null
+
+rm -f $tmpfile
+

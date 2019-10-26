@@ -1,0 +1,38 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef TPI_PA
+
+/*	  TPI 6525		   */
+
+#define	TPI_PA		0
+#define	TPI_PB		1
+#define	TPI_PC		2
+#define	TPI_DDPA	3
+#define	TPI_DDPB	4
+#define	TPI_DDPC	5
+#define	TPI_CREG	6
+#define	TPI_AIR		7
+
+#endif
+

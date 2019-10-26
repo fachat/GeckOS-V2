@@ -1,0 +1,266 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * Here are the global (sub-)routines for the lib6502 implementation.
+ *
+ * They include:
+ * 	libinit		check if lib is initialized and if not, do so
+ *	taskinit	check if task is initialized and if not, do so
+ *
+ *	llock		get a lock on a semaphore bit set in ac
+ *	lunlock		unlock semaphore bit in ac
+ *
+ *	zinit		init zeropage allocation
+ *	zalloc		alloc zeropage area
+ *	zfree		free zeropage are
+ */
+
+libinit	.(
+	php
+	sei
+	pha
+	lda zen
+	bne done
+doit
+	jsr minit
+	jsr zinit
+	inc zen
+done
+	pla
+	plp
+	rts
+	.)
+
+taskinit .(
+	jsr libinit
+	lda zta
+	ora zta+1
+	clc
+	bne done
+doit 	; alloc memory block for LT_* struct
+	lda #<LT_SLEN
+	ldy #>LT_SLEN
+	jsr Malloc
+	bcs done
+	sta zta
+	sty zta+1
+
+#if LT_ENV > 256
+#echo environment list too long!!
+#endif
+	ldy #0
+	tya
+l0	sta (zta),y
+	iny
+	; cpy #LT_SLEN
+	bne l0
+
+	ldy #LT_NTHREADS
+	lda #1
+	sta (zta),y
+
+	tsx
+	inx
+	inx
+	txa
+	ldy #LT_INISTACK
+	sta (zta),y
+
+	jsr initsig
+	clc
+done	rts
+	.)
+
+/*************************************************************************/
+
+llock	.(
+	php
+	pha
+l1	sei
+	and zen+1
+	bne loop
+	pla
+	ora zen+1
+	sta zen+1
+	plp
+	rts
+loop	pla
+	plp
+	php
+	jsr YIELD
+	pha
+	jmp l1	
+	.)
+
+lunlock	.(
+	php
+	sei
+	eor #$ff
+	and zen+1
+	sta zen+1
+	plp
+	rts
+	.)
+
+/*************************************************************************/
+
+
+	.(
+
+	.data
+zmem	.dsb 64		; each four byte have an owner
+	.text
+
+/*
+ * yr = first available zeropage address 
+ */
+
++zinit	.(
+	ldy #Zerostart
+	php
+	sei
+	lda #<-1	; all in use
+	tax
+	inx
+l0	sta zmem,x
+	inx
+	cpx #64
+	bcc l0
+
+	tya
+	clc
+	adc #3
+	lsr
+	lsr
+	tay
+	
+	lda #0		; free
+l1	sta zmem,y
+	iny
+	cpy #64
+	bcc l1
+
+	plp
+	clc
+	rts
+	.)
+
+
+/*
+ * a = length of needed zeropage area in byte
+ * returns a= address of zeropage area with c=0
+ * or c=1 when no area found
+ *
+ */
+&zalloc	.(
+	clc
+	adc #3
+	lsr
+	lsr
+
+	pha
+	jsr GETPID
+	pla
+	tay
+	inx
+	txa
+	pha
+	tya
+
+	sei
+	ldy #0
+l1
+	pha
+	tax
+l2
+	lda zmem,y
+	bne notfree
+	dex
+	beq found
+	iny 
+	cpy #64
+	bcc l2
+	pla
+	pla
+	cli
+	rts
+
+notfree	iny
+	pla
+	cpy #64
+	bcc l1
+	pla
+	cli
+	rts
+
+found
+	pla
+	tax
+	pla
+	iny
+l3
+	dey
+	sta zmem,y
+	dex
+	bne l3
+
+	tya
+	asl
+	asl
+	clc
+	cli
+	rts
+	.)
+
+/*
+ * a = address of area to free. All consecutive zeropage addresses
+ * belonging to this task from a on are free'd.
+ */
+&zfree	.(
+	clc
+	adc #3
+	lsr
+	lsr
+	tay
+	jsr GETPID
+	inx
+	sei
+l0	txa
+	cmp zmem,y
+	bne ende
+	lda #0
+	sta zmem,y
+	iny
+	cpy #64
+	bcc l0
+ende
+	clc
+	cli
+	rts
+	.)
+
+	.)
+
+

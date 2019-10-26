@@ -1,0 +1,283 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * exports checksum3, printpacket2, ECout, ETxtout, EHexout, EClfout
+ *
+ * Must be at the end of the code, because of #iflused constructs
+ */
+
+	.(
+	.bss
+tmp	.byt 0,0,0
+len	.word 0
+	.zero
+&p	.word 0
+	.text
+
+	/* computes IP header checksum and returns it in a/x */
+	/* packet length in a/y, x = zeropage address of pkt address pointer */
+&checksum3 .(
+
+	sec
+	sbc #1
+	sta len
+	tya
+	sbc #0
+	sta len+1
+	bcs uf
+	rts
+uf
+	lda 0,x
+	sta p
+	lda 1,x
+	sta p+1
+
+#if 0 /* def DEBUGPKT */
+DB("Check: ")
+lda p+1:jsr EHexout: lda p: jsr EHexout:lda #" ": jsr ECout
+lda len+1:jsr EHexout: lda len: jsr EHexout
+#endif
+	lda #0
+	sta tmp
+	sta tmp+1
+	sta tmp+2
+	ldy #0
+loop	
+	iny
+	lda tmp
+	clc
+	adc (p),y
+	sta tmp
+	lda tmp+1
+	dey
+	adc (p),y
+	sta tmp+1
+	bcc l0
+	inc tmp+2
+l0
+	iny
+	iny
+	bne l1
+	inc p+1
+l1	
+	lda len
+	sec
+	sbc #2
+	sta len
+	bcs l1a
+	lda len+1
+	sbc #0
+	sta len+1
+	bcc loope	; underflow (even size) -> end
+l1a	lda len		
+	ora len+1
+	bne loop
+
+l1b	lda (p),y
+	clc
+	adc tmp+1
+	sta tmp+1
+	bcc loope
+	inc tmp+2
+loope
+	lda tmp
+	clc
+	adc tmp+2
+	pha
+	lda tmp+1
+	adc #0
+	eor #$ff
+	tax
+	pla
+	eor #$ff
+#if 0 /* def DEBUGPKT */
+	php
+	pha
+	DB(" -> ")
+	txa
+	jsr EHexout
+	pla
+	pha
+	jsr EHexout
+	jsr ECrlfout
+	pla
+	plp
+#endif
+	bne err
+	cpx #0
+	bne err
+	clc
+	rts
+err	sec
+	rts
+	.)
+
+
+#iflused printpacket2
+
+&printpacket2 .(
+	sta len
+	sty len+1
+	cmp #64
+	bcs limit
+	tya
+	beq nolimit
+limit	lda #48
+	sta len
+	lda #0
+	sta len+1
+nolimit
+	lda 0,x
+	sta p
+	lda 1,x
+	sta p+1
+
+	ldy #0
+l0
+	lda (p),y
+	jsr EHexout
+	lda #" "
+	jsr ECout
+	iny
+	cpy len
+	beq lend
+	tya
+	and #7
+	bne l0
+	jsr ECrlfout
+	jmp l0
+lend
+	DB("^m^jHeader Checksum=")
+	lda #0
+	sta tmp+1
+	ldy #IPH_VER
+	lda (p),y
+	and #$0f
+	asl
+	asl
+	sta tmp
+	lda tmp
+	ldy tmp+1
+	ldx #p
+	jsr checksum3
+	pha
+	txa
+	jsr EHexout
+	pla
+	jsr EHexout
+
+	jsr ECrlfout
+	clc
+	rts
+	.)
+#endif
+	.)
+
+/**********************************************************************/
+/* Output on STDERR			 			      */
+
+	.(
+	.bss
+XR	.byt 0
+	.text
+
+#iflused ECout
+&ECout	.(
+	stx XR
+	ldx #STDERR
+	sec
+	jsr fputc
+	ldx XR
+	rts
+	.)
+#endif
+
+#iflused ECrlfout
+&ECrlfout .(
+	stx XR
+	ldx #STDERR
+	lda #13
+	sec
+	jsr fputc
+	lda #10
+	sec
+	jsr fputc
+	ldx XR
+	rts
+	.)
+#endif
+
+#iflused EHexout
+&EHexout  .(
+	  stx XR
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr nibout
+          pla
+          and #$0f
+nibout    ldx #STDERR
+	  clc
+          adc #"0"
+          cmp #"9"+1
+          bcc nibok
+          adc #6
+nibok     sec
+	  jsr fputc
+	  ldx XR
+	  rts
+          .)
+#endif
+
+#iflused ETxtout
+&ETxtout
+	  .(
+	.zero
+tp        .word
+	.text
+
+          sta tp
+          sty tp+1
+	  stx XR
+	  ldx #STDERR
+          ldy #0
+tol       lda (tp),y
+          beq tole
+	  sec
+          jsr fputc
+          iny
+          bne tol
+          inc tp+1
+          bne tol
+tole
+	  ldx XR
+          clc
+          rts
+          .)
+#endif
+	.)
+
+

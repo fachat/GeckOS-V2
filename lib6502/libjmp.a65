@@ -1,0 +1,244 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef   _LIB6502_H_
+#define   _LIB6502_H_
+
+#include "kdefs.i65"	/* this is for STD*  and E_* only */
+#include "inet.i65"	/* this is for network stuff */
+
+/**************************************************************************/
+
+#define	MAX_FILENAME	128
+
+#define	MYTASK		-1
+
+#define	OPEN_RD		0
+#define	OPEN_WR		1
+#define	OPEN_RW		2
+#define	OPEN_AP		3
+
+#define	FC_PUSH		0
+#define	FC_PULL		1
+#define	FC_RCHECK	2
+#define	FC_WCHECK	3
+
+#define	FC_RENAME	16
+#define	FC_DELETE	17
+#define	FC_MKDIR	18
+#define	FC_RMDIR	19
+#define	FC_FORMAT	20
+#define	FC_CHKDSK	21
+
+#define	FD_VALID	0
+#define	FD_PERM		2
+#define	FD_OWNER	4
+#define	FD_GROUP	6
+#define	FD_LENGTH	8
+#define	FD_MDATE	12
+#define	FD_NAME		18
+
+#define	S_ISUID         $800    /* set user ID on execution */
+#define	S_ISGID         $400    /* set group ID on execution */
+#define	S_ISVTX         $200    /* -- (sticky bit) */
+
+#define	S_IRWXU		$1c0	/* rwx mask for user */
+#define	S_IRUSR         $100    /* read by owner */
+#define	S_IWUSR         $080    /* write by owner */
+#define	S_IXUSR         $040    /* exexute by owner */
+
+#define	S_IRWXG		$038	/* rwx mask for group */
+#define	S_IRGRP         $020    /* read by group */
+#define	S_IWGRP         $010    /* write by group */
+#define	S_IXGRP         $008    /* execute by group */
+
+#define	S_IRWXO		$007	/* rwx mask for others */
+#define	S_IROTH         $004    /* read by others */
+#define	S_IWOTH         $002    /* write by others */
+#define	S_IXOTH         $001    /* execute by others */
+
+#define	S_IFMT		$f000	/* file type mask */
+#define	S_IFSOCK	$c000	/* socket */
+#define	S_IFLNK		$a000	/* symbolic link */
+#define	S_IFREG		$8000	/* regular file */
+#define	S_IFBLK		$6000	/* block device */
+#define	S_IFDIR		$4000	/* directory */
+#define	S_IFCHR		$2000	/* character device */
+#define	S_IFIFO		$1000	/* fifo */
+
+#define	S_IFMNAME	$3000	/* media name */
+#define	S_IFMFREE	$5000	/* free area on media */
+#define	S_IFMSIZE	$7000	/* media size */
+
+#define	FDV_PERM	1
+#define	FDV_LENGTH	2
+#define	FDV_MDATE	4
+#define	FDV_OWNER	8
+#define	FDV_GROUP	16
+
+/**************************************************************************/
+
+#define LIBCALLNUM      45
+#define LIBOSACALLS     4
+
+
+/* These are actually OS/A specific calls to the internals of lib6502 */
+
+#define	mon_forkto	LIB6502-12	/* mon can start lib6502 prgs here */
+#define	init_forkto	LIB6502-9	/* init can start lib6502 prgs here */
+#define	flib2osa_r	LIB6502-6	/* maps lib fileno to OS/A65 stream */
+#define	flib2osa_w	LIB6502-3	/* maps lib fileno to OS/A65 stream */
+
+/* official LIB6502 is here */
+
+#define	fopen		LIB6502+0
+#define	fclose		LIB6502+3
+#define	fgetc		LIB6502+6
+#define	fputc		LIB6502+9
+#define	fread		LIB6502+12
+#define	fwrite		LIB6502+15
+#define	fseek		LIB6502+18
+#define	pipe		LIB6502+21
+#define	flock		LIB6502+24
+#define	fcntl		LIB6502+27
+#define	fcmd		LIB6502+30
+#define	stddup		LIB6502+33
+#define	dup		LIB6502+36
+
+#define	fopendir	LIB6502+39
+#define	freaddir	LIB6502+42
+#define	fgetattr	LIB6502+45
+#define	fsetattr	LIB6502+48
+#define	chdir		LIB6502+51
+#define	cwd		LIB6502+54
+
+#define	connect		LIB6502+57
+#define	listen		LIB6502+60
+#define	accept		LIB6502+63
+
+#define	malloc		LIB6502+66
+#define	mfree		LIB6502+69
+#define	realloc		LIB6502+72
+
+#define	exec		LIB6502+75
+#define	forkto		LIB6502+78
+#define	forkthread	LIB6502+81
+#define	term		LIB6502+84
+#define	kill		LIB6502+87
+#define	getpid		LIB6502+90
+#define	yield		LIB6502+93
+
+#define	semget		LIB6502+96
+#define	semfre		LIB6502+99
+#define	semgetnamed	LIB6502+102
+#define	psem		LIB6502+105
+#define	vsem		LIB6502+108
+
+#define signal		LIB6502+111
+#define	sendsignal	LIB6502+114
+
+#define	send		LIB6502+117
+#define	receive		LIB6502+120
+
+#define	getenv		LIB6502+123
+#define	putenv		LIB6502+126
+#define	getenvp		LIB6502+129
+#define	getos		LIB6502+132
+
+#endif
+
+/**************************************************************************/
+
+#ifdef LIB6502BIN
+
+#echo lib6502 jump table
+
+/* OS/A specific calls */
+
+jmp mon_forkto_i
+jmp init_forkto_i
+jmp Flib2osa_r
+jmp Flib2osa_w
+
+/* official lib6502 is here */
+
++LIB6502=*
+
+jmp Fopen
+jmp Fclose
+jmp Fgetc
+jmp Fputc
+jmp Fread
+jmp Fwrite
+jmp Fseek
+jmp Pipe
+jmp notimp		; Flock		; not working on OS/A at this time
+jmp Fcntl
+jmp Fcmd
+jmp Stddup
+jmp Dup
+
+jmp Fopendir
+jmp Freaddir
+jmp notimp		; Fgetattr	; not working on OS/A at this time
+jmp notimp		; Fsetattr	; not working on OS/A at this time
+jmp Chdir
+jmp Cwd
+
+jmp Connect
+jmp Listen
+jmp Accept
+
+jmp Malloc
+jmp Mfree
+jmp Realloc
+
+jmp Exec
+jmp Forkto
+jmp Forkthread
+jmp Term
+jmp Kill
+jmp Getpid
+jmp YIELD
+
+jmp Semget
+jmp Semfre
+jmp notimp		; Semgetnamed
+jmp Psem
+jmp Vsem
+
+jmp Signal
+jmp Sendsignal
+
+jmp notimp		; Send
+jmp notimp		; Receive
+
+jmp Getenv
+jmp Putenv
+jmp Getenvp
+jmp Getos
+
+#endif
+

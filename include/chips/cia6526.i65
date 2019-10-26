@@ -1,0 +1,46 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef CIA_PRA
+
+/*	  CIA 6526		   */
+
+#define	CIA_PRA		0
+#define	CIA_PRB		1
+#define	CIA_DDRA	2
+#define	CIA_DDRB	3
+#define	CIA_TAL		4
+#define	CIA_TAH		5
+#define	CIA_TBL		6
+#define	CIA_TBH		7
+#define	CIA_TOD_10TH	8
+#define	CIA_TOD_SEC	9
+#define	CIA_TOD_MIN	10
+#define	CIA_TOD_HR	11
+#define	CIA_SDR		12
+#define	CIA_ICR		13
+#define	CIA_CRA		14
+#define	CIA_CRB		15
+
+#endif
+

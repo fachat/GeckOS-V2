@@ -1,0 +1,510 @@
+
+#ifndef ROM
+
+#define   NOPRG
+/*#define   CLK1MHZ*/        /* otherwise 2Mhz default    */
+
+#endif
+          .(
+#ifdef ROM
+          .word ende
+          .byt PK_PRG
+          .byt 8
+          .word 0
+          .word PRG
+#ifndef NOMMU
+          .byt 8,8,9,9,$a,$a,$b,$b,$c,$c,$d,$d,$e,$e,<-1
+#else
+	  .byt <-1
+#endif
+          .asc "irtx",0,0
+
+#else	/* ROM */
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+#include  "chips/via6522.i65"
+#include  "oldlib/stdio.a65"
+
+#ifdef NOPRG
+
+          .word $800
+          *=$800
+          jmp PRG
+
+#else
+          .word $800
+          *=$800
+          .word 0
+          .byt PK_PRG
+          .byt 16
+          .word 0
+          .word mainprg
+          .byt <-1
+mainprg   jmp PRG
+
+#endif
+#endif /* ROM */
+
+#include  "irtx.i65"
+
+/**************************** irtxmain ********************************/
+
+#if 0
+#ifndef VIA
+#define   VIA       $ec10	/* $e830 */
+#endif
+#endif
+
+#define   MP_MENU   0
+#define   MP_BEF    2
+#define   MP_SC     4
+#define   MP_ADR    6
+
+PRG       .(
+	.zero
+mp        .word 0
+bp        .word 0
+	.text
+     
+          ;jsr initir
+
+          lda #<main
+          ldy #>main
+          jsr mloop
+#ifdef NOPRG
+	  rts
+#else
+	  jmp TERM
+#endif
+          
+mainloop  lda mp
+          pha
+          lda mp+1
+          pha
+          
+          lda PCBUF+ITX_MSG
+          asl
+          tay
+          lda mainadr,y
+          pha
+          lda mainadr+1,y
+          tay
+          pla
+          jsr mloop
+          
+          pla
+          sta mp+1
+          pla
+          sta mp
+
+showmenu  ldy #MP_MENU
+          lda (mp),y
+          pha
+          iny
+          lda (mp),y
+          tay
+          pla
+          jmp Txtout
+
+main      .word mainmenu
+          .word mainbef
+          .word maincode
+          .word mainloop
+          
+mainmenu  .asc TC_FF,"^J^J^J"
+          .asc "[1]      Sony-Master^M^J"
+          .asc "[2]      Sony-CD^M^J"
+          .asc "[3]      Universum-TV^J^M"
+          .asc "^J^M[q]      Ende^M^J",0 
+
+mainbef   .asc "123",0
+
+maincode  .word 0,1,2
+
+mainadr   .word sonymaster,sonycdtab,unitv
+    
+&mloop    .(
+          sta mp
+          sty mp+1
+ml        jsr showmenu
+mlx       jsr Getc
+          tax
+          cmp #"q"
+          beq end
+          
+          ldy #MP_BEF
+          lda (mp),y
+          sta bp
+          iny
+          lda (mp),y
+          sta bp+1
+          
+          ldy #0
+ml1       lda (bp),y
+          beq ml
+          txa
+          cmp (bp),y
+          beq execute
+          iny
+          bne ml1     
+
+end       clc
+          rts
+
+execute   tya
+          asl
+          pha
+          ldy #MP_SC
+          lda (mp),y
+          sta bp
+          iny
+          lda (mp),y
+          sta bp+1 
+          pla
+          tay         
+          lda (bp),y
+          sta PCBUF+ITX_MSG
+          iny
+          lda (bp),y
+          sta PCBUF+ITX_MSG+1
+          ldy #MP_ADR
+          lda (mp),y
+          sta bp
+          iny
+          lda (mp),y
+          sta bp+1
+          jsr mll
+          jmp mlx
+mll       jmp (bp)
+          .)
+
+sonycdtab .(
+          .word menucdtxt
+          .word befcdtab
+          .word sycdtab
+          .word sendsony
+                    
+menucdtxt .asc TC_FF,"^J^J^J"
+          .asc "[P]      Play^M^J"
+          .asc "[U]      Pause^M^J"
+          .asc "[I]      Continue^M^J"
+          .asc "[Y]      Display^M^J"
+          .asc "[S]      Stop^M^J"
+          .asc "[R]      Repeat^M^J"
+          .asc "[L]      Shuffle^M^J"
+          .asc "[N]      Next song^M^J"
+          .asc "[V]      Previous song^M^J"
+          .asc "[1-9]    Song no. 1-9^M^J"
+          .asc "[A-G]    Song no. 10-16^M^J"
+          .asc "[H]      >16^M^J"
+          .asc "[Q]      Quit^M^J"
+          .asc 0   
+
+befcdtab  .asc "puysrnv123456789abcdefghli",0
+
+sycdtab   .word SY_CD_PLAY,   SY_CD_PAUSE,   SY_CD_DISP
+          .word SY_CD_STOP,   SY_CD_CLR,     SY_CD_AMSV
+          .word SY_CD_AMSZ,   SY_CD_1,       SY_CD_2
+          .word SY_CD_3,      SY_CD_4,       SY_CD_5
+          .word SY_CD_6,      SY_CD_7,       SY_CD_8
+          .word SY_CD_9,      SY_CD_10,      SY_CD_11
+          .word SY_CD_12,     SY_CD_13,      SY_CD_14
+          .word SY_CD_15,     SY_CD_16,      SY_CD_G16
+          .word SY_CD_SHUFF,  SY_CD_CONT
+          .)
+          
+sonymaster .(
+          .word symamenu
+          .word symabef
+          .word symasc
+          .word sendsony
+          
+symamenu  .asc TC_FF,"^J^J^J"
+          .asc "[L]      LDP on/off^M^J"
+          .asc "[V]      VTR on/off^M^J"
+          .asc "[T]      TV on/off^M^J"
+          .asc "[A]      Audio on/off^M^J"
+          .asc "[+]      Master Volume up^M^J"
+          .asc "[-]      Master Volume down^M^J"
+          .asc "[M]      Muting^M^J"
+          .asc "  Signal sources:^M^J"
+          .asc "[1]      CD^M^J"
+          .asc "[2]      Tuner^M^J"
+          .asc "[3]      Phono^M^J"
+          .asc "[4]      Tape^M^J"
+          .asc "[5]      DAT^M^J"
+          .asc "[6]      Video 1^M^J"
+          .asc "[7]      Video 2^M^J"
+          .asc "[8]      Video 3^M^J"
+          .asc "[q]      End^M^J",0
+          
+symabef   .asc "lvta+-m12345678",0
+
+symasc    .word     SY_MC_P_LDP,SY_MC_P_VTR,SY_MC_P_TV,SY_MC_P_AUDIO
+          .word     SY_MC_VOLU,SY_MC_VOLD,SY_MC_MUTE
+          .word     SY_MC_CD,SY_MC_TUNER,SY_MC_PHONO,SY_MC_TAPE,SY_MC_DAT
+          .word     SY_MC_VIDEO1,SY_MC_VIDEO2,SY_MC_VIDEO3
+          .)
+          
+unitv     .(
+          .word unitvmenu
+          .word unitvbef
+          .word unitvsc
+          .word unitvsend
+          
+unitvmenu .asc TC_FF,"^J^J^J"
+          .asc "[T]      TV on/off^J^M"
+          .asc "[V]      TV/VIDEO^J^M"
+          .asc "[+]      volume up^J^M"
+          .asc "[-]      volume down^J^M"
+          .asc "[M]      Muting^J^M"
+          .asc "[1-9]    Program 1-9^J^M"
+          .asc "[A-C]    Program 10-12^J^M"
+          .asc "[Q]      Ende^J^M",0
+          
+unitvbef  .asc "tv+-m123456789abc",0
+
+unitvsc   .word UNI_TV_POWER,UNI_TV_VIDEO,UNI_TV_VOLU,UNI_TV_VOLD
+          .word UNI_TV_MUTE,UNI_TV_1,UNI_TV_2,UNI_TV_3,UNI_TV_4
+          .word UNI_TV_5,UNI_TV_6,UNI_TV_7,UNI_TV_8,UNI_TV_9
+          .word UNI_TV_10,UNI_TV_11,UNI_TV_12
+          .)
+                         
+          .)
+          
+getif     .(
+#ifdef SEM_T1
+	  clc
+	  ldx #SEM_T1
+	  jsr PSEM
+#endif
+	  php
+          sei
+          lda VIA+VIA_ACR
+          and #%00111111
+          sta VIA+VIA_ACR
+
+          lda VIA+VIA_DDRB
+          ora #%10000000
+          sta VIA+VIA_DDRB
+
+          lda VIA+VIA_DRB
+          ora #%10000000
+          sta VIA+VIA_DRB
+
+          lda #%01000000
+          sta VIA+VIA_IFR
+          sta VIA+VIA_IER
+
+	  plp
+          rts
+          .)
+
+freif	  .(
+#ifdef SEM_T1
+	  ldx #SEM_T1
+	  jmp VSEM
+#else
+	  rts
+#endif
+	  .)
+
+
+/**************************** irtxsony.a65 ********************************/
+
+
+#ifdef CLK1MHZ
+
+#define   SY_TI_START    2500
+#define   SY_TI_PAUSE    500
+#define   SY_TI_0        650
+#define   SY_TI_1        1250
+#define   SY_TI_XPAUS    20000
+
+#define   UNI_TI_PULS    500
+#define   UNI_TI_0       1500
+#define   UNI_TI_1       3500
+#define   UNI_TI_XPAUS   20000
+
+#else
+
+#define   SY_TI_START    5000
+#define   SY_TI_PAUSE    1000
+#define   SY_TI_0        1250
+#define   SY_TI_1        2500
+#define   SY_TI_XPAUS    40000
+
+#define   UNI_TI_PULS    1000
+#define   UNI_TI_0       3000
+#define   UNI_TI_1       7000
+#define   UNI_TI_XPAUS   40000
+
+#endif
+
+#define   SD_BITS   0
+#define   SD_REPT   1
+#define   SD_START  2
+#define   SD_P0     4
+#define   SD_0      6
+#define   SD_P1     8
+#define   SD_1      10
+#define   SD_XPAUS  12
+
+          .(
+	.zero
+p         .word 0
+	.data        
+msgcnt    .byt 0
+bitcnt    .byt 0
+msg       .word 0
+	.text
+
+          .(
+&&sendsony 
+          lda #<sonydat
+          ldy #>sonydat
+          bne x1
+&&unitvsend
+          lda #<univdat
+          ldy #>univdat
+x1
+          sta p
+          sty p+1
+         
+	  jsr getif
+ 
+          ldy #SD_REPT
+          lda (p),y
+          sta msgcnt
+      
+          sei
+          
+          lda VIA+VIA_ACR
+          ora #%11000000
+          sta VIA+VIA_ACR
+          
+ssml      ldy #SD_START
+          lda (p),y
+          sta VIA+VIA_T1LL
+          iny
+          lda (p),y
+          sta VIA+VIA_T1CH         ; start timer here
+
+          lda PCBUF+ITX_MSG
+          sta msg
+          lda PCBUF+ITX_MSG+1
+          sta msg+1
+     
+          ldy #SD_BITS             ; number of bits
+          lda (p),y
+          sta bitcnt
+ 
+bitloop   lda msg
+          lsr
+          bcs pause1
+          ldy #SD_P0
+          .byt $2c
+pause1    ldy #SD_P1
+          jsr setsdti              ; set time for next half period
+          jsr waitend              ; wait till current half period is over
+
+          lsr msg+1
+          ror msg
+          bcc set0
+
+          ldy #SD_1
+          .byt $2c
+set0      ldy #SD_0
+          jsr setsdti              ; set time for next half period
+          jsr waitend
+
+          dec bitcnt
+          bne bitloop
+
+          dec msgcnt
+          beq msgend
+          
+          ldy #SD_XPAUS
+          jsr setsdti		   ; pause after last bit
+
+          jsr waitend
+
+          jsr waitend
+          
+          jmp ssml
+          
+msgend    lda VIA+VIA_ACR
+          and #%00111111
+          sta VIA+VIA_ACR
+          lda #%01000000
+          sta VIA+VIA_IFR
+          cli          
+	  jmp freif
+          rts
+          .)
+
+setsdti   .(
+          lda (p),y
+          sta VIA+VIA_T1LL
+          iny
+          lda (p),y
+          sta VIA+VIA_T1LH
+          rts
+          .)
+
+waitend   .(
+          lda #%01000000
+          sta VIA+VIA_IFR
+wl        lda #%01000000
+          and VIA+VIA_IFR
+          beq wl
+          rts
+          .)
+
+sonydat   .byt 12             ; number of bits
+          .byt 5              ; number of repetitions for a single command
+          .word SY_TI_START   ; length start bit
+          .word SY_TI_PAUSE   ; break before 0
+          .word SY_TI_0       ; 0
+          .word SY_TI_PAUSE   ; break before 1
+          .word SY_TI_1       ; 1
+          .word SY_TI_XPAUS   ; break between repetitions
+          
+univdat   .byt 6              ; number of bits
+          .byt 4              ; number of repetitions for a single command
+          .word UNI_TI_PULS   ; length start bit
+          .word UNI_TI_0      ; break before 0
+          .word UNI_TI_PULS   ; 0
+          .word UNI_TI_1      ; break before 1
+          .word UNI_TI_PULS   ; 1
+          .word UNI_TI_XPAUS  ; break between repetitions
+          .)
+      
+/**********************************************************************/
+
+Getc	.(
+	ldx #STDIN
+	sec
+	jmp getc
+	.)
+
+Txtout	.(
+	.zero
+p	.word 0
+	.text
+	sta p
+	sty p+1
+	ldy #0
+l0	lda (p),y
+	beq end
+	ldx #STDOUT
+	sec
+	jsr putc
+	iny
+	jmp l0
+end	rts
+	.)
+ende
+          .)
+          

@@ -1,0 +1,53 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#ifndef FSDEV_H_
+#define FSDEV_H_
+/* 
+ * These are some definitions common for most/all filesystems 
+ * if we introduce shared mem, we could probably have a 'virtual filesystem'
+ * with only one set of routines managing the data transfer from streams
+ * to these buffers and vice versa - or somehow rewrite those for 
+ * (to be implemented) kernel block transfer modes.
+ */
+
+#define   F_FL      0         ; state of buffer 
+#define   F_DEV     1
+#define   F_DRV     2
+#define   F_STR     3
+#define   F_LEN     4         ; number of bytes in buffer
+#define   F_BYT     5         ; current byte
+#define   F_MODE    6         ; 0=read,1=write
+#define   F_SLEN    8
+
+#define   F_FL_OK   0
+#define   F_FL_DIR  1
+#define   F_FL_EOF  2
+#define   F_FL_DO   3
+#define   F_FL_DOX  4
+#define   F_FL_FRE  255
+#define   F_MODE_RD 0
+#define   F_MODE_WR 1
+
+#endif
+

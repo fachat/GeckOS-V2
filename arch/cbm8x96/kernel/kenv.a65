@@ -1,0 +1,424 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* TODO: make stack addr computation a table lookup, which is faster */
+
+/*        Struct Task Environment Entry          */
+
+/* we have three structs now: 
+ * TE_* 	for task environment handling - not needed for system without
+ *       	memory management
+ * TT_*		task table, contains STD streams, etc
+ * TH_*		thread table, has stack info and state
+ */
+
+#define	TE_SLEN		0	/* we don't have envs */
+
+/************************************************************************
+ * These routines are needed in the env section! 
+ *   inienv
+ *   setthread
+ *   initsp
+ *   push
+ *   pull
+ *   memtask
+ *   memsys
+ *
+ *   sbrk
+ *   getenv
+ *   freenv
+ */
+
+&&enmem  = notimp	; to enable memory blocks to the kernel
+&&setblk = notimp	; to set memory blocks in MMU mapping
+
+#ifdef STACKCOPY
+	.zero
+zp	.word 0
+
+	.data
+
+Stacks  .dsb MAXNTHREADS * STACKSIZE
+
+	.text
+#endif
+
+
+&inienv .(
+	lda #<-1
+	sta actThread
+	sta actTask
+	lda #1
+	sta Syscnt
+	clc
+	rts
+	.)
+
+setthread .(
+	.data
+newThread .byt 0
+	.text
+
+	cmp actThread
+	bne doit
+	rts
+doit
+	sta newThread
+
+	ldx actThread
+	cpx #<-1
+	beq nosave
+
+	lda THREADSAVE
+	sta threadTab + TH_LIBSAVE,x
+	lda THREADSAVE+1
+	sta threadTab + TH_LIBSAVE+1,x
+
+#ifdef STACKCOPY
+	txa		; stack is 8 * TH_SLEN = 64
+	ldy #0
+	sty zp+1
+	asl 
+	rol zp+1
+	asl
+	rol zp+1
+	asl
+	rol zp+1
+	clc
+	adc #<Stacks
+	sta zp
+	lda #>Stacks
+	adc zp+1
+	sta zp+1
+	;bcc l1
+	;inc zp+1
+;l1
+	lda threadTab + TH_SP,x
+	tay
+	iny
+l2	cpy #STACKSIZE
+	bcs savetask
+	lda $100,y
+	sta (zp),y
+	iny
+	bne l2
+#endif
+savetask
+	ldy threadTab + TH_TASK,x
+	lda TASKSAVE
+	sta taskTab + TT_LIBSAVE,y
+	lda TASKSAVE + 1
+	sta taskTab + TT_LIBSAVE + 1,y
+nosave	
+loadtask
+	ldx newThread
+	stx actThread
+	cpx #<-1
+	bne load
+	stx actTask
+	beq noload
+load
+	ldy threadTab + TH_TASK,x
+	sty actTask
+
+	lda taskTab + TT_LIBSAVE,y
+	sta TASKSAVE
+	lda taskTab + TT_LIBSAVE + 1,y
+	sta TASKSAVE + 1
+
+loadthread 
+	lda threadTab + TH_LIBSAVE,x
+	sta THREADSAVE
+	lda threadTab + TH_LIBSAVE+1,x
+	sta THREADSAVE+1
+
+#ifdef STACKCOPY
+	txa
+	ldy #0
+	sty zp+1
+	asl 
+	rol zp+1
+	asl
+	rol zp+1
+	asl
+	rol zp+1
+	clc
+	adc #<Stacks
+	sta zp
+	lda #>Stacks
+	adc zp+1
+	sta zp+1
+	;bcc l3
+	;inc zp+1
+;l3
+	lda threadTab + TH_SP,x
+	tay
+	iny
+l4	cpy #STACKSIZE
+	bcs endset
+	lda (zp),y
+	sta $100,y
+	iny
+	bne l4
+#endif
+noload
+endset	rts
+	.)
+
+initsp	.(
+#ifdef STACKCOPY
+	lda #STACKSIZE-1
+	;ldx actThread
+	sta threadTab + TH_SP,x
+	rts
+#else
+	.data
+divsp	.byt 0
+	.text
+
+	;ldx actThread
+	txa
+	clc
+	adc #TH_SLEN
+	sta divsp
+	asl
+	asl				; split stack
+	clc
+	adc divsp
+	sta threadTab + TH_SP,x
+	dec threadTab + TH_SP,x
+	rts
+#endif
+	.)
+
+pull	.(
+	ldx actThread
+	inc threadTab + TH_SP,x
+	lda threadTab + TH_SP,x
+	tay
+	lda $0100,y
+	rts
+	.)
+
+&push	.(
+	pha
+	ldx actThread
+	lda threadTab + TH_SP,x
+	tay
+	pla
+	sta $0100,y
+	dec threadTab + TH_SP,x
+	rts
+	.)
+
+	.(
+	.zero
+AC      .byt 0
+XR      .byt 0
+YR      .byt 0
+SR      .byt 0
+ADR     .word 0
+&SSP    .byt 0
+	.text
+
+/* 
+ * this one is used to return from an interrupt. We do not need to save
+ * any registers. so for brevity, we do it as macro
+ * This doesn't check for interrupted devices, as we do not have them 
+ * without MMU (so far).
+ */
+
+#define MEMTASK2()                                      \
+	.(						:\
+	  sei						:\
+	  dec Syscnt					:\
+	  bne mtask					:\
+          tsx                                           :\
+          stx SSP                                       :\
+          ldy actTask					:\
+          ldx taskTab+TT_ENV,y				:\
+          beq system					:\
+;.byt 2							:\
+          ldx #%10001100				:\
+          stx $fff0					:\
+system							:\
+          ldy actThread                                 :\
+          ldx threadTab+TH_SP,y                         :\
+          txs						:\
+mtask	.)
+
+/* 
+ * This is the standard return to user space. the kernel jumps here,
+ * so we need not save any return address, but use the one on the
+ * user stack.
+ */
+&&memtask .(
+	  php
+          sei
+          dec Syscnt     ; wieder in Task 
+          bne mtask      ; nein dann Ende
+
+          bit adev       ; Ruecksprung in Device
+          bpl mtask      ; ja dann Ende
+ 
+          sty YR         ; sonst Task-Env setzen
+          stx XR
+          sta AC
+          pla		 ; SR
+
+          tsx
+          stx SSP
+
+          ldy actThread
+          ldx threadTab+TH_SP,y 
+          txs
+
+	  ldy actTask
+	  ldx taskTab+TT_ENV,y
+	  beq system
+	  ldx #%10001100	; map alternate 8x96 memory bank
+	  stx $fff0
+system
+
+          pha		 ; SR
+          lda AC
+          ldy YR
+          ldx XR
+mtask     
+	  plp
+          rts
+	  .)
+
+/* 
+ * This is the kernel entry routine. It leaves all registers as they
+ * are, except for the stack pointer, which is set to the system stack.
+ * also the return address is moved from user stack to system stack,
+ * to allow "JSR"-ing to memsys.
+ */
+&&memsys  php
+          sei
+          pha
+
+	  lda #%11100000	; map system memory
+	  sta $fff0
+
+          lda Syscnt
+          inc Syscnt
+          cmp #0
+          bne mse
+          bit adev       ; called by device
+          bmi msys       ; no then save stack
+mse       pla
+          plp
+          rts
+
+msys      pla
+          sta AC
+          pla
+          sta SR
+          stx XR
+          ; sty YR
+          pla
+          sta ADR
+          pla
+          sta ADR+1
+          tsx
+
+          txa
+          ldx actThread
+          sta threadTab+TH_SP,x
+          ldx SSP
+          txs
+          lda ADR+1
+          pha
+          lda ADR
+          pha
+          lda SR
+          pha
+          lda AC
+          ldx XR
+          ; ldy YR
+          plp
+          cld
+          rts
+	.)
+
+
+&&sbrk	.(
+	bcc ok
+	sec
+	lda #E_NOMEM
+	rts
+ok	lda #>ROMSTART		; return available memory
+	clc
+	rts
+	.)
+
+kgetenv	.(
+	ldx #0
+	tya
+	bne system
+	inx
+system  clc
+	rts
+	.)
+
+freenv	.(
+	clc
+	rts
+	.)
+
+/*
+ * MAPSYSBUF() maps the PCBUF of the active task into the system memory
+ * at address SYSBUF. It's not needed in a C64...
+ */
+#undef	MAPSYSBUF
+#define	SYSBUF	$200
+
+/*
+ * MAPENV() maps the address given in a/y in env x to somewhere in the 
+ * kernel map. returns mapped address in a/y
+ * MAPAENV() does the same but for the actual task (env)
+ */
+#define	MAPENV()
+#define	MAPAENV()
+
+
+/*
+ * needed for GETINFO, gives RAM available for task
+ */
+#define	GETTASKMEM	lda #>ROMSTART
+
+/*
+ * copy routines for SEND/RECEIVE and FORK
+ */
+#undef CPPCBUFRX
+#undef CPPCBUFTX
+#define	CPFORKBUF()
+
+/*
+ * needed in device code to get active environment in AC
+ */
+#define GETACTENV()     lda #<-1
+
+

@@ -1,0 +1,780 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/*        Struct Task Environment Entry          */
+
+/* we have three structs now: 
+ * TE_* 	for task environment handling - not needed for system without
+ *       	memory management
+ * TT_*		task table, contains STD streams, etc
+ * TH_*		thread table, has stack info and state
+ */
+
+/************************************************************************
+ * These routines are needed in the env section! 
+ *   inienv
+ *   savethread
+ *   loadthread
+ *   initsp
+ *   push
+ *   pull
+ *   memtask
+ *   memsys
+ *
+ *   sbrk
+ *   getenv
+ *   freenv
+ */
+
+
+#define	TE_NTASKS	0
+#define	TE_MMU		1	/* must be at least 1 - see getenv */
+#define	TE_MMU_LEN	15	/* allow up to 15 pages being mapped */
+#define	TE_RAMLEN	16	/* the number of RAM blocks allocated */
+#define	TE_SLEN		17	
+
+	.data
+&actEnv	.byt 0
+&envTab	.dsb MAXENVS * TE_SLEN
+	.text
+
+
+/* 
+ * Maps PCBUF to a place reachable by the kernel (called several times).
+ * The new address of PCBUF in kernel space is then called SYSBUF.
+ * MAPSYSBUF must preserve xr 
+ */
+#define MAPSYSBUF	jsr mapsysbuf
+
+&mapsysbuf
+	.(							:\
+	ldy actEnv						:\
+	cpy #<-1						:\
+	beq map1						:\
+	lda envTab+TE_MMU,y					:\
+	.byt $2c						:\
+map1	lda #SYSPAGE						:\
+	sta MMU+1						:\
+	rts							:\
+	.)
+
+#define	SYSBUF		$1200
+
+/* 
+ * copies PCBUF from another (thread id in y) task to actual task
+ * length in TH_PAR+1(actThread)
+ */
+#define	CPPCBUFRX()						\
+	ldx actTask						:\
+	lda taskTab + TT_ENV,x					:\
+	tax							:\
+	lda envTab + TE_MMU,x					:\
+	sta MMU+2						:\
+	lda threadTab + TH_TASK,y				:\
+	tax							:\
+	lda taskTab + TT_ENV,x					:\
+	tax							:\
+	lda envTab + TE_MMU,x					:\
+	sta MMU+1						:\
+	lda threadTab + TH_PAR+1,y				:\
+	jsr cploop
+
+/* 
+ * copies PCBUF from actual task to another (thread id in y)
+ * length in TH_PAR+1(actThread)
+ */
+#define	CPPCBUFTX()						\
+	jsr setmmu12						:\
+	ldx actThread						:\
+	lda threadTab + TH_PAR+1,x				:\
+	jsr cploop
+
+/* 
+ * copies PCBUF from actual task to another (thread id in y)
+ * length in TH_PAR+1(actThread)
+ */
+#define	CPFORKBUF()						\
+	.(							:\
+	ldy actThread						:\
+	cpy #<-1						:\
+	beq nocopy						:\
+	ldy div							:\
+	jsr setmmu12						:\
+	lda #0							:\
+	jsr cploop						:\
+nocopy	.)
+
+cploop	.(
+	tay
+l_0	dey
+	lda PCBUF+(BLKSIZ),y
+	sta PCBUF+(BLKSIZ*2),y
+	tya
+	bne l_0
+	rts
+	.)
+
+setmmu12 .(
+	ldx actEnv
+	lda envTab + TE_MMU,x
+	sta MMU+1
+	lda threadTab + TH_TASK,y
+	tax
+	lda taskTab + TT_ENV,x
+	tax
+	lda envTab + TE_MMU,x
+	sta MMU+2
+	rts
+	.)
+	
+&inienv .(
+	jsr inimem
+	lda #<-1
+	sta actThread
+	sta actTask
+	sta actEnv
+	lda #1
+	sta Syscnt
+	;clc
+	rts
+	.)
+
+setthread .(
+        .data
+newThread .byt 0
+        .text
+
+        cmp actThread
+        bne doit
+        rts
+doit
+        sta newThread
+
+        ldx actThread
+        cpx #<-1
+        beq nosave
+
+	ldy actEnv
+	lda envTab + TE_MMU,y
+	sta MMU+3
+
+        lda BLKSIZ*3 + THREADSAVE
+        sta threadTab + TH_LIBSAVE,x
+        lda BLKSIZ*3 + THREADSAVE+1
+        sta threadTab + TH_LIBSAVE+1,x
+
+;savetask
+        ldy threadTab + TH_TASK,x
+        lda BLKSIZ*3 + TASKSAVE
+        sta taskTab + TT_LIBSAVE,y
+        lda BLKSIZ*3 + TASKSAVE + 1
+        sta taskTab + TT_LIBSAVE + 1,y
+nosave
+;loadtask
+        ldx newThread
+        stx actThread
+        cpx #<-1
+        bne load
+        stx actTask
+        stx actEnv
+        beq noload
+load
+        ldy threadTab + TH_TASK,x
+        sty actTask
+	lda taskTab + TT_ENV,y
+	sta actEnv
+	tay
+	lda envTab + TE_MMU,y
+	sta MMU+3
+;loadtask
+	ldy actTask
+        lda taskTab + TT_LIBSAVE,y
+        sta BLKSIZ*3 + TASKSAVE
+        lda taskTab + TT_LIBSAVE + 1,y
+        sta BLKSIZ*3 + TASKSAVE + 1
+
+;loadthread
+        lda threadTab + TH_LIBSAVE,x
+        sta BLKSIZ*3 + THREADSAVE
+        lda threadTab + TH_LIBSAVE+1,x
+        sta BLKSIZ*3 + THREADSAVE+1
+noload
+endset  rts
+        .)
+
+initsp	.(
+	lda #<-1		;STACKSIZE-1
+	;ldx actThread
+	sta threadTab + TH_SP,x
+	rts
+	.)
+
+pull	.(
+	MAPSYSBUF
+	ldx actThread
+	inc threadTab + TH_SP,x
+	lda threadTab + TH_SP,x
+	tay
+	lda SYSBUF - PCBUF + $0100,y
+	rts
+	.)
+
+push	.(
+	pha
+	MAPSYSBUF
+	ldx actThread
+	lda threadTab + TH_SP,x
+	tay
+	pla
+	sta SYSBUF - PCBUF + $0100,y
+	dec threadTab + TH_SP,x
+	rts
+	.)
+
+/***************************************************************************/
+
+#define	MAPENV()	jsr mapenv
+#define	MAPAENV()	jsr mapaenv	
+
+&mapaenv 
+	ldx actEnv
+&mapenv	.(
+	cpx #<-1
+	beq system
+	rts
+system	pha
+	tya
+	lsr
+	lsr
+	lsr
+	lsr
+	tax
+#ifdef ROMTEST
+	ora #$10
+#endif
+	sta MMU,x
+	pla
+	rts
+	.)
+
+/***************************************************************************/
+
+/*
+ * we have changed the memtask call from jsr to jmp, but we need
+ * the jsr routine (or an equivalent) for the return from interrupt 
+ */
+
+#define	MEMTASK2()	jsr memtask2
+
+&memtask jsr memtask2
+	rts
+
+	.(
+
+mempage = 3
+
+	.data
+AC      .byt 0
+XR      .byt 0
+YR      .byt 0
+SR      .byt 0
+ADR     .word 0
+SSP     .byt 0
+mmu	.byt 0
+	.text
+
+&&memtask2 
+	  php
+          sei
+          dec Syscnt     ; back to thread?
+          bne mtask      ; no then end
+
+	  bit adev
+	  bpl mtask
+
+          sty YR         ; otherwise set thread env
+          stx XR
+          sta AC
+          pla
+          sta SR
+          pla
+          sta ADR
+          pla
+          sta ADR+1
+          tsx
+          stx SSP	 ; save all regs
+
+          ldy actEnv
+
+          ldx #1
+tm1       lda envTab+TE_MMU+1,y
+          sta MMU,x
+          iny
+          inx
+          cpx #TE_MMU_LEN
+          bcc tm1
+
+          ldy actThread
+	  ldx threadTab + TH_SP,y
+          txs
+
+          ldy actEnv
+          lda envTab+TE_MMU+mempage,y
+          sta mmu
+          lda envTab+TE_MMU,y
+          sta MMU
+
+mt2
+          lda #SYSPAGE
+          sta MMU+mempage
+
+          lda BLKSIZ*mempage+ADR+1
+          pha
+          lda BLKSIZ*mempage+ADR
+          pha
+          lda BLKSIZ*mempage+SR
+          pha
+          lda BLKSIZ*mempage+AC
+          pha
+          lda BLKSIZ*mempage+mmu
+          ldy BLKSIZ*mempage+YR
+          ldx BLKSIZ*mempage+XR
+          sta MMU+mempage
+          pla
+mtask     plp
+          rts
+
+&&memsys  php
+          sei
+          pha
+          lda #SYSPAGE
+          sta MMU+mempage
+          lda BLKSIZ*mempage+Syscnt
+          inc BLKSIZ*mempage+Syscnt
+          cmp #0
+          beq msys
+devr      pla
+          plp
+          rts
+msys      
+	bit BLKSIZ*mempage+adev
+	bpl devr
+
+	  pla
+          sta BLKSIZ*mempage+AC
+          pla
+          sta BLKSIZ*mempage+SR
+          stx BLKSIZ*mempage+XR
+          sty BLKSIZ*mempage+YR
+#ifdef CMOSCPU
+          ply
+#else
+          pla
+          tay
+#endif
+          pla		; y/a hold the return address now
+
+          tsx
+          stx BLKSIZ*mempage + mmu
+          ldx #SYSPAGE
+          stx MMU
+          ldx SSP
+          txs
+
+          pha		; save return address 
+#ifdef CMOSCPU
+          phy
+#else
+          tya
+          pha
+#endif
+	  lda mmu
+	  ldy actThread
+	  sta threadTab + TH_SP,y
+
+          lda SR
+          pha
+          lda AC
+          ldx XR
+          ldy YR
+          plp
+          cld
+          rts
+
+	.)
+
+/***************************************************************************/
+
+	.(
+	.data
+gdiv	.byt 0
+gdiv2	.byt 0
+gdiv3	.byt 0
+	.text
+
+&&kgetenv .(
+	sta gdiv	; number of 256-byte blocks as RAM from lo of mem
+	sty gdiv2	; number of shared 256-byte blocks from top of mem
+	ldx #0
+l0	lda envTab + TE_NTASKS,x
+	beq found
+	txa
+	clc
+	adc #TE_SLEN
+	tax
+	cmp #TE_SLEN * MAXENVS
+	bcc l0	
+	rts
+found	stx gdiv3
+	; first clean table
+	lda #$0f		; kernel ROM page, read-only
+	ldy #TE_MMU_LEN
+l0a	sta envTab + TE_MMU,x
+	inx
+	dey
+	bne l0a
+	; then copy shared
+	lda gdiv2
+	beq noshared
+	; a memory page has 16 blocks - be sure to map all
+	; also already shorten to length of MMU table 
+#if 15-(16-TE_MMU_LEN)*16
+	clc
+	adc #< 15-(16-TE_MMU_LEN)*16
+#endif
+	lsr
+	lsr
+	lsr
+	lsr
+	sta gdiv2	; number of 4k blocks
+
+	lda actEnv
+
+	cmp #<-1
+	bne valid
+	ldy #TE_MMU_LEN - 1
+l11	lda MMU,y
+	sta envTab + TE_MMU - 1, x
+	dex
+	dey
+	dec gdiv2
+	bne l11
+	beq l12
+
+valid	clc
+	adc #TE_MMU_LEN
+	tay
+l1
+	lda envTab + TE_MMU - 1, y	; TE_MMU is at least 1, so no
+	sta envTab + TE_MMU - 1, x	; wraparound
+	dex
+	dey
+	dec gdiv2
+	bne l1
+noshared
+l12
+	
+	; now alloc the requested memory blocks
+	lda gdiv
+	beq end
+	clc
+	adc #15
+	lsr
+	lsr
+	lsr
+	lsr
+	sta gdiv	; number memory blocks to allocate
+	
+	ldx gdiv3
+	stx gdiv2
+	sta envTab + TE_RAMLEN,x	; save length of RAM
+
+l2	jsr getmem
+	bcs release
+	txa
+	ldx gdiv2
+	sta envTab + TE_MMU,x
+	inc gdiv2
+	dec gdiv
+	bne l2
+
+	ldx gdiv3
+
+	lda envTab + TE_MMU,x	; needs to work with MAPSYSBUF of current
+	sta MMU+3		; thread -> not page 1
+	lda #0
+	sta ENVSAVE+(3*BLKSIZ)
+	sta ENVSAVE+(3*BLKSIZ)+1
+
+	lda #1
+	sta envTab + TE_NTASKS,x
+	clc
+	rts
+release
+	ldy gdiv2
+	cpy gdiv3
+	beq end
+	dey
+	sty gdiv2
+	ldx envTab + TE_MMU,y
+	jsr fremem
+	jmp release
+end	sec
+	rts
+	.)
+
+&&freenv .(
+	stx gdiv
+	lda envTab + TE_NTASKS,x
+	sec
+	sbc #1
+	sta envTab + TE_NTASKS,x
+	beq last
+	rts
+last
+	lda #TE_MMU_LEN
+	sta gdiv2
+
+l1	ldy gdiv
+	ldx envTab + TE_MMU,y
+	jsr fremem
+	bcs error
+	inc gdiv
+	dec gdiv2
+	bne l1
+error	rts
+	.)
+
+&&sbrk	.(
+	jsr memsys
+	bcc read
+	clc
+	adc #15
+	lsr
+	lsr
+	lsr
+	lsr
+	ldx actEnv
+	sec
+	sbc envTab + TE_RAMLEN,x
+	sta gdiv
+	beq read
+	bcs more
+less
+	dec envTab + TE_RAMLEN,x
+	lda envTab + TE_RAMLEN,x
+	clc
+	adc actEnv
+	tay
+	lda envTab + TE_MMU,y
+	tax
+	lda #$0f
+	sta envTab + TE_MMU,y
+	jsr fremem
+	inc gdiv
+	bne less
+	beq read
+more	
+	jsr getmem
+	bcs read
+	txa
+	pha
+	ldx actEnv
+	lda envTab + TE_RAMLEN,x
+	inc envTab + TE_RAMLEN,x
+	clc
+	adc actEnv
+	tax
+	pla
+	sta envTab + TE_MMU,x
+	dec gdiv
+	bne more
+
+read	ldx actEnv
+	lda envTab + TE_RAMLEN,x	; return available memory
+	asl
+	asl
+	asl
+	asl
+	clc
+	jmp memtask
+	.)
+
+	.)
+
+/***************************************************************************
+ *
+ * This code handles the setblk kernel call. It is used to change the
+ * MMU mapping by a task itself. It is for debugging puposes (monitor)
+ * only. It is reduced from the 1.3 kernel call, as it only allows writing,
+ * and also only for the own task.
+ * Handle with care!
+ */
+
+&&setblk .(
+	jsr memsys
+	cpy #TE_MMU_LEN
+	bcs indexerr
+	pha
+	tya
+	clc
+	adc actEnv
+	tay
+	pla
+	sta envTab + TE_MMU,y
+	clc
+indexerr
+	jmp memtask
+	.)
+
+/***************************************************************************
+ *
+ * The code below is the memory handling code previously located in 
+ * oa1sm.a65. It is not needed for computer w/o MMU, so it moved here
+ */
+
+#define   MBLOCKS   256
+
+          .(
+#ifndef MAP_ZERO
+	.data
+#else
+	.zero
+#endif
+MEMVAL    .dsb MBLOCKS/8
+MEMFRE    .dsb MBLOCKS/8
+mdiv       .byt 0
+	.text
+
+&inimem   .(
+	  ldy #MBLOCKS/8
+          lda #0
+l1        sta MEMVAL,y
+          sta MEMFRE,y
+          dey
+          bpl l1
+          ;clc
+          rts
+	  .)
+
+&getmem   .(
+	  ; jsr memsys
+          ldx #0
+l2        lda MEMVAL,x
+          and MEMFRE,x
+          beq gnext
+          ldy #7
+l3        asl
+          bcs found
+          dey
+          bpl l3
+found     lda POT2,y
+          eor #$FF
+          and MEMFRE,x
+          sta MEMFRE,x
+          txa
+          asl
+          asl
+          asl
+          sta mdiv
+          tya
+          ora mdiv
+          tax
+          jmp gne
+gnext     inx
+          cpx #MBLOCKS/8
+          bcc l2
+notfre    lda #E_NOMEM
+          .byt $2c
+gne       lda #E_OK
+          cmp #1
+ 	  ;jsr memtask
+          rts
+	  .)
+
+&fremem   .(
+	  ; jsr memsys
+#if MBLOCKS - 256
+          cpx #MBLOCKS
+          bcs notfre
+#endif
+          jsr gsetxy
+          ora MEMFRE,x
+          and MEMVAL,x
+          sta MEMFRE,x
+          lda #E_OK
+          clc
+	  ;jsr memtask
+          rts
+	  .)
+
+&&enmem   jsr memsys
+#if MBLOCKS - 256
+          cpx #MBLOCKS
+          bcs notfre
+#endif
+          jsr gsetxy
+          ora MEMVAL,x
+          sta MEMVAL,x
+          lda POT2,y
+          ora MEMFRE,x
+          sta MEMFRE,x
+          lda #E_OK
+          clc
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+
+/*
+&getblk   jsr memsys
+#if MBLOCKS - 256
+          cpx #MBLOCKS
+          bcs notfre
+#endif
+          jsr gsetxy
+          and MEMFRE,x
+          and MEMVAL,x
+          beq notfre
+          lda POT2,y
+          eor #$ff
+          and MEMFRE,x
+          sta MEMFRE,x
+          lda #E_OK
+          clc
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+*/
+          .)
+
+/*
+ * needed for GETINFO, gives mem available for task
+ */
+#define	GETTASKMEM  ldx taskTab + TT_ENV,y: lda envTab + TE_RAMLEN,x: asl: asl: asl: asl
+
+/*
+ * needed in device code to get active environment in AC
+ */
+#define	GETACTENV()	lda actEnv
+

@@ -1,0 +1,297 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/**************************************************************************/
+/*                                                                        */
+/* Standard-Device-Programm zur einfachen Erstellung einer anderen Device */
+/*                                                                        */
+/**************************************************************************/
+
+          .(
+          .word devend
+          jmp prg1
+          .asc "name",0
+
+	.data  
+status    .byt 0
+instr     .byt 0
+outstr    .byt 0
+	.text
+
+prg1      cmp #DC_RES
+          beq devini
+          
+          pha
+          lda status
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq
+          jmp others
+
+devini    lda #0
+          sta status
+          sta instr
+          sta outstr
+
+/************************ Reset ************************************/
+
+/******* go on here, or on error go to devx ************************/
+
+rts1hi
+
+/***************** here if stream over highwatermark ***************/
+
+/*******************************************************************/
+
+          clc
+          rts
+          
+devx      lda status
+          ora #2
+          sta status
+          lda #E_NOTIMP
+          sec
+          rts
+          
+devirq    .(
+
+/********************* is IRQ for device? no, then irqend **********/
+
+/************************ here if irq for device *******************/
+
+          lda status
+          bpl tx
+
+/**** receive byte to ac, no byte then nobyt ***********************/
+
+/*******************************************************************/
+
+          ldx outstr
+          jsr PUTC
+          bcs test
+
+nobyt     ldx outstr
+          lda #SC_STAT
+          jsr STRCMD
+          
+test      bcc tx
+          cmp #E_NUL
+          bne tstwater
+          jsr rxoff
+          jmp tx
+          
+tstwater  cmp #E_SEMPTY
+          beq wl
+          tax
+          lda status
+          and #1
+          bne wh
+          txa
+          cmp #E_SFULL
+          beq wh
+          cmp #E_SHWM
+          bne twl
+wh        jsr rts1hi
+          bcc tx         ; unbedingt
+twl       cmp #E_SLWM
+          bne tx
+          
+wl        
+/******** here if stream below lowwatermark ************************/
+
+/*******************************************************************/
+
+tx        lda status
+          rol
+          bpl irqhs
+          
+/******* hardware ready to send? if not then irqhs *****************/
+
+/*******************************************************************/
+
+          ldx instr
+          jsr GETC
+          bcs test2
+          
+/***************** send byte ***************************************/
+
+/*******************************************************************/
+
+          jmp irqhs
+test2     cmp #E_EOF
+          bne irqhs
+          jsr txoff
+
+irqhs     
+
+/**************** remove IRQ and clean up **************************/
+
+/*******************************************************************/
+
+	  lda #E_OK		; interrupt source removed
+	  rts
+irqend    
+	  lda #E_NOIRQ		; no interrupt source removed
+	  rts
+
+          .)
+
+others    cmp #DC_GS
+          bne o1
+          lda status
+          and #DC_SW_TX
+          bne devonx
+          sty instr
+          jmp ok
+devonx    jmp devon
+o1        cmp #DC_PS
+          bne o2
+          lda status
+          and #DC_SW_RX
+          bne devonx
+          sty outstr
+okx       jmp ok
+o2        cmp #DC_RX_ON
+          bne o3
+
+/********************* check if receive possible ******************/
+
+/************************ if not then onotimp *********************/
+
+          lda #DC_SW_RX
+          bne o2a
+o3        cmp #DC_TX_ON
+          bne o4
+
+/********************* check if send possible ********************/
+
+/************************ if not then onotimp ********************/
+
+          lda #DC_SW_TX
+o2a       ora status
+          sta status
+          bne okx
+o4        cmp #DC_RX_OFF
+          bne o5
+
+rxoff     lda status
+          and #DC_SW_RX
+          beq devoffx
+          ldx outstr
+          lda #SC_EOF
+          jsr STRCMD
+          lda status
+          and #255-DC_SW_RX
+          sta status
+          jsr rts1hi
+          bcc okx
+devoffx   jmp  devoff
+o5        cmp #DC_TX_OFF
+          bne o6
+
+txoff     lda status
+          and #DC_SW_TX
+          beq devoffx
+          ldx instr
+          lda #SC_NUL
+          jsr STRCMD
+          lda status
+          and #255-DC_SW_TX
+          sta status
+          jmp ok
+          
+o6        cmp #DC_HS
+          bne o6a
+
+/******************** here Handshake ************************/
+
+          lda status
+          and #255-1
+          sta status
+          tya
+          and #1
+          ora status
+          sta status
+
+/***********************************************************/
+
+          jmp ok
+          
+o6a       cmp #DC_SPD
+          bne o7
+          
+/****************** here speed *****************************/
+
+/***********************************************************/
+
+          jmp ok
+
+o7        cmp #DC_ST
+          bne o8
+
+          lda status
+          and #2
+          bne onotimp
+                    
+/****************** here state request *********************/
+
+/***********************************************************/
+
+          jmp ok
+
+o8        cmp #DC_EXIT
+          bne onotimp
+          jsr rxoff
+          jsr txoff
+          lda status
+          ora #2
+          sta status
+
+/****************** disable device ************************/
+
+/*********************************************************************/
+          
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+/******************** subprograms, includes, etc *********************/
+
+/*********************************************************************/
+
+devend    .)
+

@@ -1,0 +1,160 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/*
+ * protocol utilities 
+ */
+
+/* when called with AC=ihl and XR=islot, sets pp, pd, ppl, pdl, pslot and phl */
+getpinfo .(
+        sta phl
+        stx pslot
+        jsr getbadr
+	bcs err
+
+        sta pp
+        sty pp+1
+        clc
+        adc phl
+        sta pd
+        tya
+        adc #0
+        sta pd+1
+        jsr getblen
+        sta ppl
+        sty ppl+1
+        sec
+        sbc phl
+        sta pdl
+        tya
+        sbc #0
+        sta pdl+1
+	clc
+err	rts
+	.)
+
+/* moves src IP address to trg ddress in the IP header */
+pxip	.(
+        ldy #IPH_SRC
+        lda (pp),y
+        ldy #IPH_TRG
+        sta (pp),y
+        ldy #IPH_SRC+1
+        lda (pp),y
+        ldy #IPH_TRG+1
+        sta (pp),y
+        ldy #IPH_SRC+2
+        lda (pp),y
+        ldy #IPH_TRG+2
+        sta (pp),y
+        ldy #IPH_SRC+3
+        lda (pp),y
+        ldy #IPH_TRG+3
+        sta (pp),y
+	rts
+	.)
+
+/* sets my own IP address as src IP in the IP header */
+setmyip	.(
+        ldy #IPH_SRC
+l0      lda MyIP-IPH_SRC,y
+        sta (pp),y
+        iny
+        cpy #IPH_SRC+4
+        bcc l0
+	rts
+	.)
+
+/* when checksum is in (pd),YR and (pd),YR+1, then compute checksum and
+   set it */
+setdcheck .(
+	.bss
+tmp	.byt 0
+	.text
+
+	lda #0
+	sta (pd),y
+	iny
+	sta (pd),y
+
+	sty tmp
+
+	lda pdl
+	ldy pdl+1
+	ldx #pd
+	jsr checksum3
+
+	ldy tmp	
+	sta (pd),y
+	dey
+	txa
+	sta (pd),y
+	rts
+	.)
+
+/* prepares an IP header (p*) */
+prepip	.(
+	ldy #IPH_VER
+	lda #$45		/* we never send options... */
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+	iny
+	lda ppl+1		/* set packet length */
+	sta (pp),y
+	iny
+	lda ppl
+	sta (pp),y
+	iny
+	lda #0			/* we also never fragment */
+	sta (pp),y
+	iny
+	sta (pp),y
+	iny
+	sta (pp),y		/* and don't set any flags */
+	iny
+	sta (pp),y
+
+	ldy #IPH_CSUM		/* clear checksum */
+	sta (pp),y
+	iny
+	sta (pp),y
+
+	ldy #IPH_TTL		/* time to live */
+	lda #64
+	sta (pp),y
+
+	lda #20		;ppl
+	ldy #0		;ppl+1
+	ldx #pp
+	jsr checksum3
+	ldy #IPH_CSUM+1
+	sta (pp),y
+	dey
+	txa
+	sta (pp),y
+
+	rts
+	.)

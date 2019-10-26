@@ -1,0 +1,1061 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This is the real monitor part of the program. 
+ * Most stuff has just been taken over from the @MON program,
+ * which you can see by the all-capital writing.
+ * 
+ */
+
+          .(
+
+	.zero
+Z1        .word 0
+Z2        .word 0
+Z3        .word 0
+	.data
+ABPZ      .byt 0
+	.text
+
+#ifndef NOSYSFKT
+	.zero
+Z0        .word 0
+	.text
+#endif
+
+#ifndef SHORTMON
+	.zero
+ZEI       .word 0   ; MON TSERO, ASS
+Z4        .word 0   ; U(D)
+Z5        .word 0   ; U(D)
+Z6        =ZEI      ; U(D)
+	.data
+LEN       .byt 0    ; U/D/A
+STBYT     .byt 0    ; U/D/A
+NR        .byt 0    ; U/D/A
+INP       =Z4+1     ; A
+	.text
+#endif
+
+	.data
+BRKPC     .word 0
+BRKSR     .byt 0
+BRKSP     .byt 0
+BRKAC     .byt 0
+BRKXR     .byt 0
+BRKYR     .byt 0
+	.text
+
+MA        =1
+MB        =3
+MEBYT     =","
+MEASS     =";"
+MEREG     ="+"
+MESSAGE   =">"
+IGNORESIGN ="-"
+
+30000 ;********************************
+30001 ;MONITOR-PROGRAMM
+30002 ;********************************
+&MONITOR  tsx
+          dex
+          dex
+          stx BRKSP
+#ifndef SHORTLINE
+          lda #16
+#else
+          lda #8
+#endif
+          STA ABPZ
+          lda #<M0TXT
+          ldy #>M0TXT
+          jsr TSERO
+          JSR BR
+MXL       
+#ifndef NOSYSFKT
+          jsr oldoutstr
+#endif
+          JSR CRLFOUT:LDA #MESSAGE
+          JSR SEROUT
+          JSR MLINEIN:bcs termmon
+linex     jsr CHRGOT:beq MXL:bne mx1
+MO0       jsr CHRGET:beq MXL
+mx1       CMP #MESSAGE:BEQ MO0
+          jsr TOUPPER
+          LDX #0:MO3 CMP MONBEF,X:BEQ MO4
+          INX:CPX #ANZBEF:BCC MO3
+          JSR ERR
+          JMP MXL
+MOX       pla
+          pla
+termmon   
+#ifndef NOSH
+          rts
+#else
+#ifdef RETRTS
+          rts
+#else
+	  jmp TERM
+#endif
+#endif
+ERR       LDA #<M3TXT:LDY #>M3TXT:JSR TSERO:SEC:RTS
+MO4       INC LZEI
+          JSR MOEX
+          JMP MXL
+MOEX      TXA:ASL:TAX:LDA MONADR+1,X
+          PHA:LDA MONADR,X:PHA:RTS
+
+#ifdef SHORTMON
+BA BD BGD BU jmp ERR
+#endif
+
+#ifndef NOSYSFKT
+          .(
+&MOY      ldy LZEI
+          lda IOBUF,y
+          beq xERR
+          inc LZEI
+          ldy #0
+          jsr TOUPPER
+y1        cmp ybef,y
+          beq yok
+          iny
+          cpy #anzy
+          bcc y1
+xERR      jmp ERR
+yok       tya
+          asl
+          tax
+          lda yadr+1,x
+          pha
+          lda yadr,x
+          pha
+          rts
+
+anzy      =11
+ybef      .asc "DMFSREPWVGC"
+
+yadr      .word MOB-1,MOgetmem-1,MOfremem-1
+          .word MOgetstr-1,MOfrestr-1
+          .word MOgetenv-1,MOfork-1
+          .word MOpsem-1,MOvsem-1                
+          .word MOgetblk-1,DIRECTORY-1
+
+MOgetblk  jsr GETADR:bcs xERR
+          tax
+          jsr GETBLK
+          jmp show
+
+MOB       JSR GETADR:BCS xERR:STA Z1
+          jsr GETADR:bcs xERR:sta Z1+1
+          jsr GETADR
+          tay:lda Z1+1:ldx Z1
+          jsr DEVCMD
+show      jsr mog
+          jmp BR
+
+MOgetmem jsr GETMEM
+          jmp show
+
+MOfremem jsr GETADR:bcs xERR
+          tax
+          jsr FREMEM
+          jmp show
+
+MOgetstr jsr GETSTR
+          jmp show
+
+MOfrestr jsr GETADR:bcs xERR
+          tax
+          jsr FRESTR
+          jmp show
+
+MOgetenv jsr GETADR:bcs MOCEOx
+          tay
+          jsr GETENV
+          jmp show
+
+MOfork    
+#ifdef NOMMU
+	  clc
+	  ldx #SEM_SENDBUF
+	  jsr PSEM
+#endif
+	  jsr GETADR:bcs MOCEOx
+          sta PCBUF+FORK_ADDR
+          stx PCBUF+FORK_ADDR+1
+          jsr GETADR:bcs MOCEOx
+          sta PCBUF+FORK_SIZE
+          jsr GETADR:bcs MOCEOx
+          sta PCBUF+FORK_SHARED
+          jsr GETADR:bcs MOCEOx
+          sta PCBUF+FORK_STDIN
+          jsr GETADR:bcs MOCEOx    
+          sta PCBUF+FORK_STDOUT
+          jsr GETADR:bcs MOCEOx
+          sta PCBUF+FORK_STDERR
+
+          lda #SP_FORK
+          ldy #6
+          sec
+          ldx #SEND_SYS
+          jsr SEND
+#ifdef NOMMU
+	  jsr mog
+	  ldx #SEM_SENDBUF
+	  jsr VSEM
+          jmp BR		;show
+#else
+	  jmp show
+#endif
+
+MOpsem   jsr GETADR:bcs MOCEOx
+          tax
+          jsr PSEM
+          jmp show
+
+MOvsem   jsr GETADR:bcs MOCEOx
+          tax
+          jsr VSEM
+          jmp show
+
+MOCEOx    jmp ERR
+          .)
+#endif
+          
+MOM       .(
+          JSR GET12:BCS MOME:jsr setout
+30150 MOM1 JSR MOMZO
+          jsr SERBRK:bcs MOME
+30160 LDA ABPZ:JSR ADCMP:BCC MOM1
+30170 MOME RTS
+30180 MOMZO JSR CRLFOUT:LDA #MEBYT:JSR MASOUT
+30220 LDY #0:beq mom2:MOM2 jsr SSPOUT:mom2 LDA (Z1),Y
+30230 JSR SBYTO:INY:CPY ABPZ:BNE MOM2
+          lda #":":jsr SEROUT
+30240 LDY #0:MOM3 LDA (Z1),Y
+30250 TAX:AND #127:CMP #32:BCS MOM4
+30260 LDX #".":MOM4 TXA:JSR SEROUT
+30270 INY:CPY ABPZ:BNE MOM3
+30280 RTS
+          .)
+
+BB        .(
+          JSR GET12:BCS MOBE:jsr setout
+MOB1      JSR MOBZO
+          jsr SERBRK:bcs MOBE
+          LDA #1:JSR ADCMP
+          BCC MOB1
+MOBE      RTS
+MOBZO     JSR CRLFOUT:LDA #MEBYT:JSR MASOUT
+          LDY #0
+          LDA (Z1),Y
+          JMP SBINBO         
+          .)
+
+MASOUT    PHA
+          LDA #MESSAGE
+          JSR SEROUT
+          PLA
+          JSR SEROUT
+          LDA Z1
+          LDX Z1+1
+          JSR SADRO
+          JMP SSPOUT
+
+GET12     .(
+          JSR GETADR
+          BCS GBDX
+          STA Z1:STX Z1+1
+          STA Z2:STX Z2+1
+          JSR GETADR
+          BCS GBD1
+          STA Z2:STX Z2+1
+GBD1      CLC
+GBDX      RTS
+          .)
+
+;******** R = REGISTER
+
+BR        .(
+          jsr setout
+          LDA #<R1TXT:LDY #>R1TXT
+          JSR TSERO
+          
+BR2       lda #MESSAGE
+          jsr SEROUT
+          LDA #MEREG
+          jsr SEROUT
+          LDA BRKPC:LDX BRKPC+1
+          JSR SADRO
+          JSR SSPOUT
+          LDA BRKAC:JSR SSBOUT
+          LDA BRKXR:JSR SSBOUT
+          LDA BRKYR:JSR SSBOUT
+          LDA BRKSP:JSR SSBOUT
+          JSR SSPOUT
+          LDA BRKSR:JMP SBINBO
+
+;******** GR = GET REGISTER
+
+&BGR      jsr CHRGOT:cmp #IGNORESIGN:beq gr1a
+          JSR GETADR:bcs bge:STA BRKPC:STX BRKPC+1:jmp gr2:gr1a inc LZEI
+gr2       jsr CHRGOT:cmp #IGNORESIGN:beq gr2a
+          JSR GETADR:bcs bge:STA BRKAC:jmp gr3:gr2a inc LZEI
+gr3       jsr CHRGOT:cmp #IGNORESIGN:beq gr3a
+          JSR GETADR:bcs bge:STA BRKXR:jmp gr4:gr3a inc LZEI
+gr4       jsr CHRGOT:cmp #IGNORESIGN:beq gr4a     
+          JSR GETADR:bcs bge:STA BRKYR:jmp gr5:gr4a inc LZEI
+gr5       jsr CHRGOT:cmp #IGNORESIGN:beq gr5a
+          JSR GETADR:bcs bge:STA BRKSP:jmp gr6:gr5a inc LZEI
+gr6       jsr CHRGOT:cmp #IGNORESIGN:beq bge
+          JSR GETADR:bcs bge:ORA #$20:STA BRKSR
+bge       jsr CROUT
+          JSR BR2
+          rts;JMP MESS
+          .)
+ 
+#ifndef SHORTMON
+ 
+;******** D = DISASSEMBLER
+
+BD        .(
+          JSR GET12:BCS BDX:jsr setout
+BD1       JSR SERBRK:bcs BDX
+          JSR ZEID:BCC BD1
+BDX       rts
+
+12015 &GETPAR LDY #0:LDA (Z1),Y:TAX:AND #$1F:CMP #$10:BNE BDA1
+      TXA:LSR:LSR:LSR:LSR:LSR:STA NR:INY:LDA (Z1),Y:PHP
+12025 LDX Z1+1:CLC:ADC Z1:BCC BDB1:INX:BDB1 CLC:ADC #2:BCC BDB1A:INX
+12030 BDB1A PLP:BPL BDB2:DEX
+12035 BDB2 STA Z3:STX Z3+1:LDA #2:STA LEN:LDA #6:STA STBYT:RTS
+12040 BDA1 TXA:LDX #0:BD1A CMP CODTEX,X:BNE BD1B
+12045 TXA:CLC:ADC #8:BD4B STA NR:LDA #1:STA LEN:RTS
+12050 BD1B INX:CPX #37-8:BNE BD1A
+12055 LDY #33:STY NR
+12060 LDX #0:BD2B LDY #0:BD2A CMP CODTAB,X:BEQ BD2OUT
+12065 INX:INY:CPY #5:BNE BD2A:INC NR:LDY NR
+12070 CPY #45:BNE BD2B
+12075 LDX #0:BD3B LDY #0:BD3A CMP CODLON,X:BEQ BD2OUT
+12080 INX:INY:CPY #8:BNE BD3A:INC NR:LDY NR
+12085 CPY #54:BNE BD3B:BEQ BD4
+12090 BD2OUT LDA STB,Y:STA STBYT:TAX:LDY #1:LDA (Z1),Y
+12095 STA Z3:TXA:AND #4:BEQ BD3:INY
+12100 LDA (Z1),Y:STA Z3+1:BD3 INY:STY LEN:RTS
+12105 BD4 LDX #4:BD4A CMP ANDC,X:BEQ BD40:DEX:BPL BD4A:LDA #56:BNE BD4B
+12110 BD40 LDA ANDT,X:STA NR:LDA ANDA,X:TAY:BNE BD2OUT
+12115 &ZEID JSR CRLFOUT:&ZEID2 LDA #MEASS:JSR MASOUT:JSR GETPAR
+12120 LDA NR:ASL:CLC:ADC NR:TAY:LDX #3
+12125 ZD1 LDA TEXT,Y:JSR SEROUT:INY:DEX:BNE ZD1
+      JSR SSPOUT:LDY LEN:DEY:BEQ ZDEND
+12130 LDA STBYT:AND #3:TAY:LDA VORSP,Y:BEQ ZD2:JSR SEROUT
+12135 ZD2 LDA #"$":JSR SEROUT
+12140 LDA Z3:LDX Z3+1:LSR STBYT:LSR STBYT:LSR STBYT:BCS ZD3:JSR SBYTO
+12145 JMP ZD4:ZD3 JSR SADRO
+12150 ZD4 LDA STBYT:BEQ ZDEND:ASL:CLC:ADC STBYT:TAY:LDX #3
+12155 ZD41 LDA NAHSP-3,Y:JSR SEROUT:INY:DEX:BNE ZD41
+12160 ZDEND LDY #10:LDA #" ":ZDE1 JSR SEROUT:DEY:BNE ZDE1
+12170 LDA LEN:jmp ADCMP
+          .)
+
+#endif
+          .(
+&ADD      CLC
+          ADC Z1
+          STA Z1
+          LDA #0
+          ADC Z1+1
+          STA Z1+1
+          rts
+&ADCMP    jsr ADD
+          bcs cs
+&COMP     lda Z1+1
+          CMP Z2+1
+          bne cs
+          lda Z1    
+          cmp Z2
+cs        rts
+          .)
+
+#ifndef SHORTMON
+
+;******** BGD = ASSEMBLER
+BA        .(
+          JSR GETADR:bcs BGD7
+          STA Z1:STX Z1+1
+          jsr CHRGOT:bne BGD2
+          JMP GETEND
+&BGD      JSR GETADR:STA Z1:STX Z1+1
+BGDLOOP   JSR CHRGOT
+          BNE BGD2:RTS
+BGD2      LDX #0:STX NR
+          lda #<TEXT
+          sta ZEI
+          lda #>TEXT
+          sta ZEI+1
+BGD3      LDX LZEI:ldy #0
+BGD4      LDA IOBUF,x:sec:sbc (ZEI),y:beq bgd5
+          cmp #$20:bne BGD5
+bgd5      INX:INY
+          CPY #3
+          BCC BGD4:BCS BGD6
+BGD5      INC NR:LDA NR:CMP #57:BCS BGD7
+          lda ZEI:clc:adc #3:sta ZEI
+          bcc BGD3:inc ZEI+1:bne BGD3
+BGD7      JMP ERR
+BGD6      CLC:LDA #3:ADC LZEI:STA LZEI
+          lda NR:cmp #56;"???":beq ASSE
+          JSR GETASC:LDA NR:CMP #8:BCS BGD8
+; BRANCHES
+          LDA STBYT:CMP #2:BNE BGD7:LDA Z3:SEC
+          SBC Z1:TAY:LDA Z3+1:SBC Z1+1:TAX
+          TYA:SEC:SBC #2:TAY:BCS BGDD1:DEX
+BGDD1     CPX #0:BEQ BGDD2:INX:BNE BGD7
+          TYA:BPL BGD7:BMI BGDD3:BGDD2 TYA:BMI BGD7
+BGDD3     LDY #1:STA (Z1),Y
+          LDA NR:ASL:ASL:ASL:ASL:ASL:ORA #$10
+ASSEND    LDY #0:STA (Z1),Y:ASSE JSR CROUT
+          JSR ZEID2:JMP GETEND
+
+BGD8      CMP #37:BCS BGD9:LDY LEN:DEY:BNE BGD8E:TAX:LDY #0
+          LDA CODTEX-8,X:JMP ASSEND
+BGD8E     CMP #33:BCS BGD9
+BA1E      JMP ERR
+ASKIP     jmp ASSE
+
+BGD9      LDY LEN:DEY:BEQ BA1E
+          CMP #45:BCS BGDA
+
+          LDY STBYT:CPY #5:BCS BGNF:SEC:SBC #33
+          STA NR:ASL:ASL:ADC NR:ADC STBYT:TAX:LDA CODTAB,X
+ASS1      BEQ BGNF;BA1E:STA NR
+          LDY LEN:DEY:BGD9A LDA Z3-1,Y:STA (Z1),Y
+          DEY:BNE BGD9A:LDA NR:BNE ASSEND
+
+BGDA      CMP #54:BCS BGNF:LDY STBYT:CPY #8:BCS BGNF:SEC:SBC #45
+          ASL:ASL:ASL:ADC STBYT:TAX:LDA CODLON,X:JMP ASS1
+
+BGNF      LDA NR:CMP #56:BEQ ASKIP ;"???"
+          LDX #4:BGNF1 LDA NR:CMP ANDT,X:BNE BGNF2
+          LDA STBYT:CMP ANDA,X:BNE BGNF2
+          LDA ANDC,X:BNE ASS1
+BGNF2     DEX:BPL BGNF1
+
+          ldx STBYT:lda STBX,x:beq bgnf
+          sta STBYT
+          inc LEN
+          lda #0:sta Z3+1
+          lda NR:jmp BGD9
+bgnf
+          JMP ERR
+
+&GETAUF   LDY #0:STY STBYT:INY:STY LEN:JSR CHRGOT:BEQ GAU1
+          LDY #0:CMP #"#":BEQ GA2:INY:CMP #"(":BEQ GA2
+          INY:bne ga2a
+GA2       jsr CHRGET
+ga2a      TYA:LSR:ROR STBYT:LSR:ROR STBYT
+          CLC:.BYT $24:GAU1 SEC:RTS
+
+GETASC    JSR GETAUF:BCC GA3:JMP GA1
+GA3       JSR GETADR:STA Z3:STX Z3+1:INC LEN
+          LDA Z3+1:BEQ GA4:SEC:ROR STBYT:INC LEN:BNE GETZU
+
+GA4       CLC:ROR STBYT
+
+&GETZU    LDX #0:JSR CHRGOT:BEQ GA7N0:LDA STBYT
+          AND #96:CMP #32:BNE GA7KL:LDX #3:GA7KL STX INP    
+          JSR CHRGOT:JMP GA7XX
+GA7K1     JSR CHRGET
+GA7XX     BEQ GA7B:CMP #"?":BEQ GA7B
+          CMP #",":BNE GA7K1:INC INP
+          JSR CHRGET
+          CMP #"X":BEQ GA7B
+          cmp #"x":beq GA7B
+          cmp #"y":beq GA7K2
+          CMP #"Y":BEQ GA7K2
+GAERR     JMP ERR
+
+GA7K2     LDX INP:INX
+GA7N0     STX INP
+GA7B      LDA STBYT:LSR INP:ROR:LSR INP:ROR:LSR INP:ROR:LSR:LSR:STA STBYT
+GA1       LDX #9:LDA STBYT
+          cmp #%00011001:bne GAA:lda #$1d:sta STBYT
+GAA       CMP STB,X:BEQ GAA1:DEX:BPL GAA
+          BMI GAERR
+GAA1      STX STBYT:ASSRT clc:RTS
+
+GETEND    LDY #0
+          LDA #MEASS
+          JSR INLOOP
+          BCS ASSRTx
+          JMP BGDLOOP
+ASSRTx    cmp #0
+          beq ASSRT
+          pla
+          pla
+          jmp linex
+          .)
+
+;******** BU = ADRESSEN UMRECHNEN
+
+BU        .(
+          JSR GETADR:STA Z1:STX Z1+1:JSR GETADR:STA Z2:STX Z2+1
+          JSR GETADR:STA Z4:STX Z4+1:jsr GETADR:sta Z5:stx Z5+1
+          jsr GETADR:sec:sbc Z4:sta Z6:txa:sbc Z4+1:sta Z6+1
+          
+BU1       JSR GETPAR:LDA LEN:CMP #3:BNE BU2
+          LDX Z3+1:LDA Z3
+          cpx Z4+1:BCC BU2:BNE BU3:CMP Z4:BCC BU2
+BU3       CPX Z5+1:BCC BU4:BNE BU2:CMP Z5:BCC BU4:BNE BU2
+BU4       LDY #1:CLC:ADC Z6:STA (Z1),Y:INY:TXA:ADC Z6+1:STA (Z1),Y
+BU2       LDA LEN:JSR ADCMP:BCC BU1:RTS
+          .)
+
+#endif
+
+MOG       .(
+          JSR GETADR:BCS ge
+          STA Z1:STX Z1+1
+          jsr setout
+#ifndef NOSH
+	  jsr setin
+#endif
+          lda BRKSR
+          pha
+          lda BRKAC
+          ldx BRKXR
+          ldy BRKYR
+          plp
+          jsr go
+#ifndef NOSYSFKT
+&mog      
+#endif
+          php
+          sta BRKAC
+          stx BRKXR
+          sty BRKYR
+          pla
+          sta BRKSR
+          tsx
+          stx BRKSP
+          cli
+          cld
+ge        rts
+
+go        JMP (Z1)
+          .)
+
+;****
+
+BI        .(
+          JSR GETADR:bcs MOIE
+          sta Z1:stx Z1+1
+          jsr CHRGOT:bne MOI0
+          lda #MEBYT
+          ldy #0
+          jmp MOINL
+
+&MOI      JSR GETADR:STA Z1:STX Z1+1
+          BCS MOIE
+          jsr CHRGOT
+          beq MOIE
+MOI0      LDA #0:STA Z2
+MOI1      JSR GETADR:LDY Z2:BCS MOINL
+          STA (Z1),Y:INC Z2
+          JMP MOI1
+MOIE      RTS
+          
+MOINL     LDA #0
+          STA Z2
+          LDA #MEBYT
+          JSR INLOOP
+          BCC MOI1
+          cmp #0
+          clc
+          beq MOIE
+          pla
+          pla
+          jmp linex
+          .)
+          
+INLOOP    .(
+          PHA
+          TYA
+          CLC
+          ADC Z1
+          STA Z1
+          LDA #0
+          ADC Z1+1
+          STA Z1+1
+          JSR CRLFOUT
+          PLA
+          JSR MASOUT
+          JSR MLINEIN
+          ldy #<-1
+il1       iny
+          lda IOBUF,y
+          beq ils
+          cmp #MESSAGE   ; zeile gewechselt
+          beq ils
+          cmp #" "
+          beq il1   
+          sty LZEI
+          clc
+          rts
+ils       
+/*#ifdef SHOW
+          lda #"c"
+          ldx #STDERR
+          jsr OUT
+#endif*/
+          sec
+          rts
+          .)
+
+;****
+
+#ifdef NOSYSFKT
+MOE MOS   jmp ERR
+#else
+MOE       .(
+          jsr GETADR
+          bcs MOER
+          sta Z2
+          jsr GETADR
+	sta Z2+1
+          bcs MOER
+set       ldx #OWNTASK
+          ldy Z2
+          sec
+          jsr SETBLK
+	bcs MOER
+	jsr CHRGOT
+	cmp #"+"
+	beq some
+	inc Z2
+	jsr GETADR
+	sta Z2+1
+	bcc set
+          clc
+          rts
+some	jsr CHRGET
+	jsr GETADR
+	sta Z3
+next	inc Z2
+	inc Z2+1
+	ldx #OWNTASK
+	ldy Z2
+	lda Z2+1
+	sec
+	jsr SETBLK
+	bcs MOER
+	dec Z3
+	bne next
+	clc
+	rts
+MOER   
+lda #"E":jsr SEROUT
+       jmp ERR
+          .)
+
+MOS       .(
+          jsr wopenfile
+          bcs MOSE
+          stx Z0
+          jsr GETADR
+          bcs mose
+          sta Z2:stx Z2+1
+          jsr GETADR
+          bcs mose
+          sta Z1:stx Z1+1
+          ldy #0
+mos1      lda Z2+1
+          cmp Z1+1
+          bcc mos1a
+          bne mosec
+          lda Z2
+          cmp Z1
+          bcs mosec
+mos1a     lda (Z2),y
+          ldx Z0
+          jsr OUT
+          inc Z2
+          bne mos1
+          inc Z2+1
+          jmp mos1
+mosec     clc
+mose      php
+          ldx Z0
+          lda #SC_EOF
+          jsr STRCMD
+          plp
+MOSE      bcc msx
+          jsr ERR
+msx       rts
+          .)
+#endif
+
+&MOL      .(
+          JSR CHRGOT
+          CMP #34
+          BNE mol
+#ifdef NOSYSFKT
+          jmp ERR
+#else
+          jsr ropenfile
+          bcs MOLEx
+          stx Z0
+          jsr GETADR
+          bcs mole
+          sta Z2:stx Z2+1
+          ldy #0
+moll      ldx Z0
+          jsr IN
+          bcs molec
+          sta (Z2),y
+          inc Z2
+          bne moll
+          inc Z2+1
+          bne moll
+molec     clc
+mole      php
+          lda #":"
+          jsr SEROUT
+          lda Z2
+          ldx Z2+1
+          jsr SADRO
+          ldx Z0
+          lda #SC_NUL
+          jsr STRCMD
+          plp
+MOLEx     bcc mlx
+          jsr ERR
+mlx       rts
+#endif
+
+mol       JSR GETADR:BCS MOLE
+30410 STA Z1:STX Z1+1
+30420 JSR GETADR:BCS MOLE
+30430 STA Z2:STX Z2+1:ora Z2+1:beq MOLE
+30440 MOLL JSR SERIN:LDY #0:STA (Z1),Y
+30450 INC Z1:BNE MOL1:INC Z1+1
+30460 MOL1 LDA Z2:BNE MOL2
+30470 DEC Z2+1:MOL2 DEC Z2:BNE MOLL
+30480 LDA Z2+1:BNE MOLL
+30490 MOLE RTS
+          .)
+
+30499 ;****
+          .(
+&MOC3     JSR GETADR:BCS MOCX
+          STA Z1:STX Z1+1
+          JSR GETADR:BCS MOCX
+          STA Z2:STX Z2+1
+          JSR GETADR:BCS MOCX
+          STA Z3:STX Z3+1:RTS
+          
+&MOC      JSR MOC3:BCS MOCE:jsr setout:JSR CRLFOUT
+30570 MOC2 LDY #0:LDA (Z1),Y:CMP (Z3),Y
+30580 BEQ MOC1:LDA Z1:LDX Z1+1
+30590 JSR SADRO:JSR SSPOUT
+30600 MOC1 LDA #1:JSR ADCMP:BCS MOCX
+30610 INC Z3:BNE MOC2:INC Z3+1
+30620 JMP MOC2
+30630 MOCX RTS
+30640 MOCE jmp ERR
+          .)
+
+MOF       .(
+          ldy LZEI:lda IOBUF,y:pha:beq mofex
+          cmp #" ":beq mof00:inc LZEI
+mof00     jsr GETADR:sta Z1:stx Z1+1:bcs mofex
+          jsr GETADR:sta Z2:stx Z2+1:bcs mofex
+          pla:cmp #" ":bne mofother
+          
+          lda #0:sta Z3
+mof0      jsr GETADR:bcs mofn
+          ldx Z3:sta IOBUF,x:inc Z3
+          bne mof0          
+
+mofn      ldy LZEI:lda IOBUF,y
+          cmp #34:bne mofnx
+          ldx Z3
+mofn1     iny
+          lda IOBUF,y
+          beq mofn2
+          cmp #34
+          beq mofn2a
+          sta IOBUF,x
+          inx
+          bne mofn1
+mofn2a    iny
+mofn2     sty LZEI
+          stx Z3
+          bne mof0
+          
+mofnx     lda Z3:beq mofe
+
+          jsr CRLFOUT
+mof1      ldy #0
+mofl      lda (Z1),y
+          cmp IOBUF,y
+          bne mof2
+          iny
+          cpy Z3:bcc mofl
+          lda Z1:ldx Z1+1:jsr SADRO
+          jsr SSPOUT
+mof2      lda #1:jsr ADCMP:bcc mof1
+          rts
+mofex     pla
+mofe      jmp ERR
+
+#ifdef SHORTMON
+mofother  =*-3
+#else
+mofother  cmp #"R":beq mofr
+          cmp #"r":bne mofrn
+mofr
+18060 LDA #6:STA IOBUF+2:LDA #2:STA IOBUF+1:LDA #%11111111:STA IOBUF
+18065 BNE BFA1
+mofrn     cmp #"-":beq mofneg:JSR CHRGET:JSR GETAUF:BCS BFA0
+18075 LDA #0:STA IOBUF:STA IOBUF+2:JSR CHRGOT:Beq BFA0
+      JSR GADR:bcs mofe:JSR GETZU:bcs BFA3
+18080 STA IOBUF+2
+18085 BFA0 LDA LEN:STA IOBUF+1
+18090 BFA1 JSR GETPAR:LDA LEN:PHA:CMP IOBUF+1:BNE BFA1N:DEC LEN:BEQ BFA1OK
+18095 LDA STBYT:CMP IOBUF+2:BNE BFA1N
+18100 JSR CADR:BNE BFA1N
+18105 BFA1OK JSR CROUT:PLA:JSR ZEID:JMP BFA2
+18110 BFA1N PLA:JSR ADD:BCS BFA3:BFA2 JSR SERBRK:Bcs BFA3
+18115 JSR COMP:BCC BFA1:BEQ BFA1:BFA3 RTS
+
+mofneg    jsr GETADR:sta Z3
+          jsr CRLFOUT
+mofn3     ldy #0:lda (Z1),y
+          cmp Z3
+          beq mofn4
+          lda Z1:ldx Z1+1:jsr SADRO
+          jsr SSPOUT
+mofn4     lda #1:jsr ADCMP:bcc mofn3
+          rts
+
+CADR      LDY IOBUF:LDX #0:JSR CBYT:BNE CART:INX:DEC LEN:BEQ CART
+1490 CBYT LDA IOBUF+3,X:EOR Z3,X
+1495 STA INP:TYA:LSR:TAY:BCS CNI1:LDA INP:AND #$0F:BNE CART
+1500 CNI1 TYA:LSR:TAY:BCS CA1:LDA INP:AND #$F0:CART RTS:CA1 LDA #0:RTS
+
+GADR ldy LZEI:INC LEN:CLC:ROR STBYT
+1460 JSR GBYT:bcs GARx:STA IOBUF+4
+     lda IOBUF,y:Beq CART2
+     CMP #",":BEQ CART2
+     CMP #")":beq CART2
+1465 CMP #"?":BEQ CART2
+     INC LEN:LDA STBYT:ORA #$80:STA STBYT
+     jsr GBYT:.byt $24:CART2 clc:.byt $24:GARx sec:sty LZEI:rts
+1470 GBYT JSR GNIB:bcs GAR:ASL:ASL:ASL:ASL:STA INP:JSR GNIB:bcs GAR
+     ORA INP:STA IOBUF+3:clc:RTS
+1475 GNIB lda IOBUF,y:beq GAR:iny
+     CMP #"*":BNE GNI1:LDA #0:SEC:BCS GNI2
+1480 GNI1 JSR tsthex:bcs GAR:CLC:GNI2 ROL IOBUF:clc:RTS
+
+1140 JSR CHRGET:PHP:dec LZEI
+1145 PLP:BEQ GAR:CLC:RTS:GAR SEC:RTS
+#endif
+          .)
+          
+MOT       .(
+          JSR MOC3:BCS MOCEO
+30710 LDA Z3+1:CMP Z2+1:BCC MOT1
+30720 BNE MOTA:LDA Z3:CMP Z2:BCS MOTA
+30730 MOT1 LDA Z3+1:CMP Z1+1
+30740 BCC MOTA:BNE MOTB
+30750 LDA Z3:CMP Z1:BCS MOTB
+30760 MOTA LDY #0:LDA (Z1),Y
+30770 STA (Z3),Y:INC Z3:BNE MOT2
+30780 INC Z3+1:MOT2 LDA #1:JSR ADCMP
+30790 BNE MOTA:RTS
+
+30800 MOTB LDA Z3:CLC:ADC Z2:STA Z3
+30810 LDA Z3+1:ADC Z2+1:STA Z3+1
+30820 LDA Z3:SEC:SBC Z1:STA Z3
+30830 LDA Z3+1:SBC Z1+1:STA Z3+1:jmp MOT3a
+30840 MOT3 LDY #0:LDA (Z2),Y:STA (Z3),Y
+30850 MOT3a LDA Z2:BNE MOT4:DEC Z2+1
+30860 MOT4 DEC Z2
+30870 LDA Z3:BNE MOT5:DEC Z3+1
+30880 MOT5 DEC Z3
+30890 JSR COMP
+30895 BCC MOT3:BEQ MOT3:RTS
+          .)
+
+30899 ;****
+
+MOCEO     jmp ERR
+
+MOO       .(
+          JSR GETADR:BCS MOCEO
+30906 STA Z1:STX Z1+1
+30907 JSR GETADR:BCS MOCEO
+30908 STA Z2:STX Z2+1
+30910 JSR GETADR:BCC MOO1
+30920 LDA #0:MOO1 STA Z3
+30930 MOO2 LDY #0:LDA Z3:STA (Z1),Y
+30940 LDA #1:JSR ADCMP:BCC MOO2
+30950 RTS
+          .)
+
+30999 ;****
+
+MOP       .( 
+#ifndef NOSYSFKT
+          jsr CHRGOT
+          beq MOP1
+          cmp #IGNORESIGN
+          beq mop1
+          jsr GETADR:bcs MOP1
+          jsr SETDRV
+          jmp mop2
+mop1      inc LZEI
+mop2
+#endif
+          jsr CHRGOT
+          beq MOP1
+          cmp #IGNORESIGN
+          beq mop3
+          JSR GETADR:BCS MOP1
+          STA ABPZ
+          jmp mop4
+mop3      inc LZEI
+mop4      jsr GETADR:bcs MOP1
+          jsr Setmem
+MOP1      rts
+          .)
+
+38999 ;********
+
+SSBOUT    JSR SBYTO
+          JMP SSPOUT
+
+SADRO     PHA:TXA:JSR SBYTO:PLA
+SBYTO     PHA:LSR:LSR:LSR:LSR
+          JSR SNIBO:PLA:AND #$0F
+SNIBO     CLC:ADC #"0":CMP #"9"+1
+          BCC SNO1:ADC #6:SNO1 JMP SEROUT
+
+SBINBO    STX Z3
+          pha
+          LDA #"%"
+          JSR SEROUT
+          pla
+          LDX #8
+s2        ASL
+          PHA
+          BCC s1
+          lda #"1"
+          .byt $2c
+s1        lda #"0"
+          jsr SEROUT
+          pla
+          dex
+          bne s2
+          ldx Z3
+          rts
+
+M0TXT     .ASC "^M^JC*^M^J"
+          .ASC "MON V"
+          .BYT MA+"0",".",MB+"0"
+          .asc " (c) A.Fachat^@"
+M3TXT     .BYT " ","?",0
+R1TXT     .ASC "^M^J   PC  AC XR YR SP   NV1BDIZC^M^J^@"
+
+MONBEF    .ASC "ESMGLCTOPUIFXDBRA"
+          .BYT MEBYT,MEREG,MEASS
+#ifndef NOSYSFKT
+          .byt "Y"
+ANZBEF    =21
+#else
+ANZBEF    =20
+#endif
+
+MONADR    .WORD MOE-1,MOS-1,MOM-1,MOG-1
+          .WORD MOL-1,MOC-1,MOT-1,MOO-1
+          .WORD MOP-1,BU-1,BI-1,MOF-1
+          .WORD MOX-1,BD-1,BB-1,BR-1,BA-1
+          .word MOI-1,BGR-1,BGD-1
+
+#ifndef NOSYSFKT
+          .word MOY-1
+#endif
+
+59999 ;********
+
+#ifndef SHORTMON
+
+61000 TEXT .ASC "BPLBMIBVCBVSBCCBCSBNEBEQ";0-7
+61005 .ASC "BRKCLCCLDCLICLVDEXDEYINXINY";8-16
+61010 .ASC "NOPPHAPHPPLAPLPRTIRTSSECSEDSEI";17-26
+61015 .ASC "TAXTAYTSXTXATXSTYA";27-32
+61020 .ASC "ASLLSRROLRORBITCPXCPYDECINC";33-41
+61025 .ASC "LDYSTXSTYADCANDCMPEORLDALDXORASBCSTAJSRJMP???";42-56
+61030 CODTEX .BYT $00,$18,$D8,$58
+61035 .BYT $B8,$CA,$88,$E8,$C8,$EA
+61040 .BYT $48,$08,$68,$28,$40,$60
+61045 .BYT $38,$F8,$78,$AA,$A8,$BA
+61050 .BYT $8A,$9A,$98,$0A,$4A,$2A,$6A
+61055 CODTAB =*
+61060 .BYT $00,$06,$0E,$16,$1E
+61065 .BYT $00,$46,$4E,$56,$5E
+61070 .BYT $00,$26,$2E,$36,$3E
+61075 .BYT $00,$66,$6E,$76,$7E
+61080 .BYT $00,$24,$2C,$00,$00
+61085 .BYT $E0,$E4,$EC,$00,$00
+61090 .BYT $C0,$C4,$CC,$00,$00
+61095 .BYT $00,$C6,$CE,$D6,$DE
+61100 .BYT $00,$E6,$EE,$F6,$FE
+61105 .BYT $A0,$A4,$AC,$B4,$BC
+61110 .BYT $00,$86,$8E,$00,$00
+61115 .BYT $00,$84,$8C,$94,$00
+61120 CODLON =*
+61125 .BYT $69,$65,$6D,$75,$7D,$79,$61,$71
+61130 .BYT $29,$25,$2D,$35,$3D,$39,$21,$31
+61135 .BYT $C9,$C5,$CD,$D5,$DD,$D9,$C1,$D1
+61140 .BYT $49,$45,$4D,$55,$5D,$59,$41,$51
+61145 .BYT $A9,$A5,$AD,$B5,$BD,$B9,$A1,$B1
+61150 .BYT $A2,$A6,$AE,$00,$00,$BE,$00,$00
+61155 .BYT $09,$05,$0D,$15,$1D,$19,$01,$11
+61160 .BYT $E9,$E5,$ED,$F5,$FD,$F9,$E1,$F1
+61165 .BYT $00,$85,$8D,$95,$9D,$99,$81,$91
+61170 STB  .BYT $00,$02,$06,$0A,$0E,$16,$21,$29,$1D,$12
+61175 ANDC .BYT $96,$B6,$20,$4C,$6C
+61180 ANDT .BYT 43,50,54,55,55
+61185 ANDA .BYT 9,9,2,2,8
+      STBX .BYT 0,2,0,4,0,0,0,0,0,5
+61500 ;****
+61505 VORSP .ASC "#(":.BYT 0
+61510 NAHSP .ASC ",X ,Y )  ,X)),Y"
+
+#endif
+          .)
+

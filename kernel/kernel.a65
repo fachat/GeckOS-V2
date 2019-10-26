@@ -1,0 +1,137 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#echo OS/A65 kernel
+
+/**************************************************************************/
+/*                              OS/A 1.4.0                                */
+/*                                                                        */
+/*   The following kernel options are available:			  */
+/*   General options:							  */
+/*     ROM          without ROM, all options are set in this file 	  */
+/*     CMOSCPU      for (Rockwell) CMOS CPU				  */
+/*     NMIDEV       allows handling of NMIs in devices - without MMU only */
+/*     NMIRESET     calls RESET when an NMI is received 		  */
+/*     STACKCOPY    without MMU, split stack in 2 pieces only and save    */
+/*                  task stack each time the context is switched          */
+/*		    Gives larger stack space per process and more         */
+/*		    processes but is slower				  */
+/*									  */
+/*   Memory options:							  */
+/*     RAMSIZE	    Size of the RAM					  */
+/*     MIN_MEM	    minimum needed size of RAM to start 		  */
+/*     ROMTEST      if ROMTEST is defined, the MMU is not loaded, the RAM */
+/*		    is not tested, and RAMSIZE is assumed to be the real  */
+/*		    RAM size. The memory blocks in MMU registers $8-$f    */
+/*		    are secured with GETBLK				  */
+/*     RAMTEST	    if set, the RAM from address 2 up is being tested up  */
+/*		    to RAMSIZE. If not set, RAMSIZE is assumed to be the  */
+/*		    real RAM size. 					  */
+/*		    If set, then BATMEM, MEMINIVAL, and NOMIRRORMEM can   */
+/*		    be used						  */
+/*     BATMEM       during memory test the main memory is not cleared,    */
+/*		    the value is kept intact (for battery buffered RAM)	  */
+/*     NOMIRRORMEM  can be set if definitely _no_ mirrored memory is      */
+/*		    there. Should definitely be set when a 32k RAM socket */
+/*		    can be fed with an 8 kByte RAM.			  */
+/*     MEMINIVAL    value to fill RAM with after RAM test (0 if not set)  */
+/*									  */
+/*  Architecture options:						  */
+/*     NOMMU        computer without MMU				  */
+/*     NOSYSPORT    computer without SYSPORT ($efe0)			  */
+/*									  */
+/*  Architecture defines - these are defined in arch/x/devices/kinit.a65: */
+/* 	LEDPORT	    Address of the port where an LED can be switched on   */
+/*	LED_LED	    The bit of the LED in the LEDPORT. 0 means on, 	  */
+/*		    != 0 means off					  */
+/*		    can be set to SYSPORT, SYS_LED for example		  */
+/*	H_ERROR	    If LEDPORT is not defined, then H_ERROR must be 	  */
+/*		    defined as routine to signal hardware errors	  */
+/*	INITIMER    Routine to init kernel timer, i.e. the preemption     */
+/*		    timer						  */
+/*	CLRTIMER    clear the irq line from the kernel timer signal	  */
+/*									  */
+/**************************************************************************/
+
+
+/***************************************************************************/
+
+#ifndef ROM		/* to allow independend test assembles */
+#define   ROM
+
+	.word $2000
+	*= $f000
+
+#define   CMOSCPU
+#define   NOMMU
+#define   NOSYSPORT  
+#define   NMIDEV
+
+#ifndef ROMSTART
+#define	ROMSTART	$8000
+#endif
+
+#include  "arch/config.i65"
+#include  "kdefs.i65"
+
+#endif	/* ROM */
+
+/***************************************************************************/
+
+#define   VA        1
+#define   VB        4
+#define   VC        0
+
+#define   D_Y       97
+#define   D_M       03
+#define   D_D       20
+
+#define   SYSTEM
+
++OSA2KERNEL =*
+
+#include  "kernel/jmptbl.a65"
+#include  "kernel/init.a65"
+#include  "kernel/tasks.a65"
+#include  "kernel/streams.a65"
+#include  "kernel/devices.a65"
+#include  "kernel/files.a65"
+
+POT2      .byt 1,2,4,8,$10,$20,$40,$80
+
+#if * > $fff4
+#echo     ROM is to long!
+#print *+12 
+#endif
+
+	.bss
+startmem=*
+	.zero
+startzero=*
+
+	.text
+
+#ifndef EOK_SEPARATE
+#include "kernel/end.a65"
+#endif
+

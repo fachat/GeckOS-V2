@@ -1,0 +1,332 @@
+
+******** OS/A 1.00 ******** 23sep90, Andre Fachat
+
+Multitasking Operating system for the 6502 CPU. 
+The system has a memory manager, stream handler and device handler.
+Also there is an environment handler with a scheduler.
+The whole stuff works like a kind of virtual machine, with the only
+difference that hardware accesses are done via the kernel. 
+But each task and each device has its dedicated memory area. 
+Each task can think of having its own CPU concerning memory environment
+and esp. stack and zeropage.
+This only works with the CS/A builtin MMU, where the upper 4 bit are 
+expanded to 8 bit, thus allowing 1 MByte of virtual memory.
+The memory block size is 4kByte. The possible 1 MByte is divided into
+256 blocks, which can be mapped at any of the 16 possible positions
+in the 64k size 6502 address space.
+Each task can have up to 58 kByte of linear address space, which is
+64k minus 4 kByte kernel ($f***) and 2 kByte I/O ($e800-$efff). 
+The communication between the tasks work via streams, i.e. asynchronous
+first-in-first-out buffer. For example, a device can write into the 
+stream that is being used as STDIN stream, while tasks puts its data
+to the STDOUT stream that might be written to file on a filesystem.
+Devices are a set of subroutines that can have up to 4 kBytes, i.e.
+one memory block. They are mostly called during an interrupt, which they 
+have to serve.
+Tasks can also have their own interrupt routine. Semaphores to 
+synchronize different tasks are also available. As long as a 
+semaphore has a Pass (P) operation done on it and no Free (V), 
+another task trying to Pass it will be set asleep.
+With SEND and RECEIVE messages up to 256 byte can be passed from one
+to another task. When receiving, the sending task can also be specified.
+READ and WRITE allow a task to manipulate another tasks memory.
+
+Currently available are the NULL, SPOOLER, CENTRONICS, SER(1-2) and VIDEO(1-4)
+devices. The NULL device empties all streams, until there is no further
+data available (EOF). The spooler copies all input streams one after 
+the other to its output stream (serialization). 
+File handling is done with the filesystems. Currently available are
+the FSDEV and the FSIEC filesystems. Filesystems are called with 
+SEND on task $fe. FSDEV allows the handling of devices as files.
+FSIEC handles Commodore disk drives with device address 8 and 9.
+
+******** OS/A 1.01 ******** 1oct90, Andre Fachat
+
+Video device and shell/monitor overhauled, mainly because of better 
+cooperation on full screen editor.
+
+******** OS/A 1.30 ******** 14apr91, Andre Fachat
+
+Complete reworking: 
+Several negative task numbers can be assigned an
+specific 'real' tasks. For each negative number only one task can 
+be assigned.
+The operating system now even works in a computer without MMU. All tasks
+work in the same environment, so that identical programs cannot be
+invoked twice. 
+For speed reasons the task interrupts can be disabled at assemble time.
+Also the availability of a system port can be flaged at assmble time.
+The IEC bus filesystem can also work as a drive for the IEEE bus. 
+That means that e.g. a C64 can use the internal filesystems of the 
+CS/A computer as a disk drive. 
+With a new hardware board, the computer can now handle IBM PC style
+disks with FSIBM. Disks from 360k up to 1.44 MByte can be handled,
+with block sizes up to 1 kByte (what you get from a WD1770).
+A Basic interpreter has been ported from the C64, thus making it possible
+to run BASIC programs in parallel...
+
+******** OS/A 1.31 ******** 25jun91, Andre Fachat
+
+A special MCOPY program to copy multiple files one after each other
+is available in the ROM. (Starting the copies in the shell in the
+background would eat up resources). Also filename jokers (*, ?) are
+available with this program.
+
+******** OS/A 1.31 ******** (19jan92) 21feb92, Andre Fachat
+
+Introduced some kind of STDIO library below $e800, i.e. below the I/O 
+area. These library routines run in the tasks own memory and handle some
+things happening in most tasks.
+The centronics device finally works, and FSIEC now accepts an additional
+drive number for dir and and the disk commands, for the handling of
+dual disk drives for example.
+
+******** OS/A 1.31 ******** 10may92 Andre Fachat
+
+Two new options when compiling: BATMEM allows some battery buffered 
+memory ($0000-$8000) to not be erased on boot. NOMIRRORMEM saves a few
+byte in the kernel if it's sure that we have no mirrored memory
+(no open address lines).
+
+******** OS/A 1.31 ******** 12jul92 Andre Fachat
+
+When using PSEM, the Carry flag now says, if the task should block
+(C=0) or if the task should return immediately with an error if it
+could not get the semaphore (C=1).
+Negative semaphores can be used as system semaphores.
+
+********* OS/A 1.31 ******** 15oct92 A.Fachat
+
+Another bug in the STDIO library is fixed: The drive is set correctly
+with Usedir. In the monitor, when setting registers or parameters, the 
+"." to ignore an entry (leave byte untouched) has been replaced by
+a dash ("-"). Now it is possible to enter decimal numbers (with leading 
+".").
+A bug in the shell DEVCMD introduced with the STDIO lib has been fixed.
+The programs got too big, so now MCOPY is not in the ROM anymore.
+Exchanged FSIEC and FSIBM in the ROM, so that drive C: is IEC drive 8,
+which normally is the harddisk of my Atari.
+
+******** OS/A 1.32 ******** 16oct92 A.Fachat
+
+In the shell and in the monitor now RAM extensions are accepted not only
+till $8000 but till program start. Also, if no more memory available, 
+the block is not set to $20 anymore.
+Without an MMU, the NMI interrupt can now also be used.
+If NOSINPORT is set when assembling, the system port is only used 
+for output, so that plugging a debug card into the bus enables debug
+output (if any). 
+
+******** OS/A 1.33 ******** 17oct92 A.Fachat
+
+In this version the previous kernel task tables (task data and the
+task name) are put into two tables with the same offset for a task.
+(previously the task number had to be multiplied by 24 and 8, now 
+by 16 for both tables). Thus now with MMU, 16 instead of 10 tasks can
+be running.
+The 'SYSBUF' has been eliminated. Instead of copying data from PCBUF to
+SYSBUF and vice versa for (system) SENDs, REGDEV,... the MMU is now used.
+Now the PCBUF is used by the kernel ony during startup and can later
+be used by the programs.
+
+******** OS/A 1.3.3 ******** apr1996 A.Fachat
+
+Put the source code into a Unix tar archive, html-ized the docs and
+put it on the World Wide Web.
+ 
+******** OS/A 1.3.5 ******** apr1996 A.Fachat
+
+Introduced a version for the C64 (on public demand... ;-)
+The FSIEC has been changed to handle the original Commodore C64 IEEE488
+bus interface. The terminal device handles the C64 screen and keyboard.
+The kernel uses the CIA1 timer B for interrupts.
+Many things have now only been ported to a system without MMU, because 
+that's a lot of work. Everything has to be check if using global 
+variables, esp. when called from different tasks, like the STDIO lib...
+Development took place on the vice C64 emulator.
+
+******** OS/A 1.3.6e ******** 09jun1996 A.Fachat
+
+The C64 is now real 'breadbox C64' tested and debugged. The parallel
+port (IEEE488) stuff had bugs that are now fixed. The serial bus is now
+working as well.  Some more bugs in the NOMMU port have been fixed. A
+semaphore for the use of the global PCBUF send buffer has been
+introduced.  All filesystems and tasks now try to get the SENDBUF
+semaphore first before trying to write to the send buffer.
+Also system semaphores for some hardware (IEEE488 interface, WD1770 PC 
+disk controller) have been introduced.
+
+******** OS/A 1.3.6f ******** 09jun1996 A.Fachat
+
+Changed the maximum number of tasks for systems without MMU from 6 to 5.
+This gives 40 instead of 32 bytes of stack space for each task.
+Hopefully now occasional BRKs are gone.
+FSIEC does now recognize the "/" DIRSIGN at the beginning of a directory
+search mask and removes it - all filenames are global.
+
+******** OS/A 1.3.7 ******** 30jun1996 A.Fachat
+
+Introduced return code for device interrupt routines. It is returned
+if an interrupt source has been cleared (E_OK) or not (E_NOIRQ).
+This is checked, and if a source has been removed, the interrupt 
+routine is left - if we cannot check the irq line directly with SYSINPORT.
+The C64 got a ACIA 6551 device, if it is built into the C64.
+
+******** OS/A 1.3.8 ******** 13oct1996 A.Fachat
+
+Added two routines (PUTB, GETB) to handle block transfers to Stream
+buffers. SBLK transfers a block of data (length in a) to (c=1) or from
+(c=0) a stream (xr) buffer to memory (address in zeropage address
+pointed to by yr).  The routine returns the number of actually
+transfered data in a (?). The data must not cross page (4k) boundaries
+on MMU systems.
+This procedure (hopefully) avoids a lot of context switches.
+
+******** OS/A 1.3.8d ******** 16oct1996 A.Fachat
+
+a log says more than thousand words :-)))
+----------------------------------------------------------------
+root:/root>ping -c 1 192.168.0.13
+PING 192.168.0.13 (192.168.0.13): 56 data bytes
+64 bytes from 192.168.0.13: icmp_seq=0 ttl=64 time=4673.4 ms
+
+--- 192.168.0.13 ping statistics ---
+1 packets transmitted, 1 packets received, 0% packet loss
+round-trip min/avg/max = 4673.4/4673.4/4673.4 ms
+root:/root>date
+Wed Oct 16 18:07:58 MET 1996
+root:/root>
+----------------------------------------------------------------
+Well, there still is a lot to do:
+- problems with lost characters
+- memory management buggy
+- removing DEBUG output (gets down to 1.6s for a ping reply)
+
+******** OS/A 1.3.8e ******** 16oct1996 A.Fachat
+
+Ironed out some bugs in SLIP memory handling, which seems stable now.
+SLIP behaves strange when packet buffer is _not_ empty (i.e. filled
+with zero)
+
+******** OS/A 1.3.8f ******** 18oct1996 A.Fachat
+
+SLIP IP layer is stable now. Added serial device driver for UART 16550A.
+with FIFO. But still lost chars above 2400 baud :-(
+Fixed another bug in GETB, but GETB version of SLIP is way _slower_
+than GETC version!? GETC version gives PING replies in 860ms (@ 2400 baud),
+GETB version in around 1750ms.
+Serial line interrupts still increase cursor speed.
+
+******** OS/A 1.3.9 ******** 19oct1996 A.Fachat
+
+A new compile option STACKCOPY for systems without MMU allows the stack
+to be copied into a save area on context switch (i.e. $80-$ff is system,
+$00-$7f for task, the stack is copied only when a real task change takes
+place). This now allows more than 5 tasks in systems without MMU.
+
+******** OS/A 1.3.9a ******** 19oct1996 A.Fachat
+
+Optimized UART 16550A driver. Now works for 9600 baud (if not much other
+work to do). Then we still loose characters. Running SLIP with 19200
+crashes the system :-(
+
+******** OS/A 1.3.9b ******** 20oct1996 A.Fachat
+
+I managed to get my selfbuilt hardware running again! So the current
+stdrom is checked with MMU. OLDROM will from the next version on
+refer to 1.3.9b
+
+******** OS/A 1.3.9d ******** 21oct1996 A.Fachat
+
+Serial device driver for the fast (i.e. 9600 baud) RS232 interface by
+Daniel Dallmann started. Transmitting works.
+
+******** OS/A 1.3.9e ******** 22oct1996 A.Fachat
+
+Now receiving at slow byterate (though 9600 baud) works. Too many bytes
+(i.e. NMIs) in a short time kill the machine... 
+
+******** OS/A 1.3.9f ******** 22oct1996 A.Fachat
+
+Made NMI driver a bit faster, receiving at fast RS232 works better now
+for low byterates, although still crashes at high byterates.
+SETNMI now returns the old NMI vector, and the NMI routine has not to
+RTS, but to JMP(old_vector).
+
+******** OS/A 1.3.9g ******** 23oct1996 A.Fachat
+
+Fixed the bug in the serial driver IRQ (not NMI!) routine, which messed
+up the stack when getting above the stream low water mark...
+SETNMI now sets the NMI routine directly, i.e. ($fffa) jumps to 
+jmp (vector), where vector can be set with SETNMI; so registers have to 
+be saved in the NMI routine. 
+TODO now: a means to disable NMI during disk or whatever access.
+Maybe redefine $f003 jmp, because NMI vector is known anyway: jmp ($fffa).
+PING now gives around 10 seconds reply time, dropping every second packet
+due to full tx queue: tx byterate is slow due to 16 used bits per byte
+(i.e. 6 additional stop bits) and interrupt latency. But usually receiving
+should have higher byterate than receiving. With PING, the SLIP task
+tries to send as fast as it receives, which doesn't work...
+
+The same bug as in the fast serial driver was in the UART driver, which
+now works at 19200 baud, only very occasionally loosing characters.
+Also some more handshake bugs in these drivers have been fixed.
+
+******** OS/A 1.3.10a ******** 25oct1996 A.Fachat
+
+Added CTRLNMI system call, together with the NMI chain. There is still 
+a way missing to remove a driver from the chain.
+The C64 fast serial driver uses this method now. Although flooding the
+computer with bytes slows it down to near unusability.
+
+******** OS/A 1.3.11 ******** jan1997 A.Fachat
+
+Been working on TCP implementation. discard & echo ports work. 
+Also connection closing ceremonies. Packet Retransmission works.
+Retransmission timeouts, timewait timeouts work.
+chargen port works. program registers itself as filesystem.
+
+TODO: 32-bit-modulo, some timeouts...
+
+******** OS/A 1.3.12 ******** 2mar1997 A.Fachat
+
+Implemented the Gecko OS ROM. It features a shell (with monitor), 
+the irtx program to send commands to IR devices (like CD players or
+TV sets), a serial IEC filesystem. The shell runs over the serial 
+line (with 16550).
+
+******** OS/A 1.3.13 ******** 09mar1997 A.Fachat
+
+The fstcp filesystem works for reading files and directories.
+Directories without directory mask, though. 
+The fstcp server accepts connections only from a given address now,
+and (hopefully) doesn't allow accesses outside the given directory.
+TODO: 32-bit modulo, fstcp writes, bugfixes
+
+******** OS/A 1.3.13a ******** 10mar1997 A.Fachat
+
+Writing to the fstcp filesystem seems to work now.
+FSTCP can now be disabled in main.a65.
+
+******** OS/A 1.3.13b ******** 11mar1997 A.Fachat
+
+hacked a small (and dirty) WWW server...
+
+******** OS/A 1.3.13d ******** 14mar1997 A.Fachat
+
+Bug fixes...: 
+- It is now possible to run the WWW server together with the
+  FSTCP filesystem at the same time - it is _not_ allowed to let the 
+  WWW server access a file on the FSTCP filesystem - it hangs the SLIP
+  process!
+- The problem with the aborts is gone: I forgot to release the STREAMS
+  in the WWW server
+- the transition from LASTACK to CLOSED wasn't detected, because ackxmit
+  overwrote the "tmp" variable that holds the checkack return value...
+- LASTACK now also has a timeout to close the TCB after a while
+- FINW2 was not resolved to TIMEW because there was no check...
+  so the available number of TCBs decreased...
+- FINW2 now also has a timeout to closed, as when the FIN is ack'd, we
+  cannot resend it (removed from queue...). This is probably not as it should
+  be, but it works anyway.
+

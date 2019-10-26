@@ -1,0 +1,603 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* TODO: make strcmd compares a lookup table */
+
+#ifdef NO_STREAMS	/* embedded kernals probably don't need them */
+
+&&getc		=notimp
+&&putc		=notimp
+&&gets		=notimp
+&&ungetc	=notimp
+&&getstr	=notimp
+&&frestr	=notimp
+
+#else	/* NO_STREAMS */
+
+/*        Struct StreamData        */
+
+#define   S_II      0*ANZSTRM
+#define   S_IO      1*ANZSTRM
+#define   S_CNTW    2*ANZSTRM      /* number of Writer         */
+#define   S_CNTR    3*ANZSTRM      /* number of Reader         */
+#define   S_ESTAT   4*ANZSTRM      /* error state byte	       */
+#define   S_SLEN    5*ANZSTRM      /* Length of struct         */
+
+/*
+ * The stream buffer length must be a power of two, 64 or 128 (tested).
+ * S_AMASK is the valid bit mask for the stream buffer index.
+ */
+#define   S_AMAX    $40		   /* $80		       */
+#define	  S_AMASK   $3f		   /* $7f		       */
+/*
+ * The watermarks are for rts/cts checking for example. High Water Mark
+ * must be something around 32 bytes before buffer full, for 9600 baud 
+ * UART operation... 
+ */
+#define   S_AHWM    $20		   /* $60		       */
+#define   S_ALWM    $01		   /* $20		       */
+
+          .(
+
+	.zero
+SZEI    .word 0
+BZEI	.word 0
+	.text
+          
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+SYR     .byt 0
+SAC     .byt 0
+STRM    .dsb S_SLEN
+	
+	.bss
+blocks  .dsb ANZSTRM*S_AMAX
+
+	.text
+          .(
+&&inistream 
+          lda #0
+          tax
+l1        sta STRM,x
+          inx
+          cpx #S_SLEN
+          bcc l1
+          clc
+          rts       ;          jmp inifstr
+          .)
+          
+#if S_AMAX = $80
+setstream .(
+          cpx #ANZSTRM
+          bcc ssok
+          rts
+ssok 
+	  txa
+	  lsr
+	  pha
+	  lda #0
+	  ror		; clears carry
+	  adc #<blocks
+	  sta SZEI
+	  pla
+	  adc #>blocks
+	  sta SZEI+1
+	  clc
+          rts
+          .)
+#endif
+#if S_AMAX = $40
+setstream .(
+        cpx #ANZSTRM
+        bcc ssok
+        rts
+ssok 
+	lda #0
+	sta SZEI
+	txa
+	lsr
+	ror SZEI
+	lsr
+	ror SZEI	; clears carry
+	pha
+	lda SZEI
+	adc #<blocks
+	sta SZEI
+	pla
+	adc #>blocks
+	sta SZEI+1
+	clc
+        rts
+        .)
+#endif
+
+          .(
+&&getc    .(
+          jsr memsys
+          php
+          sei
+          sty SYR
+          jsr teststd
+          jsr setstream
+          bcs putnostr
+          lda STRM+S_IO,x
+          cmp STRM+S_II,x
+          beq empty
+          tay
+          lda (SZEI),y
+          pha
+          iny
+          tya
+          and #S_AMASK
+          sta STRM+S_IO,x
+          pla
+          ldy SYR
+          plp
+          clc
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+
+&empty    lda STRM+S_CNTW,x
+          bne empt1
+          lda #E_EOF
+          .byt $2c
+empt1     lda #E_SEMPTY
+          jmp xerr
+          .)
+
+&&putc    .(
+#if 0
+.(
+cpx #7
+bne xx
+cmp #$80
+bcc xx
+.byt 2
+xx
+.)
+#endif
+          jsr memsys
+          php
+          sei
+          sty SYR
+          jsr teststd
+          sta SAC
+          jsr setstream
+          bcs putnostr
+          lda STRM+S_CNTR,x
+          beq snul            ; NUL-Status dann ende
+          lda STRM+S_II,x
+          tay
+          lda SAC
+          sta (SZEI),y   
+          iny
+          tya
+          and #S_AMASK
+          cmp STRM+S_IO,x
+          beq full
+          sta STRM+S_II,x
+          ldy SYR
+          lda SAC
+          plp
+          clc
+          jmp memtask
+          .)
+
+snul      lda #E_NUL
+          .byt $2c
+&putnostr lda #E_NOSTR
+          .byt $2c
+full      lda #E_SFULL
+          jmp xerr
+
+#ifdef NEED_UNGETC
+
+&&ungetc   .(
+          jsr memsys
+          php
+          sei
+          sty SYR
+          jsr teststd
+          sta SAC
+          jsr setstream
+          bcs putnostr
+          lda STRM+S_CNTR,x
+          beq snul            ; NUL-Status dann ende
+          lda STRM+S_IO,x
+          sec
+          sbc #1
+          and #S_AMASK
+          cmp STRM+S_II,x
+          beq full
+          sta STRM+S_IO,x
+          tay
+          lda SAC
+          sta (SZEI),y   
+          ldy SYR
+          plp
+          clc
+          jmp memtask
+          .)
+
+#else
+
+&&ungetc	=notimp
+
+#endif
+
+          .)
+
+          .(
+&&getstr   lda #SC_GET     
+          .byt $2c
+&&frestr   lda #SC_FRE
+
+&&gets    
+          jsr memsys
+	  php
+          sei
+
+          sty SYR
+          
+          cmp #SC_GET
+          bne a0
+          jmp findnew
+
+a0        jsr teststd
+          sta SAC
+          jsr setstream
+          bcs putnostr
+          ldy SYR
+          lda SAC
+
+          cmp #SC_STAT
+          bne andere	
+sc_stat
+          lda STRM+S_CNTR,x
+          beq nul
+          lda STRM+S_II,x
+          sec
+          sbc STRM+S_IO,x
+          beq empty
+          and #S_AMASK
+          cmp #S_AMAX-1
+          beq full
+          cmp #S_ALWM
+          bcc low
+          cmp #S_AHWM
+          bcc ok
+          bcs high
+empty     lda STRM+S_CNTW,x
+          beq eof
+          lda #E_SEMPTY
+          .byt $2c
+eof       lda #E_EOF
+          .byt $2c
+high      lda #E_SHWM
+          .byt $2c
+nul       lda #E_NUL
+          .byt $2c
+ok        lda #E_OK
+          .byt $2c
+low       lda #E_SLWM     
+          .byt $2c
+full      lda #E_SFULL
+          .byt $2c
+illcode   lda #E_NOTIMP
+&xerr ret ldy SYR
+retx      
+          plp
+          cmp #1
+	  jmp memtask
+
+andere
+	  cmp #SC_GANZ
+          bne a00
+          sec
+          lda STRM+S_IO,x
+          sbc STRM+S_II,x
+          sec
+          sbc #1
+          and #S_AMASK
+          jmp ret
+
+a00       cmp #SC_EOF
+          bne a1   
+          lda STRM+S_CNTW,x
+          beq illcode
+          dec STRM+S_CNTW,x
+          jmp ok
+
+a1        cmp #SC_CLR
+          bne a2
+clrstr    lda #0
+          sta STRM+S_II,x
+          sta STRM+S_IO,x
+          sta STRM+S_ESTAT,x
+          beq ok1
+
+a2        cmp #SC_FRE
+          bne a3
+          lda STRM+S_CNTW,x
+          beq a2a
+          dec STRM+S_CNTW,x
+a2a       jmp frer
+
+a3        cmp #SC_REG_RD
+          bne a4
+          inc STRM+S_CNTR,x
+          bne ok1
+
+a4        cmp #SC_REG_WR
+          bne a5
+          inc STRM+S_CNTW,x
+          bne ok1
+
+a5        cmp #SC_NUL
+          bne a6;   illcode
+frer      lda STRM+S_CNTR,x
+          beq illcode
+          dec STRM+S_CNTR,x
+ok1       jmp ok
+
+a6        cmp #SC_RWANZ
+          bne estat
+          ldy STRM+S_CNTR,x
+          lda STRM+S_CNTW,x
+          jmp retx
+
+nofrex    lda #E_NOSTR
+	  bne ret
+
+estat          
+	  cmp #SC_ESTAT		; get error stat byte in yr
+	  bne sestat
+	  lda STRM+S_ESTAT,x
+	  sta SYR
+	  jmp sc_stat
+sestat	  cmp #SC_SSTAT		; set error stat byte
+	  bne cestat
+	  tya
+	  ora STRM+S_ESTAT,x
+	  sta STRM+S_ESTAT,x
+	  jmp ret
+cestat	  cmp #SC_CSTAT		; clear error stat byte
+	  bne illcode1
+	  tya
+	  eor #$ff
+	  and STRM+S_ESTAT,x
+	  sta STRM+S_ESTAT,x
+	  jmp ret
+
+illcode1  jmp illcode
+
+findnew   ldx #0
+lx        lda STRM+S_CNTW,x
+          ora STRM+S_CNTR,x
+          beq ly
+          inx
+          cpx #ANZSTRM
+          bcc lx
+          bcs nofrex
+ly        inc STRM+S_CNTR,x
+          inc STRM+S_CNTW,x
+          jmp clrstr      
+          .)
+
+#if 0
+	  .(
+&&getb    .(
+          jsr memsys
+          php
+          sei
+          sty SYR
+          jsr teststd
+
+          sta SAC
+
+          jsr setstream
+          bcs putnostr3
+
+	  lda STRM+S_II,x
+	  cmp STRM+S_IO,x
+	  beq empty3
+
+#ifndef NO_MMU
+	  lda #0
+	  jsr setmmu1
+	  ldy SYR
+	  lda BLKSIZ,y
+	  sec
+	  sbc STRM+S_IO,x
+	  sta BZEI
+	  php
+	  lda BLKSIZ+1,y
+	  sta BZEI+1
+	  lsr
+	  lsr
+	  lsr
+	  lsr
+	  jsr setmmu1
+	  lda BZEI+1
+	  and #$0f
+	  ora #$01
+	  plp
+	  sbc #0
+	  sta BZEI+1
+#else
+	  ldy SYR
+	  sec
+	  lda 0,y
+	  sbc STRM+S_IO,x
+	  sta BZEI
+	  lda 1,y
+	  sbc #0
+	  sta BZEI+1
+#endif
+	  lda SAC
+	  sta SYR
+
+          ldy STRM+S_IO,x
+l0
+	  lda (SZEI),y
+	  sta (BZEI),y
+	  iny
+	  tya
+	  bpl l1		; this heavily depends on Streamsize = 128!!
+	  clc
+	  adc BZEI
+	  sta BZEI
+	  lda #0
+	  bcc l1
+	  inc BZEI+1	  
+l1	  tay
+	  cmp STRM+S_II,x
+	  beq end
+l2 	  dec SYR
+	  bne l0
+end
+	  tya
+	  sta STRM+S_IO,x
+	  lda SAC
+	  sec
+	  sbc SYR
+	  clc
+
+          plp
+          clc
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+          .)
+
+snul3     lda #E_NUL
+          .byt $2c
+putnostr3 lda #E_NOSTR
+          .byt $2c
+full3     lda #E_SFULL
+          .byt $2c
+empty3    lda #E_SEMPTY
+          jmp xerr
+
+&&putb    .(
+          jsr memsys
+          php
+          sei
+          sty SYR
+          jsr teststd
+
+          sta SAC
+
+          jsr setstream
+          bcs putnostr3
+          lda STRM+S_CNTR,x
+          beq snul3            ; NUL-Status dann ende
+
+	  ldy STRM+S_II,x
+	  iny
+	  tya
+	  and #$7f
+	  cmp STRM+S_IO,x
+	  beq full3
+
+#ifndef NO_MMU
+	  lda #0
+	  jsr setmmu1
+	  ldy SYR
+	  lda BLKSIZ,y
+	  sec
+	  sbc STRM+S_II,x
+	  sta BZEI
+	  php
+	  lda BLKSIZ+1,y
+	  sta BZEI+1
+	  lsr
+	  lsr
+	  lsr
+	  lsr
+	  jsr setmmu1
+	  lda BZEI+1
+	  and #$0f
+	  ora #$01
+	  plp
+	  sbc #0
+	  sta BZEI+1
+#else
+	  ldy SYR
+	  sec
+	  lda 0,y
+	  sbc STRM+S_II,x
+	  sta BZEI
+	  lda 1,y
+	  sbc #0
+	  sta BZEI+1
+#endif
+
+	  lda SAC
+	  sta SYR
+
+          ldy STRM+S_II,x
+l0
+	  lda (BZEI),y
+	  sta (SZEI),y
+	  iny
+	  tya
+	  bpl l1		; this heavily depends on Streamsize = 128!!
+	  clc
+	  adc BZEI
+	  sta BZEI
+	  lda #0
+	  bcc l1
+	  inc BZEI+1	  
+l1	  tay
+	  cmp STRM+S_IO,x
+	  bne l2
+	  dey
+	  jmp end
+l2 	  dec SYR
+	  bne l0
+end
+	  tya
+	  sta STRM+S_II,x
+	  lda SAC
+	  sec
+	  sbc SYR
+	  clc
+
+          plp
+          clc
+          jmp memtask
+	  ;jsr memtask
+          ;rts
+          .)
+
+	  .)
+#endif		/* endif 0 to disable getb/putb */
+          .)
+
+#endif	/* NO_STREAMS */
+

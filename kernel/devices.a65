@@ -1,0 +1,265 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+          .(
+	.zero
+devzei    .word 0
+DZ        .word 0
+	.text
+
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+&adev     .byt 0
+ANZDEV    .byt 0
+cnt       .byt 0
+freq      .byt 0
+hidigit   .byt 0
+DZ2	  .word 0
+	.text
+
+#define	DVT_ADRL	0
+#define	DVT_ADRH	MAXDEV
+#define	DVT_ENV		(2*MAXDEV)
+#define	DVT_SLEN	3
+
+	.data
+&DEVTAB   .dsb MAXDEV*DVT_SLEN
+	.text
+
+&inidev   sta freq
+          ldx #0
+          stx ANZDEV
+          dex
+          stx adev
+          clc
+          rts
+
+&irqdev   .(
+          ldx ANZDEV
+          stx cnt
+l1        dec cnt
+          bmi dendirq
+          ldx cnt
+          lda #DC_IRQ
+          ldy freq
+          jsr exejmp
+#ifndef NOSYSPORT
+          jsr testirq
+          beq l1
+#else
+	  bcs l1	; irq source removed -> ac=0 -> c=0
+#endif
+dendirq   clc
+          rts
+          .)
+          
+&devcmd   jsr memsys
+	  php
+          sei
+          cmp #DC_GNUM
+          beq devgnum
+          cmp #DC_REGDEV
+          bne x1
+          jmp regdev
+x1        cpx ANZDEV
+          bcs idcex
+          cmp #DC_GNAM
+          beq devgnam
+          jsr exejmp
+          bcs idce
+idcok     lda #E_OK
+          .byt $2c
+idcex     lda #E_NODEV
+idce      
+	  plp
+	  cmp #1
+	  jmp memtask
+
+devgnum   .(
+	  MAPSYSBUF
+
+          ldx #0
+gu1       stx cnt
+          cpx ANZDEV
+          bcs idcex
+          jsr setnam
+          ldx cnt
+gu2       lda (devzei),y
+          cmp SYSBUF-3,y
+          bne gun
+          cmp #0
+          beq idcok
+          iny
+          bne gu2
+gun       inx
+          bne gu1
+          .)
+
+setnam    .(
+	lda DEVTAB+DVT_ADRL,x
+	pha
+	lda DEVTAB+DVT_ADRH,x
+	tay
+	lda DEVTAB+DVT_ENV,x
+	tax
+	pla
+	MAPENV()
+	sta devzei
+	sty devzei+1
+	ldy #3
+	rts
+	.)
+
+devgnam   .(
+	  MAPSYSBUF
+
+          jsr setnam
+gn1       lda (devzei),y
+          sta SYSBUF-3,y
+          iny
+          cmp #0
+          bne gn1
+gn2       tya
+	  sec
+	  sbc #3
+          tax
+          jmp idcok
+          .)
+
+regdev    .(
+	  txa
+loop	  
+	  sta DZ2
+	  sty DZ2+1
+	  MAPAENV()
+	  sta DZ
+	  sty DZ+1
+
+	  ldy #0
+          lda (DZ),y
+          iny
+          and (DZ),y
+          tay
+          iny
+          beq enddev
+
+          lda ANZDEV
+          cmp #MAXDEV
+          bcs enddev
+          tax
+
+          lda DZ2
+          clc
+          adc #2
+          sta DEVTAB+DVT_ADRL,x          
+          lda DZ2+1
+          adc #0
+          sta DEVTAB+DVT_ADRH,x
+
+	  GETACTENV()
+
+	  sta DEVTAB+DVT_ENV,x
+          ldx ANZDEV
+          inc ANZDEV
+          ldy freq
+          lda #DC_RES
+          jsr DEVCMD
+
+	  lda DZ2
+	  ldy DZ2+1
+	  MAPAENV()
+	  sta DZ
+	  sty DZ+1
+
+          ldy #0
+          lda (DZ),y
+          pha
+          iny
+          lda (DZ),y
+          tay
+          pla
+          jmp loop
+
+sE_CONFIG lda #E_CONFIG
+          .byt $2c
+enddev    lda #E_OK
+          plp
+          cmp #1
+	  jmp memtask
+          ;jsr memtask
+          ;rts
+          .)
+          
+exejmp    .(
+#ifdef MAP_ZERO
+	.zero
+#else
+	.data
+#endif
+cmd       .byt 0
+par       .byt 0
+	.text
+
+          sta cmd
+          sty par
+          lda adev
+          pha
+          lda Syscnt
+          pha
+          lda #0
+          sta Syscnt     ; Aufrufe von Device wie von Task
+          stx adev       ; Dev-No for memtask
+
+/* TODO: in CS/A65, make non-ROM-started devices work! */
+
+          lda DEVTAB+DVT_ADRL,x
+	  pha
+          lda DEVTAB+DVT_ADRH,x
+	  tay
+	  lda DEVTAB+DVT_ENV,x
+	  tax
+	  pla
+	  MAPENV()
+          sta devzei
+          sty devzei+1
+          lda cmd
+          ldy par
+          jsr jmpzei
+          sta cmd
+          pla
+          sta Syscnt
+          pla
+          sta adev
+          lda cmd
+          cmp #1
+          rts
+          
+jmpzei    jmp (devzei)
+          .)
+
+          .)
+

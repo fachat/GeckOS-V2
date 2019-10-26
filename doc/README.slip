@@ -1,0 +1,281 @@
+
+                   TCP/SLIP implementation for the OS/A65
+                   --------------------------------------
+                           (c) 1997-1998 A. Fachat
+
+
+0) Warning: This code is experimental and in a late Beta now! 
+   It has bugs, and may damage files on your computer! 
+   The programs are provided "as is", there is no warranty at all,
+   and the usual disclaimers apply.
+
+   I you are a beginner, forget it. This is (still) advanced stuff.
+
+1) Never, never ever run the "fstcp" server on a computer connected
+   to the Internet! 
+   It has no other security protection than checking the IP address of
+   an incoming connection request!
+   
+   Never, never ever run the WWW server on the OS/A computer (C64), if 
+   it is connected to more than your home PC. It reads all files from 
+   the specified (C64 or OS/A) drive!
+
+2) Now that you're warned: What's it for?
+
+   The TCP/SLIP implementation can be used for telneting to and
+   from an OS/A65 computer. Now it's used to transfer files between an 
+   OS/A65 computer and a (Unix) computer. It can also be used as a simple
+   WWW server now.
+
+   I use it on a C64, to transfer files between a PC and a VC1541 disk.
+   
+   The lowest level you can see is the icmp (internet control message
+   protocol) level. If you "ping" the OS/A65 computer, it replies.
+   See "man ping" on a Unix machine. It also replies to "traceroute" 
+   packets appropriately.
+
+   Then there are the simple test TCP ports "echo" (7), "discard" (9) and
+   "chargen" (19). You can telnet to these ports on the OS/A65 computer.
+   See "man telnet" on how to telnet to a different port.
+
+   Another special port is the http port (80). This port is used to 
+   transfer html pages for the World Wide Web (WWW). A special server
+   is listening on this port and serves requests from a given directory.
+
+   The next level is a client-server-application. The server "fstcp"
+   runs on a connected (unix) system. The client "slipd" runs on the
+   OS/A65 machine. It tries to connect to a remote server (the fstcp
+   program on the unix machine) and establishes a TCP connection to the
+   server. This connection is then used to transfer file data.
+
+   The "slipd" internet daemon exports internet capabilities to the 
+   lib6502 library. This is actually the only part that still seems
+   to be buggy. The www server built into slipd is quite stable, as
+   is the rest of the OS (has been running for several days without
+   problems)
+
+   The default configuration for slipd (see sysapps/slipd/main.a65)
+   is to run the builtin WWW server, the telnet server (starts
+   the apps/inet/tlogin program for login) and the lib6502 stuff.
+   You have to change login/password/shell in tlogin.a65 to your 
+   preferences.
+
+   With the lib6502 inet stuff the apps/inet/telnet program opens
+   a telnet connection to the host given at the command line
+   (in doted quad notation).
+
+   The procedures described here are for a Linux machine and a C64
+   with OS/A65 running. For the serial line setup you need root 
+   (superuser) access to the unix machine. It should run without
+   any changes on any OS/A65 machine with a serial line.
+
+3) IP concepts
+
+ a) addresses
+
+   In an IP (internet protocol) network, each computer has an IP number.
+   Normally you have to formally apply at the network information center
+   for an IP number or net. But there are numbers assigned to be used
+   in private, non-connected networks.
+
+   IP addresses are usually noted in the "doted quad" notation, i.e.
+   four decimal values from 0-255 each, separated by dots.
+
+   The private network I use is are the numbers
+
+      192.168.0.*
+
+   i.e. the numbers 192.168.0.1 - 192.168.0.254. There are two numbers
+   missing, they are used as network address (0) and normally as broadcast
+   address (255).
+
+   My unix (i.e. Linux) computer at home has the IP 192.168.0.10. This is
+   the IP the fstcp server is running on. 
+   My C64 (with the OS/A65 operating system) has the IP 192.168.0.64.
+   So if the C64 has the slipd program running, I can do a 
+   "ping 192.168.0.64" on my unix machine and get a reply!
+
+ b) routing
+
+   The internet protocol is a packet oriented network. A packet is
+   sent from one host to another, which is normally not the final
+   destination. Each host decides where to send a packet next, to get
+   the packet to its destination. This process is called routing.
+   Normally the program "route" is used to tell the computer which packets
+   to put where.
+
+ c) preparing a serial port
+
+ If you connect a serial line from the C64 to the unix machine, the
+ unix machine has to know that it has to send and which IP packets to 
+ send there. There are some ways to achieve this. 
+
+ The first way is with the command "slattach", which puts the
+ serial line from "terminal mode" to "SLIP" mode. Then "ifconfig"
+ configures the "sl0" interface with the IP address.  The last command
+ is "route", which tells the unix OS that is has to send packets to the
+ C64's IP address to the interface sl0, which goes to the serial line.
+ The small script "csaip", provided in the oaslip directory, does 
+ everything.
+ Warning: this script assumes you have network device "sl0" for the
+ OS/A65 link. If you have a SLIP connection somewhere else already.
+ this might not be true! The script then mangles your routing tables!
+
+ Another way is the program "diplogin" or "sliplogin" which does everything,
+ see the appropriate man pages.
+ 
+ I have added a program "term9600" which is a little C64 BASIC terminal 
+ program to run the serial line at 9600 - if the kernel ROM allows that.
+ It can be used to login to the remote host if necessary.
+
+
+4) TCP concepts
+
+ a) addresses
+
+   TCP addresses not only contain the IP address of the host, but also
+   the "port". The Port is like the number of the flat in a house, when the
+   IP number is the address of this house. Certain port numbers are
+   registered for a special use. Port 7 (echo) for example will send
+   all data you send to it back. 
+   When you open a connection to a port on a remote computer, your own 
+   computer also assigns a local port number to the connection, to have
+   a full TCP address at the sender side.
+
+ b) connections
+
+   In contrary to the IP protocol, the TCP is a connection based protocol.
+   A connection always takes place between two TCP "ports" or
+   two "pairs of IP and TCP port numbers". This connection is defined
+   with the properties:
+     - no data "overtakes" data sent before 
+     - no data is lost
+     - no data is doubled
+   (which are all effects that can occur on IP)
+   With retransmissions, sequence numbers and lots of other things the
+   TCP ensures that the data is received in order and nothing is missing.
+
+ c) establishing a connection
+
+   Normally one side creates a "socket" and "binds" it to a specific
+   local TCP/IP address. It can then either "connect" to a remote
+   socket, or "listen" for remote connect requests. If the socket
+   listens on a port, the "accept" call will bind the local and remote
+   socket to a valid connection.
+
+   Normally a server program listens on a socket while the client tries
+   to connect to it.
+
+ d) used ports
+
+   I chose to use port "8090" as the port where the fstcp server is 
+   listening at.
+   The WWW server built into slipd listens at the standard port 80,
+   and the telnet connection is listening at the standard telnet port (23).
+
+
+5) Building the programs
+
+ a) the "fstcp" server
+
+   The fstcp server is a C program, in sysapps/slipd/fstcp.c. Going to the 
+   slipd directory and typing "make fstcp" should work on unix (linux) 
+   machines. In the first lines the port is defined where the server is 
+   listening at. 
+
+ b) the "slipd" client.
+
+   Most other files in the oaslip directory are to build the slip client.
+   In the first lines of "main.a65" the OS/A65 IP address (MY_IP) is defined.
+   (note the comma instead of the dots!). But the slipd server listens
+   for incoming packets and sets its own IP address if necessary.  
+   Also the fstcp server TCP address (IP and port) are defined there.
+   The WWW server defines its drive and directory it will read the files
+   from. Do _never_ specify a drive on the fstcp filesystem. The slipd prg
+   will hang on the first access!
+   
+   To assemble the files, you have to have my 6502 crossassembler "xa" 
+   in you path, with version above 2.1.4d.
+
+   The slipd program is built when running "make" in the sysapps/slipd 
+   subdirectory.
+
+
+6) running the program
+
+   To run the program, do the following steps:
+
+    - connect the C64 (either with Daniel Dallmans 9600 baud interface,
+      or any other RS232 interface supported by OS/A65) and a serial
+      port of the (Linux-) PC with a Nullmodem cable.
+      The standard C64 configuration allows an UART16550 at address
+      $d600. To change that have a look at arch/c64/c64rom.a65, which
+      holds the configuration for the C64.
+      
+    - enable SLIP on the serial line by running something similar to 
+      the script oaslip/csaip (does slattach, ifconfig, route).
+
+    - If you want fstcp services, start the fstcp server on the unix 
+      host. As arguments it needs the directory (relative from the 
+      starting directory) to export and the IP address to which to export 
+      the directory.
+      As fstcp might very well be buggy, try to be as cautions as
+      possible. Never ever run it on a computer connected to the internet.
+      Never ever run it as root (superuser). 
+
+    - Transfer the slipd file to a disk accessible to the C64 when running
+      OS/A65 (using an x1541 cable, for example)
+
+    - start OS/A65 on the C64 (see other files, like README.c64)
+
+    - You should have a shell prompt (">") with a binking cursor.
+      Now start the slip.obj program by typing
+
+          c:slip.obj a:video4 c: c:tlogin <a:ser1 >a:ser1 &
+
+      This starts the slip client from drive c: (usually Commodore serial 
+      IEC device #8, the floppy disk), piping the STDIO
+      to the C64 serial line ser1 (in standard C64 OS/A65 it's Daniel 
+      Dallmanns 9600 baud interface). STDERR is sent to the 4th virtual
+      console (first command line parameter). The second parameter
+      is the drive to use as WWW server file source. The third parameter
+      is the program to start at a remote login on the telnet port.
+      The ampersand makes the slip program running in the background.
+      The slip program receives and sends its SLIP data via STDIO.
+      STDERR prints (currently a horrible lot of) debugging output.
+
+      You can also start the slipd program directly from the C64
+      ROM, see c64rom.a65
+
+    - If enabled, the slip client registers a filesystem with one drive. 
+      On a standard C64 OS/A65 system, it will be drive g:.
+      If a connection to the server cannot be found, or breaks
+      later, the fstcp tries to reconnect in periodic intervals.
+
+    - You should now be able to ping the C64, and do telnets to the 
+      echo, discard and chargen ports.
+
+    - when telneting to the http port (80)
+      (When the WWW server is enabled in oaslip/main.a65), you can issue
+      the "GET" command, followed by an URL on the OS/A65 computer.
+      You then get the specified file.
+      You can also point your Web browser (netscape) to the C64
+      with the URL "http://192.168.0.64/index.html". Replace the IP
+      number with the one you have chosen for your system.
+
+    - If fstcp is enabled, it should now also be possible to show the 
+      directory of drive g:, and to read files from or write files to 
+      drive g: This drive will be the contents of the directory given to 
+      the fstcp server, i.e. on your Unix machine!
+
+
+7) (Known) Bugs
+
+   - The WWW server only understands "GET filename" requests. No "http://"
+     or host prefixes are allowed. At least with Netscape it seems to work.
+
+   - The implementation is bloated, and horribly slow.
+
+   - Tons of others, I'm sure
+
+   - lib6502 binding seems to bug. 

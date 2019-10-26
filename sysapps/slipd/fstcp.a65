@@ -1,0 +1,935 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+	.(
+
+#include "fstcp.h"
+
+#define	MAXQUEUE	MAXFILES
+
+	.bss
+status	.dsb MAXFILES
+stream	.dsb MAXFILES
+fscmd	.dsb MAXFILES
+fstask	.dsb MAXFILES
+fsrxb	.dsb MAXFILES	; received data buffer to be transfered to stream
+fslot	.dsb MAXFILES	; slot when cmd slot has to be requeued
+
+fsqueue	.dsb MAXQUEUE
+fsnq	.byt 0
+fsconn	.byt 0
+fscnt	.byt 0
+	.text
+
+fstcp_srv 
+        .byte FSTCP_SERVER_IP, >FSTCP_SERVER_PORT, <FSTCP_SERVER_PORT, 0,0, 0
+        .word fstcp_open-1, fstcp_queue-1, fstcp_loop-1, fstcp_signal-1
+
+fstcp_open
+	rts
+
+&fstcp_init .(		; carry set on return -> could not register as filed
+	lda #<-2
+	sta fsconn
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	lda #1
+	sta PCBUF+FM_REG_DRVS
+	lda owntask
+	sta PCBUF+FM_REG_ENV
+	ldx #SEND_FM
+	lda #FM_REG
+	ldy #2
+	jsr SEND
+
+	php
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	plp
+
+	bcc ok
+	rts	; jmp TERM
+ok
+	ldy #0
+	lda #F_FREE
+l0	sta status,y
+	iny
+	cpy #MAXFILES
+	bcc l0
+
+	lda #0
+	sta fsnq
+
+	lda #<-1
+	sta fsconn
+
+	lda #1
+	sta fscnt
+
+openerr
+	clc
+	rts
+	.)
+
+&&&fstcp_mloop .(	/* called from mainloop */
+	lda fsconn	/* if negative, everything is cleared up */
+	bpl ok
+	dec fscnt	/* not give too much load when retrying */
+	bne ok
+	lda #<fstcp_srv
+	ldy #>fstcp_srv
+	jsr tcp_open	/* reopen */
+	bcs ok
+DB("fstcp_mloop: fsconn->")
+txa:jsr EHexout:jsr ECrlfout
+
+	stx fsconn
+ok	rts
+	.)
+
+fstcp_queue .(
+	txa
+	ldy fsnq
+	cpy #MAXQUEUE
+	bcs foops		/* shouldn't happen! */
+	sta fsqueue,y
+	inc fsnq
+
+	clc
+	rts
+foops	sec
+	rts
+	.)
+
+fstcp_loop .(
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_ESTAB
+	bne looperr
+
+	; jsr rxloop
+	jsr qloop
+	jsr dloop
+looperr	rts
+	.)
+
+	.bss
+task	.byt 0
+cmd	.byt 0
+len	.word 0
+slot	.byt 0
+fd	.byt 0
+	.text
+
+/****************************************************************************
+ * check streams and get/put data 
+ */
+dloop	.(
+	ldx #<-1
+	stx fd
+l0	ldx fd
+	inx
+	cpx #MAXFILES
+	bcc l1
+	rts
+l1 	stx fd
+
+	lda status,x
+	cmp #F_CMD_REQUEUE
+	bne norequeue
+
+	lda fslot,x
+	tax
+	jsr incownr
+	jsr tx_requeue_packet
+	bcs l0
+	ldx fd
+	lda fslot,x
+	tax
+	jsr bfree
+	ldx fd
+	lda #F_CMD_SENT
+	sta status,x
+	jmp l0
+
+norequeue
+	cmp #F_RD
+	bne rd1
+	
+	; do read check 
+	lda stream,x
+	tax
+	lda #SC_STAT
+	jsr STRCMD
+	cmp #E_NUL
+	bne noend
+
+rdclose	lda #FS_CLOSE
+	jsr send_msg
+	bcs l0a
+rdc1	ldx fd
+	lda stream,x
+	tax
+	lda #SC_EOF
+	jsr STRCMD
+	lda #F_FREE
+	ldx fd
+	sta status,x
+l0a	jmp l0
+noend
+	cmp #E_SLWM
+	beq doit
+	cmp #E_SEMPTY
+	bne l0a
+doit	lda #FS_READ
+	jsr send_msg
+	bcs l0a		; not queued
+	ldx fd
+	lda #F_RD_SENT
+	sta status,x	; this is changed to F_RD_RXD when a packet was rxd
+	jmp l0
+
+rd1	cmp #F_RD_RXD
+	beq rdrx
+	cmp #F_RD_EOF
+	beq rdrx
+	cmp #F_RD_CLOSE
+	beq rdclose
+	jmp write
+rdrx
+	lda fsrxb,x
+	tax
+	jsr getbadr
+	bcc rd1a
+DB("illegal block adr in dloop rd^m^j")
+rd1b	jmp rdclose
+rd1a
+	sta pp
+	sty pp+1
+rdloop
+	ldy #3
+	lda (pp),y
+	sta len+1
+	dey
+	lda (pp),y
+	sta len
+	dey
+	lda (pp),y
+	tax
+	dey
+	lda (pp),y
+	clc
+	adc pp
+	sta pd
+	txa
+	adc pp+1
+	sta pd+1
+datloop
+	lda len
+	ora len+1
+	bne datok
+
+	ldx fd
+	lda fsrxb,x
+	tax
+	jsr bfree
+
+	ldx fd
+	lda status,x
+	cmp #F_RD_EOF
+	bne l00
+	lda #F_RD_CLOSE
+	.byt $2c
+l00	lda #F_RD
+	sta status,x
+	jmp l0
+datok
+	ldx fd
+	lda stream,x
+	tax
+	ldy #0
+	lda (pd),y
+	jsr PUTC
+	bcc nextd1
+	cmp #E_NUL
+	bne noclose
+
+DB("rxd E_NUL from stream^m^j")
+	ldx fd
+	lda fsrxb,x
+	tax
+	jsr bfree
+	jmp rdclose
+nextd1	jmp nextd
+noclose
+	cmp #E_SFULL
+	bne nextd
+DB("stream full, put back=")
+lda len+1:jsr EHexout:lda len:jsr EHexout:jsr ECrlfout
+
+	;  buffer full, so put length back to block
+	ldy #0
+	lda pd
+	sec
+	sbc pp
+	sta (pp),y
+	iny
+	lda pd+1
+	sbc pp+1
+	sta (pp),y
+	iny
+	lda len
+	sta (pp),y
+	iny
+	lda len+1
+	sta (pp),y
+	jmp l0	
+
+nextd	inc pd
+	bne n0
+	inc pd+1
+n0 	lda len
+	bne n1
+	dec len+1
+n1	dec len
+	jmp datloop
+
+write	cmp #F_WR_WAIT
+	beq trysend1
+	cmp #F_WR_WEOF
+	bne nowait
+trysend1
+	jmp trysend
+nowait
+	cmp #F_WR
+	beq l0d
+l0c1	jmp l0
+l0d
+	ldx fd
+	lda stream,x
+	tax
+	lda #SC_STAT
+	jsr STRCMD
+pha:DB("STAT gives "):pla:pha:jsr EHexout:jsr ECrlfout:pla
+	cmp #E_SFULL
+	beq sendx
+	cmp #E_SHWM
+	beq sendx
+	lda #SC_RWANZ
+	jsr STRCMD
+pha:DB("RWANZ gives "):pla:pha:jsr EHexout:jsr ECrlfout:pla
+	cmp #0		; number of writing tasks - last packet!
+	bne l0c1
+sendx
+	lda #TCP_DOFFSET+FSP_DATA+64
+	ldy #0
+	jsr balloc
+	bcs l0c1
+	txa
+	ldy fd
+	sta fsrxb,y
+	lda #TCP_DOFFSET+FSP_DATA
+	jsr getpinfo
+	bcs l0c1
+
+	ldx fd
+	lda stream,x
+	tax
+	ldy #0
+wrl	jsr GETC
+	bcs wrle
+	sta (pd),y
+	iny
+	cpy #64
+	bcc wrl
+	lda #E_OK
+wrle	pha
+tya:pha:DB("GETC gives "):tsx:lda $102,x:jsr EHexout:jsr ECrlfout:pla:tay
+	lda pd
+	sec
+	sbc #FSP_DATA
+	sta pd
+	bcs w1
+	dec pd+1
+w1	tya
+	clc
+	adc #FSP_DATA
+	sta pdl
+	ldy #FSP_LEN
+	sta (pd),y
+	lda fd
+	ldy #FSP_FD
+	sta (pd),y
+
+	ldx fd
+	lda fsrxb,x
+	tax
+	lda pdl
+	ldy #0
+	clc
+	adc #TCP_DOFFSET
+	bcc w2
+	iny
+w2	jsr btrunc
+
+	ldy #0
+	lda #<TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda #>TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda pdl
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+
+	pla
+	cmp #E_EOF
+	beq wend
+	ldx #F_WR_WAIT
+	lda #FS_WRITE
+	bne we2
+wend	ldx #F_WR_WEOF
+	lda #FS_EOF
+we2
+	ldy #FSP_CMD
+	sta (pd),y
+	txa
+	ldx fd
+	sta status,x
+	
+	ldx fd
+	lda fsrxb,y
+	tax
+	jsr incownr
+	jsr tx_queue_packet
+	bcs l0c
+	bcc l0e
+trysend
+	ldx fd
+	lda fsrxb,y
+	tax
+	jsr incownr
+	jsr tx_requeue_packet	; queueslot
+	bcs l0c
+l0e
+	ldx fd
+	lda fsrxb,x
+	tax
+	jsr bfree
+
+	ldx fd
+	lda status,x
+	cmp #F_WR_WAIT
+	beq l0f
+
+	lda stream,x
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+
+	lda #F_FREE
+	.byt $2c
+l0f	lda #F_WR
+
+	ldy fd
+	sta status,y
+	
+l0c	jmp l0
+	.)
+
+/****************************************************************************
+ * process requests from filesystem interface 
+ */
+#if 0
+rxloop	.(
+	lda sendbuf	; test WWW server interference
+	bne norx
+	clc
+	jsr RECEIVE
+	bcc ok
+norx	rts
+ok
+#endif
+
+&&&fstcp_rxmess .(
+	stx task
+	sty len
+	sta cmd
+
+	ldx fsconn
+	bpl doit
+ret	jmp retnofil
+doit	jsr settcb
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_ESTAB
+	bne ret
+			; check for OS/A network calls
+	/* get free fd */
+	jsr getfd
+	bcc noretnofil
+	jmp retnofil
+noretnofil
+	sty fd
+
+	/* interprete received request */
+
+	ldy #0
+	lda len
+	clc
+	adc #TCP_DOFFSET
+	bcc l1
+	iny
+l1
+	jsr balloc
+	bcs retnomem
+
+	sta pp
+	sty pp+1
+	stx slot
+
+	clc
+	adc #TCP_DOFFSET
+	sta pd
+	tya
+	adc #0
+	sta pd+1
+
+	/* save stream and prepare PCBUF for sending */
+	ldy fd
+	lda cmd
+	sta fscmd,y
+	sta PCBUF+FS_OPEN_DRV
+	lda PCBUF+FS_OPEN_STR
+	sta stream,y
+	tya
+	sta PCBUF+FS_OPEN_PFAD
+	lda len
+	sta PCBUF+FS_OPEN_STR
+
+	ldy #0
+	lda #TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+	iny
+	lda len
+	sta (pp),y
+	iny
+	lda len+1
+	sta (pp),y
+/*
+DB("cmd=")
+lda cmd:jsr EHexout:lda #":":jsr ECout
+*/
+	ldy #0
+l2	lda PCBUF,y
+	sta (pd),y
+	iny
+	cpy len
+	bcc l2
+
+	lda slot
+	ldy fd
+	sta fslot,y
+	tax
+	jsr incownr
+	jsr tx_queue_packet
+	bcs notqueued
+
+	ldx slot
+	jsr bfree
+
+	lda #F_CMD_SENT
+	.byt $2c
+notqueued
+	lda #F_CMD_REQUEUE
+	ldy fd
+	sta status,y
+	lda task
+	sta fstask,y
+
+	lda #E_OK
+	clc
+	rts
+
+retnomem
+DB("retnomem!^m^j")
+	lda #E_NOMEM
+	.byt $2c
+retnofil
+	lda #E_NOFILE
+	sta PCBUF+FS_X_ERR
+	ldy #1
+	ldx task
+	jsr SEND
+	rts
+	.)
+
+getfd	.(
+	ldy #0
+	clc
+l0	lda status,y
+	beq found
+	iny
+	cpy #MAXFILES
+	bcc l0
+found	rts
+	.)
+
+/****************************************************************************
+ * check incoming packets 
+ */
+qloop	.(
+	lda fsnq
+	bne gotone
+	rts
+gotone
+	/* TODO: this implementation wants each reply in exactly one packet! */
+	ldx fsqueue
+	jsr getbadr
+	sta pp
+	sty pp+1
+/*
+DB("pp=")
+lda pp+1:jsr EHexout: lda pp:jsr EHexout
+DB(" do=")
+ldy #1: lda (pp),y: jsr EHexout
+ldy #0: lda (pp),y: jsr EHexout
+DB(", l=")
+ldy #3: lda (pp),y: jsr EHexout
+ldy #2: lda (pp),y: jsr EHexout
+DB(" slot=")
+lda fsqueue:jsr EHexout
+jsr ECrlfout
+*/
+	ldy #0
+	lda (pp),y
+	clc
+	adc pp
+	sta pd
+	iny
+	lda (pp),y
+	adc pp+1
+	sta pd+1
+
+	iny
+	lda (pp),y
+	sta len
+	iny
+	lda (pp),y
+	sta len+1
+
+	/* interpret reply packet */
+	ldy #FSP_FD
+	lda (pd),y
+	sta fd
+	tay
+	lda status,y
+	bne noillfd
+
+illfd	DB("illegal FD^m^j")
+	ldx fsqueue
+	jsr bfree
+	jmp nextbuf
+
+noillfd
+	ldy #FSP_LEN
+	lda (pd),y
+	cmp len
+	bne illlen
+	lda len+1
+	beq noilllen
+
+illlen	DB("illegal len^m^j")
+disc	ldx fsqueue
+	jsr bfree
+	jmp nextbuf
+noilllen
+/*
+DB("pkt type ")
+ldy #FSP_CMD:lda (pd),y:jsr EHexout
+DB(", fd="):lda fd:jsr EHexout
+DB(", st="):ldy fd:lda status,y:jsr EHexout:jsr ECrlfout
+*/
+	ldy #FSP_CMD
+	lda (pd),y
+	cmp #FS_REPLY
+	beq reply
+	jmp noreply
+reply
+	/* first (and only) data byte is reply value */
+	lda len
+	cmp #4
+	bne illlen
+
+	ldx fd
+	lda status,x
+	cmp #F_CMD_SENT
+	beq noillreply
+DB("reply but not CMD_SENT: st=")
+lda status,x:jsr EHexout:jsr ECrlfout
+	jmp disc
+noillreply
+
+	ldy #FSP_DATA
+	lda (pd),y
+	sta PCBUF+FS_X_ERR
+	cmp #E_OK
+	bne l1
+	ldy fd
+	lda fscmd,y
+	cmp #FS_OPEN_RD
+	beq rd
+	cmp #FS_OPEN_WR
+	beq wr
+	cmp #FS_OPEN_DR
+	bne l1
+rd	lda #F_RD
+	.byt $2c
+wr	lda #F_WR
+	.byt $2c
+l1
+	lda #F_FREE
+	ldy fd
+	sta status,y
+
+	ldy fd
+	lda fstask,y
+	tax
+	ldy #FS_X_SLEN
+	lda PCBUF+FS_X_ERR
+	jsr SEND
+
+	ldx fsqueue
+	jsr bfree
+	jmp nextbuf
+	
+noreply	cmp #FS_WRITE
+	beq write
+	cmp #FS_EOF
+	bne nowrite
+	ldy #F_RD_EOF
+	.byt $2c
+write	ldy #F_RD_RXD
+	ldx fd
+	lda status,x
+	cmp #F_RD_SENT
+	bne illwrite
+	lda fsqueue
+	ldx fd
+	sta fsrxb,x
+	tya
+	sta status,x
+
+	ldx fsqueue
+	jsr getbadr
+	sta pp
+	sty pp+1
+	ldy #0
+	lda (pp),y
+	clc
+	adc #FSP_DATA
+	sta (pp),y
+	iny
+	lda (pp),y
+	adc #0
+	sta (pp),y
+	iny
+	lda (pp),y
+	sec
+	sbc #FSP_DATA
+	sta (pp),y
+	iny
+	lda (pp),y
+	sbc #0
+	sta (pp),y
+	jmp nextbuf
+illwrite
+	DB("illegal write ^m^j")
+	ldx fsqueue
+	jsr bfree
+	jmp nextbuf
+nowrite
+	DB("packet not a reply!^m^j")
+	ldx fsqueue
+	jsr bfree
+
+nextbuf		
+	ldy #1
+l0	lda fsqueue,y
+	dey
+	sta fsqueue,y
+	iny
+	iny
+	cpy fsnq
+	bcc l0
+	dec fsnq
+	jmp qloop
+
+	.)
+
+/****************************************************************************
+ * process signal from tcp
+ */
+fstcp_signal .(
+#if 0
+	pha
+	DB("fstcp_signal: ")
+	pla:pha: jsr EHexout
+	jsr ECrlfout
+	pla
+#endif
+	jsr tcp_signal
+
+	ldx #0
+	stx fd
+l0	lda status,x
+	beq next
+	cmp #F_CMD_REQUEUE
+	bne noreq
+
+	lda fslot,x
+	tax
+	jsr bfree
+	lda #F_FREE
+	ldx fd
+	sta status,x
+	jmp l0
+noreq
+	cmp #F_RD
+	bcc next
+	cmp #F_RD_RXD
+	beq r1
+	cmp #F_RD_EOF
+	beq r1
+	cmp #F_RD_CLOSE+1
+	bcs write
+	bcc rdc1
+
+r1	lda fsrxb,x
+	tax
+	jsr bfree
+	
+rdc1	ldx fd
+	lda stream,x
+	tax
+	lda #SC_EOF
+	jsr STRCMD
+	jmp nextfree
+
+write	cmp #F_WR
+	beq wrc
+	cmp #F_WR_WAIT
+	beq w1
+	cmp #F_WR_WEOF
+	bne next
+w1
+	ldx fd
+	lda fsrxb,x
+	tax
+	jsr bfree
+wrc
+	ldx fd
+	lda stream,x
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+nextfree
+	ldx fd
+	lda #F_FREE
+	sta status,x	
+	
+next	inc fd
+	ldx fd
+	cpx #MAXFILES
+	bcc l0
+
+q1	ldy fsnq
+	beq noqueue
+	dey
+	lda fsqueue,y
+	tax
+	jsr bfree
+	dec fsnq
+	jmp q1
+noqueue
+	lda #<-1
+	sta fsconn
+	sta fscnt
+	rts
+	.)
+
+/****************************************************************************/
+
+send_msg .(
+	sta cmd
+	ldy #0
+	lda #TCP_DOFFSET+3
+
+	jsr balloc
+	bcs retnomem2
+
+	lda #TCP_DOFFSET
+	jsr getpinfo
+	bcs retnomem2
+
+	/* save stream and prepare PCBUF for sending */
+	ldy #0
+	lda cmd
+	sta (pd),y
+	iny 
+	lda #3
+	sta (pd),y
+	iny
+	lda fd
+	sta (pd),y
+
+	ldy #0
+	lda #TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+	iny
+	lda #3
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+
+	ldx pslot
+	jsr tx_queue_packet	; is checked with send_msg return
+retnomem2
+	rts
+	.)
+
+	.)
+

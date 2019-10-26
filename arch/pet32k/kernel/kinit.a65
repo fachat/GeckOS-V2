@@ -1,0 +1,142 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************
+ *
+ * This file is included in the RESET routine of the kernel,
+ * after the "sei:cld". The routine starting at the bginning
+ * of this file must initialize the hardware to the system RAM
+ * in the beginning and the system ROM in the end of the memory
+ * map. Also the system stack (pointer) is setup. 
+ * 
+ * In addition to that the system interrupt timer (needed for 
+ * task preemtion) must be setup.
+ *
+ * After that the file must define the following macros:
+ *
+ * GETFREQ()		returns a=0 for 1Mhz, a=128 for 2MHz
+ * LEDPORT		address of LED port to signal hardware failures
+ * LED_LED		bit of LED bit in LEDPORT address
+ * H_ERROR()		if LEDPORT is not defined, then H_ERROR replaces
+ *			the LED toggle routine if needed.
+ * CLRTIMER()		clear the system interrupt timer interrupt
+ * KERNELIRQ()		returns if an interrupt occured in the kernel
+ *			or outside. Is checked by "BNE IRQ_in_Kernel" 
+ * SAVEMEM()		save system mem config for interrupt
+ * RESTOREMEM()		restore system mem config after interrupt
+ * STARTMEM()           This is used to alloc/enable memory pages found
+ *                      during kernel init. Takes mem size in AC as given
+ *                      by the kernel init. It is called _after_ inimem!
+ */
+
+/* Kernel routines for C64 hardware */
+
+/*
+ * init stack pointer for system stack
+ */
+	  ldx #<-1
+	  txs
+
+/*
+ * check zeropage RAM, jump to he_zero if failure
+ * clears zeropage - at least 2-7 is a _must_!
+ */
+#include "kernel/zerotest.a65"
+
+/*
+ * init memory configuration - set IRQ vector on 32k PETs
+ * (must be after zerotest... )
+ */
+	  lda #<petirqjmp  
+	  sta $90
+	  lda #>petirqjmp
+	  sta $91
+	  lda #<petbrkjmp  
+	  sta $92
+	  lda #>petbrkjmp
+	  sta $93
+
+/* 
+ * C64 specific irq timer init, irq every 20ms 
+ * We assume that the reset - or a loader program has disabled all irq 
+ */
+
+	  lda #%00000001	; enable PIA1 CB1 screen retrace timer
+	  sta PETPIA1+PIA_CRA
+
+
+/*
+ * check system RAM from RAMSTAT up to RAMEND, jump to he_ram if failure
+ * returns available RAM in 256 byte blocks in AC
+ */
+#if 0	/* we don't need it - assume normal boot did it already */
+	.zero
+cnt	.byt 0
+	.text
+#include "kernel/ramtest.a65"
+	cmp #MIN_MEM
+	bcs ok
+	lda #0
+	sta $fff0
+	jmp ($fffc)
+ok
+#endif
+
+/*
+ * originally SYSPORT specific, they have a value for the C64 also...
+ */
+#define	GETFREQ()	lda #0
+
+#undef	LEDPORT
+#undef	LED_LED
+
+/* 
+ * We have to clear the interrupt timer
+ */
+
+#define	CLRTIMER()	lda PETPIA1+PIA_PA
+
+/*
+ * MMU systems may map task pages into kernel mem to make copying 
+ * easier. This mapping has to be preserved during interrupt.
+ * SAVEMEM() saves the memory configuration, while RESTOREMEM() 
+ * restores it, obviously.
+ * These routines are called _after_ "jsr memsys", so this routine
+ * has to preserve this mapping when called from kernel space,
+ * and so must memtask.
+ */
+
+#undef	SAVEMEM
+#undef	RESTOREMEM
+
+/* 
+ * Check if we have an interrupt in the kernel
+ */
+
+#define	KERNELIRQ()	lda Syscnt:cmp #1
+
+/* 
+ * no memory management...
+ */
+#define	STARTMEM()
+

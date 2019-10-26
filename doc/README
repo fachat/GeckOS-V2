@@ -1,0 +1,21 @@
+
+This is the source code for the OS/A65 multitasking operating system for
+6502 computer. It is designed to work with a CS/A65 computer system or
+a Commodore 64. But then the kernel is almost completely hardware 
+independent, so that it should be quite easy to port it to other 6502 
+computer. See oa1.html for more details.
+
+The source is copyrighted by Andre Fachat and is released under the
+GNU public license. See the file COPYING for more details.
+
+To build the binaries, a 6502 cross compiler has to be used. The source
+is written to work with my 'xa' (version >= 2.1.4e), see my WWW page for the
+source (it's under GNU public license).
+
+The doc directory contains the english html documentation.
+
+Andre Fachat
+a.fachat@physik.tu-chemnitz.de
+http://www.tu-chemnitz.de/~fachat
+
+

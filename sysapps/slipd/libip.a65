@@ -1,0 +1,370 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* different libip states */
+
+#define	LIS_INACTIVE	0
+#define	LIS_OK		1	/* try to receive connection */
+/*#define	LIS_WAIT	2	*//* try to send back reply */
+
+#define	TCB_LPORT	TCB_CONN
+
+	.(
+
+	.bss
+lipstate .byt 0
+
+cmd	.byt 0
+len	.byt 0
+task	.byt 0
+
+	.data
+srvdata	.dsb 8,0
+	.byt 0
+	.word libip_open-1, rsh_queue-1, libip_loop-1, libip_signal-1
+
+listensrv
+	.dsb 6,0
+listenp	.word 0
+	.byt SFL_MULT
+	.word libip_lopen-1, libip_lqueue-1, libip_lloop-1, libip_lsignal-1
+
+	.text
+
+&libip_init .(
+	lda #LIS_INACTIVE
+	sta lipstate
+
+	jsr GETPID
+	txa
+	ldx #SEND_NET
+	jsr TDUP
+	bcc setact
+	DB("Could not register as net task!^m^j")
+	rts
+setact
+	lda #LIS_OK
+	sta lipstate
+	rts
+	.)
+
+&&&libip_mloop .(
+	rts
+	.)
+
+&&&libip_rxmess .(
+	sta cmd
+	sty len
+	stx task
+
+#if 1
+	pha
+	DB("got message: cmd=")
+	lda cmd:jsr EHexout
+	DB(" len=")
+	lda len:jsr EHexout
+	DB(" task=")
+	lda task:jsr EHexout
+	jsr ECrlfout
+
+	ldy #0
+l00	lda PCBUF,y
+	jsr EHexout
+	lda #" "
+	jsr ECout
+	iny
+	cpy len
+	bcc l00
+	jsr ECrlfout
+	pla
+#endif
+	cmp #FS_CONNECT
+	bne noconn
+
+	.(
+	lda PCBUF+FSN_PROT
+	cmp #IPV4_TCP
+	bne error
+
+	ldy #0
+l1	lda PCBUF+FSN_ADDR,y	; copy trg ip/port 
+	sta srvdata,y
+	iny
+	cpy #6
+	bcc l1
+
+	lda #<srvdata
+	ldy #>srvdata
+	jsr tcp_open
+	bcs error
+
+	jsr preprsh
+&retok
+	lda #E_OK
+	.byt $2c
+&error	lda #E_NOFILE
+	sta PCBUF+FSN_RET
+	ldy #1
+	ldx task
+	jmp SEND
+	.)
+
+noconn	; it's not connect -> check listen
+	cmp #FS_LISTEN
+	bne nolisten
+				/* TODO: check port in use */
+	.(
+	lda PCBUF+FSN_PROT
+	cmp #IPV4_TCP
+	bne error
+
+	lda PCBUF+FSN_ADDR
+	sta listenp
+	lda PCBUF+FSN_ADDR+1
+	sta listenp+1
+
+	lda #<listensrv
+	ldy #>listensrv
+	jsr tcp_listen
+	bcs error
+	stx conn
+
+	ldy #TCB_LPORT
+	lda conn
+	sta PCBUF+FSN_PORT
+	sta (tcbp),y
+
+	ldy #2
+	ldx task
+	lda #E_OK
+	sta PCBUF+FSN_RET
+	jmp SEND
+	.)
+	
+nolisten
+	cmp #FS_UNLISTEN
+	bne nounlisten
+
+	.(			; check all connections and close
+	ldx PCBUF+FSN_PORT
+	cpx #MAXCONN
+	bcs error
+
+	ldx #0
+l0	stx conn
+	jsr settcb
+
+	ldy #TCB_SERVICE
+	lda (tcbp),y
+	cmp #<listensrv
+	bne nextul
+	iny
+	lda (tcbp),y
+	cmp #>listensrv
+	bne nextul
+
+	ldy #TCB_LPORT
+	lda (tcbp),y
+	cmp PCBUF+FSN_PORT
+	bne nextul
+
+DB("kill port ")
+lda conn:jsr EHexout:jsr ECrlfout
+
+	jsr tcb_close
+
+nextul	ldx conn
+	inx
+	cpx #MAXCONN
+	bcc l0
+
+	ldx #SEM_SENDBUF
+	jmp VSEM
+	.)
+
+nounlisten
+	cmp #FS_ACCEPT
+	beq doacc
+	jmp error
+doacc
+	.(
+	ldx #0
+l0	stx conn
+	jsr settcb
+
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_ESTAB
+	bne nextl
+
+	ldy #TCB_SERVICE
+	lda (tcbp),y
+	cmp #<listensrv
+	bne nextl
+	iny
+	lda (tcbp),y
+	cmp #>listensrv
+	bne nextl
+
+	ldy #TCB_LPORT
+	lda (tcbp),y
+	cmp PCBUF+FSN_PORT
+	beq found
+
+nextl	ldx conn
+	inx
+	cpx #MAXCONN
+	bcc l0
+	jmp error
+
+found	jsr GETSTR
+	bcs nostr
+	stx PCBUF+FSN_RXSTR
+	jsr GETSTR
+	bcs no2str
+	stx PCBUF+FSN_TXSTR
+	lda #E_OK
+	sta PCBUF+FSN_RET
+
+	ldy #TCB_SRCIP
+l1	lda (tcbp),y
+	sta PCBUF+FSN_ADDR-TCB_SRCIP,y
+	iny
+	cpy #TCB_SRCIP+4
+	bcc l1
+
+	ldy #TCB_SRCP
+l2	lda (tcbp),y
+	sta PCBUF+FSN_ADDR+4
+	iny
+	lda (tcbp),y
+	sta PCBUF+FSN_ADDR+5
+
+	jsr preprsh
+
+	ldy #TCB_SERVICE
+	lda #<rsh_srv
+	sta (tcbp),y
+	iny
+	lda #>rsh_srv
+	sta (tcbp),y
+
+	ldy #FSN_ADDR+6
+	lda #E_OK
+	ldx task
+	jmp SEND
+
+no2str	ldx PCBUF+FSN_RXSTR
+	jsr FRESTR
+nostr
+	jsr tcb_close
+	jmp error
+	.)
+
+preprsh	.(
+	/* prepare tcb for rsh takeover */
+	ldy #TCB_RTSTR
+	lda PCBUF+FSN_TXSTR
+	sta (tcbp),y
+	ldy #TCB_RRSTR
+	lda PCBUF+FSN_RXSTR
+	sta (tcbp),y
+
+	ldy #TCB_RNIQ
+	lda #0
+	sta (tcbp),y
+
+	ldy #TCB_RTSTAT
+	lda #RST_RD
+	sta (tcbp),y
+	ldy #TCB_RRSTAT
+	lda #RSR_WR
+	sta (tcbp),y
+	ldy #TCB_RSTAT
+	lda #RSS_RUN
+	sta (tcbp),y	
+	rts
+	.)
+
+	.)
+
+libip_queue
+	sec
+libip_open
+	rts
+
+libip_loop .(
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_ESTAB
+	bne ret
+
+	ldy #TCB_SERVICE
+	lda #<rsh_srv
+	sta (tcbp),y
+	iny
+	lda #>rsh_srv
+	sta (tcbp),y
+ret	rts
+	.)
+
+libip_signal .(
+	pha
+	DB("libip_signal^m^j")
+
+	ldy #TCB_RTSTR
+	lda (tcbp),y
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+	ldy #TCB_RRSTR
+	lda (tcbp),y
+	tax
+	lda #SC_EOF
+	jsr STRCMD
+
+	pla
+	jmp tcp_signal
+	rts
+	.)
+
+/* here are the service calls that ignore everything because we wait
+ * for accept to be called */
+
+libip_lqueue
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_ESTAB+1
+	bcs doack
+	sec
+libip_lopen
+libip_lloop
+	rts
+doack	clc
+	rts
+libip_lsignal
+	jmp tcp_signal
+
+	.)
+

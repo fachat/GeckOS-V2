@@ -1,0 +1,115 @@
+/****************************************************************************
+
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This is a main RAM test routine to be included by kinit, if necessary.
+ * if BATMEM is defined, memory is not erased, rather restored
+ * to the previous state. The memory is then set to MEMINIVAL.
+ * Memory is checked from page 1 up to RAMSIZE.
+ * If NOMIRRORMEM is set, it is assumed that we do not have mirrored
+ * memory areas and this is not checked.
+ */
+
+	  .(
+          ; test mirrored memory, 256-byte-wise
+
+          lda #0
+          sta pz
+#ifndef NOMIRRORMEM
+          sta pz+2      ; test location
+          ldy #pz+2     ; address of test location relative to page
+          tax
+          inx
+          stx pz+1
+m1
+#ifdef BATMEM
+          lda (pz),y
+          tax
+#endif
+          lda pz+1
+          sta (pz),y
+          lda pz+2
+
+#ifdef BATMEM
+	  php
+          txa
+          sta (pz),y
+	  plp
+#endif
+          bne me	; write to high location changed test location -> end
+
+          inc pz+1
+          ;bpl m1	; up to 32 kByte
+          lda pz+1
+          cmp #RAMEND
+          bcc m1
+
+me        lda pz+1
+#else
+          lda #RAMEND
+#endif                  /* NOMIRRORMEM */
+          sta cnt
+#ifdef RAMSTART
+	  lda #RAMSTART
+#else
+          lda #1
+#endif
+          sta pz+1
+mtlx
+#ifdef BATMEM
+          lda (pz),y
+          tax
+#endif
+#ifdef SHORTRAMTEST
+	  lda #MEMINIVAL ^ $ff
+#else
+          lda #$55
+#endif
+          sta (pz),y
+          cmp (pz),y
+          bne mtly
+#ifndef SHORTRAMTEST
+          asl
+          sta (pz),y
+          cmp (pz),y
+          bne mtly
+#endif
+#ifdef BATMEM
+          txa
+#else
+          lda #MEMINIVAL
+#endif
+          sta (pz),y
+          cmp (pz),y
+          bne mtly
+          iny
+          bne mtlx
+          inc pz+1
+          lda pz+1
+          cmp cnt
+          bcc mtlx
+mtly      lda pz+1
+	  .)
+
+
+

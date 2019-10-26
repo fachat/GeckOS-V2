@@ -1,0 +1,540 @@
+/****************************************************************************
+
+    OS/A65 Version 2.0.0
+    lib6502 telnet program
+
+    Copyright (C) 1997-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#include "lib6502.i65"
+
+#define	TEL_WILL	251
+#define	TEL_WONT	252
+#define	TEL_DO		253
+#define	TEL_DONT	254
+#define	TEL_IAC		255
+
+#define	TEL_SUPPRESSGA	3
+#define	TEL_ECHO	1
+
+#define	BUFLEN	100
+
+	.(
+	.bss
+fd	.byt 0
+rxst	.byt 0
+topt	.byt 0
+m_echo	.byt 0
+	.zero
+p	.word 0
+	.text
+
++main	.(
+	sta p
+	sty p+1
+
+	/* parse command line */
+
+	ldy #0
+n0	lda (p),y
+	beq n1
+	iny
+	bne n0
+
+n1	iny
+	clc
+	tya
+	adc p
+	sta p
+	bcc n2
+	inc p+1
+n2
+	jsr parseip
+	bcs ende
+	iny
+	clc
+	tya
+	adc p
+	sta p
+	bcc n3
+	inc p+1
+n3
+	jsr parseport
+	bcs ende
+
+	/* init screen / modes  */
+
+	ldx #STDOUT
+	lda #13
+	sec
+	jsr fputc
+	lda #10
+	jsr fputc
+
+	lda #0
+	sta rxst
+	lda #1
+	sta m_echo
+
+	/* open connection */
+	
+	lda #<atext
+	ldy #>atext
+	jsr txtout
+
+	lda #<addr
+	ldy #>addr
+	ldx #IPV4_TCP
+	jsr connect
+	stx fd
+
+#if 1
+	pha
+	lda #<etext
+	ldy #>etext
+	jsr txtout
+	pla
+	pha
+	jsr hexout
+	
+	lda #<rtext
+	ldy #>rtext
+	jsr txtout
+
+	pla
+#endif
+	cmp #0
+	bne donot
+
+	jsr doit
+donot
+	ldx fd
+	jsr fclose
+	jmp term
+
+ende	lda #<usagetxt
+	ldy #>usagetxt
+	jsr txtout
+	jmp term
+
+	.data
+usagetxt
+	.byt "^m^jUsage: ^m^j  telnet ip-address [port]^m^j"
+	.byt "where 'ip-address' is the 4 byte dot-^m^j"
+	.byt "separated IP address (like 192.168.0.1)^m^j",0
+	.text
+
+	.)
+
+/**************************************************************************
+ * here is the main I/O loop 
+ *
+ */
+
+doit	.(
+	/* copy from keyboard to net */
+
+	ldx #STDIN
+	clc
+	jsr fgetc
+	bcc ok
+	cmp #E_EOF
+	bne rx
+ret	rts
+ok	ldx fd
+	sec
+	jsr fputc
+	bcc rx
+	cmp #E_NUL
+	beq ret
+
+	/* copy from net to screen */
+
+rx	ldx fd
+	clc
+	jsr fgetc
+	bcc okw
+	cmp #E_EOF
+	bne tx
+	rts
+okw	ldx rxst
+	bne iacrxd
+
+	cmp #TEL_IAC
+	bne rx0
+	inc rxst
+	jmp tx
+rx0
+	cmp #128		; we have 7 bit ASCII
+	bcs tx
+
+	ldx #STDOUT
+	sec
+	jsr fputc
+	bcc tx
+	cmp #E_NUL
+	beq ret
+tx
+	jmp doit
+
+	;---------------------------
+
+iacrxd	cpx #1
+	bne second
+
+	sta topt
+	cmp #TEL_WILL
+	bcc noopt
+	cmp #TEL_DONT+1
+	bcs noopt
+	inc rxst
+	jmp tx
+
+noopt
+	lda #0
+	sta rxst
+	jmp tx
+
+second	
+#if 1
+	pha
+	lda #<otxt
+	ldy #>otxt
+	jsr txtout
+	lda topt
+	sec
+	sbc #TEL_WILL
+	asl
+	tax
+	lda addrs+1,x
+	tay
+	lda addrs,x
+	jsr txtout
+	pla
+	pha
+	jsr hexout
+
+	.data
+otxt	.byt "rxd option: ",0
+ttxt	.byt " -> ",0
+addrs	.word t1,t2,t3,t4
+t1	.byt "will ",0
+t2	.byt "won't ",0
+t3	.byt "do ",0
+t4	.byt "don't ",0
+	.text
+
+	pla
+#endif
+
+	pha
+
+	ldy #0
+c1	cmp options,y
+	beq found
+	iny
+	cpy #NOPTS
+	bcc c1
+
+	/* now we have received the option we deny everything we don't know */
+ireply	ldy topt
+	lda table-TEL_WILL,y
+reply			; must have option type on stack, do/dont/ etc in AC
+	pha
+
+	lda #TEL_IAC
+	sec
+	ldx fd
+	jsr fputc
+
+#if 1
+	lda #<ttxt
+	ldy #>ttxt
+	jsr txtout
+	pla
+	pha
+	sec
+	sbc #TEL_WILL
+	asl
+	tax
+	lda addrs+1,x
+	tay
+	lda addrs,x
+	jsr txtout
+#endif
+
+	pla
+	sec
+	ldx fd
+	jsr fputc
+
+#if 1
+	pla
+	pha
+	jsr hexout
+#endif
+	pla
+	sec
+	ldx fd
+	jsr fputc
+
+	.byt $24
+noreply	pla
+	lda #0
+	sta rxst
+#if 1
+	lda #<rtext
+	ldy #>rtext
+	jsr txtout
+#endif
+	jmp tx
+
+found
+	tya
+	asl
+	tay
+	lda oaddrs+1,y
+	pha
+	lda oaddrs,y
+	pha
+	rts
+
+to_echo	.(
+	inc topt
+	inc topt
+	bne no_dont
+ireply2	jmp ireply	; dont echo
+no_dont	inc topt
+	bne no_do
+	lda #TEL_WONT	; do echo
+	jmp reply
+no_do	inc topt
+	bne no_wont
+	lda m_echo	; wont echo
+	bne noreply
+	lda #1
+	sta m_echo
+	lda #TEL_DONT
+	jmp reply
+no_wont	inc topt
+	bne ireply2
+	lda m_echo	; will echo
+	beq noreply
+	lda #0
+	sta m_echo
+	lda #TEL_DO
+	jmp reply
+	.)
+
+to_ga	.(
+	lda topt
+	cmp #TEL_WILL
+	bne ireply1
+	lda #TEL_DO
+	jmp reply
+ireply1	jmp ireply
+	.)
+
+	.data
+table	.byt TEL_DONT, TEL_DONT, TEL_WONT, TEL_WONT
+
+NOPTS	=2
+options	.byt 1, 3
+oaddrs	.word to_echo-1, to_ga-1
+
+	.text
+	.)
+
+/**************************************************************************
+ * stuff
+ */
+
+	.bss
+digit	.word 0
+	.text
+
+parseport .(
+	ldy #0
+	lda (p),y
+	bne doparse
+	clc
+	rts
+doparse
+	sty digit
+	sty digit+1
+
+l0	cmp #"0"
+	bcc err
+	cmp #"9"+1
+	bcs err
+
+	jsr nextwdig
+
+	iny
+	lda (p),y
+	bne l0
+
+	lda digit
+	sta addr+6
+	lda digit+1
+	sta addr+5
+	clc
+	rts
+err	sec
+	rts
+	.)
+
+nextwdig .(
+	pha
+	asl digit
+	rol digit+1
+	lda digit
+	ldx digit+1
+	asl digit
+	rol digit+1
+	asl digit
+	rol digit+1
+	clc
+	adc digit
+	sta digit
+	txa
+	adc digit+1
+	sta digit+1
+	pla
+	and #$0f
+	adc digit
+	sta digit
+	bcc x1
+	inc digit+1
+x1	rts
+	.)
+
+parseip	.(
+	ldx #0
+	ldy #0
+l2
+	lda #0
+	sta digit
+
+	lda (p),y
+	beq err
+l1	
+	cmp #"0"
+	bcc err
+	cmp #"9"+1
+	bcs err
+
+	jsr nextdig
+
+	iny
+	lda (p),y
+	beq ende
+	cmp #"."
+	bne l1
+
+	lda digit
+	sta addr+1,x
+	inx
+	iny
+	cpx #4
+	bcc l2
+	rts
+ende
+	lda digit
+	sta addr+1,x
+	cpx #3
+	bcc err
+	clc
+	rts
+err	sec
+	rts
+	.)
+
+nextdig	.(	; digit * 10 + AC
+	pha
+	asl digit
+	lda digit
+	asl
+	asl
+	clc
+	adc digit
+	sta digit
+	pla
+	and #$0f
+	clc
+	adc digit
+	sta digit
+	rts
+	.)
+
+txtout	.(
+	sta p
+	sty p+1
+	ldy #0
+l0	lda (p),y
+	beq end
+	sec
+	ldx #STDOUT
+	jsr fputc
+	iny
+	bne l0
+end	rts
+	.)
+
+#iflused hexout
+&hexout  .(
+	.bss
+XR	.byt 0
+	.text
+          stx XR
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr nibout
+          pla
+          and #$0f
+nibout    ldx #STDOUT
+          clc
+          adc #"0"
+          cmp #"9"+1
+          bcc nibok
+          adc #6
+nibok     sec
+          jsr fputc
+          ldx XR
+          rts
+          .)
+#endif
+
+	.data
+
+; addr	.byt 7,  192,168,0,13, 0,7	/* echo port */
+; addr	.byt 7,  192,168,0,13, 0,19	/* chargen port */
+addr	.byt 7,  192,168,0,13, 0,23	/* telnet port */
+
+atext	.asc "^m^jTrying to Connect...^m^j",0
+etext	.asc "^m^jgot return: ",0
+rtext	.asc "^m^j",0
+
+	.text
+	.)
+
+

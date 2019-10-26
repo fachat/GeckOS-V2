@@ -1,0 +1,4 @@
+
+#define FSIEC_DEVICE    "devices/siec_gecko.a65"
+#include  "apps/fs/fsiec.a65"
+

@@ -1,0 +1,1944 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This file is a TCP implementation for 6502 computer
+ *
+ * it exports:
+ *	tcpinit		- init TCP
+ *	tcploop		- must be called 
+ *	tcprx		- gets incoming packets
+ *
+ *	tcp_open	- (active) open TCP connection
+ *	tcp_listen	- (passive) open TCP connection
+ *	tcp_close	- close TCP connection
+ *
+ *	tcp_kill	- kill random connection because we ran into
+ *			  memory problems
+ *	
+ */
+
+/* TODO: make the thing 32-bit-modulo save for ack and seq! */
+/* TODO: retransmission timeout increase with retransmission */
+
+/* #define	DEBUGTCP */
+
+#ifdef DEBUGTCP
+#define	DBTCP(a)	DB(a)
+#else
+#define	DBTCP(a)
+#endif
+
+	.(
+	.zero
+tcbp	.word 0
+p2	.word 0
+srv	=p2		;srv	=syszp+4
+
+	.bss
+dlen	.word 0		; length tcp data received
+doffset	.byt 0		; data offset from pp!
+;toffset	=sysmem+3	; tcp header offset from pp!
+	.byt 0		; ???
+seg_flag .byt 0		; incoming segment flag byte
+conn	.byt 0		; connection number
+discd	.word 0		; data preceding valid data in segment
+timer	.word 0		; timer counter
+
+&&tcb	.dsb MAXCONN*TCB_LEN
+
+tmp	.byt 0
+tmp2	.dsb 3		; should be able to hold seq number
+
+state	.byt 0
+
+scnt	.byt 0		; start counter for loop 
+	.text
+
+&&tcpinit .(
+	ldx #0
+
+	stx scnt
+	stx timer
+	stx timer+1
+i1
+	jsr settcb
+	lda #TCP_CLOSED
+	ldy #TCB_STATE
+	sta (tcbp),y
+	inx
+	cpx #MAXCONN
+	bcc i1
+
+	jsr user_init
+
+	clc
+	rts
+	.)
+
+&&tcploop .(
+	.bss
+fl	.byt 0
+	.text
+
+	/* I have - yet - no way to measure the time, so we do a simple loop */
+	lda timer
+	ora timer+1
+	sta fl
+	beq load
+	lda timer
+	bne l1
+	dec timer+1
+l1	dec timer
+	jmp te
+end	rts
+load	lda #<TIMER
+	sta timer
+	lda #>TIMER
+	sta timer+1
+te
+	ldx scnt
+	inx
+	cpx #MAXCONN
+	bcc i1c
+	ldx #0
+i1c	stx scnt
+	jmp doit
+
+i1 	inx
+	cpx #MAXCONN
+	bcc i1a
+	ldx #0
+i1a	
+	cpx scnt
+	beq end
+
+	;-------------
+doit
+	stx conn
+	jsr settcb
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_CLOSED
+	beq i1
+
+	ldy #TCB_LSTATE
+	cmp (tcbp),y
+	beq same
+	sta (tcbp),y
+	; ok, state has changed since last loop
+	cmp #TCP_CLOSEW
+	bne n1
+
+	lda #TE_SIG_FIN
+	jsr signal_user
+n1
+same	lda fl
+	bne noti
+
+	ldy #TCB_MSL+1
+	lda (tcbp),y
+	dey
+	ora (tcbp),y
+	beq nomsl
+
+	sec
+	lda (tcbp),y
+	sbc #1
+	sta (tcbp),y
+	tax
+	iny
+	lda (tcbp),y
+	sbc #0
+	sta (tcbp),y
+	bne nomsl
+	txa
+	bne nomsl
+	
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_FINW2
+	beq lastack
+	cmp #TCP_LASTACK
+	beq lastack
+	cmp #TCP_TIMEW
+	bne nomsl
+lastack	
+DBTCP("lastack^m^j")
+	jsr tclose
+	jmp noretrans
+nomsl
+	ldy #TCB_RETRANS+1
+	lda (tcbp),y
+	dey
+	ora (tcbp),y
+	beq noretrans
+
+	sec
+	lda (tcbp),y
+	sbc #1
+	sta (tcbp),y
+	tax
+	iny
+	lda (tcbp),y
+	sbc #0
+	sta (tcbp),y
+	bne noretrans
+	txa
+	bne noretrans
+
+	jsr retransmit
+	; jmp noti
+noretrans
+noti	
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	beq noqueuedfin
+;inc $d020
+	jsr send_flag
+	bcs noqueuedfin
+
+	ldy #TCB_FLAG
+	lda #0
+	sta (tcbp),y
+
+noqueuedfin	
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_ESTAB
+	bcc next
+	cmp #TCP_CLOSEW+1
+	bcs next
+
+	ldy #TCB_SERVICE
+	lda (tcbp),y
+	sta srv
+	iny
+	lda (tcbp),y
+	sta srv+1
+
+	ldy #SRV_LOOP
+	lda (srv),y
+	iny
+	ora (srv),y
+	beq next
+
+	jsr end2 
+next
+	ldx conn
+	jmp i1
+	
+end2	lda (srv),y
+	pha
+	dey
+	lda (srv),y
+	pha
+	rts
+	.)
+
+&&tcprx2 .(
+
+	jsr getpinfo
+	bcc piok
+	DBTCP("getpi error in tcprx2^m^j")
+	rts
+piok
+	jsr ip2tcp
+
+#if 0 /*def DEBUGTCP*/
+DB("TCP check: pd=")
+lda pd+1: jsr EHexout: lda pd: jsr EHexout
+DB(", pdl=")
+lda pdl+1: jsr EHexout: lda pdl: jsr EHexout
+DB(", pp=")
+lda pp+1: jsr EHexout: lda pp: jsr EHexout
+DB(", ppl=")
+lda ppl+1: jsr EHexout: lda ppl: jsr EHexout
+jsr ECrlfout
+#endif
+
+	lda pdl
+	ldy pdl+1
+	ldx #pd
+	jsr checksum3
+
+#if 0 /*def DEBUGTCP*/
+php
+pha
+txa
+pha
+DB("TCP Checksum=")
+pla
+tay
+jsr EHexout
+pla
+pha
+jsr EHexout
+jsr ECrlfout
+tya
+tax
+pla
+plp
+#endif
+	bcc tcpok
+
+tdisc_check
+        DB("Packet discarded: TCP checksum^m^j")
+&tdisc	ldx pslot
+	bmi illtd
+	jsr bfree
+	lda #<-1
+	sta pslot
+	clc
+	rts
+illtd	DBTCP("tdisc with illegal slot!^m^j")
+	sec
+	rts
+	
+
+tcpok	/* here we have a valid TCP packet in (pd),0-pdl. */
+
+#if 1 /* def DEBUGTCP2  */
+DB("Receiving: ")
+ldy #TH_DOFFSET+1
+lda (pd),y:jsr EHexout:DB(" ack=")
+ldy #TH_ACK+2:lda (pd),y:jsr EHexout:iny:lda (pd),y:jsr EHexout
+DB(" seq=")
+ldy #TH_SEQ+2:lda (pd),y:jsr EHexout:iny:lda (pd),y:jsr EHexout
+jsr ECrlfout    
+#endif
+
+	lda #0		; data to be discarded at packet beginning.
+	sta discd
+	sta discd+1
+
+	ldy #TH_FLAG
+	lda (pd),y
+	sta seg_flag
+
+	ldy #TH_DOFFSET
+	lda (pd),y
+	and #$f0
+	lsr
+	lsr
+	clc
+	adc #TPH_LEN
+	sta doffset	; data offset from pseudo header start
+	lda pdl
+	sec
+	sbc doffset
+	sta dlen
+	lda pdl+1
+	sbc #0
+	sta dlen+1	; TCP data received length
+
+	lda phl
+	sec
+	sbc #TPH_LEN
+	sta phl		; offset from pp to pd
+	clc
+	adc doffset
+	sta doffset	; offset 
+
+	bcc looktcb
+datl
+	DB("Data offset too large^m^j")
+tdisc1	jmp tdisc
+
+/* we now also have: phl    = offset from pp to TCP pseudo header (pd)
+		     doffset= offset from pp to TCP data start 
+		     dlen   = length of TCP data received
+		     discd  = TCP data to be discarded
+*/
+
+looktcb
+/*	DB("LookTCB^m^j")*/
+
+	jsr findtcb
+	bcc found		/* TODO: send reset on no connection? */
+	jmp tcp_closed
+found
+	stx conn
+#ifdef DEBUGTCP2
+	lda #" "
+	jsr ECout
+	txa
+	jsr EHexout
+	lda #" "
+	jsr ECout
+	lda tcbp+1
+	jsr EHexout
+	lda tcbp
+	jsr EHexout
+	jsr ECrlfout
+#endif
+#ifdef DEBUGTCP 
+	DB("rP=")
+	ldy #TH_SRCP
+	lda (pd),y
+	jsr EHexout
+	iny
+	lda (pd),y
+	jsr EHexout
+	DB(" tcbp=")
+	lda tcbp+1
+	jsr EHexout
+	lda tcbp
+	jsr EHexout
+	DB(" s=")
+	ldy #TH_SEQ+2
+	lda (pd),y
+	jsr EHexout
+	iny
+	lda (pd),y
+	jsr EHexout
+	DB(" a=")
+	ldy #TH_ACK+2
+	lda (pd),y
+	jsr EHexout
+	iny
+	lda (pd),y
+	jsr EHexout
+	DB(" f=")
+	ldy #TH_FLAG
+	lda (pd),y
+	jsr EHexout
+	jsr ECrlfout
+#endif
+	ldy #TCB_STATE
+	lda (tcbp),y
+	sta state
+
+#if 0 /*def DEBUGTCP*/
+	pha
+	lda tcbp+1
+	jsr EHexout
+	lda tcbp
+	jsr EHexout
+	lda #":"
+	jsr ECout
+
+	lda state
+	asl
+	tax
+	lda ttab+1,x
+	tay
+	lda ttab,x
+	jsr ETxtout
+	pla
+	jmp noout
+
+ttab	.word tclosed, tlisten, tsynrxd, tsyntxd, testab, tfinw1, tfinw2
+	.word tclosew, tlastack, tclosing, ttimew
+
+tclosed	.asc "Closed:^m^j",0
+tlisten	.asc "Listen:^m^j",0
+tsynrxd .asc "SynRXd:^m^j",0
+tsyntxd .asc "SynTXd:^m^j",0
+testab 	.asc "Established:^m^j",0
+tfinw1	.asc "FinW1:^m^j",0
+tfinw2	.asc "FinW2:^m^j",0
+tclosew	.asc "CloseWait:^m^j",0
+tlastack .asc "LastAck:^m^j",0
+tclosing .asc "Closing:^m^j",0
+ttimew	.asc "TimeWait^m^j",0
+
+noout
+#endif
+	cmp #TCP_CLOSED
+	beq tcp_closed
+	cmp #TCP_LISTEN
+	bne nolisten
+	jmp tcp_listen2
+nolisten 
+	cmp #TCP_SYNTXD
+	bne nosyntxd
+	jmp tcp_syntxd
+nosyntxd
+	jmp tcp_else
+	.)
+
+tcp_closed .(
+	lda seg_flag
+	and #THF_RST
+	bne end
+
+	lda seg_flag
+	and #THF_ACK
+	bne ackset
+
+	jsr seql2ack
+	jsr clrseq
+	lda #THF_ACK + THF_RST
+	bne noack
+
+&send_rst
+&listen_ack
+ackset	
+	jsr ack2seq
+	lda #THF_RST
+noack
+	ldy #TH_FLAG
+	sta (pd),y
+	jmp bangbuf
+	
+end	jmp tdisc
+	.)
+
+tcp_listen2 .(
+	ldy #TCB_STATE
+	lda #TCP_CLOSED
+	sta (tcbp),y		; if error, release tcb
+
+	lda seg_flag
+	and #THF_RST
+	beq norst
+	DB("RST while listening^m^j")
+	jmp tdisc
+norst
+	lda seg_flag
+	and #THF_ACK
+	beq noack
+	DB("ACK while listening^m^j")
+	jmp listen_ack
+noack
+	lda seg_flag
+	and #THF_SYN
+	bne listen_syn
+	DB("Listen but no Syn!^m^j")
+	jmp tdisc
+listen_syn
+	DBTCP("Listen_syn^m^j")
+	jsr seqsyn
+
+	jsr srv_open
+
+	jsr hasdata
+	beq nodat
+
+	DB("rxd syn has data!^m^j")
+	jsr copy_n_queue
+nodat
+	jsr iniseq
+	ldy #TCB_FLAG
+	lda #THF_SYN + THF_ACK
+	sta (tcbp),y
+
+	ldy #TCB_STATE
+	lda #TCP_SYNRXD
+	sta (tcbp),y
+	sta state
+;inc $d020
+	jmp tdisc
+
+;	ldy #TH_FLAG
+;	lda #THF_SYN + THF_ACK
+;	sta (pd),y
+;
+;	jsr iniseq
+;	jsr setseq
+;	jsr setack
+;
+;	ldy #TCB_STATE
+;	lda #TCP_SYNRXD
+;	sta (tcbp),y
+;	sta state
+;
+;	lda #1
+;	ldx #0
+;	jsr addtxnxt
+;
+;	jmp bangbuf
+	.)
+
+tcp_else .(
+;	.bss
+;&needack .byt 0
+;	.text
+;
+;	lda #0
+;	sta needack
+/*
+DB("tcp_*: ip=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout
+DB(", qslot=")
+lda pslot:jsr EHexout
+DB(", sla=")
+lda slotladr:jsr EHexout
+jsr ECrlfout
+*/
+	/* first, check sequence number */
+	jsr checkseq
+	bcc seqok
+
+	lda seg_flag
+	and #THF_RST
+	bne disca	/* discard packet */
+
+	DB("bad SEQ!^m^j")
+
+	jsr setseq
+	jsr setack
+	ldy #TH_FLAG
+	lda #THF_ACK
+	sta (pd),y
+	jmp bangbuf
+
+disca	DB("got RST with bad SEQ!^m^j")
+	jmp tdisc
+
+seqok	/* second, check the RST bit */
+	lda seg_flag
+	and #THF_RST
+	beq noreset
+
+	DB("got RST!^m^j")
+
+	lda state
+	cmp #TCP_SYNRXD
+	bne seq1
+
+	/* TODO: if from active open, then close! */
+	DB("Reset rxd!^m^j")
+	ldy #TCB_STATE
+	lda #TCP_SYNRXD
+	sta (tcbp),y
+	sta state
+	jsr tdisc
+	
+	/* signal_user may use q* variables! */
+	lda #TE_SIG_RESET
+	jmp signal_user
+
+seq1	
+;	cmp #TCP_LASTACK
+;	bcs seq2
+;
+;	/* flush and close everything */
+;	jsr tdisc
+;
+;	/* signal_user may use q* variables! */
+;	;lda #TE_RESET1
+;	;jmp signal_user
+;DBTCP("seq1^m^j")
+;	jmp tclose
+;
+;seq2 	
+DBTCP("seq2^m^j")
+	jsr tdisc
+	jmp tclose
+
+noreset	/* third, check security and precedence... */
+
+	/* fourth, check SYN bit */
+
+	lda seg_flag
+	and #THF_SYN
+	beq nosyn
+	; this is an error - abort anything
+
+	DB("got SYN!^m^j")
+
+	/* flush everything, close */
+	jsr send_rst
+
+	;lda #TE_RESET2
+	;jmp signal_user
+	jmp tclose
+
+nosyn	/* fifth, check the ACK bit */
+	lda seg_flag
+	and #THF_ACK
+	bne ackok
+
+	DB("No Ack^m^j")
+	jmp tdisc
+ackok
+	jsr checkack
+	sta tmp
+#ifdef DEBUGTCP
+DBTCP("checkack returns "): lda tmp: jsr EHexout: jsr ECrlfout
+#endif
+
+	lda state
+	cmp #TCP_SYNRXD
+	bne ack1
+
+	lda tmp
+	beq badack
+	cmp #3
+	bcc ackok2
+
+badack	DB("Bad Ack in packet^m^j")
+	jmp send_rst
+ackok2
+	ldy #TCB_STATE	/* everything ok -> enter estab and continue... */
+	lda #TCP_ESTAB
+	sta (tcbp),y
+	sta state
+
+	/* TODO: check queued FIN */
+
+ack1	lda tmp
+	beq aignore
+	cmp #3
+	bcc a0
+
+	/* TODO: ack ahead send_next -> send ack, return */
+#ifdef DEBUGTCP
+DB("Ack ahead send_next^m^jpkt.ack=")
+ldy #TH_ACK:ldx #4:x0 lda (pd),y:jsr EHexout:iny:dex:bne x0
+DB(" seq.sndnxt=")
+ldy #TCB_SND_NXT: ldx #4:x1 lda (tcbp),y: jsr EHexout: iny: dex: bne x1
+jsr ECrlfout
+#endif
+
+	jmp tdisc
+a0
+	jsr getuna
+	lda tmp
+	pha
+	jsr ackxmit
+	pla
+	sta tmp
+aignore
+	lda state
+	cmp #TCP_FINW1
+	bcc do6a
+	bne ack3
+
+	lda tmp
+	cmp #2		; exactly SND_NXT -> FIN ack'd
+	bne do6a
+
+	ldy #TCB_MSL
+	lda #<TIME_FINW2
+	sta (tcbp),y
+	iny
+	lda #>TIME_FINW2
+	sta (tcbp),y
+
+	ldy #TCB_STATE
+	lda #TCP_FINW2
+	sta (tcbp),y
+	sta state
+
+ack3	cmp #TCP_FINW2
+	bne ack4
+
+do6a	jmp do6
+
+ack4	cmp #TCP_CLOSING
+	bne ack5
+
+	lda tmp
+	cmp #2
+	bne atw
+	ldy #TCB_STATE
+	lda #TCP_TIMEW
+	sta state
+	sta (tcbp),y
+
+	ldy #TCB_MSL
+	lda #<TIME_MSL
+	sta (tcbp),y
+	iny
+	lda #>TIME_MSL
+	sta (tcbp),y
+
+atw	jmp tdisc
+
+ack5	cmp #TCP_LASTACK
+	bne ack6
+
+/*	DB("LAST ACK received^m^j") */
+	
+	lda tmp
+	cmp #2
+	bne atw
+	jsr tdisc
+	jmp tclose
+
+ack6	cmp #TCP_TIMEW
+	bne do6
+
+	ldy #TCB_MSL
+	lda #<TIME_MSL
+	sta (tcbp),y
+	iny
+	lda #>TIME_MSL
+	sta (tcbp),y
+	
+	; ack retransmitted FIN 
+	jsr setack
+	jsr setseq
+	ldy #TH_FLAG
+	lda #THF_ACK
+	sta (pd),y
+	jmp bangbuf
+
+	/* sixth, check the URG bit */
+&do6
+	/* seventh, process segment text */ 
+	
+	lda state
+	cmp #TCP_ESTAB
+	bcc idat
+	cmp #TCP_FINW2+1
+	bcs idat
+
+	/* TODO: discd? */
+	ldy #0
+	lda doffset
+	sta (pp),y
+	tya
+	iny
+	sta (pp),y
+	iny
+	lda dlen
+	sta (pp),y
+	iny
+	lda dlen+1
+	sta (pp),y
+
+	jsr hasdata
+	beq idat
+	jsr copy_n_queue	; ok, we need not copy without FIN...
+;	inc needack
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	ora #THF_ACK
+	sta (tcbp),y
+
+idat	
+	/* eighth, check the FIN bit */
+	
+	lda state
+	cmp #TCP_CLOSED
+	beq nofin
+	cmp #TCP_LISTEN
+	beq nofin
+	cmp #TCP_SYNTXD
+	beq nofin
+
+	lda seg_flag
+	and #THF_FIN
+	beq nofin
+
+	lda #1
+	ldx #0
+	jsr addrxnxt
+;	inc needack
+
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	ora #THF_ACK+THF_FIN
+	sta (tcbp),y
+	
+	ldx state
+	cpx #TCP_SYNRXD
+	beq closew
+	cpx #TCP_ESTAB
+	bne noestab
+	jsr flushqueue
+	jmp closew
+noestab
+	cpx #TCP_FINW1
+	beq closing
+
+	cpx #TCP_FINW2
+	bne nofinw2
+
+	lda (tcbp),y
+	and #255-THF_FIN
+	sta (tcbp),y
+
+	ldy #TCB_STATE
+	lda #TCP_TIMEW
+	sta state
+	sta (tcbp),y
+
+	ldy #TCB_MSL
+	lda #<TIME_MSL
+	sta (tcbp),y
+	iny
+	lda #>TIME_MSL
+	sta (tcbp),y
+	jmp nofin
+nofinw2
+
+;	jsr setack
+;	jsr setseq
+;	ldy #TH_FLAG
+;	lda #THF_ACK
+;	sta (pd),y
+;	jsr bangbuf
+
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	ora #THF_ACK
+	sta (tcbp),y
+
+	lda state
+	cmp #TCP_ESTAB+1
+	bcs f1
+closew	lda #TCP_CLOSEW
+	.byt $2c
+closing	lda #TCP_CLOSING
+
+fe	ldy #TCB_STATE
+	sta (tcbp),y
+
+f1	
+	/* TODO: check other states */
+
+nofin	
+	ldx pslot
+	bmi noslot
+
+;	lda needack
+;	bne needit
+	jmp tdisc
+;needit	
+;	jsr setack
+;	jsr setseq
+;	ldy #TH_FLAG
+;	lda #THF_ACK
+;	sta (pd),y
+;	jsr bangbuf	; maybe check with retransmissions...
+;	bcc noslot
+;inc $d020
+;	ldy #TCB_FLAG
+;	lda (tcbp),y
+;	ora #4		; saved ack
+;	sta (tcbp),y
+noslot	clc
+	rts
+	.)
+
+tcp_syntxd .(
+	/*DB("SynTxd^m^j")*/
+
+	/* first, check ack bit */
+	lda seg_flag
+	and #THF_ACK
+	beq noack
+
+	jsr checkack
+	bcc noack
+
+badack	DB("Bad Ack in packet^m^j")
+	jmp send_rst
+noack	
+	/* second, check rst bit */
+	lda seg_flag
+	and #THF_RST
+	beq norst
+
+	lda seg_flag
+	and #THF_ACK
+	beq rstack
+
+	jsr tdisc
+	;lda #TE_RESET3
+	;jmp signal_user
+DBTCP("noack^m^j")
+	jmp tclose
+
+	/* TODO: close? or define that user signal routine should do that... */
+rstack	jmp tdisc
+
+norst
+	/* third, check security */
+
+	/* fourth, check syn bit */
+	lda seg_flag
+	and #THF_SYN
+	beq nosyn
+
+	jsr getseq	; get rcv_nxt number from packet
+
+	lda #1
+	ldx #0
+	jsr addrxnxt
+
+	lda seg_flag
+	and #THF_ACK
+	beq nosynack
+
+	jsr getuna
+
+	jsr ackxmit
+nosynack
+	jsr aheadiss
+	bcs noiss	; SYN not yet ACK'd
+
+	lda #TCP_ESTAB
+	ldy #TCB_STATE
+	sta (tcbp),y
+	sta state
+
+;	lda #1
+;	sta needack
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	ora #THF_ACK
+	sta (tcbp),y
+
+	jmp do6
+
+noiss	lda #TCP_SYNRXD
+	ldy #TCB_STATE
+	sta (tcbp),y
+
+	ldy #TCB_FLAG
+	lda (tcbp),y
+	ora #THF_SYN+THF_ACK
+	sta (tcbp),y
+
+	; jmp tdisc
+/*
+	jsr setack
+	jsr decseq	; dec snd_nxt back to ISS
+	jsr setseq
+	lda #1
+	ldx #0
+	jsr addtxnxt	; and inc for SYN
+
+	jsr do_queue
+
+	ldy #TH_FLAG
+	lda #THF_ACK+THF_SYN
+	jmp bangbuf
+*/
+
+nosyn	jmp tdisc
+	.)
+
+/* check acknowledge of packets in retransmission queue */
+/* TODO: save end pointer for each packet in queue -> no calculations here */
+
+ackxmit	.(
+
+#ifdef DEBUGTCP2
+DB("ackxmit:")
+.(:ldy #TCB_SND_UNA+2: x1 lda (tcbp),y: jsr EHexout: iny: cpy #TCB_SND_UNA+4:bcc x1: .)
+lda #":":jsr ECout
+jsr ECrlfout
+#endif
+	ldy #TCB_NTXBUF
+	lda (tcbp),y
+	bne noend2
+	clc
+	rts
+noend2
+	ldy #TCB_TXBUF
+	lda (tcbp),y
+	tax
+/*pha: DB("slot:"): pla: jsr EHexout: lda #":": jsr ECout*/
+	jsr getbadr
+	bcc adrok
+	DB("illegal slot# in ackxmit^m^j")
+	jmp freebuf
+adrok
+	sta p2
+	sty p2+1
+
+	ldx #3
+	ldy #TH_SEQ+TCP_OFFSET+3
+l0	lda (p2),y
+	sta tmp,x
+/*jsr EHexout*/
+	dey
+	dex
+	bpl l0
+
+	ldy #IPH_LEN+1
+	lda (p2),y
+	clc
+	adc tmp+3
+	sta tmp+3
+	dey
+	lda (p2),y
+	adc tmp+2
+	sta tmp+2
+	bcc l1
+	inc tmp+1
+	bne l1
+	inc tmp
+l1	
+	lda tmp+3
+	sec
+	sbc #<TCP_OFFSET+TH_OPTIONS
+	sta tmp+3
+	lda tmp+2
+	sbc #>TCP_OFFSET+TH_OPTIONS
+	sta tmp+2
+	bcs l2
+	lda tmp+1
+	bne l3
+	dec tmp
+l3	dec tmp+1
+l2
+#if 0
+lda #":": jsr ECout
+.(:ldy #0: x1 lda tmp,y: jsr EHexout: iny: cpy #4:bcc x1: .)
+jsr ECrlfout
+lda #":": jsr ECout
+.(:ldy #TCB_SND_UNA: x1 lda (tcbp),y: jsr EHexout: iny: cpy #TCB_SND_UNA+4:bcc x1: .)
+jsr ECrlfout
+#endif
+	ldy #TCB_SND_UNA
+l4	lda (tcbp),y
+	cmp tmp-TCB_SND_UNA,y
+	bcc end			; less than packet -> end
+	bne freebuf		; more than packet -> ok
+	iny
+	cpy #TCB_SND_UNA+4
+	bcc l4
+freebuf
+	; got ack for first packet in queue
+#ifdef DEBUGTCP2
+DB("freebuf :")
+ldy #TCP_OFFSET+TH_SEQ+2
+lda (p2),y:jsr EHexout:iny:lda (p2),y:jsr EHexout:jsr ECrlfout
+#endif
+
+	ldy #TCB_TXBUF
+	lda (tcbp),y
+	tax
+	jsr bfree
+
+	ldy #TCB_NTXBUF
+	lda (tcbp),y
+	tax
+	dex
+	txa
+	sta (tcbp),y
+	beq end		; ok, end, nothing left
+
+	ldy #TCB_TXBUF
+l5	iny
+	lda (tcbp),y
+	dey
+	sta (tcbp),y
+	iny
+	dex
+	bne l5
+
+	/* set retransmission counter to 1 to send the next buffer now */
+	ldy #TCB_TRIES
+	lda #0
+	sta (tcbp),y
+	ldy #TCB_RETRANS
+	lda #1
+	sta (tcbp),y
+	iny
+	lda #0
+	sta (tcbp),y
+	
+	jmp ackxmit
+
+end	rts
+	.)
+
+	.bss
+d2len	.word 0
+	.text
+
+hasdata	.(		/* TODO: check with discd */
+	lda dlen
+	ora dlen+1
+	rts
+	.)
+
+bangbuf	.(
+#ifdef DEBUGTCP
+DB("bangbuf: pp=")
+lda pp+1:jsr EHexout: lda pp:jsr EHexout
+DB(", pd=")
+lda pd+1:jsr EHexout: lda pd:jsr EHexout
+jsr ECrlfout
+#endif
+	; first exchange port and IP addresses
+	jsr tcpxp
+	jsr tcpxip
+	jsr shortpk
+
+/*DB("from bangbuf: ")*/
+
+&mkpacket2
+
+#if 0
+DB("mkpacket: pp=")
+lda pp+1: jsr EHexout: lda pp: jsr EHexout
+DB(", pd=")
+lda pd+1: jsr EHexout: lda pd: jsr EHexout
+DB(", ppl=")
+lda ppl+1: jsr EHexout: lda ppl: jsr EHexout
+DB(", pdl=")
+lda pdl+1: jsr EHexout: lda pdl: jsr EHexout
+DB(", slotladr=")
+lda slotladr:jsr EHexout
+jsr ECrlfout
+#endif
+	; this is for other packets also...
+	jsr preptcp
+
+	; make IP header from TCP pseudo header
+	; (i.e. copy the IP addresses to the right location and set protocol
+	; the rest is done in the IP layer
+
+	jsr tcp2ip
+	bcs needmove
+
+	jsr prepip
+
+#if 0 /*def DEBUGTCP*/
+	DB("Send Seq: ")
+	ldy #TH_SEQ
+x1	lda (pd),y
+	jsr EHexout
+	iny
+	cpy #TH_SEQ+4
+	bcc x1
+	DB("^m^jSend Ack: ")
+	ldy #TH_ACK
+x2	lda (pd),y
+	jsr EHexout
+	iny
+	cpy #TH_ACK+4
+	bcc x2
+	DB("^m^jFlag= ")
+	ldy #TH_FLAG
+	lda (pd),y
+	jsr EHexout
+	jsr ECrlfout
+#endif
+	ldx pslot
+	lda #<-1
+	sta pslot
+	jmp queueslot
+needmove
+	jsr tdisc
+	sec
+	rts
+	.)
+/*
+incuna	.(
+	ldy #TCB_SND_UNA+3
+	ldx #3
+	lda (tcbp),y
+	clc
+	adc #1
+	sta (tcbp),y
+	dey
+l5	lda (tcbp),y
+	adc #0
+	sta (tcbp),y
+	dey
+	dex
+	bne l5
+	rts
+	.)
+*/
+/*
+setqseq	.(
+	lda tcbp
+	clc
+	adc #8
+	sta p2
+	lda tcbp+1
+	adc #0
+	sta p2+1
+
+	ldy #TH_SEQ
+l5	lda (p2),y
+	sta (qd),y
+	iny
+	cpy #TH_SEQ+4
+	bcc l5
+	rts
+	.)
+
+setqack	.(
+	lda qd
+	clc
+	adc #4
+	sta p2
+	lda qd+1
+	adc #0
+	sta p2+1
+
+	ldy #TCB_RCV_NXT
+l5	lda (tcbp),y
+	sta (p2),y
+	iny
+	cpy #TCB_RCV_NXT+4
+	bcc l5
+	rts
+	.)
+*/
+
+/* The following routine takes the packet from 
+ * islot/ip/id/ipl/idlen/dlen/doffset/toffset
+ * and queues it to the user data rx queue.
+ * It sets ack appropriately. 
+ * It copies the TCP header into a new packet and sets
+ * islot/ip/..., but dlen is zero.
+ */
+copy_n_queue .(
+	.bss
+myslot	.byt 0
+myhl	.byt 0
+mydlen	.word 0
+	.zero
+myp	.word 0
+	.text
+#if 0
+DB("copy_n_queue: ip=")
+lda ip+1: jsr EHexout: lda ip: jsr EHexout
+DB(", request ")
+lda doffset: jsr EHexout
+DB(" b., dlen=")
+lda dlen+1: jsr EHexout: lda dlen: jsr EHexout
+DB(" , discd=")
+lda discd+1: jsr EHexout: lda discd: jsr EHexout
+jsr ECrlfout
+#endif
+	lda dlen+1	; dlen = discd ? then return ok
+	cmp discd+1
+	bne ok
+	lda dlen
+	cmp discd
+	bne ok
+	clc
+	rts
+ok
+	lda doffset
+	ldy #0
+	jsr balloc
+	bcc gotbuffer
+	rts
+gotbuffer
+	stx myslot
+	jsr getbadr
+	bcc adrok
+	DBTCP("illegal slot# in copy_n_queue^m^j")
+	sec
+	rts
+adrok
+	sta myp
+	sty myp+1
+
+	lda phl
+	sta myhl
+/*
+DB("got buffer slot ")
+lda myslot: jsr EHexout: DB(" @ address ")
+lda myp+1: jsr EHexout: lda myp: jsr EHexout
+jsr ECrlfout
+*/
+	ldy #0
+l0	lda (pp),y
+	sta (myp),y
+/*jsr EHexout*/
+	iny
+	cpy doffset
+	bne l0
+
+	ldy #0
+	lda doffset
+	clc
+	adc discd
+	sta (pp),y		/* save for queue routines */
+	tya
+	adc discd+1
+	iny
+	sta (pp),y
+	iny
+	lda dlen
+	sec
+	sbc discd
+	sta mydlen
+	sta (pp),y
+	iny
+	lda dlen+1
+	sbc discd+1
+	sta mydlen+1
+	sta (pp),y
+
+/*lda #" ": jsr ECout: tya: jsr EHexout*/
+/*
+	lda myp
+	sta ip
+	clc
+	adc phl
+	sta id
+	lda myp+1
+	sta ip+1
+	adc #0
+	sta id+1
+
+	lda doffset
+	sec
+	sbc phl
+	sta idlen
+	lda #0
+	sta idlen+1
+*/
+	lda pslot
+	jsr rx_queue_packet
+	bcs boom
+
+	lda mydlen
+	ldx mydlen+1
+	jsr addrxnxt
+boom
+	lda #0
+	sta mydlen
+	sta mydlen+1
+
+	ldx myslot
+	lda myhl
+	jsr getpinfo
+	bcc piok
+	DBTCP("getpi error in copy_n_queue^m^j")
+piok
+/*
+DB("copy_n_queue returns ip=")
+lda ip+1: jsr EHexout: lda ip: jsr EHexout
+DB(", id=")
+lda id+1: jsr EHexout: lda id: jsr EHexout
+jsr ECrlfout
+*/
+	clc
+nobuffer
+	rts
+	.)
+
+/* retransmit the first packet in the retransmission queue */
+&retransmit .(
+	ldy #TCB_NTXBUF
+	lda (tcbp),y
+	beq ende
+
+	ldy #TCB_TXBUF
+	lda (tcbp),y
+	tax
+
+	ldy #TCB_TRIES
+	lda (tcbp),y
+	clc
+	adc #1
+	cmp #10		; retransmit 6 times only ?
+	bcs error
+
+	pha
+	jsr incownr
+	jsr queueslot
+	pla
+	bcs endeini
+
+	ldy #TCB_TRIES
+	sta (tcbp),y
+#ifdef DEBUGTCP2
+DB("retransmit seq=")
+ldy #TCB_TXBUF:lda (tcbp),y:tax:jsr getbadr
+.zero:foo .word 0:.text:sta foo:sty foo+1
+ldy #TCP_OFFSET+TH_SEQ+2:lda (foo),y:jsr EHexout:iny:lda (foo),y:jsr EHexout
+jsr ECrlfout
+#endif	
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_TIMEW
+	bne doit
+
+	jsr flushqueue
+	rts
+doit
+	ldy #TCB_RETRANS
+	lda #<TIME_RETRANS
+	sta (tcbp),y
+	iny
+	lda #>TIME_RETRANS
+	sta (tcbp),y
+	rts
+
+error	DBTCP("error^m^j")
+	jsr tclose
+ende	rts
+
+endeini	
+	ldy #TCB_RETRANS
+	lda #1
+	sta (tcbp),y
+	iny
+	lda #0
+	sta (tcbp),y
+	clc
+	rts
+
+	.)
+
+/* this routine puts outgoing packets into the retransmission queue and sends
+ * them. It needs tcbp, and the packet buffer number in x. It always does
+ * a bfree.
+ */
+&tx_queue_packet .(
+	lda #TCP_OFFSET
+	jsr getpinfo
+	bcc piok
+	DBTCP("getpi error in tx_queue_packet^m^j")
+	sec
+	rts
+piok
+	ldy #0
+	lda (pp),y
+	cmp #<TCP_DOFFSET
+	bne move
+	iny
+	lda (pp),y
+	cmp #>TCP_DOFFSET
+	beq ok
+
+move	DB("TCP offset wrong!^m^j")
+#ifdef DEBUGTCP
+	lda pslot:jsr EHexout:lda #"-":jsr ECout
+	lda pp+1: jsr EHexout: lda pp: jsr EHexout: lda #":": jsr ECout
+	ldy #0: xx lda (pp),y: jsr EHexout: iny: cpy #10: bcc xx
+	jsr ECrlfout
+#endif
+qdisc
+	ldx pslot
+	lda #<-1
+	sta pslot
+	jsr bfree
+
+	lda #<-1
+	sec
+	rts
+
+ok
+	iny
+	lda (pp),y
+	sta dlen	; len
+	iny
+	lda (pp),y
+	sta dlen+1
+
+	jsr setout
+	jsr setseq
+	jsr setack
+
+	lda dlen
+	ldx dlen+1
+	jsr addtxnxt		; inc seq number
+
+        jsr preptcp
+        jsr tcp2ip
+        bcs qdisc
+
+        jsr prepip
+&do_requeue
+	jsr do_queue		; does an incownr
+	bcs notqueued
+
+	ldx pslot
+	lda #<-1
+	sta pslot
+	jsr queueslot
+	lda #0
+	clc
+	rts
+
+notqueued
+	ldx pslot		; we are not expected to keep a reference here
+	jsr bfree
+
+	lda #0
+	sec
+	rts
+	.)
+
+/* 
+ * requeue a packet that has already been to tx_queue_packet, but could
+ * not be queued. does a bfree.
+ */
+&tx_requeue_packet .(
+	stx pslot
+#ifdef DEBUGTCP2
+	lda #TCP_OFFSET
+	jsr getpinfo
+#endif
+	jmp do_requeue
+/*
+	jsr do_queue
+	php
+	ldx pslot
+	jsr bfree
+	plp
+	rts
+*/
+	.)
+
+do_queue
+	.(
+	ldy #TCB_NTXBUF
+	lda (tcbp),y
+	cmp #TCP_MAXTXB
+	bcc queueok
+	rts
+queueok
+	adc #1
+	sta (tcbp),y
+	clc
+	adc #TCB_TXBUF-1
+	tay
+
+	lda pslot
+	sta (tcbp),y
+	tax
+	jsr incownr
+
+	cpy #TCB_TXBUF		; not only block in buffer -> don't set time
+	bne notime
+
+	ldy #TCB_TRIES
+	lda #0
+	sta (tcbp),y		; no tries so far
+	ldy #TCB_RETRANS+1	; send in the next loop
+	sta (tcbp),y
+	lda #1
+	dey
+	sta (tcbp),y
+notime
+#ifdef DEBUGTCP2
+	DB("queued seq=")
+	ldy #TCP_OFFSET+TH_SEQ+2
+	lda (pp),y
+	jsr EHexout
+	iny
+	lda (pp),y
+	jsr EHexout
+	DB(" pp= ")
+	lda pp+1:jsr EHexout:lda pp:jsr EHexout
+	jsr ECrlfout
+#endif
+	clc
+	rts
+	.)
+
+setout	.(
+	; make TCP packet from data
+	clc
+	lda #4
+	adc pd
+	sta p2
+	lda #0
+	adc pd+1
+	sta p2+1
+
+	ldy #TH_SRCIP
+l0	lda (tcbp),y
+	sta (p2),y
+	iny
+	cpy #TH_SRCIP+4
+	bcc l0
+
+	sec
+	lda pd
+	sbc #4
+	sta p2
+	lda pd+1
+	sbc #0
+	sta p2+1
+
+	ldy #TH_TRGIP
+l1	lda (tcbp),y
+	sta (p2),y
+	iny
+	cpy #TH_TRGIP+4
+	bcc l1
+
+	ldy #TCB_SRCP
+	lda (tcbp),y
+	tax
+	iny
+	lda (tcbp),y
+	ldy #TH_TRGP+1
+	sta (pd),y
+	dey
+	txa
+	sta (pd),y
+
+	ldy #TCB_TRGP
+	lda (tcbp),y
+	tax
+	iny
+	lda (tcbp),y
+	ldy #TH_SRCP+1
+	sta (pd),y
+	dey
+	txa
+	sta (pd),y
+
+	ldy #TH_PTCL-1
+	lda #0
+	sta (pd),y
+	iny
+	lda #6
+	sta (pd),y
+	iny 
+	iny
+	lda pdl
+	sec
+	sbc #<TPH_LEN
+	sta (pd),y
+	dey
+	lda pdl+1
+	sbc #>TPH_LEN
+	sta (pd),y
+
+	ldy #TH_DOFFSET
+	lda #$50
+	sta (pd),y
+	iny
+	lda #THF_ACK
+	sta (pd),y
+
+	rts
+	.)
+
+&send_syn
+	lda #THF_SYN
+	.byt $2c
+&send_reset
+	lda #THF_RST
+;	.byt $2c
+;&send_fin
+;	lda #THF_FIN+THF_ACK
+&send_flag
+	.(
+;inc $d020
+		/* TODO: set queued FIN until everything is really ok */
+	sta tmp
+
+	lda #<TH_OPTIONS+TCP_OFFSET
+	ldy #>TH_OPTIONS+TCP_OFFSET
+	jsr balloc
+	bcc ok
+	DB("Couldn't alloc send_* buffer!^m^j")
+	sec
+	rts
+ok	;stx qslot
+	lda #TCP_OFFSET
+	jsr getpinfo
+	bcc piok
+	DB("getpi error in send_*^m^j")
+	sec
+	rts
+piok
+	jsr setout
+	jsr setack
+
+	ldy #TH_FLAG
+	lda tmp
+	sta (pd),y
+
+	and #THF_FIN+THF_SYN
+	beq nofin
+
+	ldy #TCB_FLAG2
+	and (tcbp),y
+	beq nodec	; already sent -> decrement seq before sending
+
+	jsr decseq
+nodec
+	jsr setseq	; set packet sequence number
+
+	lda #1
+	ldx #0
+	jsr addtxnxt
+
+	ldy #TCB_FLAG2
+	lda (tcbp),y
+	ora tmp
+	sta (tcbp),y
+
+	;ldx pslot	- implicit
+	jsr do_queue	; everthing adding to snd_nxt should be queued!
+	bcc nofin2
+
+	ldx pslot
+	jsr bfree
+	sec
+	rts 		; return if not able to queue
+
+nofin	jsr setseq
+nofin2	jmp mkpacket2
+	.)
+
+&tclose	.(
+	/* ok, clean up connection specific stuff */
+	lda #TE_SIG_TERM
+	jsr signal_user
+
+	ldy #TCB_STATE
+	lda #TCP_CLOSED
+	sta (tcbp),y
+
+&&flushqueue
+#ifdef DEBUGTCP2
+DB("flushqueue^m^j")
+#endif
+	ldy #TCB_NTXBUF
+	lda (tcbp),y
+	beq end
+	clc
+	adc #TCB_TXBUF-1
+	sta tmp
+l1	ldy tmp
+	cpy #TCB_TXBUF		; -1
+	bcc end
+
+	lda (tcbp),y
+	tax
+	jsr bfree
+	dec tmp
+	jmp l1
+
+end	ldy #TCB_NTXBUF
+	lda #0
+	sta (tcbp),y
+	rts
+	.)
+
+
+settcb	.(
+#if (TCB_LEN - 64)
+#warning TCB length not correct!
+#else
+	lda #0
+	sta tcbp+1
+	txa
+	asl
+	rol tcbp+1
+	asl
+	rol tcbp+1
+	asl
+	rol tcbp+1
+	asl
+	rol tcbp+1
+	asl
+	rol tcbp+1
+	asl
+	rol tcbp+1
+	clc
+	adc #<tcb
+	sta tcbp
+	lda #>tcb
+	adc tcbp+1
+	sta tcbp+1
+	rts
+#endif
+	.)
+
+gettcb	.(
+	ldx #0
+l0	jsr settcb
+	ldy #TCB_STATE
+	lda (tcbp),y
+	cmp #TCP_CLOSED
+	beq l1
+	inx
+	cpx #MAXCONN
+	bcc l0
+	sec
+	rts
+l1	ldy #TCB_NTXBUF
+	lda #0
+	sta (tcbp),y
+	ldy #TCB_FLAG
+	sta (tcbp),y
+	iny		; TCB_FLAG2
+	sta (tcbp),y
+	ldy #TCB_LSTATE
+	lda #TCP_CLOSED
+	sta (tcbp),y
+
+	; clear connection specific data 
+	lda #0
+	ldy #TCB_CONN
+l2	sta (tcbp),y
+	iny
+	cpy #TCB_LEN
+	bcc l2
+	clc
+	rts
+	.)
+
+&&tcp_kill .(
+DB("tcp_kill^m^j")
+	ldx #0
+l0	stx conn
+	jsr settcb
+	ldy #TCB_STATE
+	lda (tcbp),y
+	beq next
+	cmp #TCP_LISTEN
+	beq next
+	txa
+	pha
+DB("kill conn ")
+txa:jsr EHexout:jsr ECrlfout
+	lda #TE_SIG_RESET
+	jsr signal_user
+	pla
+	tax
+next	inx
+	cpx #MAXCONN
+	bcc l0
+	rts
+	.)
+
+#include "tutil.a65"
+#include "tcpuser.a65"
+#ifndef NO_TEST
+#include "tcpsrv.a65"
+#endif
+#ifndef NO_FSTCP
+#include "fstcp.a65"
+#endif
+#ifndef NO_WWW
+#include "wwwsrv.a65"
+#endif
+#ifdef RSH_BIN		/* must be before LIBIP */
+#include "rsh.a65"
+#endif
+#ifndef NO_LIBIP
+#include "libip.a65"
+#endif
+
+	.)
+

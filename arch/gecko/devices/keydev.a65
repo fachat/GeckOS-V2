@@ -1,0 +1,356 @@
+
+
+#define   VIA       $ec10
+#define   IRQTIME   50000
+
+          .(
+          .word devend
+          jmp prg1
+          .asc "keys",0
+
+	.data
+status    .byt 0
+outstr    .byt 0
+	.text
+
+prg1   
+          cmp #DC_RES
+          beq devini
+          
+          pha
+          lda status
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq
+          jmp others
+
+devini    lda #0
+          sta status
+/*          sta instr*/
+          sta outstr
+
+/************************ Reset ************************************/
+
+          jsr inikeys
+          lda VIA+VIA_ACR
+          and #%11011111
+          sta VIA+VIA_ACR
+          lda #%00100000
+          sta VIA+VIA_IFR
+          lda #%10100000
+          sta VIA+VIA_IER
+          lda #<IRQTIME
+          sta VIA+VIA_T2CL
+          lda #>IRQTIME
+          sta VIA+VIA_T2CH
+          
+/******* go on here or on error goto devx **************************/
+
+rts1hi
+
+/***************** here if stream over highwatermark ***************/
+
+/*******************************************************************/
+
+          clc
+          rts
+          
+devx      lda status
+          ora #2
+          sta status
+          lda #E_NOTIMP
+          sec
+          rts
+          
+devirq    .(
+
+/*************** Is interrupt for device? no, then irqend **********/
+
+          lda VIA+VIA_IFR
+          and #%00100000
+          beq irqend
+          lda #>IRQTIME
+          sta VIA+VIA_T2CH
+          
+/************************ here if irq for device *******************/
+
+          lda status
+          bpl tx
+
+/**** get byte to ac - if non rx'd, goto nobyt **********************/
+
+          jsr getkey
+          bcs nobyt
+          txa
+          
+/*********************************************************************/
+
+          ldx outstr
+          jsr PUTC
+          bcs test
+
+nobyt     ldx outstr
+          lda #SC_STAT
+          jsr STRCMD
+          
+test      bcc tx
+          cmp #E_NUL
+          bne tstwater
+          jsr rxoff
+          jmp tx
+          
+tstwater /*
+          cmp #E_SEMPTY
+          beq wl
+          tax
+          lda status
+          and #1
+          bne wh
+          txa
+          cmp #E_SFULL
+          beq wh
+          cmp #E_SHWM
+          bne twl
+wh        jsr rts1hi
+          bcc tx         ; always
+twl       cmp #E_SLWM
+          bne tx
+          
+wl        
+/******** here action if stream below lowwatermark *******************/
+
+/*********************************************************************/
+*/
+tx/*
+          lda status
+          rol
+          bpl irqhs
+          
+/******* hardware ready to send? if not goto irqhs *******************/
+
+          jmp irqhs
+          
+/*********************************************************************/
+
+          ldx instr
+          jsr GETC
+          bcs test2
+          
+/***************** send byte in ac **********************************/
+
+/********************************************************************/
+
+          jmp irqhs
+test2     cmp #E_EOF
+          bne irqhs
+          jsr txoff
+*/
+irqhs     
+
+/**************** clear interrupt at end of irq service ************/
+
+/*******************************************************************/
+
+irqend    rts
+
+          .)
+
+devonx    jmp devon
+others  /*
+          cmp #DC_GS
+          bne o1
+          lda status
+          and #DC_SW_TX
+          bne devonx
+          tya
+          sta instr
+          jmp ok    */
+          
+o1        cmp #DC_PS
+          bne o2
+          lda status
+          and #DC_SW_RX
+          bne devonx
+          sty outstr
+okx       jmp ok
+o2        cmp #DC_RX_ON
+          bne o3
+
+/********************* test if receive allowed ********************/
+
+/************************ if not, goto onotimp ********************/
+
+          lda #DC_SW_RX
+          bne o2a
+o3        cmp #DC_TX_ON
+          bne o4
+
+/********************* test if send allowed ***********************/
+
+          jmp onotimp
+          
+/************************ if not, goto onotimp ********************/
+
+          lda #DC_SW_TX
+o2a       ora status
+          sta status
+          bne okx
+o4        cmp #DC_RX_OFF
+          bne o5
+
+rxoff     lda status
+          and #DC_SW_RX
+          beq devoffx
+          ldx outstr
+          lda #SC_EOF
+          jsr STRCMD
+          lda status
+          and #255-DC_SW_RX
+          sta status
+          jsr rts1hi
+          bcc okx
+devoffx   jmp  devoff
+
+o5    /*
+          cmp #DC_TX_OFF
+          bne o6
+
+txoff     lda status
+          and #DC_SW_TX
+          beq devoffx
+          ldx instr
+          lda #SC_NUL
+          jsr STRCMD
+          lda status
+          and #255-DC_SW_TX
+          sta status
+          jmp ok
+          
+o6
+          cmp #DC_HS
+          bne o6a
+
+/******************** here handshake ************************/
+
+          lda status
+          and #255-1
+          sta status
+          tya
+          and #1
+          ora status
+          sta status
+
+/***********************************************************/
+
+          jmp ok
+        
+o6a       cmp #DC_SPD
+          bne o7
+          
+/****************** here speed *****************************/
+
+/***********************************************************/
+
+          jmp ok
+*/
+o7        cmp #DC_ST
+          bne o8
+
+          lda status,x
+          and #2
+          bne onotimp
+                    
+/****************** here status report *********************/
+
+/***********************************************************/
+
+          jmp ok
+
+o8        cmp #DC_EXIT
+          bne onotimp
+          jsr rxoff
+/*          jsr txoff*/
+          lda status
+          ora #2
+          sta status
+
+/****************** disable irq (Exit) *********************/
+
+          lda #%00100000
+          sta VIA+VIA_IER
+          
+/*********************************************************************/
+          
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+/************** other device code **********************************/
+
+	.data
+lastkey   .byt 0
+	.text
+
+inikeys   .(
+          lda #<-1
+          sta lastkey
+          lda #%00001111
+          sta VIA+VIA_DDRA
+          cmp VIA+VIA_DDRA
+          bne novia
+          lda #0
+          sta VIA+VIA_DRA
+          clc
+          rts
+novia     sec
+          rts
+          .)
+          
+getkey    .(
+          ldx #0
+          
+g0        txa
+          lsr
+          lsr
+          sta VIA+VIA_DRA
+g1        lda VIA+VIA_DRA
+          cmp VIA+VIA_DRA
+          bne g1
+          
+          ldy #4
+g2        rol
+          bcc pressed
+          inx
+          dey
+          bne g2
+
+          cpx #64
+          bcc g0
+          stx lastkey
+nokey     sec
+          rts
+
+pressed   cpx lastkey
+          stx lastkey
+          beq nokey
+          clc
+          rts
+          .)
+          
+/*********************************************************************/
+
+devend    .)
+

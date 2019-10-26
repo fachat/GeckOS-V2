@@ -1,0 +1,140 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef   _KERNEL_H_
+#define   _KERNEL_H_
+
+#echo "kernel jump table"
+
+#define	OSA_VERSION	"2.0.0"
+#define	OSA_NAME	"GeckOS/A65"
+
+#define		RESET     OSA2KERNEL
+
+#define		ENMEM     OSA2KERNEL+$3
+#define		SETBLK    OSA2KERNEL+$6
+
+#define		GETSTR    OSA2KERNEL+$9
+#define		FRESTR    OSA2KERNEL+$c
+#define		PUTC      OSA2KERNEL+$f
+#define		GETC      OSA2KERNEL+$12
+#define		UNGETC    OSA2KERNEL+$15
+#define		STRCMD    OSA2KERNEL+$18
+
+#define		DEVCMD    OSA2KERNEL+$1b
+
+#define		FORK      OSA2KERNEL+$1e
+#define		TERM      OSA2KERNEL+$21
+#define		KILL      OSA2KERNEL+$24
+#define		YIELD     OSA2KERNEL+$27
+#define		FORKT	  OSA2KERNEL+$2a
+#define		SBRK	  OSA2KERNEL+$2d
+
+#define		GETINFO   OSA2KERNEL+$30
+
+#define		DUP       OSA2KERNEL+$33
+
+#define		GETSEM    OSA2KERNEL+$36
+#define		FRESEM    OSA2KERNEL+$39
+#define		PSEM      OSA2KERNEL+$3c
+#define		VSEM      OSA2KERNEL+$3f
+
+#define		SEND      OSA2KERNEL+$42
+#define		RECEIVE   OSA2KERNEL+$45
+
+#define		SETSIG    OSA2KERNEL+$48
+#define		SENDSIG   OSA2KERNEL+$4b
+
+#define		TDUP      OSA2KERNEL+$4e
+#define		XRECEIVE  OSA2KERNEL+$51
+
+#define		SETNMI    OSA2KERNEL+$54
+#define		CTRLNMI   OSA2KERNEL+$57
+
+#define		GETPID	  OSA2KERNEL+$5a
+
+#define		SLOCK	  OSA2KERNEL+$5d
+#define		RENICE	  OSA2KERNEL+$60
+#define		CHECKCHLD OSA2KERNEL+$63
+
+#endif
+
+#ifdef    SYSTEM
+
+
+#if *-OSA2KERNEL
+echo Warning: Kernel jump table at wrong address!
+#endif
+
+jmp preset
+
+jmp enmem
+jmp setblk
+
+jmp getstr    
+jmp frestr
+jmp putc
+jmp getc
+jmp ungetc
+jmp gets
+
+jmp devcmd
+
+jmp fork
+jmp kterm
+jmp kkill
+jmp suspend
+jmp forkt
+jmp sbrk
+
+jmp getinfo
+
+jmp kdup
+
+jmp getsem
+jmp fresem
+jmp kpsem
+jmp kvsem
+
+jmp ksend
+jmp kreceive
+
+jmp setsig
+jmp sendsig
+
+jmp tdup
+jmp xreceive
+
+jmp setnmi
+jmp ctrlnmi
+
+jmp kgetpid
+
+jmp slock
+jmp renice
+jmp checkchld
+
+#endif
+
+

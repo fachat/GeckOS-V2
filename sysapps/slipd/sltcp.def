@@ -1,0 +1,167 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.3.12
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************/
+/*      SLIP constants                                                */
+
+#define SL_END          192
+#define SL_ESC          219
+#define SL_ESC_END      220
+#define SL_ESC_ESC      221
+
+/**********************************************************************/
+/*      IP structs                                                    */
+
+#define IPH_VER         0
+#define IPH_SERVICE     1
+#define IPH_LEN         2
+#define IPH_ID          4
+#define IPH_FL          6
+#define IPH_TTL         8
+#define IPH_PROT        9
+#define IPH_CSUM        10
+#define IPH_SRC         12
+#define IPH_TRG         16
+
+/**********************************************************************/
+/*      ICMP constants                                                */
+
+#define ICMP_TYPE       0
+#define ICMP_CODE       1
+#define ICMP_CSUM       2
+
+
+/**********************************************************************/
+/*      TCP defines                                                   */
+
+#define	TIMER		25	/* makes other times in ca. 1/10 Hz */
+
+#define	TIME_MSL	100	/* 10 seconds ? */
+#define	TIME_LASTACK	200	/* 20 seconds ? */
+#define	TIME_FINW2     200	/* 20 seconds ? */
+#define	TIME_RETRANS	30	/* 3 seconds ? */
+
+#define	MAXCONN		12
+
+/* TCP connection states */
+#define	TCP_CLOSED	0
+#define	TCP_LISTEN	1
+#define	TCP_SYNRXD	2
+#define	TCP_SYNTXD	3
+#define	TCP_ESTAB	4
+#define	TCP_FINW1	5
+#define	TCP_FINW2	6
+#define	TCP_CLOSEW	7
+#define	TCP_LASTACK	8
+#define	TCP_CLOSING	9
+#define	TCP_TIMEW	10
+
+/* TCP header, including pseudo header */
+#define	TH_SRCIP	0	/**/
+#define	TH_TRGIP	4
+#define	TH_PTCL		9
+#define	TH_TCPLEN	10
+#define	TH_SRCP		12	/* source port */
+#define	TH_TRGP		14	/* target port */
+#define	TH_SEQ		16
+#define	TH_ACK		20
+#define	TH_DOFFSET	24
+#define	TH_FLAG		25
+#define	TH_WINDOW	26
+#define	TH_CHECK	28
+#define	TH_URGENT	30
+#define	TH_OPTIONS	32
+
+/* TCP pseudo header length */
+#define	TPH_LEN		12
+
+/* TCP flag values */
+#define	THF_FIN		$01
+#define	THF_SYN		$02
+#define	THF_RST		$04
+#define	THF_PSH		$08
+#define	THF_ACK		$10
+#define	THF_URG		$20
+
+#define	TCP_MAXTXB	3	/* length of retransmission buffer queue */
+
+/* transmission control block */
+#define	TCB_HDR		0	/* pseudo header struct (TCB_HDR must be 0) */
+#define	TCB_SRCIP	(TCB_HDR+TH_SRCIP)	/* SRCIP - TRGP are used to */
+#define	TCB_TRGIP	(TCB_HDR+TH_TRGIP)	/* ident connection (hi-lo!)*/
+#define	TCB_SRCP	(TCB_HDR+TH_SRCP)
+#define	TCB_TRGP	(TCB_HDR+TH_TRGP)
+#define	TCB_RCV_NXT	(TCB_HDR+TH_SEQ)	/* needed to compare */	
+#define	TCB_SND_UNA	(TCB_HDR+TH_ACK)	/*        ...        */
+#define	TCB_SND_NXT	24	/* high-low format! */
+#define	TCB_MAXSEG	28	/* two byte */
+#define	TCB_SERVICE	30	/* pointer to service struct */
+#define	TCB_STATE	32	/* state of connection */
+#define	TCB_LSTATE	33	/* last state of connection */
+#define	TCB_FLAG	34	/* TCP flag to be sent */
+#define	TCB_FLAG2	35	/* TCP flag already sent */
+#define	TCB_MSL		36	/* two byte time count */
+#define	TCB_RETRANS	38	/* two byte time count */
+#define	TCB_TRIES	40	/* number of sends so far */
+#define	TCB_NTXBUF	41	/* number of buffers in retranmission buffer */
+#define	TCB_TXBUF	42	/* retransmission buffer length is TCB_MAXTB */
+				/* connection specific stuff starts here */
+#define	TCB_CONN	(TCB_TXBUF+TCP_MAXTXB)
+
+#define	TCB_LEN		64	/* actually: (41+TCP_MAXTXB+conn_stuff) but 
+				   address computation is simpler this way 
+				   (settcb) */
+
+#define	TCPWIN		512	/* we have a receive window of this size */
+#define	TCPSEG		256	/* we send maximal TCPSEG sized segments */
+
+#define	TCP_OFFSET	8	/* offset from IP hdr start to TCP pseudo hdr */
+
+				/* where does TCP data start in IP packet? */
+#define	TCP_DOFFSET	(TCP_OFFSET+TH_OPTIONS)
+
+/* service struct */
+#define	SRV_RIP		0	/* SRV_RIP must be == TCB_SRCIP */
+#define	SRV_RPORT	4
+#define	SRV_LPORT	6
+#define	SRV_FLAG	8	/* service flags */
+#define	SRV_OPEN	9	/* called when listen port opened */
+#define	SRV_QUEUE	11	/* routine to queue packets for this service */
+				/* routine gets packet slot in x, tcbp & srv */
+#define	SRV_LOOP	13	/* loop routine */
+#define	SRV_SIGNAL	15	/* signal callback; ac = signal (TE_*) */
+#define	SRV_LEN		17
+
+/* service flags */
+#define	SFL_MULT	1	/* if set, immediately set up listening  */
+				/* service again on connect */
+
+/* signal codes for user_signal */
+#define	TE_SIG_TERM	<-1	/* connection terminates (RST receveived) */
+#define	TE_SIG_FIN	<-2	/* FIN received */
+#define	TE_SIG_RESET	<-3	/* RST received in SYNRXD state */
+
+/* error codes returned to the user */
+#define	TE_NOCONN	<-4	/* illegal connection number */
+#define	TE_CLOSING	<-5	/* connection already closing */
+

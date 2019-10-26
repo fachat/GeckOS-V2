@@ -1,0 +1,10 @@
+
+	.byt 2		; jam if start from the beginning of the file
+foo
+main			; not at the beginning 
+	lda LIB6502
+	lda OSA2KERNEL
+	inc $d020
+	rts
+
+

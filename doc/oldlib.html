@@ -1,0 +1,59 @@
+<html><head>
+<title> OS/A65 Standard Library </title>
+</head><body>
+<p><h1 align=center> OS/A65 Standard Library </h1></p>
+<p> <h2 align=center> (c) 1989-98 Andre Fachat </h2></p>
+<hr>
+<pre>
+The CS/A65 standard library is a set of routines that run in user space and
+can be called if the appropriate memory page ($e000-$e7ff) is mapped in
+from the system ROM (at $0e000 bus address space).
+The zeropage addresses $10-$28 are being used by the library at this
+time.
+
+$e7fd	Fgetc	Get a byte from a stream, and wait until the byte is ready,
+		using YIELD. parameter: stream number in x, returns
+		the read byte in a
+$e7fa	Fputc	Write a byte on a stream, waiting until it can be delivered
+		parameter: stream number in x, data byte in a
+$e7f7	Getc	same as Fgetc, for STDIN
+$e7f4	Putc	same as Fputc, for STDOUT
+$e7f1	Txtout	Write a null terminated string up to 254 byte to STDOUT
+		parameter: a/y=address of string (a=lowbyte, y=highbyte)
+$e7ee	Hexout	Write a byte to STDOUT in hex. parameter: byte in a
+$e7eb	Crlfout	Write carriage return and line feed to STDOUT
+$e7e8	Serbrk	reads the status of STDIN and tests if it is E_SEMPTY
+		If it is, carry is cleared, otherwise it is set.
+$e7e5	Dezbout	writes a byte in decimal to STDOUT
+$e7e2	Assign	handles a 10 byte table, that is e.g. used to implement
+		the assign command in fsiec
+		(carry=0): reads a table entry. parameter: table index in x,
+		returns new value in x (a and y are preserved)
+		(carry=1, x&lt;0): initialize table with a[i]=i
+		(carry=1, 0&lt;=x&lt;10): write new table value
+		parameter: table index in x, new value in a
+$e7df	Getname	reads a string from memory and tries to interpret it as
+		a filename (with possibly leading 'drive:' and paths...)
+		leading spaces are ignored. The filename is saved in
+		PCBUF+FS_OPEN_NAME. If a drive is given, it is put
+		into PCBUF+FS_OPEN_DRV. Otherwise this is set to -1
+		parameter: a/y=address of string, returns PCBUF+...
+$e7de	Chdir	takes the contents of PCBUF+FS_CMD_* and interprets it as
+		a 'change directory' operation, to be done to a given
+		path. "." and ".." are interpreted as usual.
+		parameter: a/y=address of path, x maximal length of path
+$e7d9	Usedir	Takes a path and applies it to a filename in PCBUF.
+		If the filename in PCBUF contains a drive or an absolut
+		filename is given, nothing is done. Otherwise the 
+		the path is put in front of the filename and is put
+		into PCBUF again. The path is not changed. "." and ".."
+		are not removed here.
+		parameter: a/y=address of path, PCBUF+...
+		returns new filename in PCBUF+...
+$e7d6	Set2name copies a string into PCBUF
+		parameter: a/y=address of null terminated string, 
+		position the name has to be copied to in PCBUF in x.
+
+</pre>
+</body>
+</html>

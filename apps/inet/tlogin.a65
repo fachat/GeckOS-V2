@@ -1,0 +1,193 @@
+/****************************************************************************
+
+    OS/A65 Version 2.0.0
+    lib6502 tlogin program
+
+    Copyright (C) 1997-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+
+#define	TEL_WILL	251
+#define	TEL_WONT	252
+#define	TEL_DO		253
+#define	TEL_DONT	254
+#define	TEL_IAC		255
+
+#define	TEL_SUPPRESSGA	3
+#define	TEL_ECHO	1
+
+#define	BUFLEN	100
+
+	.(
+	.zero
+p	.word 0
+	.bss
+buf	.dsb BUFLEN
+	.text
+
++main	.(
+	lda #<ltext
+	ldy #>ltext
+	jsr txtout
+
+	jsr getline
+	bcs terminate
+
+	lda #<pw_name
+	ldy #>pw_name
+	jsr chkin
+	php
+
+	lda #<ptext
+	ldy #>ptext
+	jsr txtout
+
+	jsr getline
+	bcs terminate
+
+	lda #<etext
+	ldy #>etext
+	jsr txtout
+
+	lda #<pw_passwd
+	ldy #>pw_passwd
+	jsr chkin
+	bcs terminate
+	plp
+	bcs terminate
+
+	jsr clrbuf
+
+	lda #<pw_shell
+	ldy #>pw_shell
+	jsr exec
+
+	lda #<errsh
+	ldy #>errsh
+	jsr txtout
+
+terminate
+	jsr clrbuf
+	jmp term
+	.)
+
+clrbuf	.(
+	ldy #0
+	tay
+l3	sta buf,y
+	iny
+	cpy #BUFLEN
+	bcc l3
+	rts
+	.)
+
+chkin	.(
+	sta p
+	sty p+1
+
+	ldy #<-1
+l1	iny
+	lda (p),y
+	cmp buf,y
+	bne end2
+	cmp #0
+	bne l1
+	clc
+	rts
+end2	sec
+	rts
+	.)
+	
+getline	.(
+	.bss
+	.text
+
+	sta p
+	sty p+1
+
+	ldy #0
+l0	sec
+	ldx #STDIN
+	jsr fgetc
+	bcs ende
+	cmp #TEL_IAC
+	beq telcmd
+	cmp #10
+	beq l0
+	cmp #13
+	beq cende
+	sta buf,y
+	iny
+	cpy #BUFLEN
+	bcc l0
+	bcs ende
+
+cende	lda #0
+	sta buf,y
+	clc
+ende 	rts
+
+telcmd	sec
+	jsr fgetc
+	cmp #TEL_WILL
+	bcc xende
+	cmp #TEL_DO+1
+	bcs xende
+	sec
+	jsr fgetc
+xende	jmp l0
+	.)
+
+txtout	.(
+
+	sta p
+	sty p+1
+	ldy #0
+l0	lda (p),y
+	beq end
+	sec
+	ldx #STDOUT
+	jsr fputc
+	iny
+	bne l0
+end	rts
+	.)
+
+	.data
+
+ltext	; .asc TEL_IAC, TEL_DO, TEL_SUPPRESSGA
+	.asc "^m^jC64 telnet server^m^jOS/A65 operating system^m^j"
+	.asc "http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html"
+	.asc "^m^j^m^jlogin: ",0
+ptext	.asc "password: ", TEL_IAC, TEL_WILL, TEL_ECHO, 0
+etext	.asc TEL_IAC, TEL_WONT, TEL_ECHO, 13,10,0 
+
+errsh	.asc "^m^jCould not open shell!^m^j",0
+
+pw_name	.asc "c64",0		/* replace this with login name */
+pw_passwd
+	.asc "guest",0		/* replace this with login password */
+pw_shell
+	.asc "mon",0,0		/* replace this with shell to exec when
+				   login takes place - pwd as given to 
+				   tlogin, i.e. as given to slipd. */
+
+	.)
+
+

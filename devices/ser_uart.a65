@@ -1,0 +1,506 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+    Generic UART 16550 serial line device
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This is an UART 16550A serial line driver for CS/A65.
+ * It uses the hardware installed in my personal C64. The
+ * 16550A is mapped at $d600, above the SID.
+ *
+ * The 16550 is not really an easy chip, but it has 16 byte
+ * input and output FIFO buffers, which allows much higher
+ * interrupt latencies.
+ */
+
+#ifdef UARTBASE
+#define	UART		UARTBASE
+#else
+#define UART		$d600
+#endif
+
+#ifdef UARTXTAL
+#define	XTALMULT	UARTXTAL
+#else
+#define	XTALMULT	1
+#endif
+
+#include "chips/uart16550.i65"
+
+#define	Anzdev	1
+
+          .(
+	  .word devend2
+	  jmp prg1
+	  .asc "ser",sernr, 0
+
+-sernr += 1
+
+/*
+ * status: Bit 	0 = 1= handshake enabled
+ *		1 : 1= no ACIA found
+ * 		5 : 1= set RTS hi
+ *		6 : 1= we are transmitting
+ *	  	7 : 1= we are receiving
+ *
+ */
+
+/* 
+ * 16550 divisor values for BAUD rates ?, 50, 75, 110, 134.5, 150, 
+ * 300, 600, 1200, 1800, 2400, 3600, 4800, 7200, 9600, 19200
+ */
+divisor	.word 	-1, 2304 * XTALMULT, 1536 * XTALMULT, 1047 * XTALMULT
+	.word   857 * XTALMULT, 768 * XTALMULT, 384 * XTALMULT
+	.word   192 * XTALMULT, 96 * XTALMULT
+	.word	64 * XTALMULT, 48 * XTALMULT, 32 * XTALMULT
+	.word   24 * XTALMULT, 16 * XTALMULT, 12 * XTALMULT
+	.word   6 * XTALMULT
+
+	.data
+dev       .byt 0
+div       .byt 0
+status    .dsb Anzdev
+instr     .dsb Anzdev
+outstr    .dsb Anzdev
+brkkey	  .dsb Anzdev
+	.text
+
+prg1      ldx #0
+
+          stx dev
+          cmp #DC_RES
+          beq devini
+          pha
+          lda status,x
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq2
+          jmp others
+devirq2	  jmp devirq
+
+/*****************************************************************/
+
+devini    lda #0
+          sta status,x
+          sta instr,x
+          sta outstr,x
+
+	lda #3
+	sta brkkey,x
+
+	ldy UART+UART_MCR
+	lda #$10
+	sta UART+UART_MCR
+	lda UART+UART_MSR
+	and #$f0
+	bne nodev
+	lda #$1f
+	sta UART+UART_MCR
+	lda UART+UART_MSR
+	and #$f0
+	cmp #$f0
+	bne nodev
+	sty UART+UART_MCR
+
+	ldy UART+UART_SCR
+	lda #%10101010
+	sta UART+UART_SCR
+	cmp UART+UART_SCR
+	bne dev8250
+	lsr
+	sta UART+UART_SCR
+	cmp UART+UART_SCR
+	bne dev8250
+	sty UART+UART_SCR
+
+	lda #1
+	sta UART+UART_FCR
+	lda UART+UART_IIR
+	ldy #0
+	sty UART+UART_FCR
+	asl
+	bcc dev16450
+	asl
+	bcc dev16550
+	; else dev16550A; currently only this one is supported
+
+	lda #%10000000
+	sta UART+UART_LCR
+	ldx #14*2			; 9600 BAUD
+	lda divisor,x
+	sta UART+UART_DLL
+	lda divisor+1,x
+	sta UART+UART_DLH
+	lda #%00000011			; 8N1
+	sta UART+UART_LCR
+ 
+ 	lda #7				; no FIFO enable and clear FIFOs, 
+	sta UART+UART_FCR		; trigger at 1 byte
+	lda #0
+	sta UART+UART_IER		; polled mode (so far) 
+	lda UART+UART_MCR
+	and #%00001100			; keep OUT1, OUT2 values
+	sta UART+UART_MCR		; reset DTR, RTS
+
+          clc
+          rts
+
+nodev					; no UART at all
+dev8250					; no Scratchpad, no FIFO
+dev16450				; scratchpad, no FIFO
+dev16550				; FIFO bug
+	  lda status,x
+          ora #2
+          sta status,x
+          lda #E_NOTIMP
+          sec
+          rts
+          
+/*****************************************************************/
+
+devirq    
+        .(
+	lda UART+UART_IIR
+	lsr
+	bcc intr
+irqend  lda #E_NOIRQ		; no irq source found
+	;rts			; not this one
+	jmp irqe
+
+	;-----------------------------------------------
+
+intr
+	and #%00000011		; interrupt mask - makes four possible IRQs
+	tay
+	bne int_tx
+	
+	lda UART+UART_MSR
+	jmp checkint
+
+int_tx
+	dey
+	bne int_rx
+tx_loop
+	jsr tx2
+	jmp checkint
+
+int_rx
+	dey
+	bne int_status
+rx_loop
+	jsr rx2			; get one char
+	lda UART+UART_LSR
+	lsr
+	bcs rx_loop
+;	and #$20		; THRE ($40/2)
+;	bne tx_loop
+	jmp checkint
+
+int_status
+	lda UART+UART_LSR
+
+checkint
+	lda UART+UART_IIR
+	lsr
+	bcc intr		; irq still pending
+
+;	lda UART+UART_LSR
+;	and #$40
+;	beq nbyt
+;	jsr tx2
+;nbyt
+	jsr nobyt
+
+irqok   lda #E_OK		; irq source removed
+irqe	pha
+
+	lda UART+UART_LSR
+	and #$40
+	beq nbyt
+	jsr tx2
+	jsr nobyt
+nbyt
+	pla
+	rts
+
+	;-----------------------------------------------
+
+rx2	.(
+	lda UART+UART_RXTX
+	bit status
+	bpl rx2end
+        ldx outstr
+
+	cmp brkkey
+	bne nobrk
+	lda #SC_SSTAT
+	ldy #SCE_BRK
+	jsr STRCMD
+	lda brkkey
+nobrk
+        jsr PUTC
+        bcc rx2end
+	cmp #E_SLWM		; this happens most and is caught by nobyt
+	bne test
+rx2end	rts
+
+&nobyt  ldx outstr
+	bit status
+	bpl rx2end
+        lda #SC_STAT
+        jsr STRCMD
+        bcc rx2end
+test
+        cmp #E_NUL
+        bne tstwater
+        jmp rxoff
+tstwater  
+	cmp #E_SEMPTY
+        beq wl
+        tax
+        lda status
+        and #1
+        bne wh
+        txa
+        cmp #E_SHWM
+        beq wh
+        cmp #E_SFULL
+        bne twl
+;inc $d020
+wh      ldx #0  
+	jmp rtshi
+twl     cmp #E_SLWM
+        bne rx2end
+wl      ldx #0  
+	jmp rtslo
+	.)
+
+	;-----------------------------------------------
+
+tx2 	.(
+	bit status
+        bvc txrt		; reading IIR should clear this line
+
+	lda UART+UART_MSR
+	and #%00110000
+	cmp #%00110000		; cts or dsr inactive
+	bne txrt
+
+	ldy #15			
+txloop
+        ldx instr		; send new data byte
+        jsr GETC
+        bcs test2
+        sta UART+UART_RXTX
+	dey
+	bne txloop		; fill up FIFO
+        bcc txrt
+
+test2   cmp #E_EOF
+        bne txrt
+        jmp txoff
+txrt	rts
+	.)
+
+          .)
+
+/*****************************************************************/
+
+dtrhi
+	lda UART+UART_MCR
+	and #%11111110
+	sta UART+UART_MCR
+	lda #0
+	sta UART+UART_IER
+	rts
+
+dtrlo
+	lda UART+UART_MCR
+	ora #%00000001
+	sta UART+UART_MCR
+	lda #3
+	sta UART+UART_IER
+	rts
+
+rtshi
+	lda UART+UART_MCR
+	and #%11111101
+	sta UART+UART_MCR
+	lda status,x
+	ora #%0010000
+	sta status,x
+	rts
+
+rtslo
+	lda UART+UART_MCR
+	ora #%00000010
+	sta UART+UART_MCR
+	lda status,x
+	and #%11011111
+	sta status,x
+	rts
+
+/*****************************************************************/
+
+others    cmp #DC_GS		; set stream to get data from
+          bne o1
+          lda status,x
+          and #DC_SW_TX
+          bne devonx
+          tya
+          sta instr,x
+          jmp ok
+devonx    jmp devon
+o1        cmp #DC_PS		; set stream to put data to
+          bne o2
+          lda status,x
+          and #DC_SW_RX
+          bne devonx
+          tya
+          sta outstr,x
+okx       jmp ok
+o2        cmp #DC_RX_ON		; switch receiver on
+          bne o3
+	; lda #3
+	; sta brkkey
+	jsr rtslo
+	jsr dtrlo
+          lda #DC_SW_RX
+          bne o2a
+o3        cmp #DC_TX_ON		; switch sender on
+          bne o4
+	jsr dtrlo
+          lda #DC_SW_TX
+o2a       ora status,x
+          sta status,x
+          bne okx
+o4        cmp #DC_RX_OFF	; switch receiver off, send eof to stream
+          bne o5
+rxoff     ldx dev
+          lda status,x
+          and #DC_SW_RX
+          beq devoffx
+	jsr rtshi
+          lda outstr,x
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_RX
+          sta status,x
+	  jmp checkdtr
+
+devoffx   jmp  devoff
+
+o5        cmp #DC_TX_OFF	; switch sender off, send nul to stream
+          bne o6
+txoff     ldx dev
+          lda status,x
+          and #DC_SW_TX
+          beq devoffx
+          lda instr,x
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_TX
+          sta status,x
+checkdtr
+	and #DC_SW_TX+DC_SW_RX
+	bne active
+	jsr dtrhi
+active 	jmp ok
+
+o6        cmp #DC_HS		; set handshake -- currently ignored (TODO)
+          bne o6a
+          lda status,x
+          and #255-1
+          sta status,x
+          tya
+          and #1
+          ora status,x
+          sta status,x
+          jmp ok
+
+o6a       cmp #DC_SPD		; set speed
+          bne o7
+          tya
+          and #%00001111
+	  asl
+          tax
+	  beq ok
+
+	lda UART+UART_LCR
+	ora #$80
+	sta UART+UART_LCR
+  	lda divisor,x
+	sta UART+UART_DLL
+	lda divisor+1,x
+	sta UART+UART_DLH
+	lda UART+UART_LCR
+	and #$7f
+	sta UART+UART_LCR
+
+          jmp ok
+
+o7        cmp #DC_ST		; get status...
+          beq ok 
+          cmp #DC_EXIT		; disable everything
+          bne o8		; onotimp
+          jsr rxoff
+          jsr txoff
+          ldx dev 
+          lda status,x
+          ora #2
+          sta status,x
+	  bne ok
+o8
+	  cmp #DC_BRKKEY
+	  bne onotimp
+          lda brkkey
+	  sty brkkey
+	  tay
+	  ; jmp ok
+
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+#undef UART
+#undef XTALMULT
+
+devend2   .)
+

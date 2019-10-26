@@ -1,0 +1,25 @@
+
+This is a sample implementation of an embedded version of the GeckOS.
+It is reduced to basic scheduling and interrupt handling and has 
+thus removed the 
+
+- streams
+
+- memory management
+
+- file manager
+
+- send/receive
+
+- semaphores
+
+This shortens the kernel to almost 2k in size.
+Also the used amount of RAM is $bc = 188 byte normal RAM,
+plus $e = 14 byte zeropage (not counting the environment, task and
+thread save 6 bytes from addresses 2-8), also not counting 
+the possible use of PCBUF by fork and devcmd. 
+1k RAM total should be sufficient for simple applications.
+
+Using the PCBUF without locking with a semaphore should be handled with 
+care.
+

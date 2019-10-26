@@ -1,0 +1,140 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * This file is a TCP implementation for 6502 computer
+ *
+ * it exports:
+ *	udpinit		- init TCP
+ *	udprx		- gets incoming packets
+ *
+ */
+
+/* #define	DEBUGUDP */
+
+#ifdef DEBUGUDP
+#define	DBUDP(a)	DB(a)
+#else
+#define	DBUDP(a)
+#endif
+
+	.(
+
+&&udpinit .(
+	clc
+	rts
+	.)
+
+
+&&udprx .(
+
+	jsr getpinfo
+	bcc piok
+	DBUDP("getpi error in udprx^m^j")
+	rts
+piok
+	ldy #6
+	lda (pd),y
+	iny
+	ora (pd),y
+	beq udpok	; no check
+
+#if 0
+	jsr ip2tcp
+
+#if 0 /*def DEBUGTCP*/
+DB("TCP check: pd=")
+lda pd+1: jsr EHexout: lda pd: jsr EHexout
+DB(", pdl=")
+lda pdl+1: jsr EHexout: lda pdl: jsr EHexout
+DB(", pp=")
+lda pp+1: jsr EHexout: lda pp: jsr EHexout
+DB(", ppl=")
+lda ppl+1: jsr EHexout: lda ppl: jsr EHexout
+jsr ECrlfout
+#endif
+
+	lda pdl
+	ldy pdl+1
+	ldx #pd
+	jsr checksum3
+
+	php
+	lda #8
+	sta phl
+	jsr tcp2ip
+	plp
+
+#if 0 /*def DEBUGTCP*/
+php
+pha
+txa
+pha
+DB("TCP Checksum=")
+pla
+tay
+jsr EHexout
+pla
+pha
+jsr EHexout
+jsr ECrlfout
+tya
+tax
+pla
+plp
+#endif
+	bcc udpok
+#endif
+
+tdisc_check
+        DB("Packet discarded: UDP checksum^m^j")
+&tdisc	ldx pslot
+	bmi illtd
+	jsr bfree
+	lda #<-1
+	sta pslot
+	clc
+	rts
+illtd	DBUDP("tdisc with illegal slot!^m^j")
+	sec
+	rts
+	
+
+udpok	/* here we have a valid UDP packet in (pd),0-pdl. */
+/*
+DB("tcpok pp=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout
+jsr ECrlfout
+*/
+	DBUDP("UDP port unreachable packet!^m^j")
+
+	; jsr exports
+
+	lda phl
+	ldx pslot
+	jmp uporterr
+	.)
+
+	.)
+

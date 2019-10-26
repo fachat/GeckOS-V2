@@ -1,0 +1,28 @@
+
+This is the OS/A65 source.
+(c) 1989-1998 A. Fachat (a.fachat@physik.tu-chemnitz.de)
+
+This comes of course with no warranty in any form. See
+the file COPYING for the GNU public license.
+
+The doc directory contains all necessary documentation (in html mostly).
+I propose reading doc/index.html with your favourite html browser first.
+
+kernel, lib6502, oldlib, devices and include are general source directories.
+
+apps holds pure lib6502 applications, like a shell, mkdir, etc.
+They should also assemble for other lib6502 operating systems.
+
+sysapps holds OS/A65 specific programs, like the monitor, slipd, or the
+filesystem servers.
+
+The arch directory holds the architecture specific part. Almost everything
+in here is pretty system independent. The arch directory contains a directory
+for each supported architecture. "proto" holds a prototype architecture
+that can be used for porting.
+
+Have fun!
+
+26jan1998 A. Fachat
+(a.fachat@physik.tu-chemnitz.de)
+

@@ -1,0 +1,1679 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/**********************************************************************
+ * File handling for lib6502
+ * exports
+ * 	Fgetc, Fputc, Fread, Fwrite
+ *	Fopen, Fclose
+ *
+ * Actually many routines just pass through to the kernel, and
+ * do not check if parameters are right.
+ *
+ * Drive names are single char, "a-z" and "A-Z", case independent. 
+ */
+
+	.(
+
+	.zero
+f1	.word 0
+f2	.word 0
+
+d	=f2
+
+	.text
+
+&getfd	.(		/* this is called by others to get and lock an entry
+			   in the fd table. y then holds the fileno + LT_FTAB */
+	jsr fllock
+
+	ldy #LT_FTAB
+l0	lda (zta),y
+	beq foundfd
+	iny
+	cpy #LT_FTAB+MAXFILES
+	bcc l0
+	bcs fderror
+foundfd	lda #8			; lock temporarily
+	sta (zta),y
+	clc
+fderror	php
+	jsr flunlock
+	plp
+	rts
+	.)
+
+&Fclose	.(
+	stx zth
+	txa
+	clc
+	adc #LT_FTAB
+	sta zth+1
+	tay
+	lda (zta),y
+	beq nofd
+	jsr fllock
+
+	asl
+	asl
+	asl
+	sta (zta),y	; clear lower bits to disable access from other threads
+
+	and #8+32	; read + directory
+	beq noread
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+noread
+	ldy zth+1
+	lda (zta),y
+	and #16		; write
+	beq nowrite
+	tya
+	clc
+	adc #2*MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_EOF
+	jsr STRCMD
+nowrite
+	jsr flunlock
+
+	ldy zth+1
+	lda #0
+	sta (zta),y
+	clc
+	rts
+
+nofd	lda #E_NOFILE
+	sec
+	rts
+	.)
+
+/****************************************************************************
+ * currently we only have uni-directional opens allowed in this OS,
+ * with the exception of non-seekable internet connection, which are
+ * not handled here. We don't have to take care of them during open
+ * here, only in the other routines.
+ */
+	.(
+strerr	pha
+	ldy f1
+	lda #0
+	sta (zta),y
+	pla
+	.byt $2c
+fderror	lda #E_NOFILE
+	pha
+	jsr flunlock
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	sec
+	pla
+	rts
+
+	.data
+openmode .byt 0
+	.text
+
+&&Fopen	
+	sta zth
+	sty zth+1
+
+	txa
+	pha
+
+	jsr taskinit		; be save...
+
+	clc
+	ldx #SEM_SENDBUF
+	jsr PSEM		; this can block, so we do it first.
+
+	pla
+	tax
+	jsr fopen2
+
+	php
+	pha
+	txa
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+	tax
+	pla
+	plp
+	rts
+
+&&fopen2 
+	txa
+	pha
+
+	jsr fllock
+
+	pla
+	sta openmode
+
+	ldy #LT_FTAB
+l0	lda (zta),y
+	beq foundfd
+	iny
+	cpy #LT_FTAB+MAXFILES
+	bcc l0
+	bcs fderror
+foundfd	lda #8			; lock temporarily
+	sta (zta),y
+	sty f1
+
+	jsr GETSTR
+	bcs strerr
+
+	stx PCBUF+FS_OPEN_STR
+
+	lda f1
+	clc
+	adc #MAXFILES
+	tay
+	txa
+	sta (zta),y		; for reading
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	txa
+	sta (zta),y		; for writing
+
+	lda f1
+	pha			; save fd
+
+	jsr getname
+
+	lda zta
+	clc
+	adc #LT_PATH
+	pha
+	lda zta+1
+	adc #0
+	tay
+	pla
+	jsr usedir		; returns length in x
+	bcs lengtherr
+
+	lda #0
+	sta PCBUF+FS_OPEN_PFAD
+
+	ldy openmode
+	cpy #4
+	bcs cmderr
+	lda localfscmd,y
+	bmi cmderr
+	pha
+	txa
+	tay
+	pla
+	jsr flunlock		; unlock file lib before thread lock
+	pha			; save command
+
+	ldx #SEND_FM
+	jsr SEND
+	sec
+	jsr XRECEIVE
+
+	cmp #E_OK
+	bne fserr
+
+	pla			; get command
+	cmp #FS_OPEN_RD
+	beq ord
+	lda #2
+	.byt $2c
+ord	lda #1
+
+	tax
+	pla			; get fd back
+	tay
+	txa
+	sta (zta),y
+	tya
+	sec
+	sbc #LT_FTAB
+	tax
+
+	lda #E_OK
+	clc
+	rts
+
+cmderr
+lengtherr 
+	pla
+	tay
+	lda #0			; we can unlock the fd w/o fllock
+	sta (zta),y
+	ldx PCBUF+FS_OPEN_STR
+	jsr FRESTR
+	lda #E_FNAMLEN
+	sec
+	rts
+
+fserr	tay
+	pla	; fs command
+	pla	; fd
+	tax
+	tya
+	pha	; error code
+	txa
+	pha	; fd
+	clc
+	adc #MAXFILES
+	tay
+	lda (zta),y
+	tax
+	jsr FRESTR
+	pla	; fd
+	tay
+	lda #0
+	sta (zta),y
+	pla	; error code
+	sec
+	rts
+	
+localfscmd
+	.byt FS_OPEN_RD, FS_OPEN_WR, <-1, FS_OPEN_AP
+
+	.)
+
+/****************************************************************************
+ * Chdir is called with the argument address in a/y
+ * it is changing the file path in (zta),LT_PATH
+ * The implementation is horrible, and using PCBUF, but time is pressing...
+ */
+
+&Chdir    .(
+	sta zth
+        sty zth+1
+
+        clc
+        ldx #SEM_SENDBUF
+        jsr PSEM
+
+	jsr fllock
+
+	lda zta
+	clc 
+	adc #LT_PATH
+	sta f1
+	lda zta+1
+	adc #0
+	sta f1+1
+
+	jsr getname
+
+	  lda PCBUF+FS_OPEN_DRV
+          bmi nodrive		; no drive given 
+          ldy #PATH_DRV
+          cmp (f1),y
+          beq nodrive
+          sta (f1),y
+          iny
+          lda #0
+          sta (f1),y		; drive given -> clear old path
+nodrive   inc f1		; inc f1 over drive byte
+          bne nd1
+          inc f1+1
+          ldy #0
+                         ; Name untersuchen
+nd1       ldx #FS_CMD_NAME
+          lda PCBUF,x
+          bne ndrx       ; kein Name dann Pfad lschen
+          sta (f1),y
+	jmp cdend
+
+ndrx
+          cmp #DIRSIGN   ; Name beginnt mit DIRSIGN
+          bne nd2
+          lda #0         ; dann Pfad loeschen
+          sta (f1),y
+          
+nd2a      inx
+nd2       lda PCBUF,x    ; weiter Name anschauen
+          beq ndr        ; kein Name dann Ende
+          cmp #DIRSIGN
+          beq nd2a       ; DIRSIGN ueberlesen
+          cmp #"."
+          bne nameok     ; kein '.' dann ok
+          inx
+          lda PCBUF,x    ; hier mindestens ein '.'
+          beq ndr        ; Null dann Ende
+          cmp #DIRSIGN   ; DIRSIGN,
+          beq nd2a       ; dann '.' ignorieren
+          cmp #"."       ; noch'n Punkt ?
+          bne nerrx      ; nein, dann 
+          jsr getpos
+          ldy d          ; Position des letzten DIRSIGNs
+          lda #0
+          sta (f1),y     ; loeschen = eine Verzeichnis-Ebene hoeher
+          beq nd2a       ; (absolut)
+
+nerrx     dex
+nameok    jsr getpos     ; y=Laenge des alten Pfads
+          sty d          ; hier Verzeichnis-Name an Pfad anhaengen
+no        iny
+          cpy #PATHLEN
+          bcs nerr
+          lda PCBUF,x
+          beq nr
+          cmp #DIRSIGN
+          beq nr
+          sta (f1),y
+          inx
+          bne no
+nr        lda #0
+          sta (f1),y
+          ldy d
+          lda #DIRSIGN   ; alles ok, dann Nullbyte (Ende alter Pfad) mit
+          sta (f1),y     ; DIRSIGN berschreiben
+          lda PCBUF,x    ; Ende des neuen Verzeichnisses
+          bne nd2a       ; nein, dann wieder nach oben
+cdend
+ndr       clc
+          .byt $24
+nerr      sec
+	php
+	jsr flunlock
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	plp
+	lda #E_FNOPATH
+          rts
+
+getpos    ldy #0         ; holt y=Laenge des alten Pfadnamens
+          sty d          ; und d=Position des letzten DIRSIGNs
+no0       lda (f1),y
+          beq no1
+          cmp #DIRSIGN
+          bne no2
+          sty d
+no2       iny
+          bne no0          
+no1       rts
+          .)  
+
+/****************************************************************************
+ * cwd returns the current working directory into a given buffer
+ */
+
+&Cwd	.(
+	sta zth	
+	sty zth+1
+
+	jsr fllock
+
+	dex
+	stx f2
+	cpx #2
+	bcc lerr
+
+	lda zta
+	clc
+	adc #LT_PATH-1
+	sta f1
+	lda zta+1
+	adc #0
+	sta f1+1
+
+	ldy #1
+	lda (f1),y	; path byte (LT_PATH-1+1)
+	clc
+	adc #"a"
+	dey
+	sta (zth),y
+	lda #":"
+	iny
+	sta (zth),y
+loop	iny
+	lda (f1),y
+	sta (zth),y
+	beq end
+	cpy f2
+	bcc loop
+lerr	lda #E_FNAMLEN
+	.byt $2c
+end	
+	lda #E_OK
+	jsr flunlock
+	clc	
+	rts
+	.)
+
+
+/****************************************************************************
+ * some of these routines are just grabbed from the oldlib code, as
+ * they provide all the functionality I need for Fopen...
+ * They have to be fllock'ed
+ */
+
+
+getname	.(
+	  /* takes the name from (zth),0+ */
+          lda #0
+          sta PCBUF+FS_OPEN_NAME
+          ldy #<-1
+          sty PCBUF+FS_OPEN_DRV
+g1        iny
+          lda (zth),y
+          beq gr
+          cmp #" "
+          beq g1
+          cmp #":"
+          beq g1
+          cmp #34        ; "
+          beq g2
+          iny
+          lda (zth),y
+          dey
+          cmp #":"
+          bne g2
+          lda (zth),y
+          cmp #$41		; "A"
+          bcc g3
+          sbc #1
+g3        and #$0f
+          sta PCBUF+FS_OPEN_DRV
+          iny
+          iny
+g2        dey
+          ldx #FS_OPEN_NAME
+;           bne g2a
+
+; &set2name     /* x=iobuf, y=pcbuf */
+;           sta zp
+;           sty zp+1
+;           ldy #<-1
+;g2a
+g2a       lda #0	;#" "
+          sta d
+gn1       iny
+          lda (zth),y
+          beq gn3
+;          cmp #" "	; remove leading " ".
+;          beq gn1
+;          cmp #">"
+;          beq gn3
+          cmp #34   ; "	
+          bne gn2
+          iny
+          sta d
+gn2       lda (zth),y
+          beq gn3
+          cmp d
+          beq gn3a
+          sta PCBUF,x
+          inx
+          iny
+          bne gn2
+
+gn3a      iny
+gn3       lda #0
+          sta PCBUF,x
+          inx
+gr        rts
+	.)
+
+usedir  .(
+	  sta f1
+          sty f1+1
+          lda PCBUF+FS_OPEN_DRV
+          bpl ok         ; drive given by user -> no path
+          
+          ldy #PATH_DRV
+          lda (f1),y
+          sta PCBUF+FS_OPEN_DRV
+
+          ldx #FS_OPEN_NAME
+          lda PCBUF,x
+          cmp #DIRSIGN   ; path given absolute -> no replacement
+          beq ok
+          
+ud2       iny		; find the length of the path
+          lda (f1),y
+          bne ud2
+          sty d          
+ud4       lda PCBUF,x	; find the length of the name
+          beq ud3
+          inx
+          bne ud4
+ud3       inx
+          txa
+          clc
+          adc d
+          sta d
+          bcs nerr
+          tay
+ud5       lda PCBUF,x	; copy name to new location
+          sta PCBUF,y
+          dey
+          dex
+          cpx #FS_OPEN_NAME
+          bcs ud5
+          ldy #PATH_NAME
+ud6       lda (f1),y
+          sta PCBUF+FS_OPEN_NAME-PATH_NAME,y
+          beq ud7
+          iny
+          bne ud6
+ud7       lda #DIRSIGN
+          sta PCBUF+FS_OPEN_NAME-PATH_NAME,y
+          ldx d
+          clc
+          rts
+nerr      sec
+          rts
+ok        ldx #FS_OPEN_NAME
+ok1       lda PCBUF,x
+          beq oke
+          inx
+          bne ok1
+oke       inx
+          clc
+          rts
+	.)
+
+/****************************************************************************/
+
+&&Flib2osa_r
+&checkfd_r .(	/* check if fd in x is ok for read, then return real fd in x.
+		 * otherwise clear stack and return to calling routine */
+		/* not allowed to use zth ! */
+	lda #1
+	.byt $2c
+&&&Flib2osa_w
+&&checkfd_w 	/* check for write */
+	lda #2
+	.byt $2c
+&&checkfd_d 	/* check for directory */
+	lda #4
+	pha
+	txa
+	clc
+	bmi stdio
+	adc #LT_FTAB
+	tay
+	pla
+	and (zta),y
+	beq error
+	and #2
+	beq read
+	tya
+	;clc
+	adc #2*MAXFILES
+	bne get
+read	tya
+	clc
+	adc #MAXFILES
+get	tay
+	lda (zta),y
+	tax
+	rts
+	
+stdio	pla
+	rts
+
+error
+	sec
+	lda #E_NOFILE
+	rts
+	.)
+
+	
+/****************************************************************************/
+
+fllock	pha
+	lda #LSEM_FILE
+	jsr llock
+	pla
+	rts
+
+flunlock
+	pha
+	lda #LSEM_FILE
+	jsr lunlock
+	pla
+	rts
+
+/****************************************************************************/
+
+putf1
+	ldy #0
+	lda (zth),y
+	sta  f1
+	iny
+	lda (zth),y
+	sta f1+1
+	iny
+	lda (zth),y
+	sta f2
+	iny
+	lda (zth),y
+	sta f2+1
+	rts
+
+getf1
+	ldy #0
+	lda f1
+	sta (zth),y
+	iny
+	lda f1+1
+	sta (zth),y
+	iny
+	lda f2
+	sta (zth),y
+	iny
+	lda f2+1
+	sta (zth),y
+	rts
+
+&Fwrite	.(
+	php
+	sta zth
+	sty zth+1
+	ldy #2
+	lda (zth),y
+	iny
+	ora (zth),y
+	bne doit
+	plp
+	lda #E_ILLPAR
+	sec
+	rts
+doit
+	txa
+	pha
+	jsr checkfd_w
+	bcs xerr
+rl
+	jsr fllock
+	jsr putf1
+next
+	ldy #0
+	lda (f1),y
+	jsr PUTC
+	bcc ok
+	pha
+	jsr getf1
+	jsr flunlock
+	pla
+	cmp #E_NUL
+	beq xerr	; carry is always set when jumping
+	pla
+	plp
+	php
+	pha
+	bcc ret
+	jsr YIELD
+	jmp rl
+ok
+	inc f1
+	bne o1
+	inc f1+1
+o1	lda f2
+	bne o2
+	dec f2+1
+o2	dec f2
+	lda f2
+	ora f2+1
+	bne next
+			; finished job
+	jsr getf1
+	jsr flunlock
+ret	lda #E_OK
+	sec
+	beq xerr
+/*
+err
+	tay
+	pla
+	tax
+	tya
+	plp
+	cmp #1
+	rts
+*/
+	.)
+
+&Fread	.(
+	php
+	sta zth
+	sty zth+1
+	ldy #2
+	lda (zth),y
+	iny
+	ora (zth),y
+	bne doit
+	plp
+	lda #E_ILLPAR
+	sec
+	rts
+doit
+	txa
+	pha
+	jsr checkfd_r
+&xerr	bcs err
+rl
+	jsr fllock
+	jsr putf1
+next
+	jsr GETC
+	bcc ok
+	pha
+	jsr getf1
+	jsr flunlock
+	pla
+	cmp #E_EOF
+	beq err
+	pla
+	plp
+	php
+	pha
+	bcc ret
+	jsr YIELD
+	jmp rl
+ok
+	ldy #0
+	sta (f1),y
+	inc f1
+	bne o1
+	inc f1+1
+o1	lda f2
+	bne o2
+	dec f2+1
+o2	dec f2
+	lda f2
+	ora f2+1
+	bne next
+			; finished job
+	jsr getf1
+	jsr flunlock
+ret	lda #E_OK
+&err
+	tay
+	pla
+	tax
+	tya
+	plp
+	cmp #1
+	rts
+	.)
+
+/****************************************************************************/
+
+&Fputc	.(
+	stx zth
+	sty zth+1
+	pha
+	php
+	jsr checkfd_w
+	bcs err2
+	plp
+	bcs fputw
+
+	pla
+	jsr PUTC
+	ldx zth
+	ldy zth+1
+	rts
+fputw
+	pla
+	pha
+	jsr PUTC
+	bcc ok
+	cmp #E_NUL
+	beq ok
+	jsr YIELD
+	jmp fputw
+err2
+	plp
+	sec
+ok
+	tax
+	pla
+	txa
+	ldy zth+1
+	ldx zth
+	rts
+	.)
+
+&Fgetc	.(
+	php
+	stx zth
+	sty zth+1
+	pha
+	jsr checkfd_r
+	bcs err
+	pla
+gl	
+	jsr GETC
+	bcc ok
+	cmp #E_EOF
+	beq gcerr
+	plp
+	php
+	bcc gcerr
+	jsr YIELD
+	jmp gl
+ok	
+	ldy zth+1
+	ldx zth
+	plp
+	clc
+	rts
+gcerr	ldy zth+1
+	ldx zth
+	plp
+	sec
+	rts
+	.)
+
+/****************************************************************************/
+
+&Fseek	.(
+	lda #E_NOSEEK
+	sec
+	rts
+	.)
+
+/****************************************************************************/
+
+&Pipe	.(
+	jsr GETSTR
+	bcc ok
+	rts
+ok
+	jsr fllock
+
+	ldy #LT_FTAB
+l0	lda (zta),y
+	beq found1
+	iny
+	cpy #LT_FTAB+MAXFILES
+	bcc l0
+	bcs err1
+found1	sty f1
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	txa
+	sta (zta),y
+
+	ldy f1
+l1	iny
+	cpy #LT_FTAB+MAXFILES
+	bcs err2
+	lda (zta),y
+	bne l1
+
+	sty f1+1
+	tya
+	clc
+	adc #2*MAXFILES
+	tay
+	txa
+	sta (zta),y
+
+	ldy f1
+	lda #1
+	sta (zta),y
+	tya
+	sec
+	sbc #LT_FTAB
+	pha			; read-fd
+
+	ldy f1+1
+	lda #2
+	sta (zta),y
+	tya
+	sec
+	sbc #LT_FTAB		; write-fd
+	
+	tay
+	pla
+	tax
+	lda #E_OK
+	jsr flunlock
+	clc
+	rts
+
+err1 err2
+	jsr FRESTR
+	jsr flunlock
+	lda #E_NOFILE
+	sec
+	rts
+	.)
+
+/****************************************************************************/
+
+&Dup	.(
+	jsr fllock
+	stx f1
+	ldy #LT_FTAB
+l0	lda (zta),y
+	beq found
+	iny
+	cpy #LT_FTAB+MAXFILES
+	bcc l0
+	jsr flunlock
+	lda #E_NOFILE
+	sec
+	rts
+found
+	sty f1+1
+	lda f1
+	bmi stdio
+	clc
+	adc #LT_FTAB
+	sta f1
+	tay
+found1
+	lda (zta),y
+	ldy f1+1
+	sta (zta),y
+	pha
+
+	lda f1
+	clc
+	adc #MAXFILES
+	tay	
+	lda (zta),y
+	tax
+	lda f1+1
+	clc
+	adc #MAXFILES
+	tay
+	txa
+	sta (zta),y
+
+	pla
+	pha
+	and #1
+	beq nord
+	lda #SC_REG_RD
+	jsr STRCMD
+nord
+	lda f1
+	clc
+	adc #2*MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda f1+1
+	clc
+	adc #2*MAXFILES
+	tay
+	txa
+	sta (zta),y
+
+	pla
+	pha
+	and #2
+	beq nowr
+	lda #SC_REG_WR
+	jsr STRCMD
+nowr
+	pla
+
+	lda f1+1
+	sec
+	sbc #LT_FTAB
+	tax
+	jsr flunlock
+	clc
+	rts
+
+stdio	ldx f1
+	clc
+	jsr DUP
+	pha
+	lda f1+1
+	clc
+	adc #MAXFILES
+	tay
+	pla
+	pha
+	sta (zta),y
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	pla
+	sta (zta),y
+	lda f1
+	cmp #STDIN
+	bne noin
+	lda #1
+	.byt $2c
+noin	lda #2
+	ldy f1+1
+	sta (zta),y
+	sty f1
+	jmp found1	; copy to itself, increasing rd/wr pointers in this way
+	.)
+
+/****************************************************************************/
+
+&Stddup	.(
+	jsr fllock
+	stx f1
+	sty f2
+	tya
+	clc
+	adc #LT_FTAB
+	sta f1+1
+	tay
+	cpx #STDIN
+	bne noread
+	lda (zta),y
+	and #1
+	beq ferr
+	tya
+	clc
+	adc #MAXFILES
+x1	tay
+	sty f1+1
+	lda (zta),y
+	sec
+	jsr DUP
+	ldy f1+1
+	sta (zta),y
+	clc
+	ldx f2
+	jsr flunlock
+	clc
+	rts
+noread
+	cpx #STDOUT
+	beq write
+	cpx #STDERR
+	bne ferr
+write	lda (zta),y
+	and #2
+	beq ferr
+	tya
+	clc
+	adc #2*MAXFILES
+	bne x1		; always
+
+ferr	jsr flunlock
+	lda #E_NOFILE
+	sec
+	rts	
+	.)
+
+/****************************************************************************/
+
+&Fcntl	.(
+	jsr fllock
+	stx f1
+	sta f1+1
+
+	cmp #FC_PUSH
+	bne nopush
+	jsr checkfd_w
+	bcs efile
+	lda #SC_SSTAT
+	ldy #SCE_PUSH
+	jsr STRCMD
+	jmp ret
+nopush
+	cmp #FC_PULL
+	bne nopull
+	jsr checkfd_r
+	bcs efile
+	lda #SC_SSTAT
+	ldy #SCE_PULL
+	jsr STRCMD
+
+efile	lda #E_NOFILE
+	.byt $2c
+enoti	lda #E_NOTIMP
+	.byt $2c
+enord	lda #E_NOREAD
+	.byt $2c
+enowr	lda #E_NOWRITE
+	.byt $2c
+ret	lda #E_OK
+	jsr flunlock
+	cmp #1
+	rts
+nopull
+	cmp #FC_WCHECK
+	bne nowcheck
+	jsr checkfd_w
+	bcs efile
+
+	lda #SC_STAT
+	jsr STRCMD
+	cmp #E_SFULL
+	beq enowr
+	cmp #E_NUL
+	bne ret
+	beq enowr
+nowcheck
+	cmp #FC_RCHECK
+	bne enoti
+	jsr checkfd_r
+	bcc rcok
+	jsr checkfd_d
+	bcs efile
+rcok	lda #SC_GANZ
+	jsr STRCMD
+	bcs enord
+	cmp #0
+	bne ret
+	beq enord	
+	.)
+
+#if 0
+&Fcntl	.(
+	jsr fllock
+	stx f1
+	sta f1+1
+	txa
+	clc
+	adc #LT_FTAB
+	tay
+	sty f2
+	ldx f1+1
+	lda (zta),y
+
+	cpx #FC_PUSH
+	bne nopush
+	and #2
+	beq ferr
+	tya
+	clc
+	adc #2*MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_SSTAT
+	ldy #SCE_PUSH
+	jsr STRCMD
+	jmp ret
+nopush
+	cpx #FC_PULL
+	bne nopull
+	and #1
+	beq ferr
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_SSTAT
+	ldy #SCE_PULL
+	jsr STRCMD
+ret	jsr flunlock
+	lda #E_OK
+	clc
+	rts
+
+ferr	lda #E_NOFILE
+	.byt $2c
+nowcheck 
+	lda #E_NOTIMP
+	.byt $2c
+enord	lda #E_NOREAD
+	.byt $2c
+enowr	lda #E_NOWRITE
+	jsr flunlock
+	sec
+	rts
+nopull
+	cpx #FC_RCHECK
+	bne norcheck
+	and #5		; dir and read
+	beq ferr
+	pha
+	tya
+	clc
+	adc #MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_GANZ
+	jsr STRCMD
+	tax
+	pla		; missing check for directory-read
+	bcs enord
+	cpx #0
+	bne ret
+	beq enord
+norcheck
+	cpx #FC_WCHECK
+	bne nowcheck
+	and #2
+	beq ferr
+	tya
+	clc
+	adc #2*MAXFILES
+	tay
+	lda (zta),y
+	tax
+	lda #SC_STAT
+	jsr STRCMD
+	cmp #E_SFULL
+	beq enowr
+	cmp #E_NUL
+	bne ret
+	beq enowr
+	.)
+#endif
+
+/****************************************************************************/
+
+	.(
+
+lengtherr
+	pla
+	lda #E_FNAMLEN
+	.byt $2c
+cmderr	lda #E_NOTIMP
+	jsr flunlock
+	sec
+	rts
+
+&&Fcmd	
+	sta zth
+	sty zth+1
+	txa
+	pha
+
+	jsr taskinit		; be save...
+
+	clc
+	ldx #SEM_SENDBUF
+	jsr PSEM		; this can block, so we do it first.
+
+	jsr fllock
+
+	jsr getname
+
+	lda zta
+	clc
+	adc #LT_PATH
+	pha
+	lda zta+1
+	adc #0
+	tay
+	pla
+	jsr usedir		; returns length in x
+	bcs lengtherr
+
+	lda #0
+	sta PCBUF+FS_CMD_PFAD
+
+	pla
+	tay
+	cpy #FC_CHKDSK+1
+	bcs cmderr
+	cpy #FC_RENAME
+	bcc cmderr
+	bne no2nd
+	tya
+	pha
+	ldy #0
+a2	lda (zth),y
+	beq a3
+	iny
+	bne a2
+a3 	iny
+	inx
+	lda (zth),y
+	sta PCBUF-1,x
+	bne a3
+	pla
+	tay
+no2nd
+	lda localfscmd-FC_RENAME,y
+	bmi cmderr
+
+	pha
+	txa
+	tay
+	pla
+	jsr flunlock		; unlock file lib before thread lock
+
+	ldx #SEND_FM
+	jsr SEND
+	sec
+	jsr XRECEIVE
+
+	pha
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	pla
+
+	cmp #1
+	rts
+
+	
+localfscmd
+	.byt FS_RENAME, FS_DELETE, FS_MKDIR, FS_RMDIR, FS_FORMAT, FS_CHKDSK
+
+	.)
+
+/**********************************************************************
+ * Directory handling for lib6502
+ * exports
+ * 	Fopendir, Freaddir
+ *
+ */
+
+        .(
+strerr  pha
+        ldy f1
+        lda #0
+        sta (zta),y
+        pla
+        .byt $2c
+fderror lda #E_NOFILE
+        pha
+        jsr flunlock
+        ldx #SEM_SENDBUF
+        jsr VSEM
+        sec
+        pla
+        rts
+
+&&Fopendir
+        sta zth
+        sty zth+1
+
+        jsr taskinit            ; be save...
+
+        clc
+        ldx #SEM_SENDBUF
+        jsr PSEM                ; this can block, so we do it first.
+
+        jsr fllock
+
+        ldy #LT_FTAB
+l0      lda (zta),y
+        beq foundfd
+        iny
+        cpy #LT_FTAB+MAXFILES
+        bcc l0
+        bcs fderror
+foundfd lda #8                  ; lock temporarily
+        sta (zta),y
+        sty f1
+
+        jsr GETSTR
+        bcs strerr
+
+        stx PCBUF+FS_OPEN_STR
+
+        lda f1
+        clc
+        adc #MAXFILES
+        tay
+        txa
+        sta (zta),y             ; for reading
+
+        lda f1
+        pha                     ; save fd
+
+        jsr getname
+
+        lda zta
+        clc
+        adc #LT_PATH
+        pha
+        lda zta+1
+        adc #0
+        tay
+        pla
+        jsr usedir              ; returns length in x
+        bcs lengtherr
+
+        jsr flunlock            ; unlock file lib before thread lock
+
+	lda #0
+	sta PCBUF+FS_OPEN_PFAD
+
+	txa
+	tay
+	lda #FS_OPEN_DR
+        ldx #SEND_FM
+        jsr SEND
+        sec
+        jsr XRECEIVE
+        cmp #E_OK
+        bne fserr
+
+        ldx #SEM_SENDBUF
+        jsr VSEM
+
+        pla                     ; get fd back
+        tay
+	lda #4
+        sta (zta),y
+        tya
+        sec
+        sbc #LT_FTAB
+        tax
+
+        lda #E_OK
+        clc
+        rts
+
+;cmderr
+lengtherr
+        pla
+        tay
+        lda #0                  ; we can unlock the fd w/o fllock
+        sta (zta),y
+        ldx PCBUF+FS_OPEN_STR
+        jsr FRESTR
+	ldx #SEM_SENDBUF
+	jsr VSEM
+        lda #E_FNAMLEN
+        sec
+        rts
+
+fserr   tax		; error code
+        pla		; pull fd
+	tay
+	txa
+	pha		; push error code
+	tya
+	pha		; push fd again
+        clc
+        adc #MAXFILES
+        tay
+        lda (zta),y
+        tax
+        jsr FRESTR
+        pla		; pull fd
+        tay
+        lda #0
+        sta (zta),y
+
+	ldx #SEM_SENDBUF
+	jsr VSEM
+        pla		; pull error code
+        sec
+        rts
+        .)
+
+&Freaddir .(
+	php
+	sta zth
+	sty zth+1
+	txa
+	pha
+	jsr checkfd_d	; now x has the real stream number
+	pla
+	plp
+
+	ldy #FD_LENGTH	
+l0      jsr dgetc
+	bcs dderr
+	sta (zth),y
+	iny
+	cpy #FD_LENGTH+4
+	bcc l0
+
+	ldy #FD_MDATE
+l1	jsr dgetc
+	bcs dderr
+	sta (zth),y
+	iny
+	cpy #FD_MDATE+6
+	bcc l1
+
+	jsr dgetc
+	bcs dderr
+
+	tay
+	txa
+	pha
+	tya
+
+	asl
+	tax
+	ldy #FD_PERM
+	lda ftype,x
+	sta (zth),y
+	iny
+	lda ftype+1,x
+	sta (zth),y
+	pla
+	tax
+
+	ldy #FD_NAME
+l2	jsr dgetc
+	bcs dderr
+	sta (zth),y
+	cmp #0
+	beq end
+	iny
+	cpy #FD_NAME+MAX_FILENAME
+	bcc l2
+end	
+	ldy #FD_VALID
+	lda #FDV_PERM + FDV_MDATE
+	sta (zth),y
+	clc
+	rts
+dderr
+	sec
+	rts
+	
+	
+ftype	.word S_IFREG + S_IRWXO, S_IFMNAME, S_IFMFREE, S_IFDIR + S_IRWXO
+
+dgetc	.(
+	jsr GETC
+	bcs test
+	rts
+test	cmp #E_SEMPTY
+	beq myield
+	sec
+	rts	
+myield	jsr YIELD
+	jmp dgetc
+	.)
+	.)
+
+&getrwfd .(
+	jsr fllock
+
+	ldy #LT_FTAB
+l0	lda (zta),y
+	beq foundfd
+	iny
+	cpy #LT_FTAB+MAXFILES
+	bcc l0
+	bcs fderror
+foundfd	lda #8			; lock temporarily
+	sta (zta),y
+	sty f1
+
+	jsr GETSTR
+	bcs fderr
+
+	lda f1
+	clc
+	adc #MAXFILES
+	tay
+	txa
+	sta (zta),y		; for reading
+
+	jsr GETSTR
+	bcs strerr
+
+	lda f1
+	clc
+	adc #2*MAXFILES
+	tay
+	txa
+	sta (zta),y		; for writing
+
+	ldy f1
+	lda #3			; reading and writing
+	sta (zta),y
+	
+	tya
+	sec
+	sbc #LT_FTAB
+
+	jsr flunlock
+	tax
+
+	clc
+	rts
+
+strerr	lda (zta),y		; y is kept in GETSTR
+	tax
+	jsr FRESTR
+fderr	ldy f1
+	lda #0
+	sta (zta),y
+fderror	jsr flunlock
+	lda #E_NOFILE
+	sec
+	rts
+	.)
+
+	.)
+

@@ -1,0 +1,100 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 rmdir program
+
+    Copyright (C) 1997-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * Warning: automatically generated from rmdir.a65! 
+ */
+
+#include "lib6502.i65"
+
+main	.(
+	.zero
+argp	.word 0
+	.text
+
+	sta argp
+	sty argp+1
+
+	ldy #0
+l0	lda (argp),y
+	beq first
+	iny
+	bne l0
+
+first	iny
+	lda (argp),y
+	bne ok
+	
+usage	lda #<usagetxt
+	ldy #>usagetxt
+	jmp etxtout
+
+ok	tya
+	clc
+	adc argp
+	sta argp
+	bcc l1
+	inc argp+1
+l1
+	lda argp
+	ldy argp+1
+	ldx #FC_RMDIR
+	jsr fcmd
+
+	/* TODO: print error code */
+
+	ldy #0
+l2	lda (argp),y
+	beq next
+	iny
+	bne l2
+next
+	iny
+	lda (argp),y
+	bne ok
+
+	lda #0
+	rts
+
+etxtout	
+	.zero
+tp	.word 0
+	.text
+
+	sta tp
+	sty tp+1
+	ldx #STDERR
+	ldy #0
+t0	lda (tp),y
+	beq te
+	sec
+	jsr fputc
+	iny
+	bne t0
+te	rts
+
+usagetxt
+	.byt 13,10,"Usage:",13,10," rmdir dir1 [dir2 ...]",13,10,0
+
+	.)
+

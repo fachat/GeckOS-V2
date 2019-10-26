@@ -1,0 +1,185 @@
+<html><head>
+<title> OS/A65 Operating System </title>
+</head><body bgcolor="#ffffff">
+<h1 align=center>OS/A65 Operating System</h1>
+<h2 align=center>Version 2.0.0</h2>
+<h2 align=center>(c) 1989-1998 
+Andr&eacute; Fachat 
+<a href="http://www.tu-chemnitz.de/~fachat/index.html">[Homepage]</a></h2>
+<hr><p>
+This is a completely new version of my 6502 operating system GeckOS/A65.
+From version 2.0.0 on it has a lot of new features:
+<ul>
+<li> multithreading
+<li> dynamic memory management
+<li> relocatable fileformat
+<li> lib6502 standard library
+<li> internet support
+</ul>
+<!---
+<h3>Download</h3>
+<p><ul>
+<li><a href="oa-2.0.0.tar.gz">oa-2.0.0.tar.gz</a> Full source archive. To build the binaries you have to have the xa65 package (see below).
+<li><a href="oa-2.0.0.base.tar.gz">oa-2.0.0.base.tar.gz</a> Base archive, without the Gecko and CS/A65 architectures and without the copyrighted BASIC 
+interpreter.
+<li><a href="oa-2.0.0.lib.tar.gz">oa-2.0.0.lib.tar.gz</a> Source for the 
+supplied lib6502 programs.
+</ul><p>
+For some architecture some disk images are provided:
+<ul>
+<li><a href="c64.d64">c64.d64</a> D64 file for C64 emulators.
+Start with "x64 -8 c64.d64 -1541".
+<li><a href="cbm8x96.d64">cbm8x96.d64</a> D64 file for the VICE xpet emulator. Start with "xpet -8 cbm8x96.d64 -model 8296"
+<li><a href="pet32k.d64">cbm8x96.d64</a> D64 file for the VICE xpet emulator.
+Start with "xpet -8 pet32k.d64 -model 8032"
+</ul><p>
+After starting the emulators do a `LOAD"LOADER",8' and then `RUN'. This
+should do it. Normally you have a libshell (lsh) and an old-style shell/monitor
+coming up on two different virtual consoles.
+</p>
+--->
+<h3>Description</h3>
+<p>
+OS/A65 is a full-featured Multitasking/Multithreading operating system
+for the 6502. It is preemptive and implements some Unix-like features, 
+like signals, semaphores, 
+<a href="fileformat.html">relocatable fileformat</a>, 
+<a href="lib6502.html">standard library</a>, internet support via
+a kind of simplified sockets and last but not least virtual consoles.
+</p><p>
+It is extremly scalable. Stripped down to the scheduler and interrupt
+handling the kernel is only slightly above 2k. In normal 
+<a href="embedded.html">embedded systems</a>
+the kernel has around 4k, with only application programs running. 
+Full featured systems have a 4k kernel, and several support tasks
+provided system services like TCP/SLIP and (different) filesystems.
+</p><p>
+The kernel is almost completely hardware independent. All the 
+architecture-specific stuff is in a separate subdirectory
+for each architecture.
+</p><p>
+The <a href="lib6502.html">lib6502</a> as standard library allows easy 
+access to the system services. Parts of this library are already 
+implemented in another 6502 operating system, Lunix by Daniel Dallmann.
+This way source code compatibility is achieved.
+</p><p>
+Version 2.0.0 features a "slipd" server process that brings easy internet
+access to all lib6502 programs, that can now access TCP connections
+like files. A stable WWW server running on the OS is built into the
+slipd daemon. Also a remote login can be done. This way the OS can run
+programs to for example read sensors and write the stuff to files, which
+are exported by the WWW server.
+</p><p>
+The relocatable o65 fileformat used by the lib6502 standard library
+in version 2.0.0 allows more than one instance of a program being run 
+at the same time without interference, even without virtual memory.
+Also the very same binaries runs on all supported platforms (if they do not
+use architecture specific stuff, but lib6502 calls only).
+</p>
+<h3>Architectures</h3>
+<p>
+Architectures supported are the C64, as well as my 
+<a href="http://www.tu-chemnitz.de/~fachat/8bit/hardware/csa/index.html">CS/A65
+MMU</a> selfbuilt computer and my 
+<a href="http://www.tu-chemnitz.de/~fachat/8bit/hardware/gecko/index.html">CS/A65 Gecko</a> board.
+Also supported are the Commodore CBM8096 and CBM8296 computers, as well as
+any 32k RAM PET (the 3032, 4032 and 8032)
+</p>
+<ul>
+<p><li><a href="cbm8x96.html">CBM PET</a> documentation. Supported are 40 and
+80 column models 3032, 4032, 8032, 8096 and 8296.
+<p><li><a href="embedded.html">Embedded systems</a> need not all features. Here is some doc to strip the OS down to the basics (with around 2.5k in the end...)
+</ul>
+<h3>Development</h3>
+<p>
+For the development of OS/A65 programs there are two possibilities:
+<ul>
+<li><a href="lib6502.html">lib6502</a> with the
+<a href="fileformat.html">o65</a>
+file format. This allows source compatibility (to some degree) with Lunix, as
+well as that the program runs on all supported platforms.<p>
+lib6502 programs are simply assembled with my xa65 crossassembler with the
+including the file "lib6502.i65" and the assembler option "-LLIB6502" set. 
+This tells the compiler to put "LIB6502" into the
+file as undefined reference that is resolved when loading. The lib6502
+jump table is relative to this address. 
+
+<p><li>A system application not only uses lib6502 calls (if it uses them)
+but also <a href="kernel.html">kernel</a> calls. The kernel can be at 
+different addresses for different
+architecture as well. Therefore you have to add "-LOSA2KERNEL" to the assembler
+line. This address is also resolved when loading. If the file should also 
+be used as a ROM file, then it has to have a ROM boot header, see the
+kernel description.
+</ul>
+<h3>More Docs</h3>
+<ul>
+<!---<p><li> Have a look at the <a href="img/">Hardware!</a> --->
+<p><li> Here is the cross assembler 
+<a href="http://www.tu-chemnitz.de/~fachat/8bit/cross/xa/index.html">xa</a>
+you need to assemble the whole stuff
+<p><li> How to <a href="build.html">build</a> the binaries
+<p><li> A description of the <a href="files.txt">files</a> in the archive
+<p><li> <a href="kernel.html">kernel</a> interface
+<p><li> <a href="lib6502.html">lib6502</a> description
+<p><li> Operation <a href="nommu.html">without an MMU</a>
+<p><li> introduction to the <a href="devices.html">devices</a>
+<p><li> <a href="filesystems.html">filesystem</a> interface
+<p><li> The  <a href="README">README</a> that comes with the binary.
+<p><li> The <a href="README.c64">README.c64</a> with instructions how to run it on the C64
+<p><li> The <a href="README.slip">README.slip</a> with instructions how to run the TCP/SLIP software
+<p><li> There also is a list of <a href="BUGS">Known Bugs</a>
+<p><li> There also is a list of <a href="IDEAS">Ideas</a> what to do next...
+<p><li> An instruction to the lib6502 <a href="README.lsh">lsh</a>
+</ul>
+<p>Old stuff:</p>
+<ul>
+<p><li> <a href="oa1.html"><strong>Overview</strong></a> over the Computer System and its Software
+<p><li> The old <a href="oldlib.html">standard library</a> has been 
+replace with the lib6502 and is not longer supported.
+
+<p><li> The old summary of <a href="shell.html">shell</a> has been replaced
+by the lib6502 lsh and will no longer be developed.
+<p><li> The old <a href="mon.html">monitor</a> is still supported, but not actively developed any more.
+<p><li> summary of features and extensions of the 
+<a href="basic.html">BASIC</a> interpreter <strong>(c) Commodore</strong>
+<p><li> The <a href="LOG-1.3">ChangeLog</a> for version 1.3.* and for 
+the development of <a href="LOG-pre-2.0">2.0.0</a>.
+</ul>
+<h3>History</h3>
+<p>
+I didn't dream of this becoming such a nice project when I started
+building <a href="http://www.tu-chemnitz.de/~fachat/8bit/hardware/csa/index.html">this computer</a> in 1989.
+</p><p>
+After someone asked me to release it to the public, I decided
+to put it under the <a href="COPYING">GNU public license</a>.
+(Which, of course, doesn't hold true for the ported BASIC interpreter, which
+is taken from the C64.
+See this <a href="basic.html">file</a> for more.) Also the 
+character ROMs are taken from the C64. However, Commodore in its old
+form doesn't exist anymore and attempts to contact the new right holders
+have not brought any success, so I put them here.
+</p><p>
+Well, when I did this project, it was just for fun. But now I find it
+quite nice. Well, if you know some magazin that would like to publish
+some of it, I will be glad writing an article or so (if anybody really
+wants it ;-)<br>
+But on the other hand my interests have moved. 
+Occasionally I still work on the project - when I have the time (or take
+the time ;-) <br>
+But after all, I don't really have time for it.
+</p>
+<h3>Ideas for later versions</h3>
+<ul>
+<p><li>vt100 control codes for the console.
+<p><li>native C128 port
+<p><li>in this process abstract a kind of block device from fsibm and use
+it for the VC1571 as well
+</ul>
+<p><hr>
+Last modified 14 march 1997 by A. Fachat<br>
+This Page has been read approx. 
+<img width=56 height=16 src="/cgi-bin/counter/~fachat/8bit/osa/v2.0/index.html" alt="[Can't display counter!]">
+times since march 14, 1996.
+</body>
+</html>

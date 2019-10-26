@@ -1,0 +1,222 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#define   PIO       $e810
+#define   VIA1      $e840
+#define   vdc       $e880
+#define   VIDPAGE   4
+
+#define	MAX_SCREEN	4		/* hard limit for tables */
+
+#define	MAX_ASCREEN	#4		/* soft limit */
+
+#define	SWITCHKEY	23
+
+#define	SET_MMU		
+
+#define	BELLIRQ		jsr bellirq
+
+#define	TRIGBELL	jsr trigbell
+
+#define	MAXSPAL		#80
+
+#define	MAXZEIL		#25
+
+#define	KEY_START	16	/* when does key repetition start */
+
+				/* screen# -> hi byte of base address in AC */
+/* #define HI_VID        asl:asl:bit freq:bpl l1:asl:l1 clc:adc #VIDPAGE<<4 */
+#define	HI_VID	        asl:asl:asl:clc:adc #$90
+
+#define	ACT_HI_VID      .(			:\
+			lda screen		:\
+			cmp actscr		:\
+			beq orig		:\
+			asl:asl:asl		:\
+			clc:adc #$90		:\
+			.byt $2c		:\
+orig			lda #$80		:\
+			.)
+
+#define	SCR_SPACE	" "	/* screencode space */
+
+				/* ASCII to PET screen code */
+#define	ASC2SCR		.(			:\
+			and #$7f		:\
+			cmp #64			:\
+			bcc ok			:\
+			beq zero		:\
+			cmp #91			:\
+			bcc ok			:\
+			cmp #97			:\
+			bcc tab1		:\
+			cmp #123		:\
+			bcs tab2		:\
+			sbc #95			:\
+			bne ok			:\
+tab2			tay			:\
+			lda ctab2-123,y		:\
+			bne ok			:\
+tab1			tay			:\
+			lda ctab1-91,y		:\
+			.byt $2c		:\
+zero			lda #0			:\
+ok			.)
+
+#define	SCR2ASC		.(			:\
+			and #$7f		:\
+			beq at			:\
+			cmp #27			:\
+			bcs x1			:\
+			adc #96			:\
+			bne ok			:\
+x1			cmp #32			:\
+			bcc tab1		:\
+			cmp #91			:\
+			bcc ok			:\
+			tay			:\
+			lda atab2-91,y		:\
+			bcs ok			:\
+tab1			tay			:\
+			lda atab1-27,y		:\
+			.byt $2c		:\
+at			lda #64			:\
+ok			.)			:\
+
+&ctab1	.byt 27, 28, 29, 30, 100, 124
+&ctab2	.byt 115, 93, 107, 112, 122
+&atab1	.byt 91, 0, 93, 94, 0
+&atab2	.byt 0,0,124,0,0,0,0,0,0,95,0,0,0,0,0,0,125,0,0,0,0,126,0,0,123
+	.byt 0,0,0,0,0,0,127,0,96,0,0,0
+
+#define	DO_IRQ		.(			:\
+			bit actchange		:\
+			bpl ok			:\
+			cpy actscr		:\
+			bne ok			:\
+			ldx zeile		:\
+			jsr setzei		:\
+			ldy screen		:\
+ok			.)
+
+	.data
+&actchange .byt 0
+	.text
+
+&console_init .(
+	jsr inimem
+	jsr inivid
+	jsr inikbd
+	jsr inicrsr
+	jsr inibell
+	rts
+	.)
+
+inimem    .(
+          clc
+          rts
+          .)
+
+&inivid   .(   
+          lda screen
+          bne ix
+
+/* we assume the CRTC to be initialized... 
+          ldx #0
+i1        bit freq
+          lda vdc4tab,x
+          stx vdc
+          sta vdc+1
+          inx
+          cpx #16
+          bcc i1
+*/
+ix
+	  rts
+
+/* vdc8tab   .byt $7e,$50,$64,6,$29,0,$19,$21,0,7,$60,7,0,0,0,0 */
+
+/* vdc4tab   .byt $3f,$28,$32,3,$29,0,$19,$21,0,7,$60,7,0,0,0,0 */
+
+	  .)
+
+&setact   .(
+
+scrbuf	=$9000
+
+	.zero
+p1	.word 0
+p2	.word 0
+	.text
+
+	sec
+	ror actchange
+	pha
+	txa
+	jsr getp1
+	sta p1
+	sty p1+1
+	lda #00
+	sta p2
+	lda #$80
+	sta p2+1
+	jsr cp2to1
+	pla
+	jsr getp1
+	sta p2
+	sty p2+1
+	lda #00
+	sta p1
+	lda #$80
+	sta p1+1
+	jsr cp2to1
+	ldx zeile
+	jmp setzei
+
+cp2to1	ldx #8
+	ldy #0
+cp1	lda (p2),y
+	sta (p1),y
+	iny
+	bne cp1
+	inc p2+1
+	inc p1+1
+	dex
+	bne cp1
+	rts
+getp1
+	asl
+	asl
+	asl
+	clc
+	adc #>scrbuf
+	tay
+	lda #<scrbuf
+	rts
+
+	  .)
+
+
+#include "devices/kbd_pet.a65"
+
+

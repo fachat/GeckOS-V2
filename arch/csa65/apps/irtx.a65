@@ -1,0 +1,7 @@
+
+#define	CLK1MHZ
+#define VIA	$e830
+
+#include "sysapps/irtx/irtx.a65"
+
+

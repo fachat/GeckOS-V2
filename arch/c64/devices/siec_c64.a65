@@ -1,0 +1,415 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************
+ * 
+ * C64 serial IEC bus 
+ * hardware routines for fsiec
+ *
+ */
+
+#define   CIA2      $dd00
+
+#include "chips/cia6526.i65"
+
+	.zero
+cnt2      .byt 0
+byte      .byt 0
+bytfl     .byt 0
+eoifl     .byt 0
+	.text
+
+	/* when we get the IEC semaphore, we have nothing to do left,
+	   assuming that no other program changes the I/O lines. 
+	   The timer is configured correctly in setti every time it
+	   is needed. We also assume that any timer interrupt is 
+	   disabled by other devices when releasing the interface. */
+&getif 	.(
+	clc
+	ldx #SEM_CIA2TB
+	jsr PSEM
+#ifdef NMIDEV
+	lda #NMI_OFF
+	jmp CTRLNMI
+#else
+	rts
+#endif
+	.)
+
+&freif	.(
+#ifdef NMIDEV
+	lda #NMI_ON
+	jsr CTRLNMI
+#endif
+	ldx #SEM_CIA2TB
+	jmp VSEM
+	.)
+
+&IECINIT  .(
+	jsr getif
+	  /* init i/o */
+
+	  lda CIA2+CIA_DDRA
+	  and #%00111111
+	  ora #%00111000
+	  sta CIA2+CIA_DDRA
+	  lda CIA2+CIA_PRA
+	  and #%11000111
+	  sta CIA2+CIA_PRA
+
+	  lda %00000010
+	  sta CIA2+CIA_ICR	; clean timer b irq mask
+
+          lda #0
+          sta status
+          sta cnt2
+          sta bytfl
+          sta eoifl
+          clc
+	  .byt $24
+inix      sec
+	php
+	jsr freif
+	plp
+          rts
+	.)
+
+&IECIN     .(
+          sei
+          lda #0
+          sta eoifl
+          lda #8
+          sta cnt2
+          jsr clkhi
+;          jsr datalo
+
+l14       ;    jsr testatn
+          ;    bcs atnin
+	  lda CIA2+CIA_PRA	; wait clkhi
+	  cmp CIA2+CIA_PRA
+          bne l14
+          and #$40
+          beq l14 
+
+l19       jsr setti      
+          jsr datahi
+
+l16       jsr fragti
+          bne l15   ; abgelaufen
+          ;    jsr testatn
+          ;    bcs atnin
+	  bit CIA2+CIA_PRA	; wait clklo
+          bvs l16
+          bvc l17
+
+l15       lda eoifl
+          beq l18
+          lda #2
+          jmp error
+l18       dec eoifl
+          jsr datalo
+jsr clkhi
+          jsr waitus
+          lda #$40		; EOF
+          jsr seterror
+          bne l19
+
+l17   
+l20    
+	  lda CIA2+CIA_PRA
+          asl
+          bpl l20
+          ror byte
+
+l21
+	  bit CIA2+CIA_PRA
+          bvs l21
+
+          dec cnt2
+          bne l20
+
+          jsr datalo
+
+          bit status
+          bvc l22
+          jsr endhndshk
+          lda byte
+          sec
+	  cli
+          rts
+
+l22       lda byte
+          clc
+	  cli
+          rts
+         
+	.)
+ 
+/*
+atnin     jsr datalo
+          jsr clkhi
+          sec
+          rts
+*/
+
+nodev     lda #$80
+;inc $d020
+error     jsr seterror
+          jsr atnhi
+endhndshk jsr waitus
+;          jsr datahi
+          jsr clkhi
+jsr datahi
+          sec
+	cli
+          rts
+
+iec0out	 .(   
+	  sei
+          jsr datahi
+
+cmp #$3f
+bne l1xxx
+jsr clkhi
+l1xxx
+
+          jsr atnlo
+&iec2out  sei
+	  jsr clklo
+          jsr datahi
+          jsr waitms
+&iecout   sei 
+          jsr datahi
+l0
+	  jsr checkin
+          bcs nodev
+
+          jsr clkhi
+          bit eoifl
+          bpl l3 
+                              ; eoi senden
+l4
+	  jsr checkin
+          bcc l4
+l5
+	  jsr checkin
+          bcs l5
+l3
+	  jsr checkin
+          bcc l3
+
+          jsr clklo
+          lda #8
+          sta cnt2
+l6  
+	  lda CIA2+CIA_PRA
+	  cmp CIA2+CIA_PRA
+          bne l6
+	  asl
+          bcc timexout
+
+          ror byte            ; bit setzen
+          bcs l7
+          jsr datalo
+          bne l8
+l7        jsr datahi
+
+l8        jsr clkhi
+;          jsr waitus
+nop:nop:nop:nop
+;          jsr dhiclo
+lda CIA2+CIA_PRA
+and #%11011111
+ora #%00010000
+sta CIA2+CIA_PRA
+          dec cnt2
+          bne l6
+
+          jsr waitdlo
+          bcs timeout
+;	  cli
+          rts
+timeout   lda #3
+          .byt $2c
+timexout  lda #4
+;	  cli
+          jmp error
+	.)
+
+/**************************************************************************/
+
+clklo    
+	  lda CIA2+CIA_PRA
+	  ora #%00010000
+	  sta CIA2+CIA_PRA
+          rts
+clkhi  
+	  lda CIA2+CIA_PRA
+	  and #%11101111
+	  sta CIA2+CIA_PRA
+          rts
+datalo 
+	  lda CIA2+CIA_PRA
+	  ora #%00100000
+	  sta CIA2+CIA_PRA
+          rts
+datahi 
+	  lda CIA2+CIA_PRA
+	  and #%11011111
+	  sta CIA2+CIA_PRA
+          rts
+atnlo  
+	  lda CIA2+CIA_PRA
+	  ora #%00001000
+	  sta CIA2+CIA_PRA
+          rts
+atnhi  
+	  lda CIA2+CIA_PRA
+	  and #%11110111
+	  sta CIA2+CIA_PRA
+          rts
+
+;dhiclo
+;	  lda CIA2+CIA_PRA
+;	  and #%11011111
+;	  ora #%00010000
+;	  sta CIA2+CIA_PRA
+;         rts
+
+checkin	.(
+	lda CIA2+CIA_PRA
+	cmp CIA2+CIA_PRA
+	bne checkin
+	asl
+	rts          
+	.)
+
+/*
+testatn   .(
+          lda VIA1+VIA_DRA
+          bmi tstatn
+          and #%00100000
+          beq c
+s         sec
+          rts
+tstatn    and #%00100000
+          beq s
+c         clc
+          rts
+          .)
+*/
+
+
+waitdlo   .(
+          jsr setti
+w1        jsr fragti
+          bne w2
+	  lda CIA2+CIA_PRA
+	  cmp CIA2+CIA_PRA
+          bne w1
+	  asl
+          bcs w1
+          rts
+w2        sec
+          rts
+	.)
+
+&setti 
+lda CIA2+CIA_CRB		; stop timer
+and #%11111110
+sta CIA2+CIA_CRB
+	  lda #<1000
+	  sta CIA2+CIA_TBL
+	  lda #>1000
+	  sta CIA2+CIA_TBH
+lda CIA2+CIA_ICR		; clear irq flag
+;	  lda CIA2+CIA_CRB
+;	  and #%10011111	; count Phi2
+;	  ora #%00011001	; start, force load and single shot.
+lda #%00010001
+	  sta CIA2+CIA_CRB
+          rts
+&fragti 
+	  lda CIA2+CIA_ICR
+	  and #%00000010
+          rts
+
+waitms    txa
+          ldx #$b6
+          bne w4
+waitus    txa
+          ldx #8
+w4        dex
+          bne w4
+          tax
+          rts
+
+sectalk	  .(
+          sei
+          sta byte
+          jsr iec2out
+          bcs st1
+          jsr datalo
+          jsr atnhi
+          jsr clkhi
+st2       ;bit VIA1+VIA_DRA
+	  bit CIA2+CIA_PRA
+          bvs st2
+st1       cli
+          rts
+          .)
+
+seclisten .(
+	  sei
+          sta byte
+          jsr iec2out
+          jsr atnhi
+          cli
+          rts
+	  .)
+
+&UNTALK    .(
+	  sei
+          jsr clklo
+          lda #$5f
+          jsr atnout
+          jsr atnhi
+          jsr clkhi
+          jsr datahi
+          cli
+          rts
+	  .)
+
+&UNLISTEN  .(
+	  lda #$3f
+          sei
+          jsr atnout
+          jsr atnhi
+          jsr clkhi
+          cli
+          rts
+	  .)
+
+#undef CIA2
+
+

@@ -1,0 +1,94 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef ROM
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+
+          ;.word $700
+          *=$700
+          
+/*#define   NOPRG*/
+
+#endif
+
+          
+/*        Device-Block        */
+
+          .(
+#if 0
+#ifndef NOMMU
+-sysmem   =$300          /* werte um mit OS/A 1.33 nicht zu kollidieren    */
+-syszp    =$d0
+#endif
+
+#echo devices:
+#print sysmem
+#print syszp 
+
+#endif
+
+#ifdef ROM
+          .word endd
+          .byt PK_DEV+$80
+          .word devstart
+	  .dsb P_NAME - P_RAM, $ff
+          .asc "devices",0
+#else    
+#ifndef NOPRG
+          .word 0
+          .byt PK_DEV
+          .byt 0
+          .word 0
+          .word devstart
+          .byt 0,0,<-1
+#endif
+#endif
+
+devstart
+
+/*#include  "c:eigene\eigene.a65\osarom3\oadev\oa1dt.a65"*/
+
+
+-sernr = "1"
+
+#include  "devices/keydev.a65"
+#include  "devices/nulldev.a65"
+#include  "devices/spooler.a65"
+
+#ifdef GECKO_CSAEMU
+#include  "chips/pia6521.i65"
+#define	SYSPORT $efe0
+#define   SYS_RTS   %00000100
+#include  "../csa65/devices/oa1ds.a65"
+#endif
+
+#define UARTBASE $ec00
+#include  "devices/ser_uart.a65"
+
+          .word $ffff
+
+endd      .)
+

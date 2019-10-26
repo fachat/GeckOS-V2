@@ -1,0 +1,79 @@
+<html><head>
+<title> OS/A65 Machine Language Monitor </title>
+</head><body>
+<p><h1 align=center> OS/A65 Machine Language Monitor </h1></p>
+<p> <h2 align=center> (c) 1989-98 Andre Fachat </h2></p>
+<hr><p>
+This machine language monitor owns the most standard commands together
+with some interesting features taken from my C64
+<a href="../c64/assembler/">assembler</a> and some commands to 
+do system calls easier.<br>
+All addresses and data bytes can be given in hex, decimal (with 
+preceding "."), octal (with preceding "&") or in binary (with
+preceding "%"). The output of the commands M, B, R, D, G and C can 
+be piped to a file with "&gt; filename", like in the shell.
+<p>
+<pre>
+X		exits monitor (goes to shell)
+D a b		disassemble from address a to b
+B a b		binary list
+M a b		hex dump
+R		shows register contents
+; a mnem
+A a mnem	assembles 6502 mnemonic to address a
++ pc ac xr yr sp sr
+		sets registers to a new value. a "-" instead of a 
+		value leaves the register unchanged
+E a b		exchanges environment block a (the a'th MMU register) with
+		with memory block b
+S "name" a b	save memory from a (included) to b (not included)
+		in file "name". The first two bytes in the file are the 
+		memory address
+G a		Goto address (executes a JSR)
+L a b		reads b bytes from STDIN and saves them at address a
+L "name" a	Load file "name" to address a or the included load 
+		address if a is left out
+C a b c		Compare memory area from a to b with the area starting at c
+T a b c		Transfer (copy) memory from a to b to the address c
+O a b c		Occupy (fill) memory from a to b with c
+P a b c		sets system parameter: a becomes the standard drive (for
+		load/save), b is the number of bytes printed in a line
+		with hex dump and c becomes the number of available 
+		memory blocks (a 4kByte) for this task. A "-" leaves the
+		value unchanged.
+U a b c d e	change in the memory area from a to b all three byte 
+		assembler opcode addresses pointing to the area between 
+		c and d to the area starting at e
+I a b c ...
+, a b c ...	writes bytes b, c, ... into the memory at address a
+F a b string	tries to Find the string (which is mixed from bytes, 
+		separated by spaces and strings, enclosed in double quotes)
+		in the address area from a to b
+FA a b addressing
+		search all assembler codes in memory from a to b, that have
+		the given addressing mode: "FA a b (**AB)" means to search
+		all absolute indirect addressing modes with low byte
+		equal to $AB
+FR a b		search for relative jumps
+F- a b c	search in memory from a to b for bytes that are not equal to c
+
+YD a b c	DEVCMD with device a, command b and parameter c
+YM		GETMEM
+YF a		FREMEM memory block a
+YS		GETSTR
+YR a		FRESTR stream a
+YE		GETENV
+YP adr env stdin stdout stderr
+		FORK
+YW sem		PSEM
+YV sem		VSEM
+YG a		tries to get memory block a with GETBLK
+YC d:mask	show directory
+</pre>
+<h4>Memory Map</h4>
+The shell and the monitor both use the zeropage addresses
+from 64-128 ($40-$80) and memory addresses from 768-1024 ($300-$400).
+In addition to this, of course the stack ($0100-$01ff) and the PCBUF
+Send buffer ($0200-$02ff) are being used.
+</body>
+</html>

@@ -1,0 +1,171 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 cat program
+
+    Copyright (C) 1997-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+
+#define	BUFLEN	1024
+
+main	.(
+	.zero
+argp	.word 0
+	.text
+
+	sta argp
+	sty argp+1
+
+	ldy #0
+l0	lda (argp),y
+	beq first
+	iny
+	bne l0
+
+first	iny
+	lda (argp),y
+	bne ok
+	
+	ldx #STDIN
+	jmp docopy
+	
+ok	tya
+	clc
+	adc argp
+	sta argp
+	bcc l1
+	inc argp+1
+l1
+	lda argp
+	ldy argp+1
+
+	jsr docat
+	bcs ende
+	/* TODO: print error code */
+
+	ldy #0
+l2	lda (argp),y
+	beq next
+	iny
+	bne l2
+next
+	iny
+	lda (argp),y
+	bne ok
+
+	lda #0
+ende	
+	rts
+
+etxtout	
+	.zero
+tp	.word 0
+	.text
+
+	sta tp
+	sty tp+1
+	ldx #STDERR
+	ldy #0
+t0	lda (tp),y
+	beq te
+	sec
+	jsr fputc
+	iny
+	bne t0
+te	rts
+
+	.bss
+fileno	.byt 0
+frdat	.word 0,0
+buf	.dsb BUFLEN
+	.text
+
+docat	ldx #OPEN_RD
+	jsr fopen
+	bcc docopy
+	rts
+docopy  stx fileno
+rdloop
+	lda #<buf
+	sta frdat
+	lda #>buf
+	sta frdat+1
+	lda #<BUFLEN
+	sta frdat+2
+	lda #>BUFLEN
+	sta frdat+3
+	lda #<frdat
+	ldy #>frdat
+	ldx fileno
+	sec
+	jsr fread
+	pha
+	php
+
+	lda #<BUFLEN
+	sec
+	sbc frdat+2
+	sta frdat+2
+	lda #>BUFLEN
+	sbc frdat+3
+	sta frdat+3
+	lda #<buf
+	sta frdat
+	lda #>buf
+	sta frdat+1
+wrloop	lda #<frdat
+	ldy #>frdat
+	ldx #STDOUT
+	sec
+	jsr fwrite
+	bcs wrerr
+	lda frdat+2
+	ora frdat+3
+	bne wrloop
+	pla
+	plp
+	bcs rderr
+	jmp rdloop
+
+wrerr	pha
+	ldx fileno
+	cpx #STDIN
+	beq w1
+	jsr fclose
+w1	pla
+	tay
+	pla
+	pla
+	tya
+	sec
+	rts
+rderr	cmp #E_EOF
+	bne rde2
+	lda #E_OK
+rde2	pha
+	ldx fileno
+	cpx #STDIN
+	beq r1
+	jsr fclose
+r1	pla
+	clc
+	rts
+	.)
+

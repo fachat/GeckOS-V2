@@ -1,0 +1,187 @@
+
+
+/***************** c64 rom build - arch/c64/* *****************************/
+
+c64rom.a65		includes/wraparound to build 'ROM' image for C64
+c64def.i65		additional C64 defines
+config.i65		standard OS/A65 config defines
+devices/c64dev.a65	device wraparound
+devices/ser_acia1.a65	ACIA 6551 RS232 device driver
+devices/ser_9600.a65	Fast RS232 driver for interface by D. Dallmann
+devices/con_c64.a65	include for standard console driver 
+devices/piec_c64.a65	include for standard IEEE488 driver - parallel IEEE
+devices/siec_c64.a65	include for standard IEEE488 driver - serial IEC
+kernel/kinit.a65	C64 reset functions
+kernel/kenv.a65		plain memory config task switching stuff
+
+boot/loader		BASIC loader to start everything
+boot/loader11		BASIC loader to start everything on VICE with piec
+boot/boot		small Machine Language boot program
+boot/boot.a65		source for boot
+boot/charom		charom to use (needs ASCII, not PETSCII)
+boot/term9600		small terminal program (BASIC)
+
+/***************** CS/A65 rom build - arch/csa/* **************************/
+
+csarom.a65		includes/wraparound to build a complete rom image 
+config.i65		standard OS/A65 config defines
+csa65.i65		additional CS/A65 defines
+devices/oadev.a65	mainly includes, to build devices into the kernel
+devices/par.a65		parallelport device
+devices/piec_csa.a65	include for standard IEEE488 driver - parallel IEEE
+devices/siec_csa.a65	include for standard IEEE488 driver - serial IEC
+devices/oa1ds.a65	ACIA6551 serial device
+devices/con_csa.a65	include for standard console driver.
+boot/inirom.a65		inirom sets the memory configuration for testing a
+			new rom and starts it
+boot/charom		charom to use (ASCII)
+kernel/kinit.a65	CS/A65 reset functions
+kernel/kenv.a65		CS/A MMU memory config task switching stuff
+
+
+/***************** gecko rom build - arch/gecko/* *************************/
+
+devices/fsiec.a65	modified FSIEC filesystem for Gecko
+config.i65		standard OS/A65 config defines
+gecko.a65		main ROM (includes, wraparound)
+gecko.i65		additional Gecko defines
+boot/inig2.a65		Program to start Gecko emulation on CS/A MMU 
+boot/inig3.a65		 - " -
+boot/inigecko.a65	A small program to make test environment for Gecko
+devices/keydev.a65	device for keyboard
+devices/oadev.a65	device wraparounds (also uses oadev/oa1ds2.a65)
+devices/siec_gecko.a65	include for standard IEEE488 driver - serial IEC
+kernel/kinit.a65	Gecko reset functions
+kernel/kenv.a65		plain memory config task switching stuff
+
+/***************** defines - include/* ************************************/
+
+chips/*			hardware (chips) definitions
+fdefs.i65		kernel file interface definitions
+kdefs.i65		kernel interface definitions
+kernel.i65		kernel jump table
+file_o65.i65		o65 fileformat definitions
+inet.i65		kernel network interface definitions
+lib6502.i65		lib6502 definitions
+
+/***************** kernel - kernel/* **************************************/
+
+kernel.a65		kernel: wraparound/includes
+jmptbl.a65		jumptable / address defines (for include)
+init.a65		bootup: memory test, start rom processes, frequency
+			detect; irq/nmi wraparounds (vectors)
+tasks.a65		kernel entry/exit gates (memsys/memtask), scheduler,
+			environment stuff, kill, term, send/receive, fork,
+			read, write, setblk, dup,...
+devices.a65		kernel device routines, registering, device irq
+files.a65		fs manager - dispatch fs messages to registered fs
+streams.a65		stream manager
+
+ramtest.a65		RAM test routines for inclusion in arch specific stuff
+zerotest.a65		zeropage test routines for inclusion in arch stuff
+
+/***************** oldlib - oldlib/* **************************************/
+
+- old stuff - not documented any more
+
+/***************** devices - devices/* ************************************/
+
+nulldev.a65		kind of /dev/null
+ser_acia.a65		two serial devices for ACIA 6551
+ser_uart.a65		a serial device for UART 16550A (16 byte FIFO)
+spooler.a65		spooler - serialize output requests
+console.a65		terminal device - video, keyboard, bell
+
+arch/proto/devices/oa1std.a65	standard device routines - for new devices
+arch/proto/devices/oa1stds.a65	standard device routines for multiple devices
+
+/***************** system applications ************************************/
+
+/***************** filesystems sysapps/fs/* *******************************/
+
+fsdev.a65		filesystem for accessing devices
+fsibm.a65		IBM PC fs for drives on csa shugart bus
+fsiec.a65		fs for CBM drives on IEEE 488 interface
+
+/***************** command shell and monitor sysapps/mon/* ****************/
+
+mon.a65			shell with i/o redirection, pipes, and more
+shdir.a65		file stuff for shell
+shmon.a65		machine language monitor for shell
+
+/***************** ibm disk monitor - sysapps/ibmon/* *********************/
+
+ibmon.a65		disk monitor for IBM PC disks. doesn't work with
+ibmon.doc		fsibm due to lack of mutex/semaphore
+
+/***************** simulate keyboard for a C64 - ? ************************/
+
+keyrom/ky.a65		device to send stream data to a c64, of that the 
+keyrom/kyc64_1.a65	keyboard is emulated by dual ported (time sharing)
+			ram 
+
+/***************** send infrared commands to the stereo - sysapps/irtx ****/
+
+irtx.a65		program to send infrared commands
+
+/***************** multicopy - sysapps/mcopy/* ****************************/
+
+mcopy.a65		multicopy programm - serialize copy commands
+			(that are executed by setting up a stream and
+			leaving it alone in the shell, thus causing
+			performance/resource problems when copying many
+			files)
+
+/***************** basic interpreter - sysapps/basic/* ********************/
+
+basic4.a65		extended basic interpreter, running in multitasking
+			ported from C64, (c) commodore.
+			Not (yet?) running on the C64 under this OS.
+
+/***************** slip client - sysapps/slipd/* **************************/
+
+fstcp.c			fstcp server
+main.a65		main client wraparound
+fstcp.a65		fstcp client code
+fstcp.h			fstcp defines
+icmp.a65		ICMP (ping echo) code
+mem.a65a		memory handling for packets
+slipi.a65		SLIP input loop
+slipo.a65		SLIP output loop
+sltcp.def		IP & TCP defines
+tcp.a65			basic TCP code (when packet arrives)
+tcpuser.a65		basic TCP code (user calls)
+tcpsrv.a65		echo, discard, and chargen code
+putil.a65		protocl utility functions
+tutil.a65		TCP utility functions
+util.a65		utility functions
+csaip			small example script to prepare serial line 
+mon.a65			some general debug output
+rsh.a65			telnetd server
+libip.a65		lib6502 binding
+
+/***************** lib6502 applications ***********************************/
+
+/***************** file apps - apps/file/* ********************************/
+
+cat.a65			cat
+chkdsk.a65		chkdsk
+format.a65		format
+ls.a65			ls
+mkdir.a65		mkdir
+mv.a65			mv
+rm.a65			rm
+rmdir			rmdir
+
+/***************** shell - apps/lsh/* *************************************/
+
+lsh.a65			lib6502 shell
+
+/***************** inet apps - apps/inet/* ********************************/
+
+tlogin.a65		login program called by slipd when incoming telnet 
+			connection is opened.
+telnet.a65		telnet program
+httpd.a65		lib6502 WWW server - not yet working.
+
+

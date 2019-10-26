@@ -1,0 +1,401 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************
+ * 
+ * Double ACIA serial line device driver 
+ * for CS/A65 architecture.
+ * It uses other peripheral lines then the ones of the 6551 for rts/cts
+ */
+
+#define   ACIA      $efe8
+#define   ACIA2     $e818
+#define   PIA2      $e810
+#define   Anzdev    2
+  
+          .(
+          .word devend1
+          jmp prg1
+          .asc "ser",sernr, 0
+
+-sernr += 1
+
+devend1   .word devend2
+          jmp prg2
+          .asc "ser",sernr, 0
+
+-sernr += 1
+
+	.data
+dev       .byt 0
+div       .byt 0
+status    .dsb Anzdev
+instr     .dsb Anzdev
+outstr    .dsb Anzdev
+brkkey    .dsb Anzdev
+	.text
+
+prg1      ldx #0
+          .byt $2c
+prg2      ldx #1
+          stx dev
+          cmp #DC_RES
+          beq devini
+          pha
+          lda status,x
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq
+          jmp others
+
+devini    lda #0
+          sta status,x
+          sta instr,x
+          sta outstr,x
+
+	  lda #3
+	  sta brkkey,x
+
+          cpx #1
+          beq iniser2
+          
+          STA ACIA+1
+          LDA #%00011000; 1200 BAUD
+          STA ACIA+3
+          cmp ACIA+3
+          bne devx
+          LDA #%00000101
+          STA ACIA+2
+          cmp ACIA+2
+          bne devx
+          LDA ACIA+1
+rts1hi    lda SYSPORT         /* RTS hi     */
+          ora #SYS_RTS
+          sta SYSPORT 
+          clc
+          rts
+
+iniser2   STA ACIA2+1
+          LDA #%00011000; 1200 BAUD
+          STA ACIA2+3
+          cmp ACIA2+3
+          bne devx
+          LDA #%00000101
+          STA ACIA2+2
+          cmp ACIA2+2
+          bne devx
+          LDA ACIA2+1
+rts2hi    lda PIA2+PIA_CRA    /*   CA2 output hi =RTS Hi   */
+          ora #%00111000
+          ;and #%11110111
+          sta PIA2+PIA_CRA
+          clc
+          rts
+
+devx      lda status,x
+          ora #2
+          sta status,x
+          lda #E_NOTIMP
+          sec
+          rts
+          
+devirq 
+          cpx #1
+          bne irqser1
+          jmp irqser2
+irqser1
+          .(
+          lda ACIA+1
+          bpl irqend
+          sta div
+          bit status
+          bpl tx
+          and #%00001000
+          beq nobyt
+          ldx outstr
+          lda ACIA
+
+	  cmp brkkey
+	  bne nobrk
+	  lda #SC_SSTAT
+	  ldy #SCE_BRK
+	  jsr STRCMD
+	  lda brkkey
+nobrk
+          jsr PUTC
+          bcs test
+
+nobyt     ldx outstr
+          lda #SC_STAT
+          jsr STRCMD
+test      bcc tx
+          cmp #E_NUL
+          bne tstwater
+          jsr rxoff
+          jmp tx
+
+irqend    lda #E_NOIRQ
+	  rts
+
+tstwater  cmp #E_SEMPTY
+          beq wl
+          tax
+          lda status
+          and #1
+          bne wh
+          txa
+          cmp #E_SFULL
+          beq wh
+          cmp #E_SHWM
+          bne twl
+wh        jsr rts1hi
+          bcc tx         ; unbedingt
+twl       cmp #E_SLWM
+          bne tx
+wl        lda SYSPORT
+          and #255-SYS_RTS    ; IO freigeben
+          sta SYSPORT
+
+tx        bit status
+          bvc irqhs
+          lda div
+          and #%01010000
+          eor #%00010000
+          bne irqhs
+          ldx instr
+          jsr GETC
+          bcs test2
+          sta ACIA
+          bcc irqhs
+test2     cmp #E_EOF
+          bne irqhs
+          jsr txoff
+
+irqhs     lda ACIA+1
+	  lda #E_OK
+	  rts
+          .)
+
+irqser2   .(
+          lda ACIA2+1
+          bpl irqend
+          sta div
+          bit status+1
+          bpl tx
+          and #%00001000
+          beq nobyt
+          ldx outstr+1
+          lda ACIA2
+
+	  cmp brkkey+1
+	  bne nobrk
+	  lda #SC_SSTAT
+	  ldy #SCE_BRK
+	  jsr STRCMD
+	  lda brkkey+1
+nobrk
+          jsr PUTC
+          bcs test
+
+nobyt     ldx outstr+1
+          lda #SC_STAT
+          jsr STRCMD
+test      bcc tx
+          cmp #E_NUL
+          bne tstwater
+          jsr rxoff
+          jmp tx
+tstwater  cmp #E_SEMPTY
+          beq wl
+          cmp #E_SFULL
+          beq wh
+          cmp #E_SHWM
+          bne twl
+wh        jsr rts2hi
+          bcc tx         ; unbedingt
+twl       cmp #E_SLWM
+          bne tx
+wl        lda PIA2+PIA_CRA
+          and #%11110111
+          sta PIA2+PIA_CRA
+
+tx        bit status+1
+          bvc irqhs
+          lda div
+          and #%01010000
+          eor #%00010000
+          bne irqhs
+          ldx instr+1
+          jsr GETC
+          bcs test2
+          sta ACIA2
+          bcc irqhs
+test2     cmp #E_EOF
+          bne irqhs
+          jsr txoff
+
+irqhs     lda ACIA2+1
+	  lda #E_OK
+	  rts
+irqend    lda #E_NOIRQ
+	  rts
+          .)
+
+others    cmp #DC_GS
+          bne o1
+          lda status,x
+          and #DC_SW_TX
+          bne devonx
+          tya
+          sta instr,x
+          jmp ok
+devonx    jmp devon
+o1        cmp #DC_PS
+          bne o2
+          lda status,x
+          and #DC_SW_RX
+          bne devonx
+          tya
+          sta outstr,x
+okx       jmp ok
+o2        cmp #DC_RX_ON
+          bne o3
+          lda #DC_SW_RX
+          bne o2a
+o3        cmp #DC_TX_ON
+          bne o4
+	  ; lda #3
+	  ; sta brkkey,x
+          lda #DC_SW_TX
+o2a       ora status,x
+          sta status,x
+          bne okx
+o4        cmp #DC_RX_OFF
+          bne o5
+rxoff     ldx dev
+          lda status,x
+          and #DC_SW_RX
+          beq devoffx
+          lda outstr,x
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_RX
+          sta status,x
+          txa
+          beq rx1off
+          jsr rts2hi
+          bcc okx
+rx1off    jsr rts1hi
+          bcc okx
+devoffx   jmp  devoff
+o5        cmp #DC_TX_OFF
+          bne o6
+txoff     ldx dev
+          lda status,x
+          and #DC_SW_TX
+          beq devoffx
+          lda instr,x
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_TX
+          sta status,x
+          jmp ok
+o6        cmp #DC_HS
+          bne o6a
+          lda status,x
+          and #255-1
+          sta status,x
+          tya
+          and #1
+          ora status,x
+          sta status,x
+          jmp ok
+o6a       cmp #DC_SPD
+          bne o7
+          tya
+          and #%00001111
+          sta div
+          ldx dev
+          bne o6b
+          lda ACIA+3
+          and #%11110000
+          ora div
+          sta ACIA+3
+          jmp ok
+o6b       lda ACIA2+3
+          and #%11110000
+          ora div
+          sta ACIA2+3
+          jmp ok
+
+o7        cmp #DC_ST
+          beq ok 
+          cmp #DC_EXIT
+          bne o9		; onotimp
+          jsr rxoff
+          jsr txoff
+          ldx dev 
+          lda status,x
+          ora #2
+          sta status,x
+          txa
+          bne o8a
+          sta ACIA+1
+          beq ok
+o8a       sta ACIA2+1
+          beq ok
+o9
+	  cmp #DC_BRKKEY
+	  bne onotimp
+	  lda brkkey,x
+	  pha
+	  tya
+	  sta brkkey,x
+	  pla
+	  tay
+	  ; jmp ok
+
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+devend2   .)
+

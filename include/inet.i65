@@ -1,0 +1,58 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef   _INET_H_
+#define   _INET_H_
+
+/*
+ * command codes for kernel network interface - must be between 
+ * filesystem command codes and FS_LASTCODE
+ */
+
+#define	FS_CONNECT		32
+#define	FS_LISTEN		33	/* open listen port */
+#define	FS_UNLISTEN		34	/* close listenport */
+#define	FS_ACCEPT		35
+
+/*
+ * protocol definitions for lib6502 and kernel netwaork calls
+ */
+
+#define	IPV4_TCP		0
+#define	IPV4_UDP		1
+
+/*
+ * message format for kernel net server calls
+ */
+
+#define	FSN_PROT		0	/* network protocol for accept */
+#define	FSN_RET			0	/* return value for accept/listen */
+#define	FSN_PORT		1	/* network port for (un)listen */
+#define	FSN_RXSTR		2	/* stream where network writes */
+#define	FSN_TXSTR		3	/* stream where network reads */
+#define	FSN_ADDR		4	/* network address, depends on prot. */
+
+#endif
+

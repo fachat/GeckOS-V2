@@ -1,0 +1,826 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+	.(
+
+#define	MAXQUEUE	4
+
+#define	MAXBUF		128
+
+#define	TCB_RSTAT	TCB_CONN	/* general state */
+
+#define	TCB_SAVESIG	(TCB_CONN+1)
+
+#define	TCB_RTSTAT	(TCB_CONN+2)	/* state stream -> net */
+#define	TCB_RTSTR	(TCB_CONN+3)
+#define	TCB_RTSLOT	(TCB_CONN+4)
+#define	TCB_RTCNT	(TCB_CONN+5)	/* not each single byte is sent 
+					   immediately, but after this count 
+					   loops */
+
+#define	TCB_RRSTAT	(TCB_CONN+6)	/* state net -> stream */
+#define	TCB_RRSTR	(TCB_CONN+7)	
+#define	TCB_RNIQ	(TCB_CONN+8)	/* number of bytes in input queue */
+#define	TCB_RIQ		(TCB_CONN+9)	/* MAXQUEUE bytes */
+
+#if TCB_RIQ+MAXQUEUE > TCB_LEN
+#echo Warning: rsh tcb struct too long!
+#endif
+
+#define	RSS_FREE	0	/* must be 0 */
+#define	RSS_OPEN1	1	/* content for exec thread */
+#define	RSS_OPEN2	2	/* wait for exec thread to finish */
+#define	RSS_RUN		3
+
+#define	RST_FREE	0	/* must be 0 */
+#define	RST_RD		1
+#define	RST_WAIT	2
+#define	RST_WEOF	3
+
+#define	RST_CNTV	16
+
+#define	RSR_FREE	0	/* must be 0 */
+#define	RSR_QUEUE	1	/* queue it but no stream yet */
+#define	RSR_WR		2
+#define	RSR_CLOSING	3
+
+&&rsh_srv 
+        .byte 0,0,0,0, 0,0, RSH_PORT, 0, SFL_MULT
+        .word rsh_lopen-1, rsh_queue-1, rsh_loop-1, rsh_signal-1
+
+#ifndef NO_RSH
+&rsh_init .(
+DB("rsh_init^m^j")
+	lda #0
+	sta thstate
+        lda #<rsh_srv
+        ldy #>rsh_srv
+        jmp tcp_listen
+	.)
+#endif
+
+rsh_lopen .(
+DB("rsh_lopen^m^j")
+	lda #0
+	ldy #TCB_RTSTAT
+	sta (tcbp),y
+	ldy #TCB_RRSTAT
+	sta (tcbp),y
+	ldy #TCB_RNIQ
+	sta (tcbp),y
+	ldy #TCB_SAVESIG
+	sta (tcbp),y
+
+	jmp rsh_open		; setup async open 
+	.)
+
+&&rsh_queue .(
+txa:pha
+DB("rsh_queue ")
+pla:pha:jsr EHexout:
+DB(" tcbp=")
+lda tcbp+1:jsr EHexout:lda tcbp:jsr EHexout
+DB(" rst=")
+ldy #TCB_RRSTAT:lda (tcbp),y:jsr EHexout
+DB(" tst=")
+ldy #TCB_RTSTAT:lda (tcbp),y:jsr EHexout
+DB("^m^j niq=")
+ldy #TCB_RNIQ:lda (tcbp),y:jsr EHexout
+DB(" rstr=")
+ldy #TCB_RRSTR:lda (tcbp),y:jsr EHexout
+DB(" tstr=")
+ldy #TCB_RTSTR:lda (tcbp),y:jsr EHexout
+jsr ECrlfout
+pla:tax
+
+	ldy #TCB_RRSTAT		; queue it even if task not (yet) started
+	lda (tcbp),y
+	bne ok2
+
+DB("rsh_queue: discard ")
+txa:jsr EHexout:jsr ECrlfout
+
+	jsr bfree		; discard
+	clc
+	rts
+ok2
+	ldy #TCB_RNIQ
+	lda (tcbp),y
+	cmp #MAXQUEUE
+	bcs foops		/* shouldn't happen! */
+	; clc
+	adc #TCB_RIQ
+	tay
+	txa
+	sta (tcbp),y
+	ldy #TCB_RNIQ
+	lda (tcbp),y
+	clc
+	adc #1
+	sta (tcbp),y
+
+pha:DB("RNIQ=")
+pla:jsr EHexout:jsr ECrlfout
+
+	clc
+	rts
+foops	DB("rsh: iqueue overrun^m^j")
+	sec
+	rts
+	.)
+
+rsh_loop .(
+	ldy #TCB_RSTAT
+	lda (tcbp),y
+	beq looperr
+	cmp #RSS_OPEN2+1
+	bcs noopen
+	jsr oloop		/* check async open */
+noopen
+	jsr rxloop
+	jsr txloop
+	jsr rsh_sig_loop
+looperr	rts
+	.)
+
+flushfirst .(		/* returns c=0: all clear, c=1: some left */
+/*
+DB("flushfirst: niq=")
+ldy #TCB_RNIQ:lda (tcbp),y:jsr EHexout
+DB(" first=")
+ldy #TCB_RIQ:lda (tcbp),y:jsr EHexout
+jsr ECrlfout
+*/
+	ldy #TCB_RNIQ
+	lda (tcbp),y
+	beq ende
+	sec
+	sbc #1
+	sta (tcbp),y
+	pha
+
+	ldy #TCB_RIQ
+	lda (tcbp),y
+	tax
+	jsr bfree
+
+	ldy #TCB_RIQ
+l2 	iny
+	lda (tcbp),y
+	dey
+	sta (tcbp),y
+	iny
+	cmp #TCB_RIQ+MAXQUEUE-1
+	bcc l2
+
+	pla
+ende	cmp #1
+	rts
+	.)
+
+checkend .(
+	ldy #TCB_RTSTAT
+	lda (tcbp),y
+	bne noend
+	ldy #TCB_RRSTAT
+	lda (tcbp),y
+	bne noend
+DB("checkend: tcb_close^m^j")
+	jsr tcb_close
+
+noend	rts
+	.)
+
+/****************************************************************************
+ * check streams and transfer net -> stream 
+ */
+rxloop	.(
+	ldy #TCB_RRSTAT
+	lda (tcbp),y
+	bne streamok
+	; do read check 
+l1	jsr flushfirst		/* flushqueue */
+	bcs l1
+ende	rts
+
+streamok
+	cmp #RSR_QUEUE
+	beq ende
+
+	ldy #TCB_RRSTR
+	lda (tcbp),y
+	tax
+	lda #SC_STAT
+	jsr STRCMD
+
+	cmp #E_SFULL
+	beq ende
+	cmp #E_NUL
+	bne noend
+
+&rdclose	
+DB("rdclose^m^j")
+	ldy #TCB_RRSTR
+	lda (tcbp),y
+	tax
+	lda #SC_EOF
+	jsr STRCMD
+
+	ldy #TCB_RRSTAT
+	lda #RSR_FREE
+	sta (tcbp),y
+
+	jmp checkend
+
+geterr	DB("getbadr illegal slot!^m^j")
+	jsr flushfirst
+ret	rts
+
+noend	
+	ldy #TCB_RNIQ
+	lda (tcbp),y
+	bne ok1
+				; no packets queued
+	ldy #TCB_RRSTAT
+	lda (tcbp),y
+	cmp #RSR_CLOSING	; set by rsh_signal
+	bne ret
+DB("rdclose from CLOSING^m^j")
+	jmp rdclose
+
+ok1
+DB("read block ")
+ldy #TCB_RIQ:lda (tcbp),y:jsr EHexout:jsr ECrlfout
+
+	ldy #TCB_RIQ
+	lda (tcbp),y
+	tax
+	jsr getbadr
+	bcs geterr
+	sta pp
+	sty pp+1
+
+rdloop
+	ldy #3
+	lda (pp),y
+	sta pdl+1
+	dey
+	lda (pp),y
+	sta pdl
+	dey
+	lda (pp),y
+	tax
+	dey
+	lda (pp),y
+	clc
+	adc pp
+	sta pd
+	txa
+	adc pp+1
+	sta pd+1
+
+	ldy #TCB_RRSTR
+	lda (tcbp),y
+	tax
+datloop .(
+	lda pdl
+	ora pdl+1
+	bne datok
+
+	jmp flushfirst
+datok
+	ldy #0
+	lda (pd),y
+	jsr PUTC
+	bcc nextd
+
+	;  error, so put length back to block
+	ldy #0
+	lda pd
+	sec
+	sbc pp
+	sta (pp),y
+	iny
+	lda pd+1
+	sbc pp+1
+	sta (pp),y
+	iny
+	lda pdl
+	sta (pp),y
+	iny
+	lda pdl+1
+	sta (pp),y
+	rts
+
+nextd	inc pd
+	bne n0
+	inc pd+1
+n0 	lda pdl
+	bne n1
+	dec pdl+1
+n1	dec pdl
+	jmp datloop
+	.)
+
+	.)
+
+/****************************************************************************
+ * check streams and transfer stream -> net 
+ */
+
+txloop	.(
+	ldy #TCB_RTSTAT
+	lda (tcbp),y
+	bne doit
+	rts
+doit
+	cmp #RST_RD
+	beq newpkt
+
+	ldy #TCB_RTSLOT
+	lda (tcbp),y
+	tax
+	jsr incownr
+	jsr tx_requeue_packet
+	bcc okq
+notyet	rts
+okq
+DB("okq slot=")
+ldy #TCB_RTSLOT:lda (tcbp),y:jsr EHexout:jsr ECrlfout
+
+	ldy #TCB_RTSLOT
+	lda (tcbp),y
+	tax
+	jsr bfree
+
+	ldy #TCB_RTSTAT
+	lda (tcbp),y
+	cmp #RST_WEOF
+	beq closewr
+
+	lda #RST_RD
+	sta (tcbp),y
+	ldy #TCB_RTCNT
+	lda #RST_CNTV
+	sta (tcbp),y
+	jmp newpkt
+
+&closewr
+DB("closewr^m^j")
+	ldy #TCB_RTSTR
+	lda (tcbp),y
+	tax
+	lda #SC_NUL
+	jsr STRCMD
+
+	ldy #TCB_RTSTAT
+	lda #RST_FREE
+	sta (tcbp),y
+	jmp checkend
+
+newpkt
+	ldy #TCB_RTSTR
+	lda (tcbp),y
+	tax
+	lda #SC_ESTAT
+	jsr STRCMD
+	cmp #E_EOF	; means buffer is empty anyway
+	beq closewr
+	cmp #E_SEMPTY
+	beq notyet	; no further check / cnt dec.
+	cmp #E_SFULL
+	beq dosend
+	cmp #E_SHWM
+	beq dosend
+	tya
+	and #SCE_PUSH
+	beq chkcnt
+	ldy #SCE_PUSH	; clear push flag
+	lda #SC_CSTAT
+	jsr STRCMD	/* TODO: keep number of pushed bytes if one pkt is
+			   no enough */
+	jmp dosend
+chkcnt	
+	ldy #TCB_RTCNT
+	lda (tcbp),y
+	beq dosend
+	sec
+	sbc #1
+	sta (tcbp),y
+	jmp notyet
+dosend
+	lda #<TCP_DOFFSET+64
+	ldy #>TCP_DOFFSET+64
+	jsr balloc
+	bcs retnomem1
+
+	lda #TCP_DOFFSET
+	jsr getpinfo
+	bcc piok
+retnomem1
+	rts
+piok
+
+.(:bit pslot:bpl lx:.byt 2:lda pp:lx .)
+DB("pp=")
+lda pp+1:jsr EHexout:lda pp:jsr EHexout
+DB(" pd=")
+lda pd+1:jsr EHexout:lda pd:jsr EHexout
+jsr ECrlfout
+
+	/* save stream and prepare PCBUF for sending */
+	ldy #TCB_RTSTR
+	lda (tcbp),y
+	tax
+	ldy #0
+wrl
+	jsr GETC
+	bcs nobyt
+
+	sta (pd),y
+	iny
+	cpy #64
+	bcc wrl
+nobyt
+	tya
+	beq retnomem2
+	pha
+
+.(:bit pslot:bpl lx:.byt 2:lda pp:lx .)
+
+	ldy #0
+	lda #<TCP_DOFFSET
+	sta (pp),y
+	iny
+	lda #>TCP_DOFFSET
+	sta (pp),y
+	iny
+	pla
+	pha
+	sta (pp),y
+	iny
+	lda #0
+	sta (pp),y
+
+	pla
+	clc
+	adc #TCP_DOFFSET
+	ldy #0
+	ldx pslot
+	jsr btrunc
+
+	lda pslot
+	ldy #TCB_RTSLOT
+	sta (tcbp),y
+	tax
+	jsr incownr
+	jsr tx_queue_packet
+	bcs notqueued
+	ldy #TCB_RTSLOT
+	lda (tcbp),y
+	tax
+DB("queue ok slot=")
+txa:jsr EHexout:jsr ECrlfout
+
+	jsr bfree
+	rts
+notqueued
+DB("notqueued slot=")
+ldy #TCB_RTSLOT:lda (tcbp),y:jsr EHexout:
+DB(" tcbp=")
+lda tcbp+1:jsr EHexout:lda tcbp:jsr EHexout:jsr ECrlfout
+
+	ldy #TCB_RTSTAT
+	lda #RST_WAIT
+	sta (tcbp),y
+retnomem2
+	rts
+	.)
+
+
+/****************************************************************************
+ * process signal from tcp
+ */
+
+rsh_signal .(
+	ldy #TCB_SAVESIG
+	sta (tcbp),y
+pha:DB("rsh_signal: ")
+pla:jsr EHexout:jsr ECrlfout
+	rts
+	.)
+
+rsh_sig_loop .(
+	ldy #TCB_SAVESIG
+	lda (tcbp),y
+	beq nowr	; end
+
+	tax
+
+	ldy #TCB_RSTAT	; we wait until process has started and 
+	lda (tcbp),y	; thread is cleaned up until we process signal
+	cmp #RSS_RUN
+	bne nowr	; end
+
+txa:pha:DB("sig_loop: ")
+pla:pha:jsr EHexout:DB(" RRSTAT=")
+ldy #TCB_RRSTAT:lda (tcbp),y:jsr EHexout:DB(" RTSTAT=")
+ldy #TCB_RTSTAT:lda (tcbp),y:jsr EHexout:jsr ECrlfout
+pla:tax
+
+
+	cpx #TE_SIG_FIN
+	bne nofin
+			; fin received - process last bytes.
+	ldy #TCB_SAVESIG
+	lda #0
+	sta (tcbp),y
+
+	ldy #TCB_RRSTAT
+	lda (tcbp),y
+	beq nord
+	lda #RSR_CLOSING
+	sta (tcbp),y
+nord
+	ldy #TCB_RTSTAT
+	lda (tcbp),y
+	beq nowr
+	cmp #RST_RD
+	beq endit
+	lda #RST_WEOF
+	sta (tcbp),y
+nowr
+	rts
+endit	jmp closewr
+
+nofin			; do a real cleanup, as connection is lost
+	ldy #TCB_RTSTAT
+	lda (tcbp),y
+	beq notx
+	cmp #RST_WAIT
+	beq dofree
+	cmp #RST_WAIT
+	bne nowait
+dofree	ldy #TCB_RTSLOT
+	lda (tcbp),y
+	tax
+	jsr bfree
+nowait  jsr closewr
+notx
+	ldy #TCB_RRSTAT
+	lda (tcbp),y
+	beq norx
+	jsr rdclose
+l1	jsr flushfirst
+	bcs l1
+norx
+	ldy #TCB_SAVESIG
+	lda (tcbp),y
+	tax
+	lda #0
+	sta (tcbp),y
+	txa
+
+	jsr tcp_signal
+
+end	rts
+	.)
+
+/****************************************************************************
+ *
+ * forks a thread to start a new program to which to redirect I/O
+ */
+
+	.(
+	.data
+&&&thstate	.byt 0		; must be initialized upon load
+rshname .byt RSHNAME,0
+	.zero
+name	.word 0
+	.bss
+stdi	.byt 0,0	; stdin file numbers
+stdo	.byt 0,0	; stdout file numbers
+stde	.byt 0
+pid	.word 0
+forkb	.dsb MAXBUF
+lname	.dsb MAXBUF
+	.text
+
+&rsh_open .(
+	DB("rsh_open^m^j")
+	ldy #TCB_RSTAT
+	lda #RSS_OPEN1
+	sta (tcbp),y
+	ldy #TCB_RRSTAT
+	lda #RSR_QUEUE
+	sta (tcbp),y
+&&oloop
+	ldy #TCB_RSTAT
+	lda (tcbp),y
+	cmp #RSS_OPEN1	; content for exec thread?
+	bne waitth
+	
+	ldx thstate
+	beq startit
+	lda #E_TRYAGAIN
+	sec
+	rts
+startit
+	lda #<lname
+	ldy #>lname
+	sta name
+	sty name+1
+
+	inc thstate
+	lda #<threadaddr
+	ldy #>threadaddr
+	jsr forkthread		; lib6502
+	bcc forked
+	dec thstate
+error	sec
+	rts
+forked
+	ldy #TCB_RSTAT
+	lda #RSS_OPEN2
+	sta (tcbp),y
+
+waitth
+	cmp #RSS_OPEN2
+	beq openw
+ret	clc
+	rts
+openw	
+	lda thstate
+	bpl ret
+	ldx #0
+	stx thstate
+
+	cmp #$80
+	beq go
+	pha
+	jsr tcb_close
+	pla
+	jmp error
+go
+	ldx stdi+1
+	jsr flib2osa_w
+	txa
+	ldy #TCB_RRSTR
+	sta (tcbp),y
+	lda #SC_REG_WR
+	jsr STRCMD	; take over to OS
+	ldx stdi+1
+	jsr fclose	; clean up lib6502
+	lda #RSR_WR
+	ldy #TCB_RRSTAT
+	sta (tcbp),y
+
+	ldx stdo
+	jsr flib2osa_r
+	txa
+	ldy #TCB_RTSTR
+	sta (tcbp),y
+	lda #SC_REG_RD
+	jsr STRCMD
+	ldx stdo
+	jsr fclose
+	lda #RST_RD
+	ldy #TCB_RTSTAT
+	sta (tcbp),y
+	lda #RST_CNTV
+	ldy #TCB_RTCNT
+	sta (tcbp),y
+	
+	ldy #TCB_RSTAT
+	lda #RSS_RUN
+	sta (tcbp),y
+	clc
+	rts
+	.)	/* rsh_open */
+
+threadaddr .(	/* this thread is started to load/forkto another process */
+	lda #2
+	sta thstate
+
+	jsr pipe
+	bcc noina
+	jmp noin
+noina
+	stx stdi
+	sty stdi+1
+
+	jsr pipe
+	bcs noout
+	stx stdo
+	sty stdo+1
+
+	ldx stdo+1
+	jsr dup
+	bcs noerr
+	stx stde
+
+	lda stdi
+	sta forkb+0	/* STDIN */
+	lda stdo+1
+	sta forkb+1	/* STDOUT */
+	lda stde
+	sta forkb+2	/* STDERR */
+
+	inc thstate	; different error code 
+
+	ldy #0
+l0	lda (name),y
+	sta forkb+3,y
+	beq dof
+	iny
+	cpy #MAXBUF-3
+	bcc l0
+	bcs ende
+dof
+	inc thstate	; different error code 
+	lda #<forkb
+	ldy #>forkb
+	jsr forkto
+	bcs ende1
+
+	stx pid
+	sty pid+1
+
+	ldx stde
+	jsr fclose
+	ldx stdo+1
+	jsr fclose
+	ldx stdi
+	jsr fclose
+	lda #$80
+	sta thstate
+	jmp term
+
+ende1	and #$7f
+	sta thstate	
+ende
+	ldx stde
+	jsr fclose
+noerr	ldx stdo
+	jsr fclose
+	ldx stdo+1
+	jsr fclose
+noout	ldx stdi
+	jsr fclose
+	ldx stdi+1
+	jsr fclose
+noin
+	lda thstate
+	ora #$80
+	sta thstate
+	jmp term
+	.)
+
+&&&&setlogin .(
+	bcs realname
+	lda #<rshname
+	ldy #>rshname
+realname
+	sta name
+	sty name+1
+
+DB("loginprg set to ")
+lda name:ldy name+1:jsr ETxtout:jsr ECrlfout
+
+	ldy #0
+l0	lda (name),y
+	sta lname,y
+	beq end
+	iny
+	cpy #MAXBUF-1
+	bcc l0
+	lda #0
+	sta lname,y
+end	rts	
+	.)
+
+	.)	/* */
+
+	.)
+

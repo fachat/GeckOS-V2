@@ -1,0 +1,394 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.4.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+#ifndef   P_KIND
+
+/**************************************************************************/
+/* 	  Kernel saved areas */
+
+/* 
+ * These memory locations are saved for each environment/task/thread
+ */
+
+#define	ENVSAVE		2
+#define	TASKSAVE	4
+#define	THREADSAVE	6
+ 
+/**************************************************************************/
+/*        Prg-Header, ROM style */
+
+#define   P_KIND    0		/* type of file 			*/
+#define   P_ADDR    1		/* start address to load file to 	*/
+#define   P_RAM     3        	/* needed amount of memory (not for 
+				   device 				*/ 
+#define	  P_SHARED  4		/* size of shared memory from top 	*/
+#define	  P_PRIORITY 5		/* priority of task			*/
+#define   P_DEV     6         	/* two byte reserved - in the ROM, the
+				   first byte gives the device number
+				   the stdin have to be directed
+				   to, the second byte is for stdout    */
+#define	  P_NAME    8		/* name of program, ended by nullbyte; 
+				   after that follows the command line
+				   that starts the program.		*/
+
+/*        type of file in ROM              */
+
+#define   PK_PRG    0		/* simple executable 			*/
+#define   PK_DEV    1        	/* device block 			*/
+#define   PK_FS     2         	/* filesystem/daemon, i.e. stdio is 	
+				   ignored 				*/ 
+#define	  PK_INIT   3		/* init process	(no stdio, no PCBUF 
+				   with command line)			*/
+#define   PK_LIB    4           /* process started with lib6502		*/
+#define   PK_BIN    5           /* non-executable file			*/
+
+/*	  execution bits	     */
+
+#define	  PK_AUTOEXEC		$80
+#define	  PK_RESTART		$40
+ 
+/**************************************************************************/
+/*        Hardware-Errors          */
+
+
+#define   HE_ZP     <-1		/* Zeropage RAM defective */
+#define   HE_RAM    <-2		/* not enough RAM (may be defective) */
+#define   HE_ROM    <-3		/* not enough Streams/Envs to handle all 
+				   ROM autostart requests */
+#define   HE_DEV    <-4		/* error registering ROM device */
+#define   HE_TASK   <-5		/* no more active task! */
+
+
+/*        Software-Errors          */
+
+/* general OS/kernel errors */
+
+#define   E_OK      	0	/* no error 				*/
+#define   E_NOTIMP  	<-1	/* feature/function not implemented	*/
+#define   E_CONFIG  	<-2	/* in this configuration not available	*/
+#define   E_ILLPAR  	<-3	/* illegal parameter 			*/
+#define   E_NOMEM   	<-4	/* no more memory			*/
+
+/* stream handling errors */
+#define   E_NOSTR   	<-5	/* no more streams available		*/
+#define   E_SFULL   	<-6	/* stream is full			*/
+#define   E_SEMPTY  	<-7	/* stream is empty			*/
+#define   E_SLWM    	<-8	/* stream below low-water-mark (1/4)	*/
+#define   E_SHWM    	<-9	/* stream above high-water-mark (3/4)	*/
+#define   E_EOF     	<-10	/* last byte read, other side has closed */
+#define   E_NUL     	<-11	/* noone listening on stream		*/
+
+/* device handling errors */
+#define   E_NODEV   	<-12	/* illegal device number		*/
+#define   E_DON     	<-13	/* device already in use		*/
+#define   E_DOFF    	<-14	/* device not in use			*/
+#define   E_NOTX    	<-15	/* device doesn't send			*/
+
+/* misc errors */
+
+#define   E_NOENV   	<-16	/* no more free environment/task ID	*/ 
+#define   E_NOSEM   	<-17	/* no more free semaphore		*/
+#define   E_SEMSET  	<-18	/* semaphore is already set (with PSEM)	*/
+
+#define	  E_NOIRQ   	<-19   	/* irq routine has not removed irq source */
+#define	  E_VERSION 	<-20   	/* wrong (executable file) version 	*/
+
+#define	  E_NOTASK  	<-21	/* no more free task */
+#define	  E_INT     	<-22	/* interrupted (by signal) system call */
+
+#define	  E_ILLSIG	<-23	/* illegal signal number 		*/
+
+#define	  E_TRYAGAIN	<-24	/* try again 				*/
+
+/* file handling errors */
+
+#define   E_FNODRV  	<-32	/* illegal drive number			*/
+#define   E_FNOPATH 	<-33	/* wrong path 				*/
+#define   E_FILLNAM 	<-34	/* illegal name (joker "*","?","\"")	*/
+#define   E_FNAMLEN 	<-35	/* name too long			*/
+#define   E_FNOFIL  	<-36	/* file not found			*/
+#define   E_FWPROT  	<-37	/* file write protected			*/
+#define   E_FILEXIST 	<-38	/* file exists				*/
+#define   E_FDISKFULL 	<-39	/* disk full				*/
+#define   E_FDNEMPTY 	<-40	/* subdirectory not empty when rmdir	*/
+#define   E_FLOCKED	<-41	/* file locked				*/
+#define	  E_FMEDIA	<-42	/* media error				*/
+#define	  E_FLOGICAL	<-43	/* bad logical structure on media 	*/
+#define	  E_FINTERNAL	<-44	/* internal error - should not happen!	*/
+
+#define	  E_LASTERR	<-96	/* for customized error numbers 	*/
+
+#define	  E_ILLADDR	<-64	/* illegal address for lib6502 mfree	*/
+#define	  E_NOFILE	<-65	/* illegal file number for lib6502	*/
+#define	  E_NOSEEK	<-66	/* file not seekable			*/
+#define	  E_NOREAD	<-67	/* read on file would block		*/
+#define	  E_NOWRITE	<-68	/* write on file would block		*/
+#define	  E_FVERSION	<-69	/* file version number not supported	*/
+
+
+/**************************************************************************/
+/*        Stream-Commands          */
+
+#define   SC_GET    0
+#define   SC_REG_RD 1
+#define   SC_REG_WR 2
+#define   SC_CLR    3
+#define   SC_EOF    4
+#define   SC_NUL    5
+#define   SC_FRE    6
+#define   SC_STAT   7
+#define   SC_GANZ   8
+#define   SC_RWANZ  9
+#define	  SC_ESTAT  10		/* get error state */
+#define   SC_SSTAT  11		/* set error state */
+#define   SC_CSTAT  12		/* clear error state */
+
+#define	  SCE_PULL  %10000000	/* reader pulls */
+#define	  SCE_PUSH  %01000000	/* writer pushes */
+#define	  SCE_BRK   %00100000	/* writer signals break */
+#define	  SCE_RERRM %00001100	/* reader has error condition mask */
+			        /* %00 = no error, != $00 error, to be def'd */ 
+#define	  SCE_WERRM %00000011	/* writer has error condition (read error,..)*/
+			        /* %00 = no error, != $00 error, to be def'd */ 
+
+/*        Device-Commands          */
+
+#define   DC_IRQ    0
+#define   DC_RES    1
+#define   DC_GS     2
+#define   DC_PS     3
+#define   DC_RX_ON  4  
+#define   DC_TX_ON  5
+#define   DC_RX_OFF 6
+#define   DC_TX_OFF 7
+#define   DC_SPD    8
+#define   DC_HS     9
+#define   DC_ST     10
+#define   DC_EXIT   11
+#define   DC_BRKKEY 12
+
+#define   DC_GNAM   16
+#define   DC_GNUM   17
+#define   DC_REGDEV 18
+
+#define   DC_SW_RX  %10000000
+#define   DC_SW_TX  %01000000
+
+/*
+#define   REGDEV_MPOS    0
+#define   REGDEV_MBLK    1
+#define   REGDEV_ADR     2
+*/
+
+/*        NMI commands, to be passed to CTRLNMI         */
+
+#define	NMI_ON     	0	/* beq */
+#define	NMI_OFF		1
+
+/*        task state              */
+
+#define   TS_FREE   0
+#define   TS_ENV    1	/* allocated but not running		*/
+#define   TS_IBRK   2  	/* task has BRK'd in IRQ routine	*/
+#define   TS_BRK    3  	/* task has BRK'd			*/
+#define   TS_RDY    4	/* task did YIELD call			*/
+#define   TS_IRQ    5	/* task is interrupted			*/
+#define   TS_WFRX   6	/* waiting for other task to RECEIVE	*/
+#define   TS_WFTX   7	/* waiting for other task to SEND	*/
+#define   TS_WXTX   8	/* wait for certain task to SEND	*/
+#define   TS_WFSEM  9	/* wait for semaphore			*/
+#define	  TS_WSIG   10	/* wait for signal 			*/
+
+/*        GETINFO-struct            */
+
+#define   ANZ_ENV   15	/* number of valid entries		*/
+
+#define   TN_PID    0	/* process ID 				*/
+#define   TN_NTHREADS 1	/* task state				*/
+#define	  TN_ENV    2	/* environment number			*/
+#define	  TN_PARENT 3	/* parent task				*/
+#define   TN_MEM    4	/* used amount of memory		*/
+#define   TN_SIGNAL 5	/* interrupt routine address		*/
+#define   TN_STDIN  7	/* stdin stream				*/
+#define   TN_STDOUT 8	/* stdout stream			*/
+#define   TN_STDERR 9	/* stderr stream			*/
+#define   TN_SIGMASK 10	/* signal mask				*/
+#define   TN_NAME   11	/* start of program name (if avail.)	*/
+#define   TN_SLEN   17	/* length of one entry			*/
+
+#define   TNAMLEN   (TN_SLEN-TN_NAME)	/* length of name	*/
+
+/*        Terminal Commands        */
+
+#define   TC_BEL    7
+#define   TC_BS     8
+#define   TC_HT     9
+#define   TC_LF     10
+#define   TC_VT     11
+#define   TC_FF     12
+#define   TC_CR     13
+#define   TC_ESC    27
+
+#define   TC_CLFT   $80
+#define   TC_CRGT   $81
+#define   TC_CUP    $82
+#define   TC_CDWN   $83
+#define   TC_HOME   $84
+#define   TC_CLR    $85
+#define   TC_DEL    $86
+#define   TC_INS    $87
+#define   TC_WLO    $88    
+#define   TC_WRU    $89  
+#define   TC_WCLS   $8a
+#define   TC_EOL    $8b
+#define   TC_CLL    $8c
+
+#define   TC_ECHO   $8d		/* device shall echo: terminal = full screen */
+#define   TC_NOECHO $8e		/* appl. echos: full appl. control */
+
+/*********************** System Semaphores *************************/
+/* System semaphores cannot be allocated and/or freed with 
+ * GETSEM/FRESEM, but can be used with PSEM and VSEM.
+ *
+ * The semaphores marked with '(NOMMU)' need only be used without
+ * MMU, while the others should be used anyway, to share the resource
+ * between any tasks.
+ */
+ 
+#define	SEM_SENDBUF	<-1	/* Send buffer (NOMMU) */
+
+/* 
+ * the following semaphore numbers are defined, but not (yet) really 
+ * used by the current implementation. Especially the SERIEC semaphore
+ * can be used to share the serial bus between fsiec for CBM floppies
+ * and fsibm (with changed interface for VC1571) for PC style disks.
+ */
+
+#define	SEM_STDIO	<-2	/* parts of the STDIO library (NOMMU) */
+#define	SEM_PARIEC	<-3	/* parallel IEC bus */
+#define	SEM_SERIEC	<-4	/* serial IEC bus */
+#define	SEM_IBMDISK	<-5	/* IBM floppy interface */
+
+/*********************** SIGNALS ***********************************
+ *        Signal codes
+ */
+
+#define	SIG_INTABLE	%10000000	/* interruptable system call mask */
+#define	SIG_CHLD	%01000000	/* child has terminated */
+#define	SIG_KILL	%00100000	/* process shall terminate */
+#define	SIG_BRK		%00010000	/* ctrl-C received */
+
+#define	SIG_USR4	%00001000	/* 4 user signals */
+#define	SIG_USR3	%00000100
+#define	SIG_USR2	%00000010
+#define	SIG_USR1	%00000001
+
+/*********************** SEND SYSTEM *******************************
+ *        SysProcCalls 
+ * 
+ * Some system calls can also be called via the SEND interface
+ */
+
+#define   SEND_SYS       $ff
+
+#define   PCBUF     $200
+
+/* AC = function number */
+#define   SP_FORK        0	
+#define   SP_SETIRQ      1
+#define   SP_RESET       2
+
+/* struct in PCBUF when FORK'ing */
+#define   FORK_SIZE      0	/* size of needed memory in blocks (256
+				   byte) from address 0 up 		*/
+#define   FORK_SHARED    1	/* size of shared memory mapping in 
+				   blocks from address $ffff down	*/
+#define	  FORK_PRIORITY	 2	/* priority of task - 0 = parent's	*/
+#define   FORK_STDIN     3	/* stdin stream				*/
+#define   FORK_STDOUT    4	/* stdout stream			*/
+#define   FORK_STDERR    5	/* stderr stream			*/
+#define   FORK_ADDR      6	/* startaddress of task execution 	*/
+#define   FORK_NAME      8    	/* task name (ended with nullbyte)	*/
+
+/* struct in PCBUF when SETIRQ */
+#define   SETIRQ_ENV     0	/* env to set irq address in 		*/
+#define   SETIRQ_ADR     1	/* irq address to set			*/
+#define   SETIRQ_SLEN    3
+
+/* struct in PCBUF when RESET */
+#define   RESET_ENV      0	/* env to restart			*/
+#define   RESET_ADR      1	/* start address for execution		*/ 
+#define   RESET_SLEN     3
+
+/*        StdStream                */
+
+#define   STDNUL         $fc 	/* is ignored (see PK_FS)		*/
+#define   STDIN          $fd
+#define   STDOUT         $fe
+#define   STDERR         $ff
+
+/* 	  Own Task ID		   */
+
+#define   OWNTASK        $ff
+
+/*        FileManager              */
+
+#define   SEND_FM        $fe
+
+#define   FM_REG         0	/* in AC when registering new fs 	*/
+
+#define   FM_REG_DRVS    0	/* number of drives to register		*/
+#define   FM_REG_ENV     1	/* to task number			*/
+
+#define   FM_OPEN_DRV    0
+
+/*        TimeTask                 */
+
+#define   SEND_TIME      $fc
+
+/* AC = command */
+#define   TI_SET         0
+#define   TI_GET         1
+
+/* struct in PCBUF */
+#define   TE_SG_YEAR     0
+#define   TE_SG_MONTH    1
+#define   TE_SG_DAY      2
+#define   TE_SG_HOUR     3
+#define   TE_SG_MIN      4
+#define   TE_SG_SEC      5
+
+/*	  (Inter)Net Connectivity	  */
+
+#define	SEND_NET	 $fb
+
+/* Net server use an interface similar to the filesystem interface.
+ * In fact, after an open there is no real difference, and due to the
+ * non-overlapping command numbers, one process can register as 
+ * FS _and_ Net server.
+ * Further defs are found in oa1fs.i65
+ */
+
+#endif
+

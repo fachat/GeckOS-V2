@@ -1,0 +1,3561 @@
+/****************************************************************************
+   
+    This BASIC interpreter is derived from Copyrighted source!
+    Therefore I do not hold copyrights on it.
+    The Copyright is held by ???
+
+    That's why this is only an educational example of how to
+    port programs to the OS/A65 operating system.
+
+    DO NOT ASSEMBLE OR RUN THIS PROGRAM!
+    
+    This file is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+
+****************************************************************************/
+
+
+.(
+#ifdef ROM
+
+#ifndef BASICEXE
+#define	BASICEXE $80
+#endif
+#ifndef BASICDEV
+#define	BASICDEV 0
+#endif
+
+          .word endofbasic
+          .byt PK_PRG+BASICEXE
+          .byt 2
+          .byt BASICDEV, BASICDEV
+          .word BASIC
+#ifndef ROMTEST
+          .byt 8,8,9,9,$a,$a,$b,$b,$c,$c,$d,$d,$e,$e,<-1
+#else
+          .byt 8,$18,9,$19,$a,$1a,$b,$1b,$c,$1c,$d,$1d,$e,$1e,<-1
+#endif
+          .asc "basic",0,0
+
+#else	/* ROM */
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+#include  "fdefs.i65"
+
+          ;.word $800
+          *=$8000
+          .word 0
+          .byt PK_PRG
+          .byt 16
+          .word 0
+          .word BASIC
+          .byt 8,0,9,0,$a,0,$b,0,<-1
+
+;          *=$8000
+
+#endif /* ROM */
+
+/*#define   SHOW*/
+
+#ifndef BASICEND
+#define	BASICEND $4000
+#endif
+#ifndef BASICSTART
+#define	BASICSTART $800
+#endif
+
+RAMEND    =BASICEND
+RAMANF    =BASICSTART
+#print RAMANF
+#print RAMEND
+
+
+#define   E_OPEN         2
+#define   E_TOOMANYF     1
+#define   E_NOTINPUT     6
+#define   E_FILEOPEN     2
+#define   E_NOTOPEN      3
+#define   E_NOTFND       4
+
+/*#ifndef NOMMU*/
+oldsyszp =syszp
+-syszp    =$90		/* watch out - may not work on every ROM */
+/*#endif*/
+
+#echo oabasic:
+#print    syszp
+
+status    =syszp
+;directfl  =syszp+1
+filenr    =syszp+2
+drive     =syszp+3
+mode      =syszp+4
+fnlen     =syszp+5
+fnadr     =syszp+6  ;.w
+actin     =syszp+8
+&actout    =syszp+9
+&stream    =syszp+10
+dx        =syszp+11
+-syszp    +=12
+
+#define   MAXFILE   10
+#define   F_FNR     0
+#define   F_STR     1
+#define   F_MOD     2
+#define   F_DRV     3
+#define   F_SLEN    4
+
+
+BASIC     jsr inifiles
+          jsr inidup
+          jsr lffcc
+          jmp le394
+
+          .(
+anzfile   =syszp
+FTAB      =syszp+1
+-syszp    +=1+MAXFILE*F_SLEN
+
+&inifiles ldx #0
+          stx anzfile
+          rts
+
+suchfile  .(
+          txa
+          ldx anzfile
+sf1       dex
+          bmi sfe
+          cmp FTAB+F_SLEN*F_FNR,x
+          bne sf1
+sfe       rts
+          .)
+
+&lffc0    ldx filenr     ; open
+          bne op1
+          jmp notinput
+op1       jsr suchfile
+          bne op2
+          jmp fileopen
+op2       ldy anzfile
+          cpy #MAXFILE
+          bcc op3
+          jmp toomanyf
+op3       lda filenr
+          sta FTAB+F_SLEN*F_FNR,y
+          lda mode
+          sta FTAB+F_SLEN*F_MOD,y
+          lda drive
+          sta FTAB+F_SLEN*F_DRV,y
+
+          jsr xopen
+          bcs end
+
+          ldy anzfile
+          lda stream
+          sta FTAB+F_SLEN*F_STR,y
+          inc anzfile
+
+end       rts           
+          
+&xopen    jsr GETSTR
+          bcc op4
+          jmp nofile
+op4       stx stream
+          stx PCBUF+FS_OPEN_STR
+          lda mode
+          cmp #FS_OPEN_DR+1
+          bcs xoperr
+          lda #0
+          sta PCBUF+FS_OPEN_PFAD
+          jsr copen
+          bcs xoperr
+          rts
+
+&copen    lda drive
+          sta PCBUF+FS_OPEN_DRV
+          ldy #0
+          ldx #FS_OPEN_NAME
+op5       cpy fnlen
+          beq op5a
+          lda (fnadr),y
+          sta PCBUF,x
+          iny
+          inx
+          bne op5
+op5a      lda #0
+          sta PCBUF,x
+          inx
+          txa
+          tay
+          lda mode
+&ropen    ldx #SEND_FM
+          jsr SEND
+          bcs xcoperr
+          sec
+          jsr RECEIVE
+          cmp #1
+xcoperr   rts
+
+xoperr    ldx stream
+          jsr FRESTR
+          lda #E_OPEN
+          .byt $2c
+&loaderr   lda #E_NOTFND
+          .byt $2c
+&nofile    lda #E_NOFILE
+          .byt $2c
+&toomanyf  lda #E_TOOMANYF
+          .byt $2c
+&notinput  lda #E_NOTINPUT
+          .byt $2c
+&fileopen  lda #E_FILEOPEN
+          .byt $2c
+&filenotop lda #E_NOTOPEN
+
+          pha
+          jsr lffcc          
+          pla
+          cmp #1
+          rts
+          
+&lffe7    .(        ;clall
+          lda anzfile
+          beq cle
+          lda FTAB+F_SLEN*F_FNR
+          jsr lffc3
+          jmp lffe7
+cle       clc
+          rts
+          .)
+          
+&setfpar   lda FTAB+F_SLEN*F_FNR,x
+          sta filenr
+          lda FTAB+F_SLEN*F_STR,x
+          sta stream
+          lda FTAB+F_SLEN*F_DRV,x
+          sta drive
+          lda FTAB+F_SLEN*F_MOD,x
+          sta mode
+          rts
+          
+&lffc3    .(    ;close
+          tax
+          jsr suchfile
+          beq clok
+          clc
+          rts
+clok      jsr setfpar
+          txa
+          pha
+
+          tay
+          lda FTAB+F_SLEN*F_MOD,y
+          cmp #FS_OPEN_RD
+          beq clrd
+          cmp #FS_OPEN_DR
+          beq clrd
+          ldx FTAB+F_SLEN*F_STR,y
+          lda #SC_EOF
+          jsr STRCMD
+          lda FTAB+F_SLEN*F_MOD,y
+          cmp #FS_OPEN_RW
+          bne clx
+clrd      ldx FTAB+F_SLEN*F_STR,y
+          lda #SC_NUL
+          jsr STRCMD
+clx
+          pla
+          tax
+          dec anzfile
+          cpx anzfile
+          beq clend
+          ldy anzfile
+          lda FTAB+F_SLEN*F_DRV,y
+          sta FTAB+F_SLEN*F_DRV,x
+          lda FTAB+F_SLEN*F_STR,y
+          sta FTAB+F_SLEN*F_STR,x
+          lda FTAB+F_SLEN*F_MOD,y
+          sta FTAB+F_SLEN*F_MOD,x
+          lda FTAB+F_SLEN*F_FNR,y
+          sta FTAB+F_SLEN*F_FNR,x
+clend     clc
+          rts
+          .)
+                   
+&lffc6    ;chkin
+          jsr suchfile
+          beq ckin
+          jmp filenotop
+ckin      jsr setfpar
+          lda stream
+          sta actin
+          clc
+          rts
+
+&lffc9    ;chkout
+          jsr suchfile
+          beq ckout
+          jmp filenotop
+ckout     jsr setfpar
+          lda stream
+          sta actout
+          clc
+          rts
+          .)
+          
+lffe4     .(        ;get
+          stx dx
+          ldx actin
+          cpx #STDIN
+          bne lcc1
+          jsr GETC
+          ldx dx
+          bcc lcfe
+          lda #0
+lcfe      rts
+          
+&lffcf              ;basin
+          stx dx
+          ldx actin
+&lcc1     jsr GETC
+          bcc lcce
+          cmp #E_EOF
+          beq lccx
+          jsr YIELD
+          jmp lcc1
+lccx      ldx dx
+          jmp filenotop
+lcce      ldx dx
+          clc
+          rts
+          
+
+          .)
+          
+          .(
+#define   MAXDUP    5
+
+intab     =syszp
+outab     =syszp+MAXDUP
+inpnt     =syszp+2*MAXDUP
+outpnt    =syszp+2*MAXDUP+1
+-syszp    +=2*MAXDUP+2
+
+&inidup   lda #0
+          sta inpnt
+          sta outpnt
+          clc
+          rts
+
+&cldup    .(
+          ldy inpnt
+cld1      dey
+          bmi cld2
+          lda intab,y
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          jmp cld1
+cld2      lda #0
+          sta inpnt
+          ldy outpnt
+cld3      dey
+          bmi cld4
+          lda outab,y
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          jmp cld3
+cld4      lda #0
+          sta outpnt
+          clc
+          rts
+          .)
+          
+&dupout   ldy outpnt
+          cpy #MAXDUP
+          bcs duperr1
+#ifdef SHOW
+          pha
+          lda #"o"
+          jsr SEROUT
+          pla
+          pha
+          jsr xHEXOUT
+          pla
+          clc
+          ldy outpnt
+#endif
+          sta outab,y
+          sta actout
+          inc outpnt
+duperr1   rts
+          
+&clout    ldy outpnt
+          beq cl2
+          dec outpnt
+          lda outab-1,y
+#ifdef SHOW
+          pha
+          lda #"c"
+          jsr SEROUT
+          pla
+          pha
+          jsr xHEXOUT
+          pla
+          clc
+#endif
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldy outpnt
+          beq cl1a
+          lda outab-1,y
+          .byt $2c
+cl1a      lda #STDOUT
+          sta actout
+          clc
+          rts
+
+&clin     ldy inpnt
+          beq cl2
+          dec inpnt
+          lda intab-1,y
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldy inpnt
+          beq cl2a
+          lda intab-1,y
+          .byt $2c
+cl2a      lda #STDIN
+          sta actin
+          clc
+          rts
+cl2       sec
+          rts
+
+&dupin    ldy inpnt
+          cpy #MAXDUP
+          bcs duperr1
+          sta intab,y
+          sta actin
+          inc inpnt
+          rts
+           
+&lffcc    ;clrch
+          ldy inpnt
+          dey
+          bmi c1
+          lda inpnt,y
+          .byt $2c
+c1        lda #STDIN
+          sta actin
+          ldy outpnt
+          dey
+          bmi c2
+          lda outab,y
+          .byt $2c
+c2        lda #STDOUT
+          sta actout
+          clc
+          rts
+          .)
+                             
+lffd2     ;bsout
+          stx dx
+          ldx actout
+ld21      pha
+          jsr PUTC
+          bcc ld2e
+          cmp #E_NUL
+          beq ld2x
+          pla
+          jsr YIELD
+          jmp ld21
+ld2x      pla
+          jmp filenotop
+ld2e      ldx dx
+          pla
+          rts
+
+anfadr    =syszp
+endadr    =syszp+2
+loadfl    =syszp+4  ;.w!
+-syszp    +=6
+          
+lffd5     ;load
+          stx anfadr
+          sty anfadr+1
+          sta loadfl
+
+          lda mode
+          sta loadfl+1
+          
+          lda #FS_OPEN_RD
+          sta mode
+          jsr xopen
+          bcs ldendx
+          
+          ldx stream
+          jsr lcc1
+          sta endadr
+          bcs loaderrx
+          ldx stream
+          jsr lcc1
+          sta endadr+1
+          bcs loaderrx
+          
+          lda loadfl+1
+          beq ld51
+          
+          lda endadr
+          sta anfadr
+          lda endadr+1
+          sta anfadr+1
+ld51      
+          ldx stream
+          jsr lcc1
+          bcs ldend
+
+          ldy #0
+          sta (anfadr),y
+          
+          inc anfadr
+          bne ld51
+          inc anfadr+1
+          bne ld51
+ldend     
+          ldx stream
+          lda #SC_NUL
+          jsr STRCMD
+          
+ldendx    ldx anfadr
+          ldy anfadr+1
+          clc
+          rts
+loaderrx  jsr ldend
+          jmp loaderr
+
+lffd8     ;save
+          stx endadr
+          sty endadr+1
+          tax
+          lda 0,x
+          sta anfadr
+          lda 1,x
+          sta anfadr+1
+
+          lda #FS_OPEN_WR
+          sta mode
+          jsr xopen
+          bcs svend
+
+          lda anfadr
+          ldx stream
+          jsr ld21
+          lda anfadr+1
+          ldx stream
+          jsr ld21
+          
+ld81      lda anfadr+1
+          cmp endadr+1
+          bcc ld82
+          bne ld8e
+          lda anfadr
+          cmp endadr
+          bcs ld8e
+ld82
+          ldy #0
+          lda (anfadr),y
+          ldx stream
+          jsr ld21
+          
+          inc anfadr
+          bne ld81
+          inc anfadr+1
+          bne ld81
+          
+ld8e      ldx stream
+          lda #SC_EOF
+          jsr STRCMD
+          cmp #1
+svend     rts
+          
+lffdb     ;setime
+          clc
+          rts
+          
+lffde     ;getime
+          clc
+          rts
+          
+lffe1     ;getstop
+          stx dx
+          ldx #STDIN
+          lda #SC_STAT
+          jsr STRCMD
+          ldx dx
+          cmp #E_SEMPTY
+          beq notpressd
+          jsr lffcc
+          lda #0
+          sec
+          rts
+notpressd lda #1
+          clc
+          rts
+          
+
+          
+lfff0     ;cursor
+          clc
+          rts
+          
+lfff3     ;getio
+          clc
+          rts
+
+lff90     ;sta directfl
+lffb7     lda status
+          rts
+          
+lff99     ;bcc set
+          ldx #<RAMEND
+          ldy #>RAMEND
+          rts
+
+lff9c     ;bcc set
+          ldx #<RAMANF
+          ldy #>RAMANF
+          rts
+          
+lffba     sta filenr
+          stx drive      ;device
+          sty mode       ;secadr
+          rts
+
+lffbd     sta fnlen
+          stx fnadr
+          sty fnadr+1
+          rts
+
+/*
+
+lff90     =$ff90
+lff99     =$ff99
+lff9c     =$ff9c 
+lffb7     =$ffb7
+lffba     =$ffba
+lffbd     =$ffbd
+lffc0     =$ffc0
+lffc3     =$ffc3
+lffc6     =$ffc6
+lffc9     =$ffc9
+lffcc     =$ffcc
+lffcf     =$ffcf
+lffd2     =$ffd2
+lffd5     =$ffd5
+lffd8     =$ffd8
+lffdb     =$ffdb
+lffde     =$ffde
+lffe1     =$ffe1
+lffe4     =$ffe4
+lffe7     =$ffe7
+lfff0     =$fff0
+lfff3     =$fff3
+
+          .word le394,le37b:.byt "CBMBASIC"
+      
+*/
+
+romanf    =*
+          
+l0003     =$03      ;.w
+l0005     =$05      ;.w
+
+SUCHCHAR  =$07
+HKFL      =$08
+TABSPAL   =$09
+LOADFL    =$0a
+DIM       =$0b
+DIMFL     =$0c
+STRINGFL  =$0d
+INTFL     =$0e
+LISTHKFL  =$0f
+FNFL      =$10
+INPUTFL   =$11
+ATNSIGN   =$12
+ACTIO     =$13
+
+INT       =$14      ;.w
+
+STRPTR    =$16
+STRZEI    =$17     ;.w
+STRSTCK   =$19     ; [0,+8]
+
+l0022     =$22
+l0023     =$23
+l0024     =$24
+l0025     =$25
+
+REG       =$26      ; [0,+3]
+
+BASANF    =$2b      ;.w
+VARANF    =$2d      ;.w
+ARRANF    =$2f      ;.w
+ARREND    =$31      ;.w
+STRANF    =$33      ;.w
+l0035     =$35      ;.w
+BASEND    =$37      ;.w
+ZEINR     =$39      ;.w
+PRVZEINR  =$3b      ;.w
+NEXTSTAT  =$3d      ;.w
+DZEINR    =$3f      ;.w
+NEXTDATA  =$41      ;.w
+l0043     =$43      ;.w
+VARNAME   =$45      ;.w
+VARADR    =$47      ;.w
+FORVAR    =$49      ;.w 
+l004b     =$4b      ;.w
+
+l004d     =$4d
+l004e     =$4e
+l004f     =$4f
+l0050     =$50
+l0051     =$51
+
+l0053     =$53
+l0054     =$54
+l0055     =$55      ;.w
+
+akku3     =$57      ; [0,+4]
+akku4     =akku3+5  ; [0,+4]
+FAC       =akku4+5  ; [0,+7]
+ARG       =FAC+8    ; [0,+7]
+
+l0071     =$71
+
+CHRGET    =$73
+CHRGOT    =$79
+BASZEI    =$7a
+
+l0080     =$80
+
+l008b     =$8b
+
+l0100     =$100     ; [-1,+13]
+stack     =$100
+
+#ifdef TESTC64
+l0200     =$200     ; [-5,+88]
+#else
+l0200     =$340     
+#endif
+
+l0300     =$300     ;.w
+l0302     =$302     ;.w
+l0304     =$304     ;.w
+l0306     =$306     ;.w
+l0308     =$308     ;.w
+l030a     =$30a     ;.w
+
+SYSAC     =$030c
+SYSXR     =$030d
+SYSYR     =$030e
+SYSST     =$030f
+
+lusr      =$0310    ; [0,+2]
+
+lmkdir    lda #FS_MKDIR
+          .byt $2c
+lrmdir    lda #FS_RMDIR
+          .byt $2c
+lscratch   lda #FS_DELETE
+          .byt $2c
+lformat   lda #FS_FORMAT
+          sta loadfl
+          jsr le1d4
+          lda mode
+          sta PCBUF+FS_CMD_PFAD
+          lda loadfl
+          sta mode
+          jsr copen
+          bcc cmdok
+          ldx #24
+          jmp la437
+cmdok     rts
+          
+lrename   jsr le257      ; filenamen holen
+          ldx #FS_CMD_NAME
+          ldy fnlen
+          beq syntaxer
+          ldy #0
+lr1       lda (fnadr),y
+          sta PCBUF,x
+          iny
+          inx
+          cpy fnlen
+          bcc lr1
+          lda #0
+          sta PCBUF,x
+          inx
+          stx loadfl
+          jsr CHRGOT
+          cmp #$a4       ; "to"-TokenCode
+          bne syntaxer
+          jsr CHRGET
+          jsr le257
+          ldy fnlen
+          beq syntaxer
+          ldy #0
+          ldx loadfl
+lr2       lda (fnadr),y
+          sta PCBUF,x
+          inx
+          iny
+          cpy fnlen
+          bcc lr2
+          lda #0
+          sta PCBUF,x
+          inx
+          stx loadfl
+          jsr le200
+          stx PCBUF+FS_CMD_DRV
+          lda #0
+          sta PCBUF+FS_CMD_PFAD
+          lda #FS_RENAME
+          ldy loadfl
+          jmp ropen
+syntaxer  jmp syntax
+illq      jmp illquant
+
+buf       =syszp
+-syszp    +=FS_DIR_NAME
+
+ldir      beq syntaxer
+          lda #0
+          jsr lffbd
+          jsr lad9e
+          bit STRINGFL
+          bpl drnoname
+          jsr lb6a3
+          ldx l0022
+          ldy l0022+1
+          jsr lffbd
+          jsr le20e
+          jsr lad9e
+drnoname  bit STRINGFL
+          bmi syntaxer
+          jsr lb1b8
+          ldx FAC+3
+          bne illq
+          ldx FAC+4
+          stx drive
+          lda #FS_OPEN_DR
+          sta mode
+          jsr xopen
+          bcc drnloop
+          rts
+
+IN        ldx stream
+          jmp lcc1
+          
+drnloop   jsr lffe1
+          beq drend
+          ldy #0
+drl1      jsr IN
+          bcs drend
+          sta buf,y
+          iny
+          cpy #FS_DIR_NAME
+          bcc drl1
+          
+          lda buf+FS_DIR_MODE
+          cmp #FS_DIR_MOD_NAM
+          bne drl2
+          
+          lda #<dnamtxt
+          ldy #>dnamtxt
+          jsr strout
+          jsr dirname
+          jmp drle
+          
+drl2      cmp #FS_DIR_MOD_FIL
+          bne drl3
+          jsr dnout
+          jsr sizdatim
+          jmp drle
+
+drl3      cmp #FS_DIR_MOD_FRE
+          bne drl4
+          jsr sizeout
+          lda #<bytfre
+          ldy #>bytfre
+          jsr strout
+          jmp drle
+          
+drl4      cmp #FS_DIR_MOD_DIR
+          bne drle
+          jsr dnout
+          lda #<ddirtxt
+          ldy #>ddirtxt
+          jsr strout
+          jmp drle
+
+drle      jsr laad7
+          jmp drnloop
+
+drend     ldx stream
+          lda #SC_NUL
+          jsr STRCMD
+          clc
+          rts
+          
+dnout     jsr dirname
+          lda #","
+          jsr lffd2
+          ldx drive
+          lda #0
+          jsr adrout
+          jsr DPOUT
+          jmp SSPOUT
+
+dirname   ldy #0
+          lda #34
+drn1      jsr lffd2
+          jsr IN
+          bcs drlne
+          cmp #0
+          beq drlne
+          iny
+          bne drn1
+drlne     lda #34
+drn2      jsr lffd2
+          lda #" "
+          iny
+          cpy #23
+          bcc drn2 
+          rts
+          
+sizdatim  jsr sizeout
+          jsr DPOUT
+          lda PCBUF+FS_DIR_DAY
+          jsr DEZOUT
+          jsr PNTOUT
+          lda PCBUF+FS_DIR_MONTH
+          jsr DEZOUT
+          jsr PNTOUT
+          lda PCBUF+FS_DIR_YEAR
+          jsr DEZOUT
+          jsr SSPOUT
+          lda PCBUF+FS_DIR_HOUR
+          jsr DEZOUT
+          jsr DPOUT
+          lda PCBUF+FS_DIR_MIN
+          jmp DEZOUT
+
+DPOUT     lda #":"
+          .byt $2c
+SSPOUT    lda #" "
+          .byt $2c
+PNTOUT    lda #"."
+          jmp lffd2
+          
+sizeout   lda #<buf+FS_DIR_LEN
+          ldy #>buf+FS_DIR_LEN
+          ldx #" "
+          jmp ldezout
+
+ddirtxt   .asc ":<dir>",0
+dnamtxt   .asc "Diskettenname:",0
+bytfre    .asc "Bytes free",0
+
+
+          .(
+da        =syszp
+lb        =syszp+2
+lo        =syszp+3
+w         =syszp+4
+out       =syszp+8
+cnt       =syszp+9
+-syszp    +=10
+
+&ldezout  .(
+          sta da
+          sty da+1
+          stx lb
+          ldx #39
+
+l1        ldy #3
+l1c       lda dtab,x
+          sta w,y
+          dex
+          dey
+          bpl l1c
+          stx lo
+          iny
+          sty out
+          sty cnt
+l2a       ldy #3
+l2        lda (da),y
+          cmp w,y
+          bcc sloop
+          bne shift
+          dey
+          bpl l2
+          bmi xsub
+shift     ldy #0
+          ldx #4
+          clc
+h1        lda w,y
+          rol
+          sta w,y
+          iny
+          dex
+          bne h1
+          bcs ende
+          inc cnt
+          bne l2a
+
+sloop     dec cnt
+          bmi endx
+          ldy #3
+          clc
+s0        lda w,y
+          ror
+          sta w,y
+          dey
+          bpl s0
+
+xsub      ldy #3
+x0        lda (da),y
+          cmp w,y
+          bcc d0
+          bne d1
+          dey
+          bpl x0
+d1        ldy #0
+          ldx #4
+          sec
+d1a       lda (da),y
+          sbc w,y
+          sta (da),y
+          iny
+          dex
+          bne d1a
+          sec
+          .byt $24
+d0        clc
+          rol out
+          jmp sloop
+         
+endx      lda out
+          beq e3
+          ldx #0
+          stx lb
+          beq e1
+e3        bit lo
+          bmi e1
+          lda lb
+          bne e2
+e1        ora #"0"
+e2        jsr lffd2
+          
+          ldx lo
+          bmi l1b
+          jmp l1
+l1b ende  rts
+
+dtab      .word 1,0
+          .word 10,0
+          .word 100,0
+          .word 1000,0
+          .word 10000,0
+          .word 34464,1
+          .word 16960,15
+          .word 38528,152
+          .word 57600,1525
+          .word 51712,15258
+          .)
+
+&DEZOUT   .(
+l1        tay
+          sec
+          sbc #100
+          bcs l1
+          lda #0
+          sta da
+          tya
+l2        tay
+          sec
+          sbc #10
+          bcc l3
+          inc da
+          bcs l2
+l3        asl da
+          asl da
+          asl da
+          asl da
+          tya
+          ora da
+&&HEXOUT
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr NIBOUT
+          pla
+          and #$0f
+NIBOUT    clc  
+          adc #"0"
+          cmp #"9"+1
+          bcc nout
+          adc #6
+nout      jmp lffd2
+          .)
+
+          .)
+
+          .(
+l00fb     =syszp
+l00fd     =syszp+2
+l00c8     =syszp+4
+-syszp    +=5
+
+&parlist  .(
+          bcc a1
+          beq a1
+          cmp #$ab
+          bne delerr1
+a1        jsr la96b
+          jsr la613
+          jsr CHRGOT
+          beq a2
+          cmp #$ab
+delerr1   bne delerr
+          jsr CHRGET
+          jsr la96b
+          bne delerr
+a2        rts
+&delerr   jmp syntax
+          .)
+
+&ldump    .(
+          bne delerr
+          lda VARANF
+          ldy VARANF+1
+du1       cpy ARRANF+1
+          bne du2
+          cmp ARRANF
+du2       bcs duvend
+          sta INT
+          sty INT+1
+          jsr laad7      ; crlfout
+          jsr getstop
+          jsr dumpvar
+          lda INT
+          ldy INT+1
+          clc
+          adc #7
+          bcc du1
+          iny
+          bne du1
+
+dumpvar   jsr duname
+          bcs dustrbin
+          lda INT
+          adc #2
+          ldy INT+1
+          bcc du3
+          iny
+du3       cpx #128
+          bcs dufunk
+          pha
+          lda #" "
+          jsr duglout
+          pla
+          jsr lbba2      ; fliesskommavar holen
+du4       jsr lbddd      ; in ASC
+          jmp strout      ; ausgeben
+duvend    jmp duarr
+dustrbin  txa
+          bpl dustr      
+          lda #"%"       ; integervar
+          jsr duglout
+          ldy #2
+          lda (INT),y
+          tax
+          iny
+          lda (INT),y
+          tay
+          txa
+          jsr lb395
+          jmp du4
+dustr     lda #"$"       ; stringvar
+          jsr duglout
+          jsr duhkout
+          ;lda #4
+          ;jsr setfla
+          ldy #2
+          lda (INT),y    ; lÑnge
+          beq dustrr
+          sta l00c8
+          iny
+          lda (INT),y
+          sta l0022
+          iny
+          lda (INT),y
+          sta l0022+1
+          ldy #0
+dust1     lda (l0022),y
+          jsr lffd2
+          iny
+          cpy l00c8
+          bne dust1
+dustrr    
+duhkout   lda #34
+          jmp lffd2
+dufunk    ldy #2         ;funktion
+          lda (INT),y
+          sta akku4+3
+          iny
+          lda (INT),y
+          sta akku4+4
+          iny
+          lda (INT),y
+          sec
+          sbc #2
+          sta l0022
+          iny
+          lda (INT),y
+          sbc #0
+          sta l0022+1
+          lda #"("
+          jsr lffd2
+          ldy #0         ; argument
+          lda (l0022),y
+          jsr lffd2
+          iny
+          lda (l0022),y
+          beq duf1
+          jsr lffd2
+duf1      lda #")"
+          jsr duglout
+          jsr dumplist
+          rts
+duend     jmp laad7
+duarr     lda ARRANF     ; arrayvariable
+          ldy ARRANF+1
+dua1      cpy ARREND+1
+          bne dua2
+          cmp ARREND
+dua2      bcs duend
+          sta INT
+          sty INT+1
+          jsr laad7
+          jsr getstop
+          jsr duname
+          bcc duafk
+          txa
+          bmi duaint
+          lda #"$"
+          .byt $2c
+duaint    lda #"%"
+          .byt $2c
+duafk     lda #" "
+          jsr lffd2
+          lda #"("
+          jsr lffd2
+          ldy #4
+          lda (INT),y
+          sta l00fb      ; Anzahl Dimensionen
+          clc
+          lda #5
+          adc INT
+          sta l00fd
+          lda INT+1
+          adc #0
+          sta l00fd+1
+          jmp dua4
+dua3      dec l00fb
+          beq duaadd
+          lda #","
+          jsr lffd2
+dua4      lda l00fb
+          asl
+          tay
+          dey
+          lda (l00fd),y
+          sec
+          sbc #1
+          pha
+          dey
+          lda (l00fd),y
+          sbc #0
+          tay
+          pla
+          tax
+          tya
+          jsr adrout
+          jmp dua3
+duaadd    lda #")"
+          jsr lffd2
+          ldy #2
+          lda (INT),y
+          clc
+          adc INT
+          pha
+          iny
+          lda (INT),y
+          adc INT+1
+          tay
+          pla
+          jmp dua1
+
+duname    ldy #0
+          lda (INT),y
+          tax
+          and #127
+          jsr lffd2
+          iny
+          lda (INT),y
+          tay
+          and #127
+          beq dun1
+          jsr lffd2
+dun1      tya
+          asl
+          rts
+
+duglout   jsr lffd2
+          lda #"="
+          jmp lffd2
+          .)
+
+&lfind    .(
+          lda BASANF+1
+          sta l00fd+1
+          lda BASANF
+          sta l00fd
+          bne d1
+          dec l00fd+1
+d1        dec l00fd
+          ;jsr d10
+d2        ldy #0
+          lda (l00fd),y
+          bne d5
+          iny            ; zeilenende
+          iny
+          lda (l00fd),y  ; hibyte verkettungsadr
+          beq fiend      ; prgende
+          lda l00fd
+          sta akku4+3
+          lda l00fd+1
+          sta akku4+4
+          lda l00fd      ; 5 fÅr anfang text addieren
+          clc
+          adc #5
+          sta l00fd
+          bcc d4
+          inc l00fd+1
+d4        jsr getstop
+          jmp d2
+fiend     pla
+          pla
+          jmp ready
+d5        cmp (BASZEI),y ; mit erstem Byte des zu suchenden Textes vergleichen
+          bne d8
+;          lda l00fd
+;          sta l00fb
+;          lda l00fd+1
+;          sta l00fb+1
+d6        iny
+          lda (BASZEI),y ; cpy l00c8
+          beq d9         ; listen
+          lda (l00fd),y
+          beq d7         ; ende der Zeile dann nicht gefunden
+          cmp (BASZEI),y
+          beq d6
+d7;        lda l00fb
+;          sta l00fd
+;          lda l00fb+1
+;          sta l00fd+1
+d8        inc l00fd
+          bne d2
+          inc l00fd+1
+          bne d2
+
+d9        inc akku4+3
+          bne d09
+          inc akku4+4
+d09       ldy #2
+          lda (akku4+3),y
+          tax
+          iny
+          lda (akku4+3),y
+          jsr listline
+          jsr laad7
+          ldy #<-1
+d13       iny
+          lda (l00fd),y
+          bne d13
+          tya
+          clc
+          adc l00fd
+          sta l00fd
+          bcc d14
+          inc l00fd+1
+d14       jmp d2
+/*
+d10       ldy #<-1
+d11       iny
+          lda (BASZEI),y
+          bne d11
+          sty l00c8
+          rts  */
+          .)
+                    
+&ldelete  .(
+          jsr parlist
+          lda INT:ora INT+1
+          bne a3
+          ldy #0              ; hier alles bis ende lîschen
+          tya
+          sta (akku4+3),y
+          iny
+          sta (akku4+3),y
+          jmp a9
+a3        lda akku4+3
+          ldy akku4+4
+          sta l0022
+          sty l0022+1
+          jsr la613
+          bcc a5
+          ldy #0
+          lda (akku4+3),y
+          pha
+          iny
+          lda (akku4+3),y
+          sta akku4+4
+          pla
+          sta akku4+3
+a5        lda l0022+1
+          cmp akku4+4
+          bcc a5a
+          bne a9
+          lda l0022
+          cmp akku4+3
+          bcs a9
+a5a       ldy #0
+          ldx #3
+a6        lda (akku4+3),y
+          sta (l0022),y
+          cmp #0
+          bne a7
+          dex
+          beq a9
+          bne a8
+a7        ldx #3
+a8        iny
+          bne a6
+          inc l0022+1
+          inc akku4+4
+          jmp a6
+&a9       jsr bindbas
+          lda #2
+          clc
+          adc l0022
+          sta VARANF
+          lda l0022+1
+          adc #0
+          sta VARANF+1
+          jmp la663
+
+&&lrenew  bne renewerr
+          ldy #1
+          tya
+          sta (BASANF),y
+          jsr a9
+          jmp ready
+          .)
+
+renewerr  jmp syntax
+&GETINT   jsr frmnum
+          jmp getadr
+          
+paraut    .(
+          lda #0
+          sta l00fb+1
+          sta l00fd+1
+          lda #10
+          sta l00fb
+          lda #100
+          sta l00fd
+          jsr weitzei
+          cmp #","
+          beq paraut1
+          jsr CHRGOT
+          jsr GETINT
+          sty l00fd
+          sta l00fd+1
+          jsr weitzei
+          cmp #","
+          beq paraut1
+          jmp syntax
+paraut1   jsr CHRGET
+          jsr weitzei
+          cmp #","
+          beq paraut2
+          jsr GETINT
+          sty l00fb
+          sta l00fb+1
+paraut2   rts
+          .)
+          
+          .(
+rsyn      lda #11
+          .byt $2c
+rend      lda #128
+          .byt $2c
+rillq     lda #14
+          .byt $2c
+rmemer    lda #16
+          sta l00c8
+          jsr a9
+          ldx l00c8
+          jmp la437
+          
+&&lrenumber
+          jsr paraut
+          lda l00fb
+          ora l00fb+1
+          bne r00
+          jmp illquant
+r00       ldy #1
+          lda (BASANF),y
+          beq rend
+          jsr a9
+          jsr CHRGOT
+          beq r0a
+          cmp #","
+          bne rsyn
+          jsr CHRGET
+r0a       jsr parlist
+          lda INT
+          ora INT+1
+          bne r01
+          ldx #<-1
+          ldy #<-1
+          bne r02
+r01       ldx INT
+          ldy INT+1
+r02       stx l0022
+          sty l0022+1
+          jmp r03
+riq1      bcs rillq
+r1        stx akku4+3
+          sty akku4+4
+r03       ldy #1
+          lda (akku4+3),y
+          beq r4
+          ldy #3
+          lda (akku4+3),y
+          cmp l0022+1
+          bcc rrr
+          bne r4
+          dey
+          lda (akku4+3),y
+          cmp l0022
+          bcc rrr
+          bne r4
+rrr       lda STRANF
+          sec
+          sbc #4
+          sta STRANF
+          tax
+          lda STRANF+1
+          sbc #0
+          sta STRANF+1
+          cmp VARANF+1
+          bcc rmemer
+          bne r1a
+          cpx VARANF
+          bcc rmemer
+r1a       ldy #3              ; alte Zeilennummer speichern
+          lda (akku4+3),y
+          sta (STRANF),y
+          dey
+          lda (akku4+3),y
+          sta (STRANF),y
+          dey
+          lda l00fd+1         ; und neue dazu
+          sta (STRANF),y
+          tax
+          dey
+          lda l00fd
+          sta (STRANF),y
+          ldy #2
+          sta (akku4+3),y
+          iny
+          txa
+          sta (akku4+3),y
+          lda l00fd           ; neue Zeilennr erhîhen
+          clc
+          adc l00fb
+          sta l00fd
+          lda l00fd+1
+          adc l00fb+1
+          sta l00fd+1
+          bcs riq1
+          ldy #0              ; nÑxte Zeile suchen
+          lda (akku4+3),y
+          tax
+          iny
+          lda (akku4+3),y
+          tay
+          bne r1
+r4        jsr la68e           ; start Zeilennr im Text Ñndern
+r5        ldy #0
+          lda (BASZEI),y
+          bne r6
+          iny
+          lda (BASZEI),y
+          bne r7
+          iny
+          lda (BASZEI),y
+          bne r7
+          jmp rend
+r7        lda BASZEI
+          clc
+          adc #5
+          sta BASZEI
+          bcc r5
+          inc BASZEI+1
+          bne r5
+r6        cmp #$a7
+          beq rthen
+r8        cmp #$89       ; goto-Code
+          beq rgot
+          cmp #$8d       ; gosub-Code
+          beq rgot
+          cmp #$cb       ; go-Code
+          beq rgo
+          cmp #34        ; Hochkomma
+          beq rhoko
+r9        inc BASZEI
+          bne r5
+          inc BASZEI+1
+          bne r5
+rhoko     ldy #1         ; Text in Hochkomma Åberspringen
+rho1      lda (BASZEI),y
+          beq rho3
+          cmp #34        ; Ende mit Hochkomma
+          beq rho2
+          iny
+          bne rho1
+rho2      iny
+rho3      tya
+          clc
+          adc BASZEI
+          sta BASZEI
+          bcc r5
+          inc BASZEI+1
+          bne r5
+rthen     jsr CHRGET
+          beq r9
+          bcs r8
+          bcc r10
+rgo       jsr CHRGET
+          cmp #$a4       ; to-Code
+          bne r5
+rgot      jsr CHRGET
+          bcs r5
+r10       lda BASZEI
+          sta l00fd
+          lda BASZEI+1
+          sta l00fd+1
+          jsr GETINT
+          sec
+          lda BASZEI
+          sbc l00fd
+          sta akku3
+
+          ; neue Zeilennr finden
+
+          lda STRANF
+          sta l0035
+          lda STRANF+1
+          sta l0035+1
+r11       ldy #3
+          lda (l0035),y
+          cmp INT+1
+          bne r12
+          dey
+          lda (l0035),y
+          cmp INT
+          beq r13
+r12       lda #4
+          clc
+          adc l0035
+          sta l0035
+          tax
+          bcc r12a
+          inc l0035+1
+r12a      lda l0035+1
+          cmp BASEND+1
+          bcc r11
+          bne r11a
+          cpx BASEND
+          bcc r11
+r11a      lda INT+1
+          ldx INT
+          jmp r14
+r13       dey            ; ZNr in Tabelle gefunden
+          lda (l0035),y
+          pha
+          dey
+          lda (l0035),y
+          tax
+          pla
+r14       jsr rfacasc    ; und nach ASC wandeln
+          ldy #<-1
+r15       iny
+          lda stack,y
+          bne r15
+          lda l00fd
+          sta akku4+3
+          lda l00fd+1
+          sta akku4+4
+          tya
+          sec
+          sbc akku3
+          sta akku3
+          beq r16        ; Zahlen im Text gleich lang
+          bcc r17        ; neue < alte -> kleinere Adresse
+          lda VARANF
+          sta akku3+3
+          clc
+          adc akku3
+          sta akku3+1
+          sta VARANF
+          lda VARANF+1
+          sta akku3+4
+          adc #0
+          sta akku3+2
+          sta VARANF+1
+          
+          cmp STRANF+1
+          bcc r18
+          beq r18a
+r18b      jmp rmemer
+r18a      lda VARANF
+          cmp STRANF
+          bcs r18b
+r18       jsr la3bf
+          jmp r16
+          
+r17       lda BASZEI          ; neue Zahl kleiner als alte
+          sta akku4+3
+          clc
+          adc akku3
+          sta l00fb
+          lda BASZEI+1
+          sta akku4+4
+          sbc #0
+          sta l00fb+1
+r20       ldy #0
+          lda (akku4+3),y
+          sta (l00fb),y
+          inc l00fb
+          bne r20a
+          inc l00fb+1
+r20a      inc akku4+3
+          bne r20b
+          inc akku4+4
+r20b      lda akku4+3
+          cmp VARANF
+          bne r20
+          lda akku4+4
+          cmp VARANF+1
+          bne r20
+r16       lda l00fd      ; ZNr gleich lang
+          sta BASZEI
+          lda l00fd+1
+          sta BASZEI+1
+          ldy #0
+r21       lda stack,y
+          beq r22
+          sta (BASZEI),y
+          iny
+          bne r21
+r22       tya
+          clc
+          adc BASZEI
+          sta BASZEI
+          bcc r23
+          inc BASZEI+1
+r23       jsr CHRGOT
+          cmp #","       ; test auf on x goto/gosub
+          bne r24
+          jsr CHRGET
+          bcs r24
+          jmp r10
+r24       jmp r5
+
+rfacasc   sta FAC+1
+          stx FAC+2
+          ldx #$90
+          sec
+          jsr lbc49
+          jmp lbddf
+          .)
+          .)
+
+quit      .(
+          jsr lffe7      ; clall
+          jsr cldup
+          jmp TERM
+          .)
+          
+          .(
+&lomem    .(
+          jsr GETINT
+          lda INT+1
+          cmp #>RAMEND
+          bne lmh
+          lda INT
+          cmp #<RAMEND
+lmh       bcc lmok
+&lmerr    jmp la435
+lmok      lda INT
+          sta BASANF
+          clc 
+          adc #<-1
+          sta INT
+          lda INT+1
+          sta BASANF+1
+          adc #<-1
+          sta INT+1
+          lda #0
+          tay
+          sta (INT),y
+          jmp la644
+          .)
+
+&himem    .(
+          jsr GETINT
+          lda VARANF+1
+          cmp INT+1
+          bne hmt
+          lda VARANF
+          cmp INT
+hmt       bcs lmerr
+          lda INT
+          sta BASEND
+          lda INT+1
+          sta BASEND+1
+          jmp la663
+          .)
+          .)
+          
+la00c     .word lend-1,lfor-1,lnext-1,ldata-1,linputf-1,linput-1
+          .word ldim-1,lread-1,llet-1,lgoto-1,lrun-1,lif-1,lrestore-1
+          .word lgosub-1,lreturn-1,lrem-1,lstop-1,lon-1,lwait-1
+          .word lload-1,lsave-1,lverify-1,ldef-1,lpoke-1
+          .word lprintf-1,lprint-1,lcont-1,llist-1,lclr-1,lcmd-1
+          .word lsys-1,lopen-1,lclose-1,lget-1,lnew-1
+
+          .word ldir-1,lmkdir-1,lrmdir-1,lscratch-1,lrename-1,lformat-1
+          .word ldelete-1,lrenumber-1,lrenew-1,ldump-1,lfind-1
+          .word himem-1,lomem-1,quit-1,enter-1,call-1,puts-1,gets-1
+                    
+la052     .word lsgn,lint,labs,lusr,lfre,lpos,lsqr,lrnd,llog
+          .word lexp,lcos,lsin,ltan,latn,lpeek,llen,lstr,lval
+          .word lasc,lchr,lleft,lright,lmid
+
+la080     .byt $79 : .word ladd-1
+          .byt $79 : .word lsub-1
+          .byt $7b : .word lmul-1
+          .byt $7b : .word ldiv-1
+          .byt $7f : .word lpot-1
+          .byt $50 : .word land-1
+          .byt $46 : .word lor-1
+          .byt $7d : .word lneg-1
+          .byt $5a : .word lnot-1
+          .byt $64 : .word lcmp-1
+
+la09e     .asc "EN","D"+$80
+          .asc "FO","R"+$80
+          .asc "NEX","T"+$80
+          .asc "DAT","A"+$80
+          .asc "INPUT","#"+$80
+          .asc "INPU","T"+$80
+          .asc "DI","M"+$80
+          .asc "REA","D"+$80
+          .asc "LE","T"+$80
+          .asc "GOT","O"+$80
+          .asc "RU","N"+$80
+          .asc "I","F"+$80
+          .asc "RESTOR","E"+$80
+          .asc "GOSU","B"+$80
+          .asc "RETUR","N"+$80
+          .asc "RE","M"+$80
+          .asc "STO","P"+$80
+          .asc "O","N"+$80
+          .asc "WAI","T"+$80
+          .asc "LOA","D"+$80
+          .asc "SAV","E"+$80
+          .asc "VERIF","Y"+$80
+          .asc "DE","F"+$80
+          .asc "POK","E"+$80
+          .asc "PRINT","#"+$80
+          .asc "PRIN","T"+$80
+          .asc "CON","T"+$80
+          .asc "LIS","T"+$80
+          .asc "CL","R"+$80
+          .asc "CM","D"+$80
+          .asc "SY","S"+$80
+          .asc "OPE","N"+$80
+          .asc "CLOS","E"+$80
+          .asc "GE","T"+$80
+          .asc "NE","W"+$80
+          .asc "TAB","("+$80
+          .asc "T","O"+$80
+          .asc "F","N"+$80
+          .asc "SPC","("+$80
+          .asc "THE","N"+$80
+          .asc "NO","T"+$80
+          .asc "STE","P"+$80
+          .asc "+"+$80
+          .asc "-"+$80
+          .asc "*"+$80
+          .asc "/"+$80
+          .asc "^^"+$80
+          .asc "AN","D"+$80
+          .asc "O","R"+$80
+          .asc ">"+$80
+          .asc "="+$80
+          .asc "<"+$80
+          .asc "SG","N"+$80
+          .asc "IN","T"+$80
+          .asc "AB","S"+$80
+          .asc "US","R"+$80
+          .asc "FR","E"+$80
+          .asc "PO","S"+$80
+          .asc "SQ","R"+$80
+          .asc "RN","D"+$80
+          .asc "LO","G"+$80
+          .asc "EX","P"+$80
+          .asc "CO","S"+$80
+          .asc "SI","N"+$80
+          .asc "TA","N"+$80
+          .asc "AT","N"+$80
+          .asc "PEE","K"+$80
+          .asc "LE","N"+$80
+          .asc "STR","$"+$80
+          .asc "VA","L"+$80
+          .asc "AS","C"+$80
+          .asc "CHR","$"+$80
+          .asc "LEFT","$"+$80
+          .asc "RIGHT","$"+$80
+          .asc "MID","$"+$80
+          .asc "G","O"+$80,0
+
+la09enew  .asc "DI","R"+$80
+          .asc "MKDI","R"+$80
+          .asc "RMDI","R"+$80
+          .asc "SCRATC","H"+$80
+          .asc "RENAM","E"+$80
+          .asc "HEADE","R"+$80
+          
+          .asc "DELET","E"+$80
+          .asc "RENUMBE","R"+$80
+          .asc "RENE","W"+$80
+          .asc "DUM","P"+$80
+          .asc "FIN","D"+$80
+          
+          .asc "HIME","M"+$80
+          .asc "LOME","M"+$80
+          .asc "QUI","T"+$80
+          .asc "ENTE","R"+$80
+          .asc "CAL","L"+$80
+          .asc "SPU","T"+$80
+          .asc "SGE","T"+$80
+          .byt 0
+   
+le1       .asc "TOO MANY FILE","S"+$80
+le2       .asc "FILE OPE","N"+$80
+le3       .asc "FILE NOT OPE","N"+$80
+le4       .asc "FILE NOT FOUN","D"+$80
+le5       .asc "DEVICE NOT PRESEN","T"+$80
+le6       .asc "NOT INPUT FIL","E"+$80
+le7       .asc "NOT OUTPUT FIL","E"+$80
+le8       .asc "MISSING FILE NAM","E"+$80
+le9       .asc "ILLEGAL DEVICE NUMBE","R"+$80
+le10      .asc "NEXT WITHOUT FO","R"+$80
+le11      .asc "SYNTA","X"+$80
+le12      .asc "RETURN WITHOUT GOSU","B"+$80
+le13      .asc "OUT OF DAT","A"+$80
+le14      .asc "ILLEGAL QUANTIT","Y"+$80
+le15      .asc "OVERFLO","W"+$80
+le16      .asc "OUT OF MEMOR","Y"+$80
+le17      .asc "UNDEF'D STATEMEN","T"+$80
+le18      .asc "BAD SUBSCRIP","T"+$80
+le19      .asc "REDIM'D ARRA","Y"+$80
+le20      .asc "DIVISION BY ZER","O"+$80
+le21      .asc "ILLEGAL DIREC","T"+$80
+le22      .asc "TYPE MISMATC","H"+$80
+le23      .asc "STRING TOO LON","G"+$80
+le24      .asc "FILE DAT","A"+$80
+le25      .asc "FORMULA TOO COMPLE","X"+$80
+le26      .asc "CAN'T CONTINU","E"+$80
+le27      .asc "UNDEF'D FUNCTIO","N"+$80
+le28      .asc "VERIF","Y"+$80
+le29      .asc "LOA","D"+$80
+
+la328     .word le1,le2,le3,le4,le5,le6,le7,le8,le9
+          .word le10,le11,le12,le13,le14,le15,le16
+          .word le17,le18,le19,le20,le21,le22
+          .word le23,le24,le25,le26,le27,le28,le29
+          .word lbreak
+
+la364     .byt 13,10,"OK",13,10,0
+lerror    .byt "  ERROR",0
+la371     .byt " IN ",0
+lready    .byt 13,10,"READY.",13,10,0
+la381     .byt 13,10
+lbreak    .byt "BREAK",0
+          
+la38a tsx 
+ 104 inx :inx :inx :inx :la38f lda stack+1,x
+ 105 cmp #$81:bne la3b7:lda FORVAR+1:bne la3a4:lda stack+2,x
+ 106 sta FORVAR:lda stack+3,x:sta FORVAR+1:la3a4 cmp stack+3,x:bne la3b0
+ 107 lda FORVAR:cmp stack+2,x:beq la3b7:la3b0 txa :clc 
+ 108 adc #$12:tax :bne la38f:la3b7 rts :la3b8 jsr la408
+ 109 sta ARREND:sty ARREND+1:la3bf sec :lda akku3+3:sbc akku4+3
+ 110 sta l0022:tay :lda akku3+4:sbc akku4+4:tax 
+ 111 inx :tya :beq la3f3:lda akku3+3:sec 
+ 112 sbc l0022:sta akku3+3:bcs la3dc:dec akku3+4:sec 
+ 113 la3dc lda akku3+1:sbc l0022:sta akku3+1:bcs la3ec:dec akku3+2
+ 114 bcc la3ec:la3e8 lda (akku3+3),y:sta (akku3+1),y:la3ec dey :bne la3e8
+ 115 lda (akku3+3),y:sta (akku3+1),y:la3f3 dec akku3+4:dec akku3+2:dex 
+ 116 bne la3ec:rts :la3fb asl :adc #$3e:bcs la435
+ 117 sta l0022:tsx :cpx l0022:bcc la435:rts 
+ 118 la408 cpy STRANF+1:bcc la434:bne la412:cmp STRANF:bcc la434
+ 119 la412 pha :ldx #$09:tya :la416 pha :lda akku3,x
+ 120 dex :bpl la416:jsr lb526:ldx #$f7:la421 pla 
+ 121 sta FAC,x:inx :bmi la421:pla :tay 
+ 122 pla :cpy STRANF+1:bcc la434:bne la435:cmp STRANF
+ 123 bcs la435:la434 rts :la435 ldx #$10:la437 jmp (l0300):la43a txa 
+ 124 asl :tax :lda la328-2,x:sta l0022:lda la328-1,x
+ 125 sta l0022+1:jsr lffcc:lda #$00:sta ACTIO:jsr laad7
+ 126 jsr lab45:ldy #$00:la456 lda (l0022),y:pha :and  #$7f
+ 127 jsr basout:iny :pla :bpl la456:jsr la67a
+ 128 lda #<lerror:ldy #>lerror:la469 jsr strout:ldy ZEINR+1:iny 
+ 129 beq ready:jsr lbdc2:ready lda #<lready:ldy #>lready:jsr strout
+ 130 lda #$80:jsr lff90:la480 jmp (l0302)
+ la483 jsr linein:stx BASZEI
+ 131 sty BASZEI+1:exestart jsr CHRGET:;la48d: tax :beq la480:ldx #$ff
+ 132 stx ZEINR+1:bcc la49c:jsr la579:jmp la7e1:la49c jsr la96b
+ 133 jsr la579:sty DIM:jsr la613:bcc la4ed:ldy #$01
+ 134 lda (akku4+3),y:sta l0023:lda VARANF:sta l0022:lda akku4+4
+ 135 sta l0025:lda akku4+3:dey :sbc (akku4+3),y:clc 
+ 136 adc VARANF:sta VARANF:sta l0024:lda VARANF+1:adc #$ff
+ 137 sta VARANF+1:sbc akku4+4:tax :sec :lda akku4+3
+ 138 sbc VARANF:tay :bcs la4d7:inx :dec l0025
+ 139 la4d7 clc :adc l0022:bcc la4df:dec l0023:clc 
+ 140 la4df lda (l0022),y:sta (l0024),y:iny :bne la4df:inc l0023
+ 141 inc l0025:dex :bne la4df:la4ed jsr la659:jsr bindbas
+ 142 lda l0200:beq la480:clc :lda VARANF:sta akku3+3
+ 143 adc DIM:sta akku3+1:ldy VARANF+1:sty akku3+4:bcc la508
+ 144 iny :la508 sty akku3+2:jsr la3b8:lda INT:ldy INT+1
+ 145 sta l0200-2:sty l0200-1:lda ARREND:ldy ARREND+1:sta VARANF
+ 146 sty VARANF+1:ldy DIM:dey :la522 lda l0200-4,y:sta (akku4+3),y
+ 147 dey :bpl la522:;la52a: jsr la659:jsr bindbas:jmp la480
+ 148 bindbas 
+     lda BASANF:ldy BASANF+1:sta l0022:sty l0023:clc 
+ 149 la53c ldy #$01:lda (l0022),y:beq la55f:ldy #$04:la544 iny 
+ 150 lda (l0022),y:bne la544:iny :tya :adc l0022
+ 151 tax :ldy #$00:sta (l0022),y:lda l0023:adc #$00
+ 152 iny :sta (l0022),y:stx l0022:sta l0023:bcc la53c
+ 153 la55f rts 
+
+linein     .(
+          LDx #0
+MO1       JSR lffcf      ; le112
+          bcc mo1a
+/*     pha
+     lda #"E"
+     jsr SEROUT
+     pla
+     pha
+     jsr HEXOUT
+     pla*/
+          cmp #E_NOTOPEN
+          bne MO1
+          txa
+          pha
+          jsr clin
+          pla
+          tax
+          bcc MO1
+          jmp TERM
+          
+mo1a      cmp #$1f
+          bcs MO1A
+
+          CMP #13:BEQ MO2
+
+          CMP #8:BNE MO1
+          cpx #0:beq MO1
+          dex
+          jsr lffd2
+          jmp MO1
+
+MO1A      STA l0200,x
+          jsr lffd2
+          INx:CPx #$59
+          BCC MO1
+          ldx #$17:jmp la437
+/*MO2S      sec:.byt $24*/
+MO2       jmp laaca
+          .)
+/*
+ linein ldx #$00:la562 jsr le112:jsr lffd2:cmp #$0d:beq la576
+ 154 sta l0200,x:inx :cpx #$59:bcc la562:ldx #$17
+ 155 jmp la437:la576 ;lda #10:;jsr lffd2:jmp laaca
+*/
+ la579 jmp (l0304)
+ la57c
+#if l0200 & $00ff
+          lda BASZEI
+          sec
+          sbc #<l0200
+          tax
+#else
+          ldx BASZEI
+#endif
+          ldy #$04
+ 156 sty LISTHKFL:la582 lda l0200,x:bpl la58e:cmp #$ff:beq la5c9
+ 157 inx :bne la582:la58e cmp #$20:beq la5c9:sta HKFL
+ 158 cmp #$22:beq la5eex:bit LISTHKFL:bvs la5c9:cmp #$3f
+ 159 bne la5a4:lda #$99:bne la5c9:la5a4 cmp #$30:bcc la5ac
+ 160 cmp #$3c:bcc la5c9:la5ac sty l0071:ldy #$00:sty DIM
+ 161 dey :stx BASZEI:dex 
+ la5b6    iny :inx 
+ la5b8    lda l0200,x:sec :sbc la09e,y:beq la5b6
+          cmp #$20:beq la5b6
+          cmp #$a0:beq la5c5
+          cmp #$80:beq la5c5
+
+          ldx BASZEI:inc DIM
+ la5f9n   iny :lda la09e-1,y:bpl la5f9n
+          lda la09e,y:bne la5b8
+          ldy #<-1:dex
+
+ la5b6n   iny:inx
+ la5b8n   lda l0200,x:sec:sbc la09enew,y:beq la5b6n
+          cmp #$20:beq la5b6n
+          cmp #$a0:beq la5c5:la5eex beq la5ee
+          cmp #$80:bne la5f5
+
+ la5c5    and #$80:ora DIM
+ la5c7    ldy l0071
+ la5c9    inx :iny 
+          sta l0200-5,y:lda l0200-5,y
+          beq la609:sec :sbc #$3a
+          beq la5dc:cmp #$49
+          bne la5de
+ la5dc    sta LISTHKFL
+ la5de    sec 
+          sbc #$55:beq la582x:jmp la582:la582x
+          sta HKFL
+ la5e5    lda l0200,x:beq la5c9
+          cmp HKFL:beq la5c9
+ la5ee    iny :sta l0200-5,y
+          inx :bne la5e5
+
+ la5f5    ldx BASZEI:inc DIM
+ la5f9    iny :lda la09enew-1,y
+          bpl la5f9:lda la09enew,y:bne la5b8n
+
+          lda l0200,x:bpl la5c7
+ la609    sta l0200-3,y
+#if l0200 & $00ff
+          lda #>l0200-1:sta BASZEI+1
+#else
+          dec BASZEI+1
+#endif
+ lda #<l0200-1:sta BASZEI:rts 
+ 171 la613 lda BASANF:ldx BASANF+1:la617 ldy #$01:sta akku4+3:stx akku4+4
+ 172 lda (akku4+3),y:beq la640:iny :iny :lda INT+1
+ 173 cmp (akku4+3),y:bcc la641:beq la62e:dey :bne la637
+ 174 la62e lda INT:dey :cmp (akku4+3),y:bcc la641:beq la641
+ 175 la637 dey :lda (akku4+3),y:tax :dey :lda (akku4+3),y
+ 176 bcs la617:la640 clc :la641 rts 
+ lnew bne la641:la644 lda #$00
+ 177 tay :sta (BASANF),y:iny :sta (BASANF),y:lda BASANF
+ 178 clc :adc #$02:sta VARANF:lda BASANF+1:adc #$00
+ 179 sta VARANF+1:la659 jsr la68e:lda #$00
+ lclr bne la68d:la660 jsr lffe7
+ 180 la663 lda BASEND:ldy BASEND+1:sta STRANF:sty STRANF+1:lda VARANF
+ 181 ldy VARANF+1:sta ARRANF:sty ARRANF+1:sta ARREND:sty ARREND+1
+ 182 la677 jsr la81d:la67a ldx #$19:stx STRPTR:pla :tay 
+ 183 pla :ldx #$fa:txs :pha :tya 
+ 184 pha :lda #$00:sta NEXTSTAT+1:sta FNFL:la68d rts 
+ 185 la68e clc :lda BASANF:adc #$ff:sta BASZEI:lda BASANF+1
+ 186 adc #$ff:sta BASZEI+1:rts 
+
+listfl    =syszp
+-syszp    +=1
+
+ enter    .(
+          beq ll1
+          cmp #34   ; Hochkomma
+          bne ll1
+          lda #$00:jsr lffbd
+          ldx #<-1:ldy #FS_OPEN_RD:jsr lffba
+          jsr CHRGOT
+          jsr le257      ; Filename holen
+          jsr CHRGOT:beq ll1
+          jsr le200      ; byte nach x holen
+          ldy #FS_OPEN_RD
+          jsr lffba
+          jsr CHRGOT:beq ll4
+ ll1      jmp syntax
+ ll4      jsr xopen
+          bcc ll2
+          jmp la437
+ ll2      lda stream
+          jsr dupin
+          bcc ll1y
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldx #1
+          jmp la437
+ ll1y     rts
+          .)
+          
+ llist    .(
+          cmp #34   ; Hochkomma
+          bne ll1
+          lda #$00:jsr lffbd
+          ldx #<-1:ldy #FS_OPEN_WR:jsr lffba
+          jsr CHRGOT:beq ll1
+          jsr le257      ; Filename holen
+          jsr CHRGOT:beq ll1
+          jsr le200      ; byte nach x holen
+          ldy #FS_OPEN_WR
+          jsr lffba
+          jsr CHRGOT:beq ll4
+          jsr prkomma      ; falls noch zeichen dann test auf komma
+ ll4      jsr xopen
+          bcc ll2
+          jmp la437
+ ll2      lda stream
+          jmp ll1x
+ ll1      ldx #STDOUT
+          lda #SC_REG_WR
+          jsr STRCMD
+          lda #STDOUT
+ ll1x     jsr dupout
+          bcc ll1y
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldx #1
+          jmp la437
+ ll1y     jsr CHRGOT:jsr parlist
+          pla :pla :lda INT:ora INT+1
+ 190 bne la6c9:lda #$ff:sta INT:sta INT+1:la6c9 jsr laad7
+ ldy #$01
+ 191 sty LISTHKFL:lda (akku4+3),y:beq la714:jsr lffe1:bne lok
+ jsr clout:lda #0:jmp lstop:lok ;jsr laad7
+ 192 iny :lda (akku4+3),y:tax :iny :lda (akku4+3),y
+ 193 cmp INT+1:bne la6e6:cpx INT:beq la6e8:la6e6 bcs la714
+ 194 la6e8 ;sty FORVAR
+          jsr listline
+          bcs la714
+          tay :lda (akku4+3),y:tax 
+          iny :lda (akku4+3),y:stx akku4+3:sta akku4+4:bne la6c9
+ la714    jsr clout
+          jmp le386
+          .)
+          
+ dumplist lda #128
+          sta listfl
+          ldy #0
+          jmp la703
+
+ la714n   sec
+          rts
+ la707n   clc
+          rts 
+ listline sty FORVAR
+          jsr adrout
+          lda #0
+          sta listfl
+          lda #$20
+ la6ef    ldy FORVAR:and  #$7f
+ la6f3    cmp #":":bne la6f6
+          bit listfl:bmi la707n
+ la6f6    jsr basout:cmp #$22:bne la700
+          lda LISTHKFL:eor  #$ff:sta LISTHKFL
+ la700    iny :beq la714n
+ la703    lda (akku4+3),y:beq la707n;bne la717
+ ;la717   : jmp (l0306)
+ la71a    bpl la6f3:cmp #$ff:beq la6f3
+          bit LISTHKFL:bmi la6f3:sec :sbc #$7f:tax 
+          sty FORVAR:ldy #$ff
+ la72c    dex :beq la737
+ la72f    iny 
+          lda la09e,y:beq newlist:bpl la72f:bmi la72c
+ la737    iny :lda la09e,y
+          beq nll
+          bmi la6ef:jsr basout:bne la737
+
+ nll      ldy #<-1
+          bne nl2
+ newlist  ldy #<-1
+          bne nl3
+ nl1      dex
+          beq nl2
+ nl3      iny
+          lda la09enew,y
+          bpl nl3
+          bmi nl1
+ nl2      iny
+          lda la09enew,y
+          bmi la6ef
+          jsr basout
+          bne nl2
+          
+ lfor lda #$80:sta FNFL
+ 204 jsr la9a5:jsr la38a:bne la753:txa :adc #$0f
+ 205 tax :txs :la753 pla :pla :lda #$09
+ 206 jsr la3fb:jsr la906:clc :tya :adc BASZEI
+ 207 pha :lda BASZEI+1:adc #$00:pha :lda ZEINR+1
+ 208 pha :lda ZEINR:pha :lda #$a4:jsr laeff
+ 209 jsr lad8d:jsr frmnum:lda FAC+5:ora #$7f:and  FAC+1
+ 210 sta FAC+1:lda #<la78b:ldy #>la78b:sta l0022:sty l0023
+ 211 jmp lae43:la78b lda #<lb9bc:ldy #>lb9bc:jsr lbba2:jsr CHRGOT
+ 212 cmp #$a9:bne la79f:jsr CHRGET:jsr frmnum:la79f jsr lbc2b
+ 213 jsr lae38:lda FORVAR+1:pha :lda FORVAR:pha 
+ 214 lda #$81:pha :la7ae jsr getstop:lda BASZEI:ldy BASZEI+1
+ 215 cpy #>l0200:beq la7be:sta NEXTSTAT:sty NEXTSTAT+1
+ 216 la7be ldy #$00:lda (BASZEI),y:bne la807:ldy #$02:lda (BASZEI),y
+ 217 clc :bne la7ce:jmp la84b:la7ce iny :lda (BASZEI),y
+ 218 sta ZEINR:iny :lda (BASZEI),y:sta ZEINR+1:tya 
+ 219 adc BASZEI:sta BASZEI:bcc la7e1:inc BASZEI+1:la7e1 jmp (l0308)
+ la7e4 jsr CHRGET:la7e7 jsr la7ed:jmp la7ae:la7ed beq la82b:la7ef sbc #$80
+ 221 bcc la804
+#ifdef SHOW
+          pha
+          jsr xHEXOUT
+          pla
+#endif
+          cmp #$4c            ; ist neuer Befehl
+          bcc la7f3           ; nein dann normal
+          sbc #$4c-$23        ; neue adressen direkt hinter alten
+          jmp la7f7
+ la7f3    cmp #$23:bcs la80e  ; dann function-code
+ la7f7    
+#ifdef SHOW
+          pha
+          jsr xHEXOUT
+          pla
+#endif
+          asl :tay 
+ 222 lda la00c+1,y:pha :lda la00c,y:pha :jmp CHRGET
+ 223 la804 jmp la9a5:la807 cmp #$3a:beq la7e1:la80b jmp syntax:la80e cmp #$4b
+ 224 bne la80b:jsr CHRGET:lda #$a4:jsr laeff:jmp la8a0
+ lrestore la81d sec :lda BASANF:sbc #$01:ldy BASANF+1:bcs la827
+ 226 dey :la827 sta NEXTDATA:sty NEXTDATA+1:la82b rts :getstop jsr lffe1
+ lstop bcs la832:
+ lend clc :la832 bne la870:lda BASZEI:ldy BASZEI+1
+ 228 ldx ZEINR+1:inx :beq la849:sta NEXTSTAT:sty NEXTSTAT+1
+ 229 lda ZEINR:ldy ZEINR+1:sta PRVZEINR:sty PRVZEINR+1:la849 pla 
+ 230 pla :la84b lda #<la381:ldy #>la381:bcc la854:jmp la469
+ 231 la854 jmp le386
+ lcont bne la870:ldx #$1a:ldy NEXTSTAT+1:bne la862
+ 232 jmp la437:la862 lda NEXTSTAT:sta BASZEI:sty BASZEI+1:lda PRVZEINR
+ 233 ldy PRVZEINR+1:sta ZEINR:sty ZEINR+1:la870 rts :
+ lrun php 
+ 234 lda #$00:jsr lff90:plp :bne la87d:jmp la659
+ 235 la87d jsr la660:jmp la897
+ lgosub lda #$03:jsr la3fb:lda BASZEI+1
+ 236 pha :lda BASZEI:pha :lda ZEINR+1:pha 
+ 237 lda ZEINR:pha :lda #$8d:pha :la897 jsr CHRGOT
+ 238 jsr la8a0:jmp la7ae
+ lgoto la8a0 jsr la96b:jsr la909:sec 
+ 239 lda ZEINR:sbc INT:lda ZEINR+1:sbc INT+1:bcs la8bc
+ 240 tya :sec :adc BASZEI:ldx BASZEI+1:bcc la8c0
+ 241 inx :bcs la8c0:la8bc lda BASANF:ldx BASANF+1:la8c0 jsr la617
+ 242 bcc la8e3:lda akku4+3:sbc #$01:sta BASZEI:lda akku4+4
+ 243 sbc #$00:sta BASZEI+1:la8d1 rts 
+ lreturn bne la8d1:lda #$ff
+ 244 sta FORVAR+1:jsr la38a:txs :cmp #$8d:beq la8eb
+ 245 ldx #$0c:.byt $2c :la8e3 ldx #$11:jmp la437:la8e8 jmp syntax
+ 246 la8eb pla :pla :sta ZEINR:pla :sta ZEINR+1
+ 247 pla :sta BASZEI:pla :sta BASZEI+1
+ ldata la8f8 jsr la906
+ 248 la8fb tya :clc :adc BASZEI:sta BASZEI:bcc la905
+ 249 inc BASZEI+1:la905 rts :la906 ldx #$3a:.byt $2c :la909 ldx #$00
+ 250 stx SUCHCHAR:ldy #$00:sty HKFL:la911 lda HKFL:ldx SUCHCHAR
+ 251 sta SUCHCHAR:stx HKFL:la919 lda (BASZEI),y:beq la905:cmp HKFL
+ 252 beq la905:iny :cmp #$22:bne la919:beq la911
+ lif jsr lad9e:jsr CHRGOT:cmp #$89:beq la937:lda #$a7
+ 254 jsr laeff:la937 lda FAC:bne la940
+ lrem jsr la909:beq la8fb
+ 255 la940 jsr CHRGOT:bcs la948:jmp la8a0:la948 jmp la7ed
+ lon jsr getbyt
+ 256 pha :cmp #$8d:beq la957:la953 cmp #$89:bne la8e8
+ 257 la957 dec FAC+4:bne la95f:pla :jmp la7ef:la95f jsr CHRGET
+ 258 jsr la96b:cmp #$2c:beq la957:pla :la96a rts 
+ 259 la96b ldx #$00:stx INT:stx INT+1:la971 bcs la96a:sbc #$2f
+ 260 sta SUCHCHAR:lda INT+1:sta l0022:cmp #$19:bcs la953
+ 261 lda INT:asl :rol l0022:asl :rol l0022
+ 262 adc INT:sta INT:lda l0022:adc INT+1:sta INT+1
+ 263 asl INT:rol INT+1:lda INT:adc SUCHCHAR:sta INT
+ 264 bcc la99f:inc INT+1:la99f jsr CHRGET:jmp la971
+ llet la9a5 jsr lb08b:sta FORVAR:sty FORVAR+1:lda #$b2
+ 266 jsr laeff:lda INTFL:pha :lda STRINGFL:pha 
+ 267 jsr lad9e:pla :rol :jsr lad90:bne la9d9
+ 268 pla :la9c2 bpl la9d6:jsr lbc1b:jsr lb1bf:ldy #$00
+ 269 lda FAC+3:sta (FORVAR),y:iny :lda FAC+4:sta (FORVAR),y
+ 270 rts :la9d6 jmp lbbd0:la9d9 pla :la9da ldy FORVAR+1:cpy #$bf
+ 271 bne laa2c:jsr lb6a6:cmp #$06:bne laa24:ldy #$00
+ 272 sty FAC:sty FAC+5:la9ed sty l0071:jsr laa1d:jsr lbae2
+ 273 inc l0071:ldy l0071:jsr laa1d:jsr lbc0c:tax 
+ 274 beq laa07:inx :txa :jsr lbaed:laa07 ldy l0071
+ 275 iny :cpy #$06:bne la9ed:jsr lbae2:jsr lbc9b
+ 276 ldx FAC+3:ldy FAC+2:lda FAC+4:jmp lffdb:laa1d lda (l0022),y
+ 277 jsr l0080:bcc laa27:laa24 jmp illquant:laa27 sbc #$2f:jmp lbd7e
+ 278 laa2c ldy #$02:lda (FAC+3),y:cmp STRANF+1:bcc laa4b:bne laa3d
+ 279 dey :lda (FAC+3),y:cmp STRANF:bcc laa4b:laa3d ldy FAC+4
+ 280 cpy VARANF+1:bcc laa4b:bne laa52:lda FAC+3:cmp VARANF
+ 281 bcs laa52:laa4b lda FAC+3:ldy FAC+4:jmp laa68:laa52 ldy #$00
+ 282 lda (FAC+3),y:jsr lb475:lda l0050:ldy l0051:sta ARG+6
+ 283 sty ARG+7:jsr lb67a:lda #<FAC:ldy #>FAC:laa68 sta l0050
+ 284 sty l0051:jsr lb6db:ldy #$00:lda (l0050),y:sta (FORVAR),y
+ 285 iny :lda (l0050),y:sta (FORVAR),y:iny :lda (l0050),y
+ 286 sta (FORVAR),y:rts 
+ lprintf jsr laa86:jmp labb5
+ lcmd laa86 jsr getbyt
+ 287 beq laa90:lda #$2c:jsr laeff:laa90 php :stx ACTIO
+ 288 jsr le118:plp :jmp laaa0:laa9a jsr lab21:laa9d jsr CHRGOT
+ lprint laaa0 beq laad7:laaa2 beq laae7:cmp #$a3:beq laaf8:cmp #$a6
+ 290 clc :beq laaf8:cmp #$2c:beq laae8:cmp #$3b
+ 291 beq lab13:jsr lad9e:bit STRINGFL:bmi laa9a:jsr lbddd
+ 292 jsr lb487:jsr lab21:jsr lab3b:bne laa9d:laaca lda #$00
+ 293 sta l0200,x:ldx #<l0200-1:ldy #>l0200-1:lda ACTIO:bne laae7
+ 294 laad7 lda #$0d:jsr basout:;bit ACTIO:;bpl laae5:lda #$0a
+ 295 jsr basout:laae5 eor  #$ff:laae7 rts :laae8 sec :jsr lfff0
+ 296 tya :sec :laaee sbc #$0a:bcs laaee:eor  #$ff
+ 297 adc #$01:bne lab0e:laaf8 php :sec :jsr lfff0
+ 298 sty TABSPAL:jsr lb79b:cmp #$29:bne lab5f:plp 
+ 299 bcc lab0f:txa :sbc TABSPAL:bcc lab13:lab0e tax 
+ 300 lab0f inx :lab10 dex :bne lab19:lab13 jsr CHRGET:jmp laaa2
+ 301 lab19 jsr lab3b:bne lab10:strout jsr lb487:lab21 jsr lb6a6:tax 
+ 302 ldy #$00:inx :lab28 dex :beq laae7:lda (l0022),y
+ 303 jsr basout:iny :cmp #$0d:bne lab28:jsr laae5
+ 304 jmp lab28:lab3b lda ACTIO:beq lab42:lda #$20:.byt $2c 
+ 305 lab42 lda #$1d:.byt $2c :lab45 lda #$3f:basout jsr le10c:and  #$ff
+ 306 rts :lab4d lda INPUTFL:beq lab62:bmi lab57:ldy #$ff
+ 307 bne lab5b:lab57 lda DZEINR:ldy DZEINR+1:lab5b sta ZEINR:sty ZEINR+1
+ 308 lab5f jmp syntax:lab62 lda ACTIO:beq lab6b:ldx #$18:jmp la437
+ 309 lab6b lda #<lad0c:ldy #>lad0c:jsr strout:lda NEXTSTAT:ldy NEXTSTAT+1
+ 310 sta BASZEI:sty BASZEI+1:rts 
+ lget jsr lb3a6:cmp #$23
+ 311 bne lab92:jsr CHRGET:jsr getbyt:lda #$2c:jsr laeff
+ 312 stx ACTIO:jsr le11e:lab92 ldx #<l0200+1:ldy #>l0200+1:lda #$00
+ 313 sta l0200+1:lda #$40:jsr lac0f:ldx ACTIO:bne labb7
+ 314 rts 
+ linputf jsr getbyt:lda #$2c:jsr laeff:stx ACTIO
+ 315 jsr le11e:jsr labce:labb5 lda ACTIO:labb7 jsr lffcc:ldx #$00
+ 316 stx ACTIO:rts 
+ linput cmp #$22:bne labce:jsr laebd
+ 317 lda #$3b:jsr laeff:jsr lab21:labce jsr lb3a6:lda #$2c
+ 318 sta l0200-1:labd6 jsr labf9:lda ACTIO:beq labea:jsr lffb7
+ 319 and  #$02:beq labea:jsr labb5:jmp la8f8:labea lda l0200
+ 320 bne lac0d:lda ACTIO:bne labd6:jsr la906:jmp la8fb
+ 321 labf9 lda ACTIO:bne lac03:jsr lab45:jsr lab3b:lac03 jmp linein
+ lread ldx NEXTDATA:ldy NEXTDATA+1:lda #$98:.byt $2c :lac0d lda #$00
+ 323 lac0f sta INPUTFL:stx l0043:sty l0043+1:lac15 jsr lb08b:sta FORVAR
+ 324 sty FORVAR+1:lda BASZEI:ldy BASZEI+1:sta l004b:sty l004b+1
+ 325 ldx l0043:ldy l0043+1:stx BASZEI:sty BASZEI+1:jsr CHRGOT
+ 326 bne lac51:bit INPUTFL:bvc lac41:jsr le124:sta l0200
+ 327 ldx #<l0200-1:ldy #>l0200-1:bne lac4d:lac41 bmi lacb8:lda ACTIO
+ 328 bne lac4a:jsr lab45:lac4a jsr labf9:lac4d stx BASZEI:sty BASZEI+1
+ 329 lac51 jsr CHRGET:bit STRINGFL:bpl lac89:bit INPUTFL:bvc lac65
+ 330 inx :stx BASZEI:lda #$00:sta SUCHCHAR:beq lac71
+ 331 lac65 sta SUCHCHAR:cmp #$22:beq lac72:lda #$3a:sta SUCHCHAR
+ 332 lda #$2c:lac71 clc :lac72 sta HKFL:lda BASZEI:ldy BASZEI+1
+ 333 adc #$00:bcc lac7d:iny :lac7d jsr lb48d:jsr lb7e2
+ 334 jsr la9da:jmp lac91:lac89 jsr lbcf3:lda INTFL:jsr la9c2
+ 335 lac91 jsr CHRGOT:beq lac9d:cmp #$2c:beq lac9d:jmp lab4d
+ 336 lac9d lda BASZEI:ldy BASZEI+1:sta l0043:sty l0043+1:lda l004b
+ 337 ldy l004b+1:sta BASZEI:sty BASZEI+1:jsr CHRGOT:beq lacdf
+ 338 jsr prkomma:jmp lac15:lacb8 jsr la906:iny :tax 
+ 339 bne lacd1:ldx #$0d:iny :lda (BASZEI),y:beq lad32
+ 340 iny :lda (BASZEI),y:sta DZEINR:iny :lda (BASZEI),y
+ 341 iny :sta DZEINR+1:lacd1 jsr la8fb:jsr CHRGOT:tax 
+ 342 cpx #$83:bne lacb8:jmp lac51:lacdf lda l0043:ldy l0043+1
+ 343 ldx INPUTFL:bpl lacea:jmp la827:lacea ldy #$00:lda (l0043),y
+ 344 beq lacfb:lda ACTIO:bne lacfb:lda #<lacfc:ldy #>lacfc
+ 345 jmp strout:lacfb rts
+ lacfc    .asc "?EXTRA IGNORED",13,0
+ lad0c    .asc "?REDO FROM START",13,0
+ lnext bne lad24:ldy #$00:beq lad27:lad24 jsr lb08b
+ 350 lad27 sta FORVAR:sty FORVAR+1:jsr la38a:beq lad35:ldx #$0a
+ 351 lad32 jmp la437:lad35 txs :txa :clc :adc #$04
+ 352 pha :adc #$06:sta l0024:pla :ldy #$01
+ 353 jsr lbba2:tsx :lda stack+9,x:sta FAC+5:lda FORVAR
+ 354 ldy FORVAR+1:jsr lb867:jsr lbbd0:ldy #$01:jsr lbc5d
+ 355 tsx :sec :sbc stack+9,x:beq lad78:lda stack+$f,x
+ 356 sta ZEINR:lda stack+$10,x:sta ZEINR+1:lda stack+$12,x:sta BASZEI
+ 357 lda stack+$11,x:sta BASZEI+1:lad75 jmp la7ae:lad78 txa :adc #$11
+ 358 tax :txs :jsr CHRGOT:cmp #$2c:bne lad75
+ 359 jsr CHRGET:jsr lad24
+ frmnum jsr lad9e:lad8d clc :.byt $24 
+ 360 lad8f sec :lad90 bit STRINGFL:bmi lad97:bcs lad99:lad96 rts 
+ 361 lad97 bcs lad96:lad99 ldx #$16:jmp la437
+ lad9e 
+     ldx BASZEI:bne lada4
+ 362 dec BASZEI+1:lada4 dec BASZEI
+ ldx #$00:.byt $24 :lada9 pha 
+ 363 txa :pha :lda #$01:jsr la3fb:jsr lae83
+ 364 lda #$00:sta l004d:ladb8 jsr CHRGOT:ladbb sec :sbc #$b1
+ 365 bcc ladd7:cmp #$03:bcs ladd7:cmp #$01:rol 
+ 366 eor  #$01:eor  l004d:cmp l004d:bcc lae30:sta l004d
+ 367 jsr CHRGET:jmp ladbb
+ ladd7
+     ldx l004d:bne lae07:bcs lae58x
+ 368 adc #$07:bcc lae58x:adc STRINGFL:bne lade8:jmp lb63d
+ 369 lade8 adc #$ff:sta l0022:asl :adc l0022:tay 
+ 370 ladf0 pla :cmp la080,y:bcs lae5d:jsr lad8d:ladf9 pha 
+ 371 ladfa jsr lae20:pla :ldy l004b:bpl lae19:tax 
+ 372 beq lae5b:bne lae66:lae07 lsr STRINGFL:txa :rol 
+ 373 ldx BASZEI:bne lae11:dec BASZEI+1:lae11 dec BASZEI:ldy #$1b
+ 374 sta l004d:bne ladf0:lae19 cmp la080,y:bcs lae66:bcc ladf9
+ 375 lae20 lda la080+2,y:pha :lda la080+1,y:pha :
+
+     jsr lae33
+     lda l004d:jmp lada9
+ lae30 jmp syntax
+
+ lae58x jmp lae58
+
+ lae33    lda FAC+5:ldx la080,y
+
+ lae38    tay :pla :sta l0022:pla:sta l0022+1
+          inc l0022:bne laexx:inc l0022+1:laexx
+
+ 378 tya :pha :lae43 jsr lbc1b:lda FAC+4
+ 379 pha :lda FAC+3:pha :lda FAC+2:pha 
+ 380 lda FAC+1:pha :lda FAC:pha :jmp (l0022)
+ 381 lae58 ldy #$ff:pla :lae5b beq lae80:lae5d cmp #$64:beq lae64
+ 382 jsr lad8d:lae64 sty l004b:lae66 pla :lsr :sta ATNSIGN
+ 383 pla :sta ARG:pla :sta ARG+1:pla 
+ 384 sta ARG+2:pla :sta ARG+3:pla :sta ARG+4
+ 385 pla :sta ARG+5:eor  FAC+5:sta ARG+6:lae80 lda FAC
+ 386 rts 
+ 
+ laea8    .byt $82,$49,$0f,$da,$a1
+
+ lae83    jmp (l030a)
+ lae86    lda #$00:sta STRINGFL:lae8a jsr CHRGET
+          bcs lae92:lae8f jmp lbcf3
+ lae92    ;hier neue Functionen einbinden
+          jsr lb113:bcc lae9a
+          jmp laf28
+ lae9a    cmp #"$":beq dezhex
+          cmp #"%":beq decbin
+          cmp #"&":beq decoktx
+          cmp #$ff:bne laead:lda #<laea8:ldy #>laea8:jsr lbba2
+          jmp CHRGET
+
+ 390 laead cmp #$2e:beq lae8f:cmp #$ab:beq laf0dx:cmp #$aa
+ 391 beq lae8a:cmp #$22:bne laeccx:laebd lda BASZEI:ldy BASZEI+1
+ 392 adc #$00:bcc laec6:iny :laec6 jsr lb487:jmp lb7e2
+
+ laf0dx   jmp laf0d
+ laeccx   jmp laecc
+ decoktx  jmp decokt
+ 
+ decbin   lda #0:sta FAC+1:sta FAC+2
+          ldy #1
+ deb1     lda (BASZEI),y:jsr decbit:bcs hexend
+          lsr:rol FAC+2:rol FAC+1:bcs overfl
+          iny:bpl deb1:bmi hexend
+ 
+ decbit   sec:sbc #"0":cmp #2:rts
+  
+ dezhex   ldy #1:lda #0
+          sta FAC+2:sta FAC+1
+ hex1     lda (BASZEI),y
+          jsr deznib:bcs hexend
+          asl FAC+2:rol FAC+1:bcs overfl
+          asl FAC+2:rol FAC+1:bcs overfl
+          asl FAC+2:rol FAC+1:bcs overfl
+          asl FAC+2:rol FAC+1:bcs overfl
+          clc
+          adc FAC+2
+          sta FAC+2          
+          iny
+          bpl hex1
+ hexend   tya
+          clc
+          adc BASZEI
+          sta BASZEI
+          bcc dec2
+          inc BASZEI+1
+ dec2     ldx #$90:sec:jmp lbc49
+ 
+ deznib   sec:sbc #"0":cmp #10:bcc dec1
+          cmp #"A"-"0":bcc nend
+          sec:sbc #7:dec1 cmp #16:bcc nenc
+          eor #%00100000:cmp #16:rts
+ nend     sec:nenc rts
+
+ overfl   jmp illquant
+ 
+ decokt   ldy #1:lda #0
+          sta FAC+2:sta FAC+1
+ okt1     lda (BASZEI),y
+          jsr oktnib:bcs hexend
+          asl FAC+2:rol FAC+1:bcs overfl
+          asl FAC+2:rol FAC+1:bcs overfl 
+          asl FAC+2:rol FAC+1:bcs overfl
+          clc
+          adc FAC+2
+          sta FAC+2          
+          iny
+          bpl okt1
+          tya
+          clc
+          adc BASZEI
+          sta BASZEI
+          bcc okt2
+          inc BASZEI+1
+ okt2     ldx #$90:sec:jmp lbc49
+ 
+ oktnib   sec:sbc #"0":cmp #8:rts
+
+ 393 laecc cmp #$a8:bne laee3:ldy #$18:bne laf0f
+ lnot jsr lb1bf
+ 394 lda FAC+4:eor  #$ff:tay :lda FAC+3:eor  #$ff
+ 395 jmp lb391:laee3 cmp #$a5:bne laeea:jmp lb3f4:laeea cmp #$b4
+ 396 bcc laef1:jmp lafa7:laef1 jsr laefa:jsr lad9e:laef7 lda #$29
+ 397 .byt $2c :laefa lda #$28:.byt $2c :prkomma lda #$2c:laeff ldy #$00
+ 398 cmp (BASZEI),y:bne syntax:jmp CHRGET:syntax ldx #$0b:jmp la437
+ 399 laf0d ldy #$15:laf0f pla :pla :jmp ladfa:laf14 sec 
+ 400 lda FAC+3:sbc #<romanf:lda FAC+4:sbc #>romanf:bcc laf27
+ 401 lda #<romend:sbc FAC+3:lda #>romend:sbc FAC+4:laf27 rts 
+ 402 laf28 jsr lb08b:sta FAC+3:sty FAC+4:ldx VARNAME:ldy VARNAME+1
+ 403 lda STRINGFL:beq laf5d:lda #$00:sta ARG+7:jsr laf14
+ 404 bcc laf5c:cpx #$54:bne laf5c:cpy #$c9:bne laf5c
+ 405 jsr laf84:sty akku4+2:dey :sty l0071:ldy #$06
+ 406 sty akku4+1:ldy #$24:jsr lbe68:jmp lb46f:laf5c rts 
+ 407 laf5d bit INTFL:bpl laf6e:ldy #$00:lda (FAC+3),y:tax 
+ 408 iny :lda (FAC+3),y:tay :txa :jmp lb391
+ 409 laf6e jsr laf14:bcc lafa0:cpx #$54:bne laf92:cpy #$49
+ 410 bne lafa0:jsr laf84:tya :ldx #$a0:jmp lbc4f
+ 411 laf84 jsr lffde:stx FAC+3:sty FAC+2:sta FAC+4:ldy #$00
+ 412 sty FAC+1:rts :laf92 cpx #$53:bne lafa0:cpy #$54
+ 413 bne lafa0:jsr lffb7:jmp lbc3c:lafa0 lda FAC+3:ldy FAC+4
+ 414 jmp lbba2:lafa7 asl :pha :tax :jsr CHRGET
+ 415 cpx #$8f:bcc lafd1:jsr laefa:jsr lad9e:jsr prkomma
+ 416 jsr lad8f:pla :tax :lda FAC+4:pha 
+ 417 lda FAC+3:pha :txa :pha :jsr getbyt
+ 418 pla :tay :txa :pha :jmp lafd6
+ 419 lafd1 jsr laef1:pla :tay :lafd6 lda la052-$68,y:sta l0055
+ 420 lda la052-$67,y:sta l0055+1:jsr l0054:jmp lad8d
+ lor ldy #$ff:.byt $2c
+ land ldy #0:sty DIM:jsr lb1bf:lda FAC+3:eor  DIM
+ 422 sta SUCHCHAR:lda FAC+4:eor  DIM:sta HKFL:jsr lbbfc
+ 423 jsr lb1bf:lda FAC+4:eor  DIM:and  HKFL:eor  DIM
+ 424 tay :lda FAC+3:eor  DIM:and  SUCHCHAR:eor  DIM
+ 425 jmp lb391
+ lcmp jsr lad90:bcs lb02e:lda ARG+5:ora #$7f
+ 426 and  ARG+1:sta ARG+1:lda #<ARG:ldy #>ARG:jsr lbc5b
+ 427 tax :jmp lb061:lb02e lda #$00:sta STRINGFL:dec l004d
+ 428 jsr lb6a6:sta FAC:stx FAC+1:sty FAC+2:lda ARG+3
+ 429 ldy ARG+4:jsr lb6aa:stx ARG+3:sty ARG+4:tax 
+ 430 sec :sbc FAC:beq lb056:lda #$01:bcc lb056
+ 431 ldx FAC:lda #$ff:lb056 sta FAC+5:ldy #$ff:inx 
+ 432 lb05b iny :dex :bne lb066:ldx FAC+5:lb061 bmi lb072
+ 433 clc :bcc lb072:lb066 lda (ARG+3),y:cmp (FAC+1),y:beq lb05b
+ 434 ldx #$ff:bcs lb072:ldx #$01:lb072 inx :txa 
+ 435 rol :and  ATNSIGN:beq lb07b:lda #$ff:lb07b jmp lbc3c
+ 436 lb07e jsr prkomma
+ ldim tax :jsr lb090:jsr CHRGOT:bne lb07e
+ 437 rts :lb08b ldx #$00:jsr CHRGOT:lb090 stx DIMFL:lb092 sta VARNAME
+ 438 jsr CHRGOT:jsr lb113:bcs lb09f:lb09c jmp syntax:lb09f ldx #$00
+ 439 stx STRINGFL:stx INTFL:jsr CHRGET:bcc lb0af:jsr lb113
+ 440 bcc lb0ba:lb0af tax :lb0b0 jsr CHRGET:bcc lb0b0:jsr lb113
+ 441 bcs lb0b0:lb0ba cmp #$24:bne lb0c4:lda #$ff:sta STRINGFL
+ 442 bne lb0d4:lb0c4 cmp #$25:bne lb0db:lda FNFL:bne lb09c
+ 443 lda #$80:sta INTFL:ora VARNAME:sta VARNAME:lb0d4 txa 
+ 444 ora #$80:tax :jsr CHRGET:lb0db stx VARNAME+1:sec 
+ 445 ora FNFL:sbc #$28:bne lb0e7:jmp lb1d1:lb0e7 ldy #$00
+ 446 sty FNFL:lda VARANF:ldx VARANF+1:lb0ef stx akku4+4:lb0f1 sta akku4+3
+ 447 cpx ARRANF+1:bne lb0fb:cmp ARRANF:beq lb11d:lb0fb lda VARNAME
+ 448 cmp (akku4+3),y:bne lb109:lda VARNAME+1:iny :cmp (akku4+3),y
+ 449 beq lb185a:dey :lb109 clc :lda akku4+3:adc #$07
+ 450 bcc lb0f1:inx :bne lb0ef
+
+ lb113 cmp #"A":bcc lb11c:cmp #"Z"+1:bcc lb1cs
+ cmp #"a":bcc lb11c:cmp #"z"+1:bcc lb1cs:lb11c clc:rts
+ lb1cs sec: rts:lb185a beq lb185 
+
+ lb11d pla 
+ 452 pha :cmp #<laf28+2; lobyte RÅcksprungadresse
+          bne lb128:lb123 lda #<lbf13:ldy #>lbf13
+ 453 rts :lb128 lda VARNAME:ldy VARNAME+1:cmp #$54:bne lb13b
+ 454 cpy #$c9:beq lb123:cpy #$49:bne lb13b:lb138 jmp syntax
+ 455 lb13b cmp #$53:bne lb143:cpy #$54:beq lb138:lb143 lda ARRANF
+ 456 ldy ARRANF+1:sta akku4+3:sty akku4+4:lda ARREND:ldy ARREND+1
+ 457 sta akku3+3:sty akku3+4:clc :adc #$07:bcc lb159
+ 458 iny :lb159 sta akku3+1:sty akku3+2:jsr la3b8:lda akku3+1
+ 459 ldy akku3+2:iny :sta ARRANF:sty ARRANF+1:ldy #$00
+ 460 lda VARNAME:sta (akku4+3),y:iny :lda VARNAME+1:sta (akku4+3),y
+ 461 lda #$00:iny :sta (akku4+3),y:iny :sta (akku4+3),y
+ 462 iny :sta (akku4+3),y:iny :sta (akku4+3),y:iny 
+ 463 sta (akku4+3),y:lb185 lda akku4+3:clc :adc #$02:ldy akku4+4
+ 464 bcc lb18f:iny :lb18f sta VARADR:sty VARADR+1:rts 
+ 465 lb194 lda DIM:asl :adc #$05:adc akku4+3:ldy akku4+4
+ 466 bcc lb1a0:iny :lb1a0 sta akku3+1:sty akku3+2:rts 
+ lb1a5    .byt $90,$80,$00,$00,$00
+ lb1aa    jsr lb1bf
+ 468 lda FAC+3:ldy FAC+4:rts :lb1b2 jsr CHRGET:jsr lad9e
+ 469 lb1b8 jsr lad8d:lda FAC+5:bmi lb1cc:lb1bf lda FAC:cmp #$90
+ 470 bcc lb1ce:lda #<lb1a5:ldy #>lb1a5:jsr lbc5b:lb1cc bne illquant
+ 471 lb1ce jmp lbc9b:lb1d1 lda DIMFL:ora INTFL:pha :lda STRINGFL
+ 472 pha :ldy #$00:lb1db tya :pha :lda VARNAME+1
+ 473 pha :lda VARNAME:pha :jsr lb1b2:pla 
+ 474 sta VARNAME:pla :sta VARNAME+1:pla :tay 
+ 475 tsx :lda stack+2,x:pha :lda stack+1,x:pha 
+ 476 lda FAC+3:sta stack+2,x:lda FAC+4:sta stack+1,x:iny 
+ 477 jsr CHRGOT:cmp #$2c:beq lb1db:sty DIM:jsr laef7
+ 478 pla :sta STRINGFL:pla :sta INTFL:and  #$7f
+ 479 sta DIMFL:ldx ARRANF:lda ARRANF+1:lb21c stx akku4+3:sta akku4+4
+ 480 cmp ARREND+1:bne lb228:cpx ARREND:beq lb261:lb228 ldy #$00
+ 481 lda (akku4+3),y:iny :cmp VARNAME:bne lb237:lda VARNAME+1
+ 482 cmp (akku4+3),y:beq lb24d:lb237 iny :lda (akku4+3),y:clc 
+ 483 adc akku4+3:tax :iny :lda (akku4+3),y:adc akku4+4
+ 484 bcc lb21c:lb245 ldx #$12:.byt $2c :illquant ldx #$0e:lb24a jmp la437
+ 485 lb24d ldx #$13:lda DIMFL:bne lb24a:jsr lb194:lda DIM
+ 486 ldy #$04:cmp (akku4+3),y:bne lb245:jmp lb2ea:lb261 jsr lb194
+ 487 jsr la408:ldy #$00:sty l0071+1:ldx #$05:lda VARNAME
+ 488 sta (akku4+3),y:bpl lb274:dex :lb274 iny :lda VARNAME+1
+ 489 sta (akku4+3),y:bpl lb27d:dex :dex :lb27d stx l0071
+ 490 lda DIM:iny :iny :iny :sta (akku4+3),y
+ 491 lb286 ldx #$0b:lda #$00:bit DIMFL:bvc lb296:pla 
+ 492 clc :adc #$01:tax :pla :adc #$00
+ 493 lb296 iny :sta (akku4+3),y:iny :txa :sta (akku4+3),y
+ 494 jsr lb34c:stx l0071:sta l0071+1:ldy l0022:dec DIM
+ 495 bne lb286:adc akku3+2:bcs lb30b:sta akku3+2:tay 
+ 496 txa :adc akku3+1:bcc lb2b9:iny :beq lb30b
+ 497 lb2b9 jsr la408:sta ARREND:sty ARREND+1:lda #$00:inc l0071+1
+ 498 ldy l0071:beq lb2cd:lb2c8 dey :sta (akku3+1),y:bne lb2c8
+ 499 lb2cd dec akku3+2:dec l0071+1:bne lb2c8:inc akku3+2:sec 
+ 500 lda ARREND:sbc akku4+3:ldy #$02:sta (akku4+3),y:lda ARREND+1
+ 501 iny :sbc akku4+4:sta (akku4+3),y:lda DIMFL:bne lb34b
+ 502 iny :lb2ea lda (akku4+3),y:sta DIM:lda #$00:sta l0071
+ 503 lb2f2 sta l0071+1:iny :pla :tax :sta FAC+3
+ 504 pla :sta FAC+4:cmp (akku4+3),y:bcc lb30e:bne lb308
+ 505 iny :txa :cmp (akku4+3),y:bcc lb30f:lb308 jmp lb245
+ 506 lb30b jmp la435:lb30e iny :lb30f lda l0071+1:ora l0071:clc 
+ 507 beq lb320:jsr lb34c:txa :adc FAC+3:tax 
+ 508 tya :ldy l0022:lb320 adc FAC+4:stx l0071:dec DIM
+ 509 bne lb2f2:sta l0071+1:ldx #$05:lda VARNAME:bpl lb331
+ 510 dex :lb331 lda VARNAME+1:bpl lb337:dex :dex 
+ 511 lb337 stx REG+2:lda #$00:jsr lb355:txa :adc akku3+1
+ 512 sta VARADR:tya :adc akku3+2:sta VARADR+1:tay 
+ 513 lda VARADR:lb34b rts :lb34c sty l0022:lda (akku4+3),y:sta REG+2
+ 514 dey :lda (akku4+3),y:lb355 sta REG+3:lda #$10:sta akku4+1
+ 515 ldx #$00:ldy #$00:lb35f txa :asl :tax 
+ 516 tya :rol :tay :bcs lb30b:asl l0071
+ 517 rol l0071+1:bcc lb378:clc :txa :adc REG+2
+ 518 tax :tya :adc REG+3:tay :bcs lb30b
+ 519 lb378 dec akku4+1:bne lb35f:rts 
+ lfre lda STRINGFL:beq lb384
+ 520 jsr lb6a6:lb384 jsr lb526:sec :lda STRANF:sbc ARREND
+ 521 tay :lda STRANF+1:sbc ARREND+1:lb391 ldx #$00:stx STRINGFL
+ lb395 sta FAC+1:sty FAC+2:ldx #$90:jmp lbc44
+ lpos sec 
+ 523 jsr lfff0:lb3a2 lda #$00:beq lb391
+ lb3a6 ldx ZEINR+1:inx 
+ 524 bne lb34b:ldx #$15:.byt $2c :lb3ae ldx #$1b:jmp la437
+ ldef jsr lb3e1:jsr lb3a6:jsr laefa:lda #$80:sta FNFL
+ 526 lb3c0 jsr lb08b:jsr lad8d:jsr laef7:lda #$b2:jsr laeff
+ 527 pha :lda VARADR+1:pha :lda VARADR:pha 
+ 528 lda BASZEI+1:pha :lda BASZEI:pha :jsr la8f8
+ 529 jmp lb44f:lb3e1 lda #$a5:jsr laeff:ora #$80:sta FNFL
+ 530 jsr lb092:sta l004e:sty l004f:jmp lad8d
+ lb3f4 jsr lb3e1
+ 531 lda l004f:pha :lda l004e:pha :jsr laef1
+ 532 jsr lad8d:pla :sta l004e:pla :sta l004f
+ 533 ldy #$02:lda (l004e),y:sta VARADR:tax :iny 
+ 534 lda (l004e),y:beq lb3ae:sta VARADR+1:iny :lb418 lda (VARADR),y
+ 535 pha :dey :bpl lb418:ldy VARADR+1:jsr lbbd4
+ 536 lda BASZEI+1:pha :lda BASZEI:pha :lda (l004e),y
+ 537 sta BASZEI:iny :lda (l004e),y:sta BASZEI+1:lda VARADR+1
+ 538 pha :lda VARADR:pha :jsr frmnum:pla 
+ 539 sta l004e:pla :sta l004f:jsr CHRGOT:beq lb449
+ 540 jmp syntax:lb449 pla :sta BASZEI:pla :sta BASZEI+1
+ 541 lb44f ldy #$00:pla :sta (l004e),y:pla :iny 
+ 542 sta (l004e),y:pla :iny :sta (l004e),y:pla 
+ 543 iny :sta (l004e),y:pla :iny :sta (l004e),y
+ 544 rts 
+ lstr jsr lad8d:ldy #$00:jsr lbddf:pla 
+ 545 pla :lb46f lda #<l0100-1:ldy #>l0100-1
+#if (l0100-1)&$ff00
+          bne lb487
+#else
+          beq lb487
+#endif
+ lb475 ldx FAC+3
+ 546 ldy FAC+4:stx l0050:sty l0051:lb47d jsr lb4f4:stx FAC+1
+ 547 sty FAC+2:sta FAC:rts :lb487 ldx #$22:stx SUCHCHAR
+ 548 stx HKFL:lb48d sta ARG+6:sty ARG+7:sta FAC+1:sty FAC+2
+ 549 ldy #$ff:lb497 iny :lda (ARG+6),y:beq lb4a8:cmp SUCHCHAR
+ 550 beq lb4a4:cmp HKFL:bne lb497:lb4a4 cmp #$22:beq lb4a9
+ 551 lb4a8 clc :lb4a9 sty FAC:tya :adc ARG+6:sta l0071
+ 552 ldx ARG+7:bcc lb4b5:inx :lb4b5 stx l0071+1:lda ARG+7
+ 553 beq lb4bf:cmp #>l0200:bne lb4ca:lb4bf tya :jsr lb475
+ 554 ldx ARG+6:ldy ARG+7:jsr lb688:lb4ca ldx STRPTR:cpx #$22
+ 555 bne lb4d5:ldx #$19:lb4d2 jmp la437:lb4d5 lda FAC:sta $00,x
+ 556 lda FAC+1:sta $01,x:lda FAC+2:sta $02,x:ldy #$00
+ 557 stx FAC+3:sty FAC+4:sty ARG+7:dey :sty STRINGFL
+ 558 stx STRZEI:inx :inx :inx :stx STRPTR
+ 559 rts :lb4f4 lsr LISTHKFL:lb4f6 pha :eor  #$ff:sec 
+ 560 adc STRANF:ldy STRANF+1:bcs lb501:dey :lb501 cpy ARREND+1
+ 561 bcc lb516:bne lb50b:cmp ARREND:bcc lb516:lb50b sta STRANF
+ 562 sty STRANF+1:sta l0035:sty l0035+1:tax :pla 
+ 563 rts :lb516 ldx #$10:lda LISTHKFL:bmi lb4d2:jsr lb526
+ 564 lda #$80:sta LISTHKFL:pla :bne lb4f6:lb526 ldx BASEND
+ 565 lda BASEND+1:lb52a stx STRANF:sta STRANF+1:ldy #$00:sty l004f
+ 566 sty l004e:lda ARREND:ldx ARREND+1:sta akku4+3:stx akku4+4
+ 567 lda #<STRSTCK:ldx #>STRSTCK:sta l0022:stx l0023:lb544 cmp STRPTR
+ 568 beq lb54d:jsr lb5c7:beq lb544:lb54d lda #$07:sta l0053
+ 569 lda VARANF:ldx VARANF+1:sta l0022:stx l0023:lb559 cpx ARRANF+1
+ 570 bne lb561:cmp ARRANF:beq lb566:lb561 jsr lb5bd:beq lb559
+ 571 lb566 sta akku3+1:stx akku3+2:lda #$03:sta l0053:lb56e lda akku3+1
+ 572 ldx akku3+2:lb572 cpx ARREND+1:bne lb57d:cmp ARREND:bne lb57d
+ 573 jmp lb606:lb57d sta l0022:stx l0023:ldy #$00:lda (l0022),y
+ 574 tax :iny :lda (l0022),y:php :iny 
+ 575 lda (l0022),y:adc akku3+1:sta akku3+1:iny :lda (l0022),y
+ 576 adc akku3+2:sta akku3+2:plp :bpl lb56e:txa 
+ 577 bmi lb56e:iny :lda (l0022),y:ldy #$00:asl 
+ 578 adc #$05:adc l0022:sta l0022:bcc lb5ae:inc l0023
+ 579 lb5ae ldx l0023:lb5b0 cpx akku3+2:bne lb5b8:cmp akku3+1:beq lb572
+ 580 lb5b8 jsr lb5c7:beq lb5b0:lb5bd lda (l0022),y:bmi lb5f6:iny 
+ 581 lda (l0022),y:bpl lb5f6:iny :lb5c7 lda (l0022),y:beq lb5f6
+ 582 iny :lda (l0022),y:tax :iny :lda (l0022),y
+ 583 cmp STRANF+1:bcc lb5dc:bne lb5f6:cpx STRANF:bcs lb5f6
+ 584 lb5dc cmp akku4+4:bcc lb5f6:bne lb5e6:cpx akku4+3:bcc lb5f6
+ 585 lb5e6 stx akku4+3:sta akku4+4:lda l0022:ldx l0023:sta l004e
+ 586 stx l004f:lda l0053:sta l0055:lb5f6 lda l0053:clc 
+ 587 adc l0022:sta l0022:bcc lb601:inc l0023:lb601 ldx l0023
+ 588 ldy #$00:rts :lb606 lda l004f:ora l004e:beq lb601
+ 589 lda l0055:and  #$04:lsr :tay :sta l0055
+ 590 lda (l004e),y:adc akku4+3:sta akku3+3:lda akku4+4:adc #$00
+ 591 sta akku3+4:lda STRANF:ldx STRANF+1:sta akku3+1:stx akku3+2
+ 592 jsr la3bf:ldy l0055:iny :lda akku3+1:sta (l004e),y
+ 593 tax :inc akku3+2:lda akku3+2:iny :sta (l004e),y
+ 594 jmp lb52a:lb63d lda FAC+4:pha :lda FAC+3:pha 
+ 595 jsr lae83:jsr lad8f:pla :sta ARG+6:pla 
+ 596 sta ARG+7:ldy #$00:lda (ARG+6),y:clc :adc (FAC+3),y
+ 597 bcc lb65d:ldx #$17:jmp la437:lb65d jsr lb475:jsr lb67a
+ 598 lda l0050:ldy l0051:jsr lb6aa:jsr lb68c:lda ARG+6
+ 599 ldy ARG+7:jsr lb6aa:jsr lb4ca:jmp ladb8:lb67a ldy #$00
+ 600 lda (ARG+6),y:pha :iny :lda (ARG+6),y:tax 
+ 601 iny :lda (ARG+6),y:tay :pla :lb688 stx l0022
+ 602 sty l0023:lb68c tay :beq lb699:pha :lb690 dey 
+ 603 lda (l0022),y:sta (l0035),y:tya :bne lb690:pla 
+ 604 lb699 clc :adc l0035:sta l0035:bcc lb6a2:inc l0035+1
+ 605 lb6a2 rts :lb6a3 jsr lad8f:lb6a6 lda FAC+3:ldy FAC+4:lb6aa sta l0022
+ 606 sty l0023:jsr lb6db:php :ldy #$00:lda (l0022),y
+ 607 pha :iny :lda (l0022),y:tax :iny 
+ 608 lda (l0022),y:tay :pla :plp :bne lb6d6
+ 609 cpy STRANF+1:bne lb6d6:cpx STRANF:bne lb6d6:pha 
+ 610 clc :adc STRANF:sta STRANF:bcc lb6d5:inc STRANF+1
+ 611 lb6d5 pla :lb6d6 stx l0022:sty l0023:rts :lb6db cpy STRZEI+1
+ 612 bne lb6eb:cmp STRZEI:bne lb6eb:sta STRPTR:sbc #$03
+ 613 sta STRZEI:ldy #$00:lb6eb rts 
+ lchr jsr lb7a1:txa 
+ 614 pha :lda #$01:jsr lb47d:pla :ldy #$00
+ 615 sta (FAC+1),y:pla :pla :jmp lb4ca
+ lleft jsr lb761
+ 616 cmp (l0050),y:tya :lb706 bcc lb70c:lda (l0050),y:tax 
+ 617 tya :lb70c pha :lb70d txa :lb70e pha :jsr lb47d
+ 618 lda l0050:ldy l0051:jsr lb6aa:pla :tay 
+ 619 pla :clc :adc l0022:sta l0022:bcc lb725
+ 620 inc l0023:lb725 tya :jsr lb68c:jmp lb4ca
+ lright jsr lb761
+ 621 clc :sbc (l0050),y:eor  #$ff:jmp lb706
+ lmid lda #$ff
+ 622 sta FAC+4:jsr CHRGOT:cmp #$29:beq lb748:jsr prkomma
+ 623 jsr getbyt:lb748 jsr lb761:beq lb798:dex :txa 
+ 624 pha :clc :ldx #$00:sbc (l0050),y:bcs lb70d
+ 625 eor  #$ff:cmp FAC+4:bcc lb70e:lda FAC+4:bcs lb70e
+ 626 lb761 jsr laef7:pla :tay :pla :sta l0055
+ 627 pla :pla :pla :tax :pla 
+ 628 sta l0050:pla :sta l0051:lda l0055:pha 
+ 629 tya :pha :ldy #$00:txa :rts 
+ llen jsr lb782:jmp lb3a2:lb782 jsr lb6a3:ldx #$00:stx STRINGFL
+ 631 tay :rts
+ lasc jsr lb782:beq lb798:ldy #$00
+ 632 lda (l0022),y:tay :jmp lb3a2:lb798 jmp illquant:lb79b jsr CHRGET
+ 633 getbyt jsr frmnum:lb7a1 jsr lb1b8:ldx FAC+3:bne lb798:ldx FAC+4
+ 634 jmp CHRGOT
+ lval jsr lb782:bne lb7b5:jmp lb8f7:lb7b5 ldx BASZEI
+ 635 ldy BASZEI+1:stx l0071:sty l0071+1:ldx l0022:stx BASZEI
+ 636 clc :adc l0022:sta l0024:ldx l0023:stx BASZEI+1
+ 637 bcc lb7cd:inx :lb7cd stx l0025:ldy #$00:lda (l0024),y
+ 638 pha :tya :sta (l0024),y:jsr CHRGOT:jsr lbcf3
+ 639 pla :ldy #$00:sta (l0024),y:lb7e2 ldx l0071:ldy l0071+1
+ 640 stx BASZEI:sty BASZEI+1:rts :lb7eb jsr frmnum:jsr getadr
+ 641 lb7f1 jsr prkomma:jmp getbyt:getadr lda FAC+5:bmi lb798:lda FAC
+ 642 cmp #$91:bcs lb798:jsr lbc9b:lda FAC+3:ldy FAC+4
+ 643 sty INT:sta INT+1:rts 
+ lpeek lda INT+1:pha 
+ 644 lda INT:pha :jsr getadr:ldy #$00:lda (INT),y
+ 645 tay :pla :sta INT:pla :sta INT+1
+ 646 jmp lb3a2
+ lpoke jsr lb7eb:txa :ldy #$00:sta (INT),y
+ 647 rts 
+ lwait jsr lb7eb:stx FORVAR:ldx #$00:jsr CHRGOT
+ 648 beq lb83c:jsr lb7f1:lb83c stx FORVAR+1:ldy #$00:lb840 lda (INT),y
+ 649 eor  FORVAR+1:and  FORVAR:beq lb840:lb848 rts 
+ lb849 lda #<lbf11
+ 650 ldy #>lbf11:jmp lb867:lb850 jsr lba8c
+ lsub lb853 lda FAC+5:eor  #$ff:sta FAC+5:eor  ARG+5:sta ARG+6
+ 652 lda FAC:jmp lb86a:lb862 jsr lb999:bcc lb8a3:lb867 jsr lba8c
+ ladd lb86a bne lb86f:jmp lbbfc:lb86f ldx ARG+7
+ 654 stx l0055+1:ldx #ARG:lda ARG:lb877 tay :beq lb848
+ 655 sec :sbc FAC:beq lb8a3:bcc lb893:sty FAC
+ 656 ldy ARG+5:sty FAC+5:eor  #$ff:adc #$00:ldy #$00
+ 657 sty l0055+1:ldx #FAC:bne lb897:lb893 ldy #$00:sty ARG+7
+ 658 lb897 cmp #$f9:bmi lb862:tay :lda ARG+7:lsr $01,x
+ 659 jsr lb9b0:lb8a3 bit ARG+6:bpl lb8fe:ldy #FAC:cpx #ARG
+ 660 beq lb8af:ldy #ARG:lb8af sec :eor  #$ff:adc l0055+1
+ 661 sta ARG+7:lda $04,y:sbc $04,x:sta FAC+4:lda $03,y
+ 662 sbc $03,x:sta FAC+3:lda $02,y:sbc $02,x:sta FAC+2
+ 663 lda $01,y:sbc $01,x:sta FAC+1:lb8d2 bcs lb8d7:jsr lb947
+ 664 lb8d7 ldy #$00:tya :clc :lb8db ldx FAC+1:bne lb929
+ 665 ldx FAC+2:stx FAC+1:ldx FAC+3:stx FAC+2:ldx FAC+4
+ 666 stx FAC+3:ldx ARG+7:stx FAC+4:sty ARG+7:adc #$08
+ 667 cmp #$20:bne lb8db:lb8f7 lda #$00:lb8f9 sta FAC:lb8fb sta FAC+5
+ 668 rts :lb8fe adc l0055+1:sta ARG+7:lda FAC+4:adc ARG+4
+ 669 sta FAC+4:lda FAC+3:adc ARG+3:sta FAC+3:lda FAC+2
+ 670 adc ARG+2:sta FAC+2:lda FAC+1:adc ARG+1:sta FAC+1
+ 671 jmp lb936:lb91d adc #$01:asl ARG+7:rol FAC+4:rol FAC+3
+ 672 rol FAC+2:rol FAC+1:lb929 bpl lb91d:sec :sbc FAC
+ 673 bcs lb8f7:eor  #$ff:adc #$01:sta FAC:lb936 bcc lb946
+ 674 lb938 inc FAC:beq lb97e:ror  FAC+1:ror  FAC+2:ror  FAC+3
+ 675 ror  FAC+4:ror  ARG+7:lb946 rts :lb947 lda FAC+5:eor  #$ff
+ 676 sta FAC+5:lb94d lda FAC+1:eor  #$ff:sta FAC+1:lda FAC+2
+ 677 eor  #$ff:sta FAC+2:lda FAC+3:eor  #$ff:sta FAC+3
+ 678 lda FAC+4:eor  #$ff:sta FAC+4:lda ARG+7:eor  #$ff
+ 679 sta ARG+7:inc ARG+7:bne lb97d:lb96f inc FAC+4:bne lb97d
+ 680 inc FAC+3:bne lb97d:inc FAC+2:bne lb97d:inc FAC+1
+ 681 lb97d rts :lb97e ldx #$0f:jmp la437:lb983 ldx #REG-1:lb985 ldy $03+1,x
+ 682 sty ARG+7:ldy $03,x:sty $03+1,x:ldy $02,x:sty $03,x
+ 683 ldy $01,x:sty $02,x:ldy FAC+7:sty $01,x:lb999 adc #$08
+ 684 bmi lb985:beq lb985:sbc #$08:tay :lda ARG+7
+ 685 bcs lb9ba:lb9a6 asl $01,x:bcc lb9ac:inc $01,x:lb9ac ror $01,x
+ 686 ror $01,x:lb9b0 ror $02,x:ror $03,x:ror $03+1,x:ror  
+ 687 iny :bne lb9a6:lb9ba clc :rts 
+ lb9bc    .byt $81,$00,$00,$00,$00
+ lb9c1    .byt $03
+          .byt $7f,$5e,$56,$cb,$79
+          .byt $80,$13,$9b,$0b,$64
+          .byt $80,$76,$38,$93,$16
+          .byt $82,$38,$aa,$3b,$20
+ lb9d6    .byt $80,$35,$04,$f3,$34
+ lb9db    .byt $81,$35,$04,$f3,$34
+ lb9e0    .byt $80,$80,$00,$00,$00
+ lb9e5    .byt $80,$31,$72,$17,$f8
+ llog lb9ea jsr lbc2b
+ 695 beq lb9f1:bpl lb9f4:lb9f1 jmp illquant:lb9f4 lda FAC:sbc #$7f
+ 696 pha :lda #$80:sta FAC:lda #<lb9d6:ldy #>lb9d6
+ 697 jsr lb867:lda #<lb9db:ldy #>lb9db:jsr lbb0f:lda #<lb9bc
+ 698 ldy #>lb9bc:jsr lb850:lda #<lb9c1:ldy #>lb9c1:jsr le043
+ 699 lda #<lb9e0:ldy #>lb9e0:jsr lb867:pla :jsr lbd7e
+ 700 lda #<lb9e5:ldy #>lb9e5:lba28 jsr lba8c
+ lmul bne lba30:jmp lba8b
+ 701 lba30 jsr lbab7:lda #$00:sta REG:sta REG+1:sta REG+2
+ 702 sta REG+3:lda ARG+7:jsr lba59:lda FAC+4:jsr lba59
+ 703 lda FAC+3:jsr lba59:lda FAC+2:jsr lba59:lda FAC+1
+ 704 jsr lba5e:jmp lbb8f:lba59 bne lba5e:jmp lb983:lba5e lsr 
+ 705 ora #$80:lba61 tay :bcc lba7d:clc :lda REG+3
+ 706 adc ARG+4:sta REG+3:lda REG+2:adc ARG+3:sta REG+2
+ 707 lda REG+1:adc ARG+2:sta REG+1:lda REG:adc ARG+1
+ 708 sta REG:lba7d ror  REG:ror  REG+1:ror  REG+2:ror  REG+3
+ 709 ror  ARG+7:tya :lsr :bne lba61:lba8b rts 
+ 710 lba8c sta l0022:sty l0023:ldy #$04:lda (l0022),y:sta ARG+4
+ 711 dey :lda (l0022),y:sta ARG+3:dey :lda (l0022),y
+ 712 sta ARG+2:dey :lda (l0022),y:sta ARG+5:eor  FAC+5
+ 713 sta ARG+6:lda ARG+5:ora #$80:sta ARG+1:dey 
+ 714 lda (l0022),y:sta ARG:lda FAC:rts :lbab7 lda ARG
+ 715 lbab9 beq lbada:clc :adc FAC:bcc lbac4:bmi lbadf
+ 716 clc :.byt $2c :lbac4 bpl lbada:adc #$80:sta FAC
+ 717 bne lbacf:jmp lb8fb:lbacf lda ARG+6:sta FAC+5:rts 
+ 718 lbad4 lda FAC+5:eor  #$ff:bmi lbadf:lbada pla :pla 
+ 719 jmp lb8f7:lbadf jmp lb97e:lbae2 jsr lbc0c:tax :beq lbaf8
+ 720 clc :adc #$02:bcs lbadf:lbaed ldx #$00:stx ARG+6
+ 721 jsr lb877:inc FAC:beq lbadf:lbaf8 rts
+ lbaf9    .byt $84,$20,$00,$00,$00
+ lbafe jsr lbc0c:lda #<lbaf9
+ 723 ldy #>lbaf9:ldx #$00:lbb07 stx ARG+6:jsr lbba2:jmp lbb12
+ 724 lbb0f jsr lba8c
+ ldiv lbb12 beq lbb8a:jsr lbc1b:lda #$00:sec 
+ 725 sbc FAC:sta FAC:jsr lbab7:inc FAC:beq lbadf
+ 726 ldx #$fc:lda #$01:lbb29 ldy ARG+1:cpy FAC+1:bne lbb3f
+ 727 ldy ARG+2:cpy FAC+2:bne lbb3f:ldy ARG+3:cpy FAC+3
+ 728 bne lbb3f:ldy ARG+4:cpy FAC+4:lbb3f php :rol 
+ 729 bcc lbb4c:inx :sta REG+3,x:beq lbb7a:bpl lbb7e
+ 730 lda #$01:lbb4c plp :bcs lbb5d:lbb4f asl ARG+4:rol ARG+3
+ 731 rol ARG+2:rol ARG+1:bcs lbb3f:bmi lbb29:bpl lbb3f
+ 732 lbb5d tay :lda ARG+4:sbc FAC+4:sta ARG+4:lda ARG+3
+ 733 sbc FAC+3:sta ARG+3:lda ARG+2:sbc FAC+2:sta ARG+2
+ 734 lda ARG+1:sbc FAC+1:sta ARG+1:tya :jmp lbb4f
+ 735 lbb7a lda #$40:bne lbb4c:lbb7e asl :asl :asl 
+ 736 asl :asl :asl :sta ARG+7:plp 
+ 737 jmp lbb8f:lbb8a ldx #$14:jmp la437:lbb8f lda REG:sta FAC+1
+ 738 lda REG+1:sta FAC+2:lda REG+2:sta FAC+3:lda REG+3
+ 739 sta FAC+4:jmp lb8d7:lbba2 sta l0022:sty l0023:ldy #$04
+ 740 lda (l0022),y:sta FAC+4:dey :lda (l0022),y:sta FAC+3
+ 741 dey :lda (l0022),y:sta FAC+2:dey :lda (l0022),y
+ 742 sta FAC+5:ora #$80:sta FAC+1:dey :lda (l0022),y
+ 743 sta FAC:sty ARG+7:rts :lbbc7 ldx #akku4:.byt $2c 
+ 744 lbbca ldx #akku3:ldy #$00:beq lbbd4:lbbd0 ldx FORVAR:ldy FORVAR+1
+ 745 lbbd4 jsr lbc1b:stx l0022:sty l0023:ldy #$04:lda FAC+4
+ 746 sta (l0022),y:dey :lda FAC+3:sta (l0022),y:dey 
+ 747 lda FAC+2:sta (l0022),y:dey :lda FAC+5:ora #$7f
+ 748 and  FAC+1:sta (l0022),y:dey :lda FAC:sta (l0022),y
+ 749 sty ARG+7:rts :lbbfc lda ARG+5:lbbfe sta FAC+5:ldx #$05
+ 750 lbc02 lda FAC+7,x:sta akku4+4,x:dex :bne lbc02:stx ARG+7
+ 751 rts :lbc0c jsr lbc1b:lbc0f ldx #$06:lbc11 lda akku4+4,x:sta FAC+7,x
+ 752 dex :bne lbc11:stx ARG+7:lbc1a rts :lbc1b lda FAC
+ 753 beq lbc1a:asl ARG+7:bcc lbc1a:lbc23 jsr lb96f:bne lbc1a
+ 754 jmp lb938:lbc2b lda FAC:beq lbc38:lbc2f lda FAC+5:lbc31 rol 
+ 755 lda #$ff:bcs lbc38:lda #$01:lbc38 rts 
+ lsgn jsr lbc2b
+ 756 lbc3c sta FAC+1:lda #$00:sta FAC+2:ldx #$88:lbc44 lda FAC+1
+ 757 eor  #$ff:rol :lbc49 lda #$00:sta FAC+4:sta FAC+3
+ 758 lbc4f stx FAC:sta ARG+7:sta FAC+5:jmp lb8d2:
+ labs lsr FAC+5
+ 759 rts: lbc5b sta l0024:lbc5d sty l0025:ldy #$00:lda (l0024),y
+ 760 iny :tax :beq lbc2b:lda (l0024),y:eor  FAC+5
+ 761 bmi lbc2f:cpx FAC:bne lbc92:lda (l0024),y:ora #$80
+ 762 cmp FAC+1:bne lbc92:iny :lda (l0024),y:cmp FAC+2
+ 763 bne lbc92:iny :lda (l0024),y:cmp FAC+3:bne lbc92
+ 764 iny :lda #$7f:cmp ARG+7:lda (l0024),y:sbc FAC+4
+ 765 beq lbcba:lbc92 lda FAC+5:bcc lbc98:eor  #$ff:lbc98 jmp lbc31
+ 766 lbc9b lda FAC:beq lbce9:sec :sbc #$a0:bit FAC+5
+ 767 bpl lbcaf:tax :lda #$ff:sta FAC+7:jsr lb94d
+ 768 txa :lbcaf ldx #FAC:cmp #$f9:bpl lbcbb:jsr lb999
+ 769 sty FAC+7:lbcba rts :lbcbb tay :lda FAC+5:and #$80
+ 770 lsr FAC+1:ora FAC+1:sta FAC+1:jsr lb9b0
+ 771 sty FAC+7:rts 
+ lint lbccc lda FAC:cmp #$a0:bcs lbcf2
+ 772 jsr lbc9b:sty ARG+7:lda FAC+5:sty FAC+5:eor  #$80
+ 773 rol :lda #$a0:sta FAC:lda FAC+4:sta SUCHCHAR
+ 774 jmp lb8d2:lbce9 sta FAC+1:sta FAC+2:sta FAC+3:sta FAC+4
+ 775 tay :lbcf2 rts 
+ lbcf3 ldy #$00:ldx #$0a:lbcf7 sty akku4+1,x
+ 776 dex :bpl lbcf7:bcc lbd0d:cmp #$2d:bne lbd06
+ 777 stx FAC+6:beq lbd0a:lbd06 cmp #$2b:bne lbd0f:lbd0a jsr CHRGET
+ 778 lbd0d bcc lbd6a:lbd0f cmp #$2e:beq lbd41:cmp #$45:bne lbd47
+ 779 jsr CHRGET:bcc lbd33:cmp #$ab:beq lbd2e:cmp #$2d
+ 780 beq lbd2e:cmp #$aa:beq lbd30:cmp #$2b:beq lbd30
+ 781 bne lbd35:lbd2e ror  akku4+4:lbd30 jsr CHRGET:lbd33 bcc lbd91:lbd35 bit akku4+4
+ 782 bpl lbd47:lda #$00:sec :sbc akku4+2:jmp lbd49
+ 783 lbd41 ror  akku4+3:bit akku4+3:bvc lbd0a:lbd47 lda akku4+2:lbd49 sec 
+ 784 sbc akku4+1:sta akku4+2:beq lbd62:bpl lbd5b:lbd52 jsr lbafe
+ 785 inc akku4+2:bne lbd52:beq lbd62:lbd5b jsr lbae2:dec akku4+2
+ 786 bne lbd5b:lbd62 lda FAC+6:bmi lbd67:rts :lbd67 jmp lbfb4
+ 787 lbd6a pha :bit akku4+3:bpl lbd71:inc akku4+1:lbd71 jsr lbae2
+ 788 pla :sec :sbc #$30:jsr lbd7e:jmp lbd0a
+ 789 lbd7e pha :jsr lbc0c:pla :jsr lbc3c:lda ARG+5
+ 790 eor  FAC+5:sta ARG+6:ldx FAC:jmp lb86a:lbd91 lda akku4+2
+ 791 cmp #$0a:bcc lbda0:lda #$64:bit akku4+4:bmi lbdae
+ 792 jmp lb97e:lbda0 asl :asl :clc :adc akku4+2
+ 793 asl :clc :ldy #$00:adc (BASZEI),y:sec 
+ 794 sbc #$30:lbdae sta akku4+2:jmp lbd30
+ lbdb3    .byt $9b,$3e,$bc,$1f,$fd
+ lbdb8    .byt $9e,$6e,$6b,$27,$fd
+ lbdbd    .byt $9e,$6e,$6b,$28,$00
+ lbdc2 lda #<la371:ldy #>la371:jsr lbdda
+ 797 lda ZEINR+1:ldx ZEINR:adrout sta FAC+1:stx FAC+2:ldx #$90
+ 798 sec :jsr lbc49:jsr lbddf:lbdda jmp strout:lbddd ldy #$01
+ 799 lbddf lda #$20:bit FAC+5:bpl lbde7:lda #$2d:lbde7 sta l0100-1,y
+ 800 sta FAC+5:sty l0071:iny :lda #$30:ldx FAC
+ 801 bne lbdf8:jmp lbf04:lbdf8 lda #$00:cpx #$80:beq lbe00
+ 802 bcs lbe09:lbe00 lda #<lbdbd:ldy #>lbdbd:jsr lba28:lda #$f7
+ 803 lbe09 sta akku4+1:lbe0b lda #<lbdb8:ldy #>lbdb8:jsr lbc5b:beq lbe32
+ 804 bpl lbe28:lbe16 lda #<lbdb3:ldy #>lbdb3:jsr lbc5b:beq lbe21
+ 805 bpl lbe2f:lbe21 jsr lbae2:dec akku4+1:bne lbe16:lbe28 jsr lbafe
+ 806 inc akku4+1:bne lbe0b:lbe2f jsr lb849:lbe32 jsr lbc9b:ldx #$01
+ 807 lda akku4+1:clc :adc #$0a:bmi lbe47:cmp #$0b
+ 808 bcs lbe48:adc #$ff:tax :lda #$02:lbe47 sec 
+ 809 lbe48 sbc #$02:sta akku4+2:stx akku4+1:txa :beq lbe53
+ 810 bpl lbe66:lbe53 ldy l0071:lda #$2e:iny :sta l0100-1,y
+ 811 txa :beq lbe64:lda #$30:iny :sta l0100-1,y
+ 812 lbe64 sty l0071:lbe66 ldy #$00:lbe68 ldx #$80:lbe6a lda FAC+4:clc 
+ 813 adc lbf16+3,y:sta FAC+4:lda FAC+3:adc lbf16+2,y:sta FAC+3
+ 814 lda FAC+2:adc lbf16+1,y:sta FAC+2:lda FAC+1:adc lbf16,y
+ 815 sta FAC+1:inx :bcs lbe8e:bpl lbe6a:bmi lbe90
+ 816 lbe8e bmi lbe6a:lbe90 txa :bcc lbe97:eor  #$ff:adc #$0a
+ 817 lbe97 adc #$2f:iny :iny :iny :iny 
+ 818 sty VARADR:ldy l0071:iny :tax :and  #$7f
+ 819 sta l0100-1,y:dec akku4+1:bne lbeb2:lda #$2e:iny 
+ 820 sta l0100-1,y:lbeb2 sty l0071:ldy VARADR:txa :eor  #$ff
+ 821 and  #$80:tax :cpy #$24:beq lbec4:cpy #$3c
+ 822 bne lbe6a:lbec4 ldy l0071:lbec6 lda l0100-1,y:dey :cmp #$30
+ 823 beq lbec6:cmp #$2e:beq lbed3:iny :lbed3 lda #$2b
+ 824 ldx akku4+2:beq lbf07:bpl lbee3:lda #$00:sec 
+ 825 sbc akku4+2:tax :lda #$2d:lbee3 sta l0100+1,y:lda #$45
+ 826 sta l0100,y:txa :ldx #$2f:sec :lbeef inx 
+ 827 sbc #$0a:bcs lbeef:adc #$3a:sta l0100+3,y:txa 
+ 828 sta l0100+2,y:lda #$00:sta l0100+4,y:beq lbf0c:lbf04 sta l0100-1,y
+ 829 lbf07 lda #$00:sta l0100,y:lbf0c lda #<l0100:ldy #>l0100:rts 
+ lbf11    .byt $80,$00
+ lbf13    .byt $00,$00,$00
+ lbf16    .byt $fa,$0a,$1f,$00
+          .byt $00,$98,$96,$80
+          .byt $ff,$f0,$bd,$c0
+          .byt $00,$01,$86,$a0
+          .byt $ff,$ff,$d8,$f0
+          .byt $00,$00,$03,$e8
+          .byt $ff,$ff,$ff,$9c
+          .byt $00,$00,$00,$0a
+          .byt $ff,$ff,$ff,$ff
+          
+          .byt $ff,$df,$0a,$80
+          .byt $00,$03,$4b,$c0
+          .byt $ff,$ff,$73,$60
+          .byt $00,$00,$0e,$10
+          .byt $ff,$ff,$fd,$a8
+          .byt $00,$00,$00,$3c
+          .byt $ec
+
+#ifdef TESTC64  
+ 840 tax :tax
+ 841 tax :tax :tax :tax :tax 
+ 842 tax :tax :tax :tax :tax 
+ 843 tax :tax :tax :tax :tax 
+ 844 tax :tax :tax :tax :tax 
+ 845 tax :tax :tax :tax :tax 
+ 846 tax :tax :tax
+#endif
+
+ lsqr jsr lbc0c:lda #<lbf11
+ 847 ldy #>lbf11:jsr lbba2
+ lpot beq lbfed:lda ARG:bne lbf84
+ 848 jmp lb8f9:lbf84 ldx #$4e:ldy #$00:jsr lbbd4:lda ARG+5
+ 849 bpl lbf9e:jsr lbccc:lda #$4e:ldy #$00:jsr lbc5b
+ 850 bne lbf9e:tya :ldy SUCHCHAR:lbf9e jsr lbbfe:tya 
+ 851 pha :jsr lb9ea:lda #$4e:ldy #$00:jsr lba28
+ 852 jsr lbfed:pla :lsr :bcc lbfbe
+ lneg lbfb4 lda FAC:beq lbfbe:lda FAC+5:eor  #$ff:sta FAC+5
+ 854 lbfbe rts 
+ lbfbf    .byt $81,$38,$aa,$3b,$29
+ lbfc4    .byt $07
+          .byt $71,$34,$58,$3e,$56
+          .byt $74,$16,$7e,$b3,$1b
+          .byt $77,$2f,$ee,$e3,$85
+          .byt $7a,$1d,$84,$1c,$2a
+          .byt $7c,$63,$59,$58,$0a
+          .byt $7e,$75,$fd,$e7,$c6
+          .byt $80,$31,$72,$18,$10
+          .byt $81,$00,$00,$00,$00
+ lexp lbfed lda #<lbfbf:ldy #>lbfbf:jsr lba28:lda ARG+7:adc #$50
+ 861 bcc lbffd:jsr lbc23
+ lbffd 
+#ifdef ORIGINAL
+          jmp le000
+          *=$e000
+ le000  
+#endif
+ sta l0055+1:jsr lbc0f
+ 862 lda FAC:cmp #$88:bcc le00e:le00b jsr lbad4:le00e jsr lbccc
+ 863 lda SUCHCHAR:clc :adc #$81:beq le00b:sec 
+ 864 sbc #$01:pha :ldx #$05:le01e lda ARG,x:ldy FAC,x
+ 865 sta FAC,x:sty ARG,x:dex :bpl le01e:lda l0055+1
+ 866 sta ARG+7:jsr lb853:jsr lbfb4:lda #<lbfc4:ldy #>lbfc4
+ 867 jsr le059:lda #$00:sta ARG+6:pla :jsr lbab9
+ 868 rts :le043 sta l0071:sty l0071+1:jsr lbbca:lda #akku3
+ 869 jsr lba28:jsr le05d:lda #<akku3:ldy #>akku3:jmp lba28
+ 870 le059 sta l0071:sty l0071+1:le05d jsr lbbc7:lda (l0071),y:sta FAC+6
+ 871 ldy l0071:iny :tya :bne le06c:inc l0071+1
+ 872 le06c sta l0071:ldy l0071+1:le070 jsr lba28:lda l0071:ldy l0071+1
+ 873 clc :adc #$05:bcc le07d:iny :le07d sta l0071
+ 874 sty l0071+1:jsr lb867:lda #<akku4:ldy #>akku4:dec FAC+6
+ 875 bne le070:rts
+ le08d    .byt $98,$35,$44,$7a,$00
+ le092    .byt $68,$28,$b1,$46,$00 
+ lrnd jsr lbc2b:bmi le0d3:bne le0be:jsr lfff3:stx l0022
+ 878 sty l0023:ldy #$04:lda (l0022),y:sta FAC+1:iny 
+ 879 lda (l0022),y:sta FAC+3:ldy #$08:lda (l0022),y:sta FAC+2
+ 880 iny :lda (l0022),y:sta FAC+4:jmp le0e3:le0be lda #<l008b
+ 881 ldy #>l008b:jsr lbba2:lda #<le08d:ldy #>le08d:jsr lba28
+ 882 lda #<le092:ldy #>le092:jsr lb867:le0d3 ldx FAC+4:lda FAC+1
+ 883 sta FAC+4:stx FAC+1:ldx FAC+2:lda FAC+3:sta FAC+2
+ 884 stx FAC+3:le0e3 lda #$00:sta FAC+5:lda FAC:sta ARG+7
+ 885 lda #$80:sta FAC:jsr lb8d7:ldx #$8b:ldy #$00
+ 886 le0f6 jmp lbbd4:le0f9 cmp #$f0:bne le104:sty BASEND+1:stx BASEND
+ 887 jmp la663:le104 tax :bne le109:ldx #$1e:le109 jmp la437
+ 888 le10c jsr lffd2:bcs le0f9:rts :/* le112 jsr lffcf:bcs le0f9
+ 889 rts :*/ le118 jsr le4ad:bcs le0f9:rts :le11e jsr lffc6
+ 890 bcs le0f9:rts :le124 jsr lffe4:bcs le0f9:rts
+
+          .(
+ strlen   =syszp
+ stradr   =syszp+1
+ -syszp   +=3          
+
+&gets     jsr GETINT
+          sty stradr
+          sta stradr+1
+          jsr CHRGOT
+          jsr prkomma
+          jsr getbyt
+          stx strlen
+          jsr CHRGOT
+          jsr prkomma
+          jsr lb08b
+          jsr lad8f      ; test auf string
+          sta FORVAR
+          sty FORVAR+1
+          lda #<strlen
+          ldy #>strlen
+          sta FAC+3
+          sty FAC+4
+          jmp laa52
+          .)    
+          
+ puts     jsr GETINT
+          jsr CHRGOT
+          jsr prkomma
+          jsr lad9e
+          jsr lb6a3
+          sta akku3
+          tay
+          beq putse
+          ldy #0
+ puts1    lda (l0022),y
+          sta (INT),y
+          iny
+          cpy akku3
+          bcc puts1
+ putse    rts
+          
+ glcp     jsr CHRGOT:beq lgs
+          jsr prkomma; test komma:beq lgs:cmp #",":beq lgs
+          jsr getbyt:clc:rts
+ lgs      sec:cln rts
+
+ call     jsr frmnum:jsr getadr
+          jsr glcp:bcs cl1:stx SYSAC
+ cl1      jsr glcp:bcs cl2:stx SYSXR
+ cl2      jsr glcp:bcs cl3:stx SYSYR
+ cl3      jsr glcp:bcs cl4:stx SYSST
+ cl4      jsr lcsys
+          lda SYSAC:jsr slcp
+          lda SYSXR:jsr slcp
+          lda SYSYR:jsr slcp
+          lda SYSST
+          
+ slcp     sta FAC+2:lda #0:sta FAC+1
+          jsr CHRGOT:beq cln
+          jsr prkomma:beq cln:cmp #",":beq cln
+          jsr lb08b:sta FORVAR:sty FORVAR+1
+          lda STRINGFL:bpl typerr
+          ldx #$90:sec:jsr lbc49
+          lda INTFL:jmp la9c2
+ typerr   jmp lad99
+          
+ lsys     jsr frmnum:jsr getadr
+ lcsys    ldy #0
+ ls1 lda sysadr+1,y
+     beq lsend
+     cmp INT+1
+     bne lsnex
+     lda INT
+     cmp sysadr,y
+     beq lsok
+ lsnex iny
+     iny
+     iny
+     iny
+     bne ls1
+ lsok lda sysadr+2,y
+     sta INT
+     lda sysadr+3,y
+     sta INT+1
+ lsend
+     lda #>le147-1:pha :lda #<le147-1
+     pha :lda SYSST:pha :lda SYSAC:ldx SYSXR
+     ldy SYSYR:plp :jmp (INT)
+ le147 php :sta SYSAC
+ 894 stx SYSXR:sty SYSYR:pla :sta SYSST:rts
+  
+ sysadr   .word $ff90,lff90
+          .word $ff99,lff99
+          .word $ff9c,lff9c
+          .word $ffb7,lffb7
+          .word $ffba,lffba
+          .word $ffbd,lffbd
+          .word $ffc0,lffc0
+          .word $ffc3,lffc3
+          .word $ffc6,lffc6
+          .word $ffc9,lffc9
+          .word $ffcc,lffcc
+          .word $ffcf,lffcf
+          .word $ffd2,lffd2
+          .word $ffd5,lffd5
+          .word $ffd8,lffd8
+          .word $ffdb,lffdb
+          .word $ffde,lffde
+          .word $ffe1,lffe1
+          .word $ffe4,lffe4
+          .word $ffe7,lffe7
+          .word $fff0,lfff0
+          .word $fff3,lfff3
+          .word 0
+
+ lsave jsr le1d4:ldx VARANF:ldy VARANF+1:lda #$2b:jsr lffd8
+ 896 bcc lef09x:jmp le0f9:lef09x rts 
+ lverify lda #$01:.byt $2c
+ lload lda #0:sta LOADFL
+ 897 jsr le1d4:lda LOADFL:ldx BASANF:ldy BASANF+1:jsr lffd5
+ 898 bcs le1d1:lda LOADFL:beq le195:ldx #$1c:jsr lffb7
+ 899 and  #$10:bne le19e:lda BASZEI+1:cmp #>l0200:beq le194
+ 900 lda #<la364:ldy #>la364:jmp strout:le194 rts 
+ le195 jsr lffb7
+     and  #$bf:beq le1a1:ldx #$1d:le19e jmp la437
+ le1a1 lda BASZEI+1
+     cmp #>l0200:bne le1b5
+     stx VARANF:sty VARANF+1
+#ifdef SHOW
+     lda #"x"
+     jsr SEROUT
+#endif
+     jsr la660
+     jsr bindbas
+     jsr CHRGOT
+#ifdef SHOW
+     jsr HEXOUT
+     jsr CHRGOT
+#endif
+     jmp la7e7;jmp la52a
+ le1b5 jsr la68e:jsr bindbas
+ 904 jmp la677
+ lopen jsr le219:jsr lffc0:bcs le1d1:rts 
+ lclose jsr le219:lda FORVAR:jsr lffc3:bcc le194:le1d1 jmp le0f9
+
+ 906 le1d4 lda #$00:jsr lffbd:ldx #$01:ldy #$00:jsr lffba
+ 907 jsr weitzei:jsr le257:jsr weitzei:jsr le200:ldy #$00
+ 908 stx FORVAR:jsr lffba:jsr weitzei:jsr le200:txa 
+ 909 tay :ldx FORVAR:jmp lffba:le200 jsr le20e:jmp getbyt
+ 910 weitzei jsr CHRGOT:bne le20d:pla :pla :le20d rts 
+ 911 le20e jsr prkomma:le211 jsr CHRGOT:bne le20d:jmp syntax:le219 lda #$00
+ 912 jsr lffbd:jsr le211:jsr getbyt:stx FORVAR:txa 
+ 913 ldx #$01:ldy #$00:jsr lffba:jsr weitzei:jsr le200
+ 914 stx FORVAR+1:ldy #$00:lda FORVAR:cpx #$03:bcc le23f
+ 915 dey :le23f jsr lffba:jsr weitzei:jsr le200:txa 
+ 916 tay :ldx FORVAR+1:lda FORVAR:jsr lffba:jsr weitzei
+ 917 jsr le20e:le257 jsr lad9e:jsr lb6a3:ldx l0022:ldy l0023
+ 918 jmp lffbd
+
+ lcos lda #<le2e0:ldy #>le2e0:jsr lb867
+ lsin le26b jsr lbc0c
+ 919 lda #<le2e5:ldy #>le2e5:ldx ARG+5:jsr lbb07:jsr lbc0c
+ 920 jsr lbccc:lda #$00:sta ARG+6:jsr lb853:lda #<le2ea
+ 921 ldy #>le2ea:jsr lb850:lda FAC+5:pha :bpl le29d
+ 922 jsr lb849:lda FAC+5:bmi le2a0:lda ATNSIGN:eor  #$ff
+ 923 sta ATNSIGN:le29d jsr lbfb4:le2a0 lda #<le2ea:ldy #>le2ea:jsr lb867
+ 924 pla :bpl le2ad:jsr lbfb4:le2ad lda #<le2ef:ldy #>le2ef
+ 925 jmp le043
+ ltan jsr lbbca:lda #$00:sta ATNSIGN:jsr le26b
+ 926 ldx #$4e:ldy #$00:jsr le0f6:lda #<akku3:ldy #>akku3
+ 927 jsr lbba2:lda #$00:sta FAC+5:lda ATNSIGN:jsr le2dc
+ 928 lda #$4e:ldy #$00:jmp lbb0f:le2dc pha :jmp le29d
+ le2e0    .byt $81,$49,$0f,$da,$a2
+ le2e5    .byt $83,$49,$0f,$da,$a2
+ le2ea    .byt $7f,$00,$00,$00,$00
+ le2ef    .byt $05
+          .byt $84,$e6,$1a,$2d,$1b
+          .byt $86,$28,$07,$fb,$f8
+          .byt $87,$99,$68,$89,$01
+          .byt $87,$23,$35,$df,$e1
+          .byt $86,$a5,$5d,$e7,$28
+          .byt $83,$49,$0f,$da,$a2
+ latn lda FAC+5:pha:bpl le316:jsr lbfb4:le316 lda FAC
+ 936 pha :cmp #$81:bcc le324:lda #<lb9bc:ldy #>lb9bc
+ 937 jsr lbb0f:le324 lda #<le33e:ldy #>le33e:jsr le043:pla 
+ 938 cmp #$81:bcc le337:lda #<le2e0:ldy #>le2e0:jsr lb850
+ 939 le337 pla :bpl le33d:jmp lbfb4:le33d rts
+ le33e    .byt $0b
+          .byt $76,$b3,$83,$bd,$d3
+          .byt $79,$1e,$f4,$a6,$f5
+          .byt $7b,$83,$fc,$b0,$10
+          .byt $7c,$0c,$1f,$67,$ca
+          .byt $7c,$de,$53,$cb,$c1
+          .byt $7d,$14,$64,$70,$4c
+          .byt $7d,$b7,$ea,$51,$7a
+          .byt $7d,$63,$30,$88,$7e
+          .byt $7e,$92,$44,$99,$3a
+          .byt $7e,$4c,$cc,$91,$c7
+          .byt $7f,$aa,$aa,$aa,$13
+          .byt $81,$00,$00,$00,$00
+
+ le37b jsr lffcc
+       lda #$00:sta ACTIO:jsr la67a:cli :le386 ldx #$80
+       jmp (l0300)
+ le38b txa :bmi le391:jmp la43a:le391 jmp ready
+ le394 jsr le453:jsr le3bf:jsr le422:ldx #$fb:txs 
+
+       ldy #<-1
+ lexe1 iny
+       lda PCBUF,y
+       beq le386
+       cmp #" "
+       bne lexe1
+       ldx #<-1
+ lexe2 iny
+       inx
+       lda PCBUF,y
+       sta l0200,x
+       bne lexe2
+       lda #<l0200-1
+       sta BASZEI
+       lda #>l0200-1
+       sta BASZEI+1
+       jmp exestart
+       
+       ;bne le386
+
+ le3a2 inc BASZEI:bne le3a8:inc BASZEI+1:le3a8 lda $ea60
+ 952 cmp #$3a:bcs le3b9:cmp #$20
+ 953 beq le3a2:sec :sbc #$30:sec :sbc #$d0
+ 954 le3b9 rts :.byt $80 :.byt $4f :.byt $c7 :.byt $52 
+ 955 cli :le3bf lda #$4c:sta l0054:sta lusr:lda #<illquant
+ 956 ldy #>illquant:sta lusr+1:sty lusr+2:lda #<lb391:ldy #>lb391
+ 957 sta l0005:sty l0005+1:lda #<lb1aa:ldy #>lb1aa:sta l0003
+ 958 sty l0003+1:ldx #$1c:le3e2 lda le3a2,x:sta CHRGET,x:dex 
+ 959 bpl le3e2:lda #$03:sta l0053:lda #$00:sta FAC+7
+ 960 sta ACTIO:sta STRZEI+1:ldx #$01:stx l0200-3:stx l0200-4
+ 961 ldx #$19:stx STRPTR:sec :jsr lff9c:stx BASANF
+ 962 sty BASANF+1:sec :jsr lff99:stx BASEND:sty BASEND+1
+ 963 stx STRANF:sty STRANF+1:ldy #$00:tya :sta (BASANF),y
+ 964 inc BASANF:bne le421:inc BASANF+1:le421 rts :le422 lda BASANF
+ 965 ldy BASANF+1:jsr la408:lda #<le473:ldy #>le473:jsr strout
+ 966 lda BASEND:sec :sbc BASANF:tax :lda BASEND+1
+ 967 sbc BASANF+1:jsr adrout:lda #<le460:ldy #>le460:jsr strout
+ 968 jmp la644
+ le447    .word le38b,la483,la57c,la71a,la7e4,lae86 
+ le453 ldx #$0b
+ le455 lda le447,x:sta l0300,x:dex :bpl le455:rts
+          .byt 0
+ le460    .byt " BASIC BYTES FREE",13,10,0
+ le473    .byt TC_FF,13,"    **** COMMODORE 64 BASIC V2 ****",13,10,10
+          .byt " 64K RAM SYSTEM  ",0
+          .byt $5c
+ le4ad pha:jsr lffc9:tax:pla:bcc le4b6:txa:le4b6 rts
+
+romend    =*
+
+#ifdef SHOW
+          .(
+dxr       =syszp
+-syszp    +=1
+
+&SERIN    stx dxr
+          ldx #STDIN
+          bne s0
+&xIN       stx dxr
+s0 s1     jsr GETC
+          bcc s1a
+          cmp #E_EOF
+          beq s1b
+          jsr YIELD
+          jmp s1
+s1b       sec
+s1a       ldx dxr
+          rts
+      
++SEROUT   stx dxr
+          ldx #STDOUT
+o0 s2     pha
+          jsr PUTC
+          pla
+          bcc s2a
+          jsr YIELD
+          jmp s2
+s2a       ldx dxr
+          cmp #0
+          rts
+          .)
+
++xHEXOUT   .(
+          pha
+          lsr
+          lsr
+          lsr
+          lsr
+          jsr NIBOUT
+          pla
+          and #$0f
+NIBOUT    clc  
+          adc #"0"
+          cmp #"9"+1
+          bcc nout
+          adc #6
+nout      jmp SEROUT
+          .)
+
++SPOUT    lda #32
+          jmp SEROUT
++CRLFOUT  lda #13
+          jsr SEROUT
+          lda #10
+          jmp SEROUT
+          
+          .)
+#endif
+
+x1   =(la9a5^laf28)&$00ff
+x2   =(lac15^laf28)&$00ff
+x3   =(lad24^laf28)&$00ff
+x4   =(lb3c0^laf28)&$00ff
+
+#if x1*x2*x3*x4
+#else
+#echo Adresskonflikt !
+/*
+#print x1
+#print x2
+#print x3
+#print x4*/
+stx,x
+#endif
+
+#print    syszp
+-syszp    =oldsyszp		/* watch out - may not work on every ROM */
+#echo returned to
+#print 	  syszp
+
+endofbasic =*
+.)
+

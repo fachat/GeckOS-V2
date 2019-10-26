@@ -1,0 +1,1945 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/***************************************************************************
+ * 
+ * CS/A65 disk monitor for the WD1770 (shugart bus) floppy interface
+ *
+ */
+
+#define   NOPRG
+/*#define   SHOWD*/
+
+#define   MA   0
+#define   MB   1
+
+#include "chips/wd1770.i65"
+#include "chips/via6522.i65"
+
+#define	E_CMD	<-96
+#define	E_Q	<-97
+#define	E_GT	<-98
+#define	E_RD	<-99
+#define	E_WR	<-100
+#define	E_FT	<-101
+
+          .(
+#ifdef ROM
+          .word ende
+          .byt PK_PRG
+          .byt 16
+          .word 0
+          .word PRG
+          .byt /*8,8,9,9,$a,$a,$b,$b,$c,$c,$d,$d,*/ $e,$e,<-1
+          .asc "ibmon",0,0
+#else
+
+#include  "kdefs.i65"
+#include  "kernel.i65"
+#include  "oldlib/stdio.a65"
+
+#ifdef NOPRG
+
+          .word $800
+;          *=$800
+          jmp PRG
+
+#else
+;          *=$800
+          .word 0
+          .byt PK_PRG
+          .byt 16
+          .word 0
+          .word PRG
+          .byt <-1
+
+#endif
+#endif          
+
+#ifndef   NOMMU
+-sysblk   =$4000
+-sysmem   =$400
+-syszp    =$40
+#endif
+
+#echo ibmon:
+#print    sysmem
+#print    syszp
+#print    sysblk
+
+/*************************************************************************/
+
+#define   ANZDRV    2
+
+/*  Parameter zum Aufruf RWSEC          */
+
+#define   RW_DRV    0
+#define   RW_SIDE   1
+#define   RW_TRCK   2
+#define   RW_SEC    3
+#define   RW_ADR    4
+#define   RW_SLEN   6 
+
+/*   Parameter zum Aufruf von DFORMAT   */
+
+#define   FMT_VIRG  0
+#define   FMT_SIDES 1
+#define   FMT_TRCKS 2
+#define   FMT_HDFL  3
+#define   FMT_BLEN  4
+#define   FMT_SCLST 5    /* Anzahl Sektoren+1, sekt1, sekt2, sekt3... */
+
+#define   MEBYT     ":"
+#define   ABPZ      #16
+#define   MESSAGE   "-"
+#define   MAXLEN    64
+#define   BUFLEN    8192
+
+/*************************************************************************/
+
+-sysblk   -=BUFLEN
+buffer    =sysblk
+
+LZEI      =sysmem
+IOBUF     =sysmem+1
+-sysmem   +=MAXLEN+1
+
+PRG       jsr DINIT
+          lda #<M0TXT
+          ldy #>M0TXT
+          jsr Txtout
+MXL       
+          JSR Crlfout:LDA #MESSAGE
+          JSR Putc
+          JSR MLINEIN:bcs termmon
+linex     jsr CHRGOT:beq MXL:bne mx1
+MO0       jsr CHRGET:beq MXL
+mx1       CMP #MESSAGE:BEQ MO0
+          jsr TOUPPER
+          LDX #0:MO3 CMP MONBEF,X:BEQ MO4
+          INX:CPX #ANZBEF:BCC MO3
+          JSR ERR
+          JMP MXL
+MOX       pla
+          pla
+termmon   lda #<MTTXT:ldy #>MTTXT:jsr Txtout
+#ifdef NOPRG
+          rts
+#endif
+          jmp TERM
+
+ERR       LDA #<M3TXT:LDY #>M3TXT:JSR Txtout:SEC:RTS
+MO4       INC LZEI
+          JSR MOEX
+          ;bcc mo4
+          ;jsr ERR
+mo4       JMP MXL
+MOEX      TXA:ASL:TAX:LDA MONADR+1,X
+          PHA:LDA MONADR,X:PHA:RTS
+
+ANZBEF    =14
+MONBEF    .asc "XRWMI",MEBYT,"LSOTFCBN"
+MONADR    .word MOX-1,mread-1,mwrite-1,MOM-1,BI-1,MOI-1
+          .word lread-1,lwrite-1
+          .word MOO-1,MOT-1,MOF-1,MOC-1,BB-1,MON-1
+
+M0TXT     .ASC "^M^JC*^M^J"
+          .ASC "DMON V"
+          .BYT MA+"0",".",MB+"0"
+          .asc " (c) A.Fachat^@"
+M3TXT     .BYT " ","?",0
+MTTXT     .asc "^M^JBye!^M^J",0
+
+m0rtxt    .asc "^MLese",0
+m0wtxt    .asc "^MSchreibe",0
+m1txt     .asc " Block: Drive ",0
+m2txt     .asc ", Seite ",0
+m3txt     .asc ", Track ",0
+m4txt     .asc ", Sektor ",0
+fmtxt     .asc "^M^JSind Sie sicher (J/N)?",0
+
+/**************************************************************************/
+
+          .(
+rwfl      =sysmem
+rwpar     =sysmem+1
+rwp2      =sysmem+1+RW_SLEN
+rwp3      =sysmem+1+2*RW_SLEN
+-sysmem   +=3*RW_SLEN+1
+
+&mread    ldx #0
+          .byt $2c
+&mwrite   ldx #1
+          .(
+          stx rwfl
+          jsr GETADR
+          bcs rwerr
+          sta rwpar+RW_DRV
+          jsr GETADR
+          bcs rwerr
+          sta rwpar+RW_SIDE
+          jsr GETADR
+          bcs rwerr
+          sta rwpar+RW_TRCK
+          jsr GETADR
+          bcs rwerr
+          sta rwpar+RW_SEC
+          lda #<buffer
+          sta rwpar+RW_ADR
+          lda #>buffer
+          sta rwpar+RW_ADR+1
+          jsr GETADR
+          bcs goon
+          sta rwpar+RW_ADR
+          stx rwpar+RW_ADR+1
+goon
+          jsr Crlfout
+          lda #<rwpar
+          ldy #>rwpar
+          ldx rwfl
+          bne w
+          clc
+          .byt $24
+w         sec
+          jsr RWSEC
+rwerr     rts
+          .)
+
+&lread    ldx #0
+          .byt $2c
+&lwrite   ldx #1
+          .(
+          stx rwfl
+          jsr GETADR
+          bcs rwerrx
+          sta rwpar+RW_DRV
+          jsr GETADR
+          bcs rwerrx
+          sta rwp2+RW_SIDE
+          sta rwpar+RW_SIDE
+          jsr GETADR
+          bcs rwerrx
+          sta rwp3+RW_SIDE
+          jsr GETADR
+          bcs rwerrx
+          sta rwpar+RW_TRCK
+          sta rwp2+RW_TRCK
+          jsr GETADR
+          bcs rwerrx
+          sta rwp3+RW_TRCK
+          jsr GETADR
+          bcs rwerrx
+          sta rwpar+RW_SEC
+          sta rwp2+RW_SEC
+          jsr GETADR
+rwerrx    bcs rwerr
+          sta rwp3+RW_SEC
+          lda #<buffer
+          sta rwpar+RW_ADR
+          lda #>buffer
+          sta rwpar+RW_ADR+1
+          jsr GETADR
+          bcs goon
+          sta rwpar+RW_ADR
+          stx rwpar+RW_ADR+1
+goon
+          jsr Crlfout
+loop
+          lda #<rwpar
+          ldy #>rwpar
+          ldx rwfl
+          bne w
+          clc
+          .byt $24
+w         sec
+          jsr RWSEC
+          bcs rwerr
+
+          stx rwpar+RW_ADR
+          sty rwpar+RW_ADR+1
+          
+          inc rwpar+RW_SEC
+          lda rwpar+RW_SEC
+          cmp rwp3+RW_SEC
+          bcc loop
+          lda rwp2+RW_SEC
+          sta rwpar+RW_SEC
+
+          inc rwpar+RW_TRCK
+          lda rwpar+RW_TRCK
+          cmp rwp3+RW_TRCK
+          bcc loop
+          lda rwp2+RW_TRCK
+          sta rwpar+RW_TRCK
+
+          inc rwpar+RW_SIDE
+          lda rwpar+RW_SIDE
+          cmp rwp3+RW_SIDE
+          bcs l3
+          jmp loop
+
+l3        clc       
+rwerr     rts
+          .)
+          
+&MON      .(             ;format drive format 
+          jsr GETADR
+          bcs moe
+          sta rwpar      ;drv
+          jsr GETADR
+          bcs moe
+          sta rwpar+1
+          
+          lda #<fmtxt
+          ldy #>fmtxt
+          jsr Txtout
+          jsr MLINEIN
+          jsr CHRGOT
+
+          pha
+          jsr Putc
+          pla
+
+          cmp #"j"
+          beq format
+          cmp #"J"
+          bne moe
+format    ldx rwpar
+          lda rwpar+1
+          jsr DFORMAT
+          bcs moe
+          rts          
+moe       jmp ERR
+          .)
+          .)
+
+/**************************************************************************/
+
+Z1        =syszp
+Z2        =syszp+2
+Z3        =syszp+4
+-syszp    +=6
+
+MOM       .(
+          JSR GET12:BCS MOME:;jsr setout
+/*
+          lda #<buffer
+          clc
+          adc Z1
+          sta Z1
+          lda #>buffer
+          adc Z1+1
+          sta Z1+1
+          
+          lda #<buffer
+          clc
+          adc Z2
+          sta Z2
+          lda #>buffer
+          adc Z2+1
+          sta Z2+1
+*/          
+30150 MOM1 JSR MOMZO
+          jsr Serbrk:bcs MOME
+30160 LDA ABPZ:JSR ADCMP:BCC MOM1
+30170 MOME RTS
+30180 MOMZO JSR Crlfout:LDA #MEBYT:JSR MASOUT
+30220 LDY #0:beq mom2:MOM2 jsr SSPOUT:mom2 LDA (Z1),Y
+30230 JSR SBYTO:INY:CPY ABPZ:BNE MOM2
+          lda #":":jsr Putc
+30240 LDY #0:MOM3 LDA (Z1),Y
+30250 TAX:AND #127:CMP #32:BCS MOM4
+30260 LDX #".":MOM4 TXA:JSR Putc
+30270 INY:CPY ABPZ:BNE MOM3
+30280 RTS
+          .)
+
+BB        .(
+          JSR GET12:BCS MOBE:;jsr setout
+MOB1      JSR MOBZO
+          jsr Serbrk:bcs MOBE
+          LDA #1:JSR ADCMP
+          BCC MOB1
+MOBE      RTS
+MOBZO     JSR Crlfout:LDA #MEBYT:JSR MASOUT
+          LDY #0
+          LDA (Z1),Y
+          JMP SBINBO         
+          .)
+
+BI        .(
+          JSR GETADR:bcs MOIE
+          sta Z1:stx Z1+1
+/*          clc:adc #<buffer: sta Z1
+          txa:adc #>buffer:sta Z1+1
+*/
+          jsr CHRGOT:bne MOI0
+          lda #MEBYT
+          ldy #0
+          jmp MOINL
+
+&MOI      JSR GETADR:bcs MOIE
+          sta Z1:stx Z1+1
+/*          clc: adc #<buffer:sta Z1:txa:adc #>buffer:sta Z1+1
+*/
+          jsr CHRGOT
+          beq MOIE
+MOI0      LDA #0:STA Z2
+MOI1      JSR GETADR:LDY Z2:BCS MOINL
+          STA (Z1),Y:INC Z2
+          JMP MOI1
+MOIE      RTS
+          
+MOINL     LDA #0
+          STA Z2
+          LDA #MEBYT
+          JSR INLOOP
+          BCC MOI1
+          cmp #0
+          clc
+          beq MOIE
+          pla
+          pla
+          jmp linex
+          .)
+
+          .(
+&MOC3     JSR GETADR:BCS MOCX
+          STA Z1:STX Z1+1
+          JSR GETADR:BCS MOCX
+          STA Z2:STX Z2+1
+          JSR GETADR:BCS MOCX
+          STA Z3:STX Z3+1:RTS
+          
+&MOC      JSR MOC3:BCS MOCE:;jsr setout:JSR Crlfout
+30570 MOC2 LDY #0:LDA (Z1),Y:CMP (Z3),Y
+30580 BEQ MOC1:LDA Z1:LDX Z1+1
+30590 JSR SADRO:JSR SSPOUT
+30600 MOC1 LDA #1:JSR ADCMP:BCS MOCX
+30610 INC Z3:BNE MOC2:INC Z3+1
+30620 JMP MOC2
+30630 MOCX RTS
+30640 MOCE jmp ERR
+          .)
+
+MOF       .(
+          ldy LZEI:lda IOBUF,y:pha:beq mofex
+          cmp #" ":beq mof00:inc LZEI
+mof00     jsr GETADR:sta Z1:stx Z1+1:bcs mofex
+          jsr GETADR:sta Z2:stx Z2+1:bcs mofex
+          pla:cmp #" ":bne mofother
+          
+          lda #0:sta Z3
+mof0      jsr GETADR:bcs mofn
+          ldx Z3:sta IOBUF,x:inc Z3
+          bne mof0          
+
+mofn      ldy LZEI:lda IOBUF,y
+          cmp #34:bne mofnx
+          ldx Z3
+mofn1     iny
+          lda IOBUF,y
+          beq mofn2
+          cmp #34
+          beq mofn2a
+          sta IOBUF,x
+          inx
+          bne mofn1
+mofn2a    iny
+mofn2     sty LZEI
+          stx Z3
+          bne mof0
+          
+mofnx     lda Z3:beq mofe
+
+          jsr Crlfout
+mof1      ldy #0
+mofl      lda (Z1),y
+          cmp IOBUF,y
+          bne mof2
+          iny
+          cpy Z3:bcc mofl
+          lda Z1:ldx Z1+1:jsr SADRO
+          jsr SSPOUT
+mof2      lda #1:jsr ADCMP:bcc mof1
+          rts
+mofex     pla
+&mofe      jmp ERR
+
+mofother  =*-3
+          .)
+          
+MOT       .(
+          JSR MOC3:BCS mofe;MOCEO
+30710 LDA Z3+1:CMP Z2+1:BCC MOT1
+30720 BNE MOTA:LDA Z3:CMP Z2:BCS MOTA
+30730 MOT1 LDA Z3+1:CMP Z1+1
+30740 BCC MOTA:BNE MOTB
+30750 LDA Z3:CMP Z1:BCS MOTB
+30760 MOTA LDY #0:LDA (Z1),Y
+30770 STA (Z3),Y:INC Z3:BNE MOT2
+30780 INC Z3+1:MOT2 LDA #1:JSR ADCMP
+30790 BNE MOTA:RTS
+
+30800 MOTB LDA Z3:CLC:ADC Z2:STA Z3
+30810 LDA Z3+1:ADC Z2+1:STA Z3+1
+30820 LDA Z3:SEC:SBC Z1:STA Z3
+30830 LDA Z3+1:SBC Z1+1:STA Z3+1:jmp MOT3a
+30840 MOT3 LDY #0:LDA (Z2),Y:STA (Z3),Y
+30850 MOT3a LDA Z2:BNE MOT4:DEC Z2+1
+30860 MOT4 DEC Z2
+30870 LDA Z3:BNE MOT5:DEC Z3+1
+30880 MOT5 DEC Z3
+30890 JSR COMP
+30895 BCC MOT3:BEQ MOT3:RTS
+          .)
+
+MOO       .(
+          JSR GETADR:BCS MOCEO
+30906 STA Z1:STX Z1+1
+30907 JSR GETADR:BCS MOCEO
+30908 STA Z2:STX Z2+1
+30910 JSR GETADR:BCC MOO1
+30920 LDA #0:MOO1 STA Z3
+30930 MOO2 LDY #0:LDA Z3:STA (Z1),Y
+30940 LDA #1:JSR ADCMP:BCC MOO2
+30950 RTS
+          .)
+
+/**************************************************************************/
+
+SBINBO    .(
+          STX Z3
+          pha
+          LDA #"%"
+          JSR Putc
+          pla
+          LDX #8
+s2        ASL
+          PHA
+          BCC s1
+          lda #"1"
+          .byt $2c
+s1        lda #"0"
+          jsr Putc
+          pla
+          dex
+          bne s2
+          ldx Z3
+          rts
+          .)
+          
+MOCEO     jmp ERR
+
+GET12     .(
+          JSR GETADR
+          BCS GBDX
+          STA Z1:STX Z1+1
+          STA Z2:STX Z2+1
+          JSR GETADR
+          BCS GBD1
+          STA Z2:STX Z2+1
+GBD1      CLC
+GBDX      RTS
+          .)
+
+MASOUT    PHA
+          LDA #MESSAGE
+          JSR Putc
+          PLA
+          JSR Putc
+          LDA Z1
+/*          sec
+          sbc #<buffer
+          pha          
+          LDa Z1+1
+          sbc #>buffer
+          tax
+          pla
+*/
+          ldx Z1+1
+          JSR SADRO
+          JMP SSPOUT
+
+SSBOUT    JSR SBYTO
+          JMP SSPOUT
+
+SADRO     PHA:TXA:JSR SBYTO:PLA
+SBYTO     PHA:LSR:LSR:LSR:LSR
+          JSR SNIBO:PLA:AND #$0F
+SNIBO     CLC:ADC #"0":CMP #"9"+1
+          BCC SNO1:ADC #6:SNO1 JMP Putc
+          
+SSPOUT    LDA #" ":JMP Putc
+
+          .(
+&ADD      CLC
+          ADC Z1
+          STA Z1
+          LDA #0
+          ADC Z1+1
+          STA Z1+1
+          rts
+&ADCMP    jsr ADD
+          bcs cs
+&COMP     lda Z1+1
+          CMP Z2+1
+          bne cs
+          lda Z1    
+          cmp Z2
+cs        rts
+          .)
+
+         
+INLOOP    .(
+          PHA
+          TYA
+          CLC
+          ADC Z1
+          STA Z1
+          LDA #0
+          ADC Z1+1
+          STA Z1+1
+          JSR Crlfout
+          PLA
+          JSR MASOUT
+          JSR MLINEIN
+          ldy #<-1
+il1       iny
+          lda IOBUF,y
+          beq ils
+          cmp #MESSAGE   ; zeile gewechselt
+          beq ils
+          cmp #" "
+          beq il1   
+          sty LZEI
+          clc
+          rts
+ils       
+          sec
+          rts
+          .)
+
+/**************************************************************************/
+
+TOUPPER   .(
+          cmp #"a"
+          bcc tok
+          cmp #"z"+1
+          bcs tok
+          sbc #$1f
+tok       rts
+          .)
+/*
+LINEFEED  LDA #10:.BYT $2C
+#ifndef NOSYSFKT
+PNTOUT    lda #".":.byt $2c
+#endif
+#ifndef NOMON
+CROUT     LDA #13:.BYT $2C
+#endif
+SSPOUT    LDA #" ":JMP Putc
+*/
+          .(
+div       =sysmem
+Z0        =sysmem+1
+-sysmem   +=3
+
++CHRGET   inc LZEI
++CHRGOT   sty div
+          ldy LZEI
+          LDA IOBUF,Y
+          LDY div
+          CMP #" "
+          BEQ CHRGET
+          CMP #0
+          RTS
+
++GETADR   LDY LZEI:LDA #0:STA Z0:STA Z0+1
+GA1       LDA IOBUF,Y:bne get
+          jmp GAE
+get       INY
+          CMP #" ":BEQ GA1
+
+          CMP #"%"
+          BEQ GETBIN
+          cmp #"."
+          beq GETDEZ1
+          cmp #"$"
+          beq GETHEX
+          cmp #"&"
+          beq GETOKT
+          DEY
+          JMP GETHEX
+
+GETDEZ1   jmp GETDEZ
+
+GETHEX    lda IOBUF,y
+          jsr tsthex
+          bcs gae
+GA2       INY
+          ASL Z0:ROL Z0+1:ASL Z0:ROL Z0+1
+          ASL Z0:ROL Z0+1:ASL Z0:ROL Z0+1
+          ORA Z0:STA Z0
+          LDA IOBUF,Y
+          jsr tsthex
+          bcc GA2
+          jmp GAE1
+
+gae       jmp GAE
+
+gb1       SEC:SBC #"0"
+          CMP #2
+          BCS GAE1
+          iny
+          lsr
+          rol Z0:rol Z0+1
+GETBIN    lda IOBUF,Y
+          beq GAE1
+          bne gb1
+
+go1       sec:sbc #"0"
+          cmp #8
+          bcs GAE1
+          iny
+          asl Z0:rol Z0+1
+          asl Z0:rol Z0+1
+          asl Z0:rol Z0+1
+          ora Z0:sta Z0
+GETOKT    lda IOBUF,y
+          beq GAE1
+          bne go1
+          
+gd1       sec:sbc #"0"
+          cmp #10
+          bcs GAE1
+          iny
+          pha
+          asl Z0:rol Z0+1
+          lda Z0:ldx Z0+1
+          asl Z0:rol Z0+1
+          asl Z0:rol Z0+1
+          clc:adc Z0:sta Z0
+          txa:adc Z0+1:sta Z0+1
+          pla
+          clc
+          adc Z0
+          sta Z0
+          bcc GETDEZ
+          inc Z0+1
+GETDEZ    lda IOBUF,y
+          beq GAE1
+          bne gd1
+
+GAE1      LDA Z0:LDX Z0+1
+          CLC:sty LZEI
+          rts
+
+GAE       SEC
+          lda IOBUF,y
+          STY LZEI
+          RTS
+          .)
+          
+&tsthex   .(
+          cmp #"A"-1
+          bcs th1
+          sbc #"0"-1
+          cmp #10
+          bcc thok
+therr     sec
+          rts
+th1       beq therr
+          and #%00011111
+          cmp #7
+          bcs therr
+          adc #9
+thok      clc
+          rts
+          .)
+
++MLINEIN  .(
+#ifndef NOSH
+li1       =sysmem
+-sysmem   +=1
+#endif
+          LDY #0
+MO1       
+          ldx #STDIN
+          jsr GETC
+          bcc mo1a
+          cmp #E_EOF
+          beq MO2S
+          jsr DLOOP
+          jsr YIELD
+          jmp MO1
+
+mo1a      cmp #$1f
+          bcs MO1A
+
+          CMP #TC_CR:BEQ MO2
+
+          CMP #8:BNE MO1
+          cpy #0:beq MO1
+          dey
+          jsr Putc
+/*#ifdef SHOW         
+          ldx #STDERR
+          jsr OUT
+#endif*/
+          jmp MO1
+
+MO1A      STA IOBUF,Y
+          jsr Putc
+/*#ifdef SHOW
+     ldx #STDERR
+     jsr OUT
+#endif*/
+          INY:CPY #MAXLEN
+          BCC MO1:bcs MO2
+MO2S      sec:.byt $24
+MO2       CLC
+/*#ifdef SHOW
+          php
+          lda #13
+          ldx #STDERR
+          jsr OUT
+          lda #10
+          jsr OUT
+          plp
+#endif*/
+          LDA #0:STA IOBUF,Y
+          sta LZEI
+          RTS
+          .)
+          
+/**************************************************************************/
+          .(
+
+#define   WD1  $e8e0
+#define   VIA2 $e8f0
+
+#define   ERRCNT    4
+
+zei       =syszp
+zeid      =syszp+2
+divers    =syszp+4
+sect      =syszp+5
+tr        =syszp+6
+errcnt    =syszp+7
+actdrv    =syszp+8
+side      =syszp+9
+cmd       =syszp+10
+data      =syszp+11
+drvst     =syszp+17           ; drivestatus z.b. Step-Zeit
+tracks    =syszp+17+ANZDRV    ; Track, auf dem jeweiliges Laufwerk steht
+hd        =syszp+17+2*ANZDRV  ; High-Density-Flag =bit7 , 6= motor an flag
+                              ; bit0=1 disk changed, bit1=1 double stepping
+mcnt      =syszp+17+3*ANZDRV  ; motor-aus-z„hler
+blen      =syszp+17+4*ANZDRV  ; Anzahl 256-Byte-Bl”cke in einem Sektor
+
+-syszp    +=5*ANZDRV+17
+
+/*
+          jmp DINIT
+          jmp exit
+          jmp seldrv     ; a=drv
+          jmp desel
+          jmp selside    ; a=side
+          jmp go2track   ; a=track
+          jmp setadr     ; a/y=adr
+          jmp read       ; a=sect 
+          jmp write      ;  "
+          jmp verify     ;  "
+          jmp DREAD      ; a/y=*Struct
+          jmp DWRITE     ;  "
+          ;jmp DVERIFY    ;  "
+          jmp ftrack     ; a=virgin, zeid=*seclist
+          jmp DFORMAT    ; a/y=*Struct    
+*/
+
+
+rwzei     =syszp
+-syszp    +=2
+
+&&RWSEC
+          sta rwzei
+          sty rwzei+1
+          php
+          lda #<m0rtxt
+          ldy #>m0rtxt
+          bcc rw1
+          lda #<m0wtxt
+          ldy #>m0wtxt
+rw1       jsr Txtout
+          lda #<m1txt
+          ldy #>m1txt
+          jsr Txtout
+          
+          ldy #RW_DRV
+          lda (rwzei),y
+          jsr Dezbout
+          
+          lda #<m2txt
+          ldy #>m2txt
+          jsr Txtout
+          ldy #RW_SIDE
+          lda (rwzei),y
+          jsr Dezbout
+          
+          lda #<m3txt
+          ldy #>m3txt
+          jsr Txtout
+          ldy #RW_TRCK
+          lda (rwzei),y
+          jsr Dezbout
+          
+          lda #<m4txt
+          ldy #>m4txt
+          jsr Txtout
+          ldy #RW_SEC
+          lda (rwzei),y
+          jsr Dezbout
+          
+          plp
+          lda rwzei
+          ldy rwzei+1
+          bcs wr
+          jmp DREAD
+wr        jmp DWRITE
+
+DREAD     ldx #1
+          .byt $2c
+DWRITE    ldx #2
+          stx cmd
+          .(
+          sei
+          sta zei
+          sty zei+1
+          ldy #RW_ADR
+          lda (zei),y
+          pha
+          iny
+          lda (zei),y
+          tay
+          pla
+          jsr setadr
+          ldy #RW_DRV
+          lda (zei),y
+          jsr seldrv
+          bcs rx
+          ldy #RW_SIDE
+          lda (zei),y
+          jsr selside
+          ldy #RW_TRCK
+          lda (zei),y
+          jsr go2track
+          bcs rx
+          ldx actdrv
+          lda blen,x
+          tax            ; Anzahl 256-Byte-Blocks (wird bei seldrv gesetzt)
+          ldy #RW_SEC
+          lda (zei),y
+          dec cmd
+          bne r2
+          jmp read
+r2        dec cmd
+          bne r3
+          jmp write
+r3        sec
+          lda #E_CMD
+rx        cli
+          rts
+          .)
+
+&DFORMAT  .(
+fpar      =sysmem
+-sysmem   +=1
+
+          cmp #ANZFORM
+          bcc f1
+          lda #E_ILLPAR
+          sec
+          rts
+f1        sta fpar
+          asl
+          tay
+          lda fadr,y
+          sta zei
+          lda fadr+1,y
+          sta zei+1
+          txa       ; x= drive
+          pha
+          jsr desel
+          pla
+          sta actdrv
+
+          jsr setdrv     ; a=drive
+
+          ldy #FMT_HDFL
+          lda (zei),y
+          ldx actdrv
+          sta hd,x
+          jsr setdens
+
+          jsr motoron
+          
+          ldy #FMT_BLEN
+          lda (zei),y
+          sta data+5
+          tax
+          lda POT2-1,x
+          ldx actdrv
+          sta blen,x
+          
+          jsr restore
+          bcs fx
+
+          lda #0
+          sta tr
+          lda #FMT_SCLST
+          clc
+          adc zei
+          pha
+          lda zei+1
+          adc #0
+          tay
+          pla
+          jsr setadr          ; sektor-Liste setzen
+
+floop     lda #0
+          sta side
+
+sideloop  jsr selside
+
+          ldx data+5          ; Block-L„nge 0=128,1=256,2=512,3=1024
+          ldy #FMT_VIRG
+          lda (zei),y
+          jsr ftrack
+          bcs fx
+
+          inc side
+          lda side
+          ldy #FMT_SIDES
+          cmp (zei),y
+          bcc sideloop
+
+          inc tr
+          lda tr         
+          ldy #FMT_TRCKS
+          cmp (zei),y
+          bcs wrboot
+
+          ldx actdrv
+          lda hd,x
+          and #2
+          beq fnd
+          
+          jsr lowdens
+          
+          lda #$50
+          jsr setstep
+          bcs fx
+fnd
+          lda #$50       ; step-in ohne verify
+          jsr setstep
+          bcs fx
+          jsr highdens
+          jmp floop
+          
+fx        pha
+          jsr highdens
+          pla
+          ldx #<-1
+          stx actdrv
+          sec
+          rts
+          
+wrboot    lda #0
+          jsr selside
+          lda #0
+          jsr go2track
+          bcs fx
+          lda fpar                 ; Format mal 32 als Zeiger fr 
+          asl                      ; Boot-Sektor-Daten
+          asl
+          asl
+          asl
+          asl
+          clc
+          adc #<bootsektor
+          pha
+          lda #0
+          adc #>bootsektor
+          tay
+          pla
+          jsr setadr
+
+          ldx actdrv
+          lda blen,x
+          tax
+          lda #1
+          jsr write
+          ldx #<-1
+          stx actdrv
+          rts
+
+ANZFORM   =6
+fadr      .word ssdd,dsdd,dshd3,dshd5,dshh5,dsdd40
+
+          ; single sided double density
+ssdd      .byt $e5,1,80,$01,2,10, 1,3,5,7,9,2,4,6,8  
+          ; double sided double density
+dsdd      .byt $e5,2,80,$01,2,10, 1,3,5,7,9,2,4,6,8    
+          ; double sided high density 3 1/2 zoll
+dshd3     .byt $e5,2,80,$81,2,19, 1,3,5,7,9,11,13,15,17,2,4,6,8,10,12,14,16,18 
+          ; double sided high density 5.25"
+dshd5     .byt $e5,2,80,$81,2,16, 1,3,5,7,9,11,13,15,2,4,6,8,10,12,14
+          ; double sided higher density 5.25"
+dshh5     .byt $e5,2,80,$81,3,9,  1,3,5,7,2,4,6,8
+          ; double sided double density 40 Tracks (360k)
+dsdd40    .byt $e5,2,40,$03,2,10, 1,3,5,7,9,2,4,6,8
+
+bootsektor     ; single sided double density
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 2              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 720           ; SECs
+          .byt 248            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 1             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided double density
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 2              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 1440          ; SECs
+          .byt 249            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided high density 3.5 zoll
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 224           ; DIR
+          .word 2880          ; SECs
+          .byt 240            ; Media
+          .word 9             ; SPF
+          .word 18            ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided high density 5.25 zoll
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 224           ; DIR
+          .word 2400          ; SECs
+          .byt 249            ; Media
+          .word 7             ; SPF
+          .word 15            ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden
+          .word 0             ; (Dummy)
+               ; double sided higher density 5.25 zoll (BPS=1024)
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $400          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 128           ; DIR
+          .word 1280          ; SECs
+          .byt 255            ; Media
+          .word 2             ; SPF
+          .word 8             ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden 
+          .word 0             ; (Dummy)
+               ; double sided double density 5.25 zoll 40 Tracks (360k)
+          .byt $eb,$34,$90,"OS/A 1.2"
+          .word $200          ; BPS
+          .byt 1              ; SPC
+          .word 1             ; RES
+          .byt 2              ; FATs
+          .word 112           ; DIR
+          .word 720           ; SECs
+          .byt 255            ; Media
+          .word 3             ; SPF
+          .word 9             ; SPT
+          .word 2             ; Side
+          .word 0             ; Hidden 
+          .word 0             ; (Dummy)
+          .)
+
+&DINIT    .(
+          lda #%00001111
+          sta VIA2+VIA_DRA    ;
+
+          lda #0
+          sta VIA2+VIA_DDRA   ;Ertmal testen ob IC da
+          cmp VIA2+VIA_DDRA
+          bne xini
+          lda #%00101111
+          sta VIA2+VIA_DDRA
+          cmp VIA2+VIA_DDRA
+          bne xini
+          
+          lda VIA2+VIA_ACR    
+          and #%11011110      ;t2 timed irq, pa latch disabled
+          sta VIA2+VIA_ACR
+          lda VIA2+VIA_PCR
+          and #%11110000      ;pa
+          ora #%00001110      ;ca2 hi (side), ca1 neg edge
+          sta VIA2+VIA_PCR
+          lda #%00100011      ;ca1, ca2, t2 irq off
+          sta VIA2+VIA_IER
+
+/*          lda #0       ; der Controller braucht zulange, um das Register
+          sta WD1+WD_TRCK     ; upzudaten
+          cmp WD1+WD_TRCK
+          bne xini
+*/          
+          ldx #0
+i1        lda #00000011       ; 6ms Step-Zeit
+          sta drvst,x
+          lda #<-1
+          sta tracks,x
+          inx
+          cpx #ANZDRV
+          bcc i1
+          sta actdrv
+          clc
+          rts
+xini      sec
+          rts
+          .)
+
+&DLOOP    .(
+dcnt      =sysmem
+-sysmem   +=1
+
+          lda VIA2+VIA_DRA
+          and #%00000011
+          cmp #%00000011
+          beq d1
+          clc
+          rts
+d1
+          lda #0
+          sta dcnt
+          sta divers
+dl        jsr setdrv     ; a=drive
+
+          ldx divers
+          lda hd,x  
+          and #%01000000
+          beq dl1
+          inc dcnt       ; motor an 
+          dec mcnt,x
+          bne dl1
+          lda hd,x
+          and #%10111111
+          sta hd,x
+          lda #%00000100
+          dex
+          bmi dl1a
+          asl
+dl1a      ora VIA2+VIA_DRA
+          sta VIA2+VIA_DRA
+dl1       
+          ldx divers
+          lda VIA2+VIA_DRA    ; test auf Disk Change
+          and #%00010000
+          bne dl2
+          lda hd,x
+          and #1
+          bne dl2
+          lda hd,x
+          ora #1
+          and #255-2          ; double-stepping aus
+          sta hd,x
+          lda #<-1
+          sta tracks,x
+          ;jsr dchanged
+dl2
+          inc divers
+          lda divers
+          cmp #ANZDRV
+          bcc dl
+          jsr desel
+          
+          lda VIA2+VIA_DRA
+          and #%00001100      ; motor-bits
+          eor #%00001100      ; sind beide aus
+          bne dlx             ; nein dann ende
+          jsr lowdens
+dlx       lda dcnt            ; mit z-flag bergeben
+          rts
+          .)
+
+&setdstep .(
+          lda hd,x
+          ora #2
+          sta hd,x
+          rts
+          .)
+                    
+forcend   .(
+          lda WD1+WD_ST
+          and #1
+          beq fer
+          lda #%11010000      ; Force Interrupt
+          sta WD1+WD_CMD
+          jsr wloop
+fer       rts
+          .)
+
+selside   .(
+          clc
+          and #1
+          sta side
+          bne side1
+          lda VIA2+VIA_PCR
+          ora #%00000010
+          sta VIA2+VIA_PCR
+          rts
+side1     lda #%11111101
+          and VIA2+VIA_PCR
+          sta VIA2+VIA_PCR
+          rts
+          .)
+
+wloop     .(
+          txa
+          ldx #13
+wl1       dex
+          bne wl1
+          tax
+          rts
+          .)
+
+wcmd      .(
+          pha
+          jsr wloop
+          pla
+          sta WD1+WD_CMD
+          lda #1
+wcl       bit WD1+WD_ST
+          beq wcl
+          rts
+          .)
+
+setstep   .(
+          ldx actdrv
+          and #%11111100
+          ora #%00001000      ; ohne Motor-On-Time
+          sta divers
+          lda drvst,x
+          and #3
+          ora divers
+          php
+          sei
+          jsr wcmd
+          ldx #128
+wc2       jsr setti
+wc1       bit VIA2+VIA_DRA
+          bmi wcok
+          jsr fragti
+          beq wc1
+          dex
+          bne wc2
+          plp
+          lda #E_CMD
+          sec
+          .byt $2c  ; plp,clc berspringen
+wcok      plp
+          clc
+          ldx WD1+WD_ST
+          rts
+          .)
+
+setti     lda #255
+          sta VIA2+VIA_T2CL
+          sta VIA2+VIA_T2CH
+          rts
+
+fragti    lda VIA2+VIA_IFR
+          and #%00100000
+          rts
+
+seldrv    .(
+          pha
+          ldx actdrv
+          bmi sd1
+          lda WD1+WD_TRCK
+          sta tracks,x
+sd1       pla
+          sta actdrv
+
+          jsr setdrv     ; a=drv
+          jsr setdens
+          jsr motoron
+          
+          ldx actdrv
+          lda tracks,x
+          bpl sd2
+          jsr query
+          bcs sde
+sd2       sta WD1+WD_TRCK
+          tay
+          ldx actdrv
+          lda hd,x
+          and #1
+          beq sd3
+          tya
+          eor #1         ; da track von 0-79 kann das nicht aus bereich raus
+          jsr go2track   ; um disk-change zu l”schen
+          bcs sder
+          ldx actdrv
+          lda hd,x
+          and #%11111110
+          sta hd,x
+sd3       clc
+sder      rts
+sde       sta actdrv
+          rts
+          .)
+
+motoron   .(
+          lda actdrv
+          and #1
+          beq drva
+          lda VIA2+VIA_DRA
+          and #%11110111      ; Motor on
+          bne drvs
+drva      lda VIA2+VIA_DRA
+          and #%11111011
+drvs      sta VIA2+VIA_DRA
+          ldx actdrv
+          lda hd,x
+          and #%01000000
+          bne mok             ; motor war schon an
+          sta mcnt,x          ; motor-aus-z„hler auf null
+          lda hd,x
+          ora #%01000000
+          sta hd,x
+#ifdef SHOWD
+          lda #"m"
+          jsr Putc
+#endif
+
+&mdelay 
+          lda VIA2+VIA_DRA
+          and #%00001100      ; beide Motoren
+          eor #%00001100      ; aus ?
+          beq mok             ; ja dann ende
+          
+#ifdef SHOWD
+          lda #"M"
+          jsr Putc
+#endif
+          ldx #40
+ml        jsr setti
+ml2       jsr YIELD
+          jsr fragti
+          beq ml2
+          dex
+          bne ml
+mok       rts
+          .)
+                    
+setdrv    .(
+          and #1
+          beq drva
+          lda VIA2+VIA_DRA
+          and #%11111101      ; drive select
+          ora #%00000001
+          bne drvs
+drva      lda VIA2+VIA_DRA
+          and #%11111110
+          ora #%00000010
+drvs      sta VIA2+VIA_DRA
+&densok   rts
+          .)
+          
+setdens   .(
+          ldx actdrv
+          lda hd,x            ; high-Density-Bit
+          lsr                 ; auf Portbit schieben
+          lsr
+          eor VIA2+VIA_DRA    ; vergleichen
+          and #%00100000      ; maskieren
+          beq densok          ; gleich dann fertig
+          
+          lda hd,x
+          bpl lodens
+          lda VIA2+VIA_DRA
+          ora #%00100000
+          bne denset
+lodens    lda VIA2+VIA_DRA
+          and #%11011111
+denset    sta VIA2+VIA_DRA
+          jmp mdelay
+          .)
+          
+lowdens   lda VIA2+VIA_DRA
+          and #%11011111
+          sta VIA2+VIA_DRA
+          rts
+highdens  ldx actdrv
+          lda hd,x
+          bpl lowdens
+          lda VIA2+VIA_DRA
+          ora #%00100000
+          sta VIA2+VIA_DRA
+#ifdef SHOWD
+          lda #"H"
+          jsr Putc
+#endif
+          jmp mdelay
+          
+query     .(
+          jsr restore
+          bcs qx
+          lda #4         ; hd-count
+          sta divers
+
+          lda #0
+          jsr selside
+                    
+q         ldx #40        ; bis 5.25" auf Drehzahl nach Density-Wechsel
+          lda #ERRCNT*2
+          sta errcnt
+          .byt $2c
+qloop     ldx #16         ; 8*32ms=256ms <> 1 umdrehung bei 234 upm
+          lda #%11000000 ; Read Adress
+          ldy #5
+          sei
+          jsr wcmd
+q1        jsr setti
+          lda #%00100000
+q2        bit VIA2+VIA_IFR
+          bne qn
+          bit VIA2+VIA_DRA
+          bvc q2
+          ldx WD1+WD_DATA
+          stx data,y
+          dey
+          bpl q2
+          lda WD1+WD_ST
+          and #%00001100
+          bne q3
+          lda data+2     ; Sektor Length
+          and #3
+          beq q3         ; Sektoren mit 128 Byte gehen nicht
+          tax
+          lda POT2-1,x   ; dann Anzahl 256-Byte-Blocks im Sektor
+          ldx actdrv
+          sta blen,x
+          lda data+5
+          cli
+          clc
+          rts
+
+qn        lda WD1+WD_ST
+          dex
+          bne q1
+          
+q3        dec errcnt
+          bne qloop
+          cli
+          dec divers
+          beq qe
+          
+          ldx actdrv
+          lda hd,x
+          eor #%10000000
+          sta hd,x
+          jsr setdens
+          
+          lda divers
+          pha
+          cmp #2
+          bcs q4
+          jsr restore
+q4        pla
+          sta divers
+          jmp q
+          
+qe        lda #E_Q
+qx        sec
+          rts
+          
+&POT2      .byt 1,2,4
+          .)
+
+desel     .(
+          ldx actdrv
+          bmi sd1
+          lda WD1+WD_TRCK
+          sta tracks,x
+sd1       lda #<-1
+          sta actdrv
+          lda VIA2+VIA_DRA
+          ora #%00000011
+          sta VIA2+VIA_DRA
+          clc  
+          rts
+          .)
+
+go2track  .(
+          sta tr
+          cmp WD1+WD_TRCK
+          beq gtr
+
+          jsr lowdens
+          
+          jsr findtr
+          bcc gtc
+          
+          lda #$04       ; restore mit verify
+          jsr setstep
+          bcs gts
+
+          jsr findtr
+          bcs gts
+gtc       and #%00011000
+          bne gts
+          
+          jsr highdens
+gtr       clc
+          rts
+          
+gts       jsr highdens
+          lda #E_GT
+          sec
+          rts
+          .)
+
+findtr    .(
+          lda tr
+          sta WD1+WD_DATA
+          
+          ldx actdrv
+          lda hd,x
+          and #2
+          beq gnd
+
+          lda WD1+WD_TRCK
+          pha
+          lda #$10       ; stepping ohne verify
+          jsr setstep
+          pla
+          sta WD1+WD_TRCK     ; und das ganze nochmal mit verify
+          lda tr
+          sta WD1+WD_DATA     ; das sind dann doppelt so viele steps
+
+gnd       lda #$14       ; seek track
+          jmp setstep
+          .)
+
+restore   .(
+          jsr forcend
+          jsr lowdens
+          lda #$00       ; restore
+          jsr setstep
+          pha
+          jsr highdens
+          lda #0
+          sta tr
+          pla
+          rts
+          .)
+
+setadr    sta zeid
+          sty zeid+1
+          clc
+          rts
+
+read      .(
+          sta sect
+          stx data
+#ifdef BSHOW
+          lda #"R"
+          jsr Putc
+          txa
+          jsr HEXOUT
+#endif
+          jsr forcend
+          lda #ERRCNT
+          sta errcnt
+rdloop    lda sect
+          sta WD1+WD_SECT
+          sei
+          ldx data       ; Anzahl 256-Byte-Bl”cke
+          ldy #0
+          lda #%10001000
+          jsr wcmd
+          lda WD1+WD_ST
+rd1       bit VIA2+VIA_DRA
+          bmi rde
+          bvc rd1
+          lda WD1+WD_DATA
+          sta (zeid),y
+          iny
+          bne rd1
+          inc zeid+1
+          dex
+          bne rd1
+          clc
+          ;ldx WD1+WD_ST
+          ;ldy errcnt
+          lda WD1+WD_ST
+          ldx zeid
+          ldy zeid+1
+          cli
+          rts
+rde       dec errcnt
+          bne rdloop
+          lda #E_RD
+          sec
+          ldx WD1+WD_ST
+          cli
+          rts
+          .)
+
+write     .(
+          sta sect       ; ( x-reg die Anzahl 256-Byte-Bl”cke )
+          stx data
+#ifdef BSHOW
+          lda #"W"
+          jsr Putc
+          txa
+          jsr HEXOUT
+#endif
+          jsr forcend
+          lda #ERRCNT
+          sta errcnt
+wrloop    lda sect
+          sta WD1+WD_SECT
+          sei
+          ldx data       ; Anzahl 256-Byte-Bl”cke
+          ldy #0
+          lda #%10101000
+          jsr wcmd
+          lda WD1+WD_ST
+rd1       bit VIA2+VIA_DRA
+          bmi rde
+          bvc rd1
+          lda (zeid),y
+          sta WD1+WD_DATA
+          iny
+          bne rd1
+          inc zeid+1
+          dex
+          bne rd1
+          clc
+          lda WD1+WD_ST
+          ldx zeid
+          ldy zeid+1
+          cli
+          rts
+rde       dec errcnt
+          bne wrloop
+          lda #E_WR
+          sec
+          ldx WD1+WD_ST
+          cli
+          rts
+          .)
+
+ftrack    .(
+          sta divers          ; virgin
+          stx data+4          ; Sektor-L„nge
+          lda POT2-1,x
+          sta data            ; Anzahl 256-Byte-Bl”cke
+          lda #ERRCNT
+          sta errcnt
+errloop   ldy #0
+          lda (zeid),y
+          sta data+2          ; endsector
+          iny
+          sty sect
+          jsr forcend
+          sei
+          lda #%11110100
+          jsr wcmd
+          lda WD1+WD_ST  ; intrq loeschen
+          ldy #80
+          ldx #$4e
+f1a       bit VIA2+VIA_DRA
+          bmi fey
+          bvc f1a
+          stx WD1+WD_DATA
+          dey
+          bne f1a
+sloop     lda data
+          sta data+1
+          ldx #0
+          ldy #12
+f2        bit VIA2+VIA_DRA
+          bmi fey   
+          bvc f2
+          stx WD1+WD_DATA
+          dey
+          bne f2
+          ldx #$f5
+          ldy #3
+f3        bit VIA2+VIA_DRA
+          bmi fey
+          bvc f3
+          stx WD1+WD_DATA
+          dey
+          bne f3
+          ldx #$fe
+f4        bit VIA2+VIA_DRA
+fey       bmi fex
+          bvc f4
+          stx WD1+WD_DATA
+          ldx tr
+f5        bit VIA2+VIA_DRA
+          bmi fex
+          bvc f5
+          stx WD1+WD_DATA
+          ldx side
+f6        bit VIA2+VIA_DRA
+          bmi fex
+          bvc f6
+          stx WD1+WD_DATA
+          ldy sect
+          lda (zeid),y
+          tax
+f7        bit VIA2+VIA_DRA
+          bmi fex
+          bvc f7
+          stx WD1+WD_DATA
+          ldx data+4         ; l„nge des Sektors
+f8        bit VIA2+VIA_DRA
+          bmi fex
+          bvc f8
+          stx WD1+WD_DATA
+          ldx #$f7
+f9        bit VIA2+VIA_DRA
+          bmi fex
+          bvc f9
+          stx WD1+WD_DATA
+          ldy #22
+          ldx #$4e
+f10       bit VIA2+VIA_DRA
+          bmi fex
+          bvc f10
+          stx WD1+WD_DATA
+          dey
+          bne f10
+          ldy #12
+          ldx #0
+f11       bit VIA2+VIA_DRA
+          bmi fex
+          bvc f11
+          stx WD1+WD_DATA
+          dey
+          bne f11
+          ldy #3
+          ldx #$f5
+f12       bit VIA2+VIA_DRA
+fex       bmi fe
+          bvc f12
+          stx WD1+WD_DATA
+          dey
+          bne f12
+          ldx #$fb
+f13       bit VIA2+VIA_DRA
+          bmi fe
+          bvc f13
+          stx WD1+WD_DATA
+          ldx divers          ; virgin
+f15       ldy #0
+f14       bit VIA2+VIA_DRA    ; 256 Byte
+          bmi fe
+          bvc f14
+          stx WD1+WD_DATA
+          dey
+          bne f14
+          dec data+1
+          bne f15
+          ldx #$f7            ; end of sektor
+f16       bit VIA2+VIA_DRA
+          bmi fe
+          bvc f16
+          stx WD1+WD_DATA
+          ldy #24
+          ldx #$4e            ; pause nach sektor
+f20       bit VIA2+VIA_DRA
+          bmi fe
+          bvc f20
+          stx WD1+WD_DATA
+          dey
+          bne f20
+          inc sect
+          dec data+2
+          beq f18a
+          jmp sloop
+f18a      ldx #$4e
+f18       bit VIA2+VIA_DRA
+          bmi fr
+          bvc f18
+          stx WD1+WD_DATA
+          jmp f18        ; absolut
+fe        dec errcnt
+          beq fee
+          jmp errloop
+fee       sec
+          lda #E_FT
+          ldx WD1+WD_ST
+          cli
+          rts
+fr        cli
+          clc
+          rts
+          .)
+          .)
+
+/*************************************************************************/
+
+#print    sysmem
+#print    syszp
+
+ende      .)
+          
+
