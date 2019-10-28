@@ -1325,21 +1325,21 @@ nodrive   inc zp
                          ; Name untersuchen
 nd1       ldx #FS_CMD_NAME
           lda PCBUF,x
-          bne ndrx       ; kein Name dann Pfad lîschen
+          bne ndrx       ; kein Name dann Pfad loeschen
           sta (zp),y
           clc
           rts
 ndrx
           cmp #DIRSIGN   ; Name beginnt mit DIRSIGN
           bne nd2
-          lda #0         ; dann Pfad lîschen
+          lda #0         ; dann Pfad loeschen
           sta (zp),y
           
 nd2a      inx
 nd2       lda PCBUF,x    ; weiter Name anschauen
           beq ndr        ; kein Name dann Ende
           cmp #DIRSIGN
-          beq nd2a       ; DIRSIGN Åberlesen
+          beq nd2a       ; DIRSIGN ueberlesen
           cmp #"."
           bne nameok     ; kein '.' dann ok
           inx
@@ -1352,12 +1352,12 @@ nd2       lda PCBUF,x    ; weiter Name anschauen
           jsr getpos
           ldy d          ; Position des letzten DIRSIGNs
           lda #0
-          sta (zp),y     ; lîschen = eine Verzeichnis-Ebene hîher
+          sta (zp),y     ; loeschen = eine Verzeichnis-Ebene hoeher
           beq nd2a       ; (absolut)
 
 nerrx     dex
-nameok    jsr getpos     ; y=LÑnge des alten Pfads
-          sty d          ; hier Verzeichnis-Name an Pfad anhÑngen
+nameok    jsr getpos     ; y=Laenge des alten Pfads
+          sty d          ; hier Verzeichnis-Name an Pfad anhaengen
 no        iny
           cpy maxpath
           bcs nerr
@@ -1372,14 +1372,14 @@ nr        lda #0
           sta (zp),y
           ldy d
           lda #DIRSIGN   ; alles ok, dann Nullbyte (Ende alter Pfad) mit
-          sta (zp),y     ; DIRSIGN Åberschreiben
+          sta (zp),y     ; DIRSIGN ueberschreiben
           lda PCBUF,x    ; Ende des neuen Verzeichnisses
           bne nd2a       ; nein, dann wieder nach oben
 ndr       clc
           rts
 nerr      sec
           rts
-getpos    ldy #0         ; holt y=LÑnge des alten Pfadnamens
+getpos    ldy #0         ; holt y=Laenge des alten Pfadnamens
           sty d          ; und d=Position des letzten DIRSIGNs
 no0       lda (zp),y
           beq no1

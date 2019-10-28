@@ -384,7 +384,7 @@ il        ldy bufpos
 #else
 	  jmp RETLOOP
 #endif
-cmd2      jsr sendcmd    ; cmd ausfÅhren
+cmd2      jsr sendcmd    ; cmd ausfuehren
 RetLoop	
 #ifdef NOMMU
 	  ldx #SEM_SENDBUF
@@ -1777,14 +1777,14 @@ nr        lda #0
           sta (zp),y
           ldy d
           lda #DIRSIGN   ; alles ok, dann Nullbyte (Ende alter Pfad) mit
-          sta (zp),y     ; DIRSIGN ~Aberschreiben
+          sta (zp),y     ; DIRSIGN ueberschreiben
           lda PCBUF,x    ; Ende des neuen Verzeichnisses
           bne nd2a       ; nein, dann wieder nach oben
 ndr       clc
           rts
 nerr      sec
           rts
-getpos    ldy #0         ; holt y=L~Dnge des alten Pfadnamens
+getpos    ldy #0         ; holt y=Laenge des alten Pfadnamens
           sty d          ; und d=Position des letzten DIRSIGNs
 no0       lda (zp),y
           beq no1

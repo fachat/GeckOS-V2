@@ -856,8 +856,8 @@ drvst     =syszp+17           ; drivestatus z.b. Step-Zeit
 tracks    =syszp+17+ANZDRV    ; Track, auf dem jeweiliges Laufwerk steht
 hd        =syszp+17+2*ANZDRV  ; High-Density-Flag =bit7 , 6= motor an flag
                               ; bit0=1 disk changed, bit1=1 double stepping
-mcnt      =syszp+17+3*ANZDRV  ; motor-aus-zÑhler
-blen      =syszp+17+4*ANZDRV  ; Anzahl 256-Byte-Blîcke in einem Sektor
+mcnt      =syszp+17+3*ANZDRV  ; motor-aus-zaehler
+blen      =syszp+17+4*ANZDRV  ; Anzahl 256-Byte-Bloecke in einem Sektor
 
 -syszp    +=5*ANZDRV+17
 
@@ -1033,7 +1033,7 @@ floop     lda #0
 
 sideloop  jsr selside
 
-          ldx data+5          ; Block-LÑnge 0=128,1=256,2=512,3=1024
+          ldx data+5          ; Block-Laenge 0=128,1=256,2=512,3=1024
           ldy #FMT_VIRG
           lda (zei),y
           jsr ftrack
@@ -1081,7 +1081,7 @@ wrboot    lda #0
           lda #0
           jsr go2track
           bcs fx
-          lda fpar                 ; Format mal 32 als Zeiger fÅr 
+          lda fpar                 ; Format mal 32 als Zeiger fuer 
           asl                      ; Boot-Sektor-Daten
           asl
           asl
@@ -1309,7 +1309,7 @@ dl2
           eor #%00001100      ; sind beide aus
           bne dlx             ; nein dann ende
           jsr lowdens
-dlx       lda dcnt            ; mit z-flag Åbergeben
+dlx       lda dcnt            ; mit z-flag uebergeben
           rts
           .)
 
@@ -1387,7 +1387,7 @@ wc1       bit VIA2+VIA_DRA
           plp
           lda #E_CMD
           sec
-          .byt $2c  ; plp,clc Åberspringen
+          .byt $2c  ; plp,clc ueberspringen
 wcok      plp
           clc
           ldx WD1+WD_ST
@@ -1429,7 +1429,7 @@ sd2       sta WD1+WD_TRCK
           beq sd3
           tya
           eor #1         ; da track von 0-79 kann das nicht aus bereich raus
-          jsr go2track   ; um disk-change zu lîschen
+          jsr go2track   ; um disk-change zu loeschen
           bcs sder
           ldx actdrv
           lda hd,x
@@ -1455,7 +1455,7 @@ drvs      sta VIA2+VIA_DRA
           lda hd,x
           and #%01000000
           bne mok             ; motor war schon an
-          sta mcnt,x          ; motor-aus-zÑhler auf null
+          sta mcnt,x          ; motor-aus-zaehler auf null
           lda hd,x
           ora #%01000000
           sta hd,x
@@ -1707,7 +1707,7 @@ read      .(
 rdloop    lda sect
           sta WD1+WD_SECT
           sei
-          ldx data       ; Anzahl 256-Byte-Blîcke
+          ldx data       ; Anzahl 256-Byte-Bloecke
           ldy #0
           lda #%10001000
           jsr wcmd
@@ -1740,7 +1740,7 @@ rde       dec errcnt
           .)
 
 write     .(
-          sta sect       ; ( x-reg die Anzahl 256-Byte-Blîcke )
+          sta sect       ; ( x-reg die Anzahl 256-Byte-Bloecke )
           stx data
 #ifdef BSHOW
           lda #"W"
@@ -1754,7 +1754,7 @@ write     .(
 wrloop    lda sect
           sta WD1+WD_SECT
           sei
-          ldx data       ; Anzahl 256-Byte-Blîcke
+          ldx data       ; Anzahl 256-Byte-Bloecke
           ldy #0
           lda #%10101000
           jsr wcmd
@@ -1786,9 +1786,9 @@ rde       dec errcnt
 
 ftrack    .(
           sta divers          ; virgin
-          stx data+4          ; Sektor-LÑnge
+          stx data+4          ; Sektor-Laenge
           lda POT2-1,x
-          sta data            ; Anzahl 256-Byte-Blîcke
+          sta data            ; Anzahl 256-Byte-Bloecke
           lda #ERRCNT
           sta errcnt
 errloop   ldy #0
@@ -1849,7 +1849,7 @@ f7        bit VIA2+VIA_DRA
           bmi fex
           bvc f7
           stx WD1+WD_DATA
-          ldx data+4         ; lÑnge des Sektors
+          ldx data+4         ; laenge des Sektors
 f8        bit VIA2+VIA_DRA
           bmi fex
           bvc f8
