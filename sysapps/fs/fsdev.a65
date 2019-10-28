@@ -273,8 +273,8 @@ rxe1a     bcs rxe1                      /* Fehler dann Ende             */
           lda #DC_PS                    /* Ausgabe des Devices          */
           jsr DEVCMD                    /* registrieren                 */
           bcs rxe1                      /* Fehler dann Ende             */
-          ldx dev                       /* Device-Nummer zurÅckholen    */
-          lda #DC_RX_ON                 /* öbertragung starten          */
+          ldx dev                       /* Device-Nummer zurueckholen    */
+          lda #DC_RX_ON                 /* Uebertragung starten          */
           jsr DEVCMD                    /* und los...                   */
           bcs rxe1                      /* Fehler dann Ende             */
           ldy cnt                       /* hier geht's normal weiter    */

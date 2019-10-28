@@ -99,7 +99,7 @@ l1        jsr DLOOP
           bcs l1
           pha
           stx client
-          jsr DLOOP      ; vor ausfÅhrung auf Disk-Change testen
+          jsr DLOOP      ; vor ausfuehrung auf Disk-Change testen
           ldx client
           pla
           jmp l2
