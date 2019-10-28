@@ -99,7 +99,7 @@
 #define   SY_LD_AMSZ     $335      /*$acc0*/
 #define   SY_LD_AMSV     $334      /*$2cc0*/
 #define   SY_LD_XZ       $31b      /*$d8c0*/
-#define   SY_LD_XV       Ý31c      /*$38c0*/
+#define   SY_LD_XV       $31c      /*$38c0*/
 
 /****************************** Sony TV ************************************/
 

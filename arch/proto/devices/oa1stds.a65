@@ -79,7 +79,7 @@ devini    lda #0
 
 rts1hi
 
-/***************** hier falls Stream Åber highwatermark ************/
+/***************** hier falls Stream ueber highwatermark ************/
 
 /*******************************************************************/
 
@@ -97,9 +97,9 @@ devx      ldx dev
 devirq    .(
           ldx dev
 
-/********************* ist irq fÅr device? nein dann irqend **********/
+/********************* ist irq fuer device? nein dann irqend **********/
 
-/************************ hier falls irq fÅr device ******************/
+/************************ hier falls irq fuer device ******************/
 
           ldx dev
           lda status,x
@@ -176,7 +176,7 @@ test2     cmp #E_EOF
 
 irqhs     
 
-/**************** Irq lîschen oder so am Ende des Device-Irqs ******/
+/**************** Irq loeschen oder so am Ende des Device-Irqs ******/
 
 /*******************************************************************/
 
