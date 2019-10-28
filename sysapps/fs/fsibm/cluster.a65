@@ -92,7 +92,7 @@ cce       rts
           bne snok
 
           lda ar1+1           ; bei Cluster =0
-          ldy #D_SPD+1        ; nicht Åber Main-Dir lesen 
+          ldy #D_SPD+1        ; nicht ueber Main-Dir lesen 
           cmp (dzei),y
           bcc nexend
           bne nexerr
@@ -230,7 +230,7 @@ fatzei    .word 0
 &gfrebyt  .(
           lda #2
           ldx #0
-          stx fr6        ; Z‰hler fÅr freie Cluster
+          stx fr6        ; Zaehler fuer freie Cluster
           stx fr6+1
 
           sta fr5        ; Cluster, bis zu dem gesucht wird
@@ -247,7 +247,7 @@ gfl       lda fr1
           bne gflx
           inc fr6+1
 
-gflx      jsr incmp      ; muû erhîht werden, um nÑchsten Cluster zu testen
+gflx      jsr incmp      ; muss erhoeht werden, um naechsten Cluster zu testen
           bne gfl        ; noch nicht zuende dann weitersuchen
           beq gok        
           
@@ -626,7 +626,7 @@ fx        sta fr2        ; Sektor in der FAT
           sty fr3
           ldy ar1+1
           sty fr3+1
-          jsr RDFAT      ; lÑdt FAT-Block Nr a/x
+          jsr RDFAT      ; laedt FAT-Block Nr a/x
           bcs fcerrx
           ldx drive
           jsr setpadr

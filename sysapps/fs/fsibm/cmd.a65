@@ -158,7 +158,7 @@ dl        sec
           jsr tstlocked
           bcs de
           ldy #DE_NAME
-          lda #$e5            ; null ist auf dem PC Endekennzeichen fÅr dir
+          lda #$e5            ; null ist auf dem PC Endekennzeichen fuer dir
           sta (ezei),y
           ldy fpuffer
           jsr MDBUF
@@ -305,7 +305,7 @@ sok       cmp #E_OK
           iny
           lda cluster+1
           sta (ezei),y
-          ldy #DE_SIZE   ; LÑnge auf Null setzen im Dir-Eintrag
+          ldy #DE_SIZE   ; Laenge auf Null setzen im Dir-Eintrag
           lda #0
           sta (ezei),y
           iny
@@ -320,7 +320,7 @@ sok       cmp #E_OK
           ldy fpuffer    ; Puffer speichern 
           jsr WABUF
           bcs err
-          ldy drive      ; fÅrs Drive die FAT sichern 
+          ldy drive      ; fuers Drive die FAT sichern 
           jsr DWBUF
           bcs err
 
@@ -331,11 +331,11 @@ sok       cmp #E_OK
           lda cluster+1
           sta (fzei),y
 
-          jsr xfcl2fscl  ; und als Startcluster des Files setzen (fÅr Lock)
+          jsr xfcl2fscl  ; und als Startcluster des Files setzen (fuer Lock)
 
-          jsr xclrfsp    ; FSEC,FPOS lîschen
+          jsr xclrfsp    ; FSEC,FPOS loeschen
           lda #0
-          ldy #F_LEN     ; DateilÑnge im FPB auf Null setzen
+          ldy #F_LEN     ; Dateilaenge im FPB auf Null setzen
           sta (fzei),y
           iny
           sta (fzei),y
@@ -574,7 +574,7 @@ x2fl      .byt 0
 x3fl      .byt 0
 	.text
 
-          stx x2fl       ; x<0 dann nur auf exist testen, F_Dxx nicht Ñndern
+          stx x2fl       ; x<0 dann nur auf exist testen, F_Dxx nicht aendern
           stx x3fl       ; x=1 ist freien Eintrag suchen, x=0 Datei finden
           jsr xclrfsec
 fnew      jsr xclrfpos
@@ -661,7 +661,7 @@ nexsec    jsr snext           ; sucht bei FCL,FSEC
           beq nexxend         ; dann OK und c=1
           jsr fextend 
           bcs nexend
-          jsr clrclus         ; lîscht Cluster
+          jsr clrclus         ; loescht Cluster
           bcs nexend
           jsr f2d
 nexxend   lda #E_OK
@@ -728,12 +728,12 @@ fend      clc
           dey
           lda (fzei),y
           bne f1
-          cpx #0         ; im Main-Dir nicht mîglich 
+          cpx #0         ; im Main-Dir nicht moeglich 
           bne f1
           lda #E_NOCLUS
           sec
           rts
-f1        jsr gnexcl     ; nÑchsten Cluster der Datei suchen
+f1        jsr gnexcl     ; naechsten Cluster der Datei suchen
           bcc fok        ; 
           cmp #E_NOCLUS
           bne ferr       ; Lese- oder sonstwas-Fehler

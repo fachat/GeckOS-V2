@@ -401,7 +401,7 @@ foo1
 
 	  lda sector+1
           ldy #D_STD+1        ; mit Start Main-Dir vergleichen
-          cmp (dzei),y        ; größer dann ende
+          cmp (dzei),y        ; groesser dann ende
           bcc wrl
           bne wre
           dey
@@ -446,8 +446,8 @@ serr      sec
           asl
           tay
           lda bpb+B_DIRT,y
-          bmi w2              ; Daten ungltig
-          beq w2              ; Daten nicht dirty
+          bmi w2              ; Data invalid
+          beq w2              ; Data not dirty
           ldy p
           jsr DxBUF        
           bcs err

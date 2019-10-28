@@ -1201,7 +1201,7 @@ dustr     lda #"$"       ; stringvar
           ;lda #4
           ;jsr setfla
           ldy #2
-          lda (INT),y    ; lÑnge
+          lda (INT),y    ; laenge
           beq dustrr
           sta l00c8
           iny
@@ -1356,7 +1356,7 @@ d2        ldy #0
           sta akku4+3
           lda l00fd+1
           sta akku4+4
-          lda l00fd      ; 5 fÅr anfang text addieren
+          lda l00fd      ; 5 fuer anfang text addieren
           clc
           adc #5
           sta l00fd
@@ -1423,7 +1423,7 @@ d11       iny
           jsr parlist
           lda INT:ora INT+1
           bne a3
-          ldy #0              ; hier alles bis ende lîschen
+          ldy #0              ; hier alles bis ende loeschen
           tya
           sta (akku4+3),y
           iny
@@ -1603,7 +1603,7 @@ r1a       ldy #3              ; alte Zeilennummer speichern
           iny
           txa
           sta (akku4+3),y
-          lda l00fd           ; neue Zeilennr erhîhen
+          lda l00fd           ; neue Zeilennr erhoehen
           clc
           adc l00fb
           sta l00fd
@@ -1611,14 +1611,14 @@ r1a       ldy #3              ; alte Zeilennummer speichern
           adc l00fb+1
           sta l00fd+1
           bcs riq1
-          ldy #0              ; nÑxte Zeile suchen
+          ldy #0              ; naechste Zeile suchen
           lda (akku4+3),y
           tax
           iny
           lda (akku4+3),y
           tay
           bne r1
-r4        jsr la68e           ; start Zeilennr im Text Ñndern
+r4        jsr la68e           ; start Zeilennr im Text aendern
 r5        ldy #0
           lda (BASZEI),y
           bne r6
@@ -1650,7 +1650,7 @@ r9        inc BASZEI
           bne r5
           inc BASZEI+1
           bne r5
-rhoko     ldy #1         ; Text in Hochkomma Åberspringen
+rhoko     ldy #1         ; Text in Hochkomma ueberspringen
 rho1      lda (BASZEI),y
           beq rho3
           cmp #34        ; Ende mit Hochkomma
@@ -2715,7 +2715,7 @@ listfl    =syszp
  lb1cs sec: rts:lb185a beq lb185 
 
  lb11d pla 
- 452 pha :cmp #<laf28+2; lobyte RÅcksprungadresse
+ 452 pha :cmp #<laf28+2; lobyte Ruecksprungadresse
           bne lb128:lb123 lda #<lbf13:ldy #>lbf13
  453 rts :lb128 lda VARNAME:ldy VARNAME+1:cmp #$54:bne lb13b
  454 cpy #$c9:beq lb123:cpy #$49:bne lb13b:lb138 jmp syntax

@@ -26,7 +26,7 @@
 
 #include "gecko.i65"
 
-/************************ Daten fÅr Computer ohne MMU *********************/
+/************************ Daten fuer Computer ohne MMU *********************/
 
 /*        StreamData                    */
 
