@@ -400,9 +400,9 @@ beftab    .asc "DIR^@TYPE^@DEL^@FORMAT^@CHKDSK^@RENAME^@"
 &montxt   .asc "MONITOR^@"
 #endif
           .asc "LOGOFF^@"
-          .asc "COPYCON^@DUP^@CD^@DEVCMD^@COPY^@"
-          .asc "GETSTR^@FRESTR^@SETMEM^@"
-          .asc "INFO^@KILL^@MKDIR^@RMDIR^@CHDIR^@"
+          .asc "COPYCON^@D","UP^@CD^@D","EVCMD^@COPY^@"
+          .asc "G","ETSTR^@F","RESTR^@SETMEM^@"
+          .asc "INFO^@K","ILL^@MKDIR^@RMDIR^@CHDIR^@"
 
 befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word RENAME-1,BATCH-1,BATCH-1
