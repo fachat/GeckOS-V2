@@ -39,7 +39,7 @@ i0        lda it,y
           iny
           bne i0
 info
-#ifdef NOMMU
+#if 1 // fdef NOMMU
 	  clc
 	  ldx #SEM_SENDBUF
 	  jsr PSEM
@@ -128,7 +128,7 @@ i2        jsr SSPOUT
           bcs ie
           jmp infoloop
 ie        
-#ifdef NOMMU
+#if 1 //def NOMMU
 	  ldx #SEM_SENDBUF
 	  jsr VSEM
 #endif
