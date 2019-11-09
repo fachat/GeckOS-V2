@@ -1,6 +1,6 @@
 
 apps = lsh
-sysapps = mon slipd
+sysapps = mon slipd ps
 files = mkdir rmdir rm format chkdsk ls cat mv
 inet = tlogin telnet httpd
 
@@ -47,8 +47,8 @@ ${apps}:
 	(if test ! -r lsh; then ln -s ../../../apps/lsh/lsh lsh; fi)
 
 ${sysapps}: 
-	(cd ../../../sysapps/$@; make $@;)
-	(if test ! -r $@; then ln -s ../../../sysapps/$@/$@ $@; fi)
+	(if test -d ../../../sysapps/$@; then ln -sf ../../../sysapps/$@/$@ $@; cd ../../../sysapps/$@; make $@; fi)
+	(if test -f ../../../sysapps/$@.a65; then ln -sf ../../../sysapps/$@ $@; cd ../../../sysapps; make $@; fi)
 
 ${files}:
 	(cd ../../../apps/file; make $@;)
