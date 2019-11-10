@@ -222,7 +222,7 @@
 
 /*        GETINFO-struct            */
 
-#define   ANZ_ENV   15	/* number of valid entries		*/
+#define   ANZ_ENV   12	/* number of valid entries		*/
 
 #define   TN_PID    0	/* process ID 				*/
 #define   TN_NTHREADS 1	/* task state				*/
@@ -235,9 +235,12 @@
 #define   TN_STDERR 9	/* stderr stream			*/
 #define   TN_SIGMASK 10	/* signal mask				*/
 #define   TN_EXECADDR 11 /* address where task was started (main) */
-#define   TN_NAME   13	/* start of program name (if avail.)	*/
-#define   TN_SLEN   17	/* length of one entry			*/
+#define   TN_PRIO   13	/* start of program name (if avail.)	*/
+#define   TN_NAME   14	/* start of program name (if avail.)	*/
+#define   TN_SLEN   21	/* length of one entry			*/
 
+/* Note: must be at least 5 or more, to not trigger a bug in 
+   mon.a65 and other parts that us "TNAMELEN-5" as length of .dsb filler */
 #define   TNAMLEN   (TN_SLEN-TN_NAME)	/* length of name	*/
 
 /*        Terminal Commands        */
@@ -332,7 +335,8 @@
 #define   FORK_STDOUT    4	/* stdout stream			*/
 #define   FORK_STDERR    5	/* stderr stream			*/
 #define   FORK_ADDR      6	/* startaddress of task execution 	*/
-#define   FORK_NAME      8    	/* task name (ended with nullbyte)	*/
+#define	  FORK_PAR	 8	/* value of AC in new task 		*/
+#define   FORK_NAME      9    	/* task name (ended with nullbyte)	*/
 
 /* struct in PCBUF when SETIRQ */
 #define   SETIRQ_ENV     0	/* env to set irq address in 		*/
