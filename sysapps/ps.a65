@@ -1,0 +1,189 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 ls program
+
+    Copyright (C) 1997-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+#include "kernel.i65"
+#include "kdefs.i65"
+
+main	.(
+
+	.bss
+cnt	.byt 0
+zei	.byt 0
+	.text
+
+          ldy #0
+i0        lda it,y
+          beq info
+          jsr SEROUT
+          iny
+          bne i0
+info
+#if 1 /* fdef NOMMU */
+	  clc
+	  ldx #SEM_SENDBUF
+	  jsr PSEM
+#endif
+	  jsr GETINFO
+          ldx #0
+          stx cnt
+	  stx zei
+infoloop  
+          ldx zei
+	  lda PCBUF+TN_PID,x
+          jsr HEXOUT
+          jsr SSPOUT
+          ldx zei
+          lda PCBUF+TN_NTHREADS,x
+          bne name
+          ldx #TNAMLEN
+i1        jsr SSPOUT
+          dex
+          bne i1
+          beq i2
+name      ldy #0
+          ldx zei
+i4        lda PCBUF+TN_NAME,x
+          beq i3
+          jsr SEROUT
+          iny
+          inx
+          cpy #TNAMLEN
+          bcc i4
+i3        cpy #TNAMLEN
+          bcs i2
+          jsr SSPOUT
+          iny
+          bne i3
+i2        jsr SSPOUT
+
+          ldx zei
+          lda PCBUF+TN_NTHREADS,x
+	  jsr HEXOUT
+	  jsr SSPOUT
+          lda PCBUF+TN_ENV,x
+	  jsr HEXOUT
+	  jsr SSPOUT
+	  lda PCBUF+TN_PARENT,x
+	  jsr HEXOUT
+;          asl
+;          asl
+;          tax
+;          ldy #4
+;i5        lda st,x
+;          jsr SEROUT
+;          inx
+;          dey
+;          bne i5
+          jsr SSPOUT
+          ldx zei
+          lda PCBUF+TN_MEM,x
+          jsr HEXOUT
+          jsr SSPOUT
+	  lda PCBUF+TN_SIGMASK,x
+          jsr HEXOUT
+          jsr SSPOUT
+	  lda PCBUF+TN_SIGNAL+1,x
+	  jsr HEXOUT
+	  lda PCBUF+TN_SIGNAL,x
+	  jsr HEXOUT
+	  jsr SSPOUT
+          lda PCBUF+TN_STDIN,x
+          jsr HEXOUT
+          jsr SSPOUT
+          lda PCBUF+TN_STDOUT,x
+          jsr HEXOUT
+          jsr SSPOUT
+          lda PCBUF+TN_STDERR,x
+          jsr HEXOUT
+          jsr SSPOUT
+          jsr CRLFOUT
+	  lda zei
+	  clc
+	  adc #TN_SLEN
+	  sta zei
+          inc cnt
+          lda cnt
+          cmp #ANZ_ENV
+          bcs ie
+          jmp infoloop
+ie        
+#if 1 /* def NOMMU */
+	  ldx #SEM_SENDBUF
+	  jsr VSEM
+#endif
+	  clc
+          rts
+
+&HEXOUT	.(
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibble
+	pla
+nibble	and #$0f
+	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc nibok
+	adc #6
+nibok	jmp SEROUT
+	.)
+
+CRLFOUT .(
+	.data
+tx	.byt 0
+	.text
+
+	lda #13
+	jsr SEROUT
+	lda #10
+	.byt $2c
+&SSPOUT	lda #" "
+&SEROUT
+	stx tx
+	ldx #STDOUT
+	bne loop
+
+&&OUT	stx tx
+loop	pha
+	jsr PUTC
+	bcc ok
+	cmp #E_NUL
+	beq ok
+	jsr YIELD
+	pla
+	jmp loop
+ok	pla
+	ldx tx
+	rts
+	.)
+ 
+it        .asc 13,10,"PID Name"
+	  .dsb TNAMLEN-5, 32
+	  .asc " Th En Pa Me Sm SigA In OutErr^M^J",0
+
+	.)
+
