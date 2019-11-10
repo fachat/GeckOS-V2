@@ -3,6 +3,7 @@ version="2.0.9"
 
 all:
 	(cd apps; ${MAKE};)
+	(cd sysapps; ${MAKE};)
 
 clean:
 	(cd arch; ${MAKE} clean;)
