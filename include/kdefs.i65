@@ -234,7 +234,8 @@
 #define   TN_STDOUT 8	/* stdout stream			*/
 #define   TN_STDERR 9	/* stderr stream			*/
 #define   TN_SIGMASK 10	/* signal mask				*/
-#define   TN_NAME   11	/* start of program name (if avail.)	*/
+#define   TN_EXECADDR 11 /* address where task was started (main) */
+#define   TN_NAME   13	/* start of program name (if avail.)	*/
 #define   TN_SLEN   17	/* length of one entry			*/
 
 #define   TNAMLEN   (TN_SLEN-TN_NAME)	/* length of name	*/

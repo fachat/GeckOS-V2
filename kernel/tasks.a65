@@ -62,7 +62,8 @@
 #define	TT_SIGPEND	11	/* mask of pending signals */
 #define	TT_PRIORITY	12	/* priority (i.e. irqcnt) of task */
 #define	TT_RETCODE	13	/* return code after kill */
-#define	TT_SLEN		14	/* length of task struct */
+#define TT_EXECADDR	14	/* address where first thread was started */
+#define	TT_SLEN		16	/* length of task struct */
 
 #define	TH_ST		0	/* thread state */
 #define	TH_TASK		1	/* task ID */
@@ -246,7 +247,7 @@ nothread2 bcs nothread
           lda #TS_RDY
           sta threadTab + TH_ST,y	; reserve thread
 	  txa
-	  sta threadTab + TH_PAR,y
+	  sta threadTab + TH_PAR,y	; value of XR after fork
 
           lda SYSBUF+FORK_STDIN
           sta taskTab+TT_STDIN,x
@@ -254,6 +255,11 @@ nothread2 bcs nothread
           sta taskTab+TT_STDOUT,x
           lda SYSBUF+FORK_STDERR
           sta taskTab+TT_STDERR,x
+
+	  lda SYSBUF+FORK_ADDR
+	  sta taskTab+TT_EXECADDR,x
+	  lda SYSBUF+FORK_ADDR+1
+	  sta taskTab+TT_EXECADDR+1,x
 
 	  ldx div		; init new threads stack
 	  jsr initsp
@@ -718,6 +724,11 @@ loop
 
 	lda taskTab + TT_SIGMASK,y
 	sta SYSBUF + TN_SIGMASK,x
+
+	lda taskTab + TT_EXECADDR,y
+	sta SYSBUF + TN_EXECADDR,x
+	lda taskTab + TT_EXECADDR + 1,y
+	sta SYSBUF + TN_EXECADDR + 1,x
 
 	txa
 	clc
