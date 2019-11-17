@@ -3,6 +3,7 @@ lsh = lsh
 LSHDIR=../../../apps/lsh
 
 sysapps = mon slipd ps kill 
+SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls cat mv
 FILESDIR=../../../apps/file
@@ -12,7 +13,7 @@ INETDIR=../../../apps/inet
 
 XA=xa
 
-all: boot c64rom ${files} ${lsh} ${sysapps} ${inet}
+all: osa.d64
 
 c64 c64rom:
 	(cd ..; ${MAKE};)
@@ -22,7 +23,7 @@ boot: boot.a65
 
 clean:
 	rm -f c64rom boot osa.d64 osa.x64
-	rm -f ${files} ${sysapps} ${lsh} ${inet}
+	rm -f ${sysapps}
 	rm -f vice.trace reltest
 
 tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
@@ -35,9 +36,10 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 
 osa.d64: ${files} ${sysapps} ${lsh} ${inet} c64rom boot loader index.html
 	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html
+	rm -f ${sysapps}
 
 emurun: osa.d64
-	x64 -8 osa.d64
+	x64 -autostart osa.d64
 
 emuslip: all
 	x64+rs232 -kernal ~/csa/tmp/kernalb -speed 200
@@ -51,8 +53,8 @@ ${lsh}:
 	(cd ${LSHDIR}; make $@;)
 
 ${sysapps}: 
-	(if test -d ../../../sysapps/$@; then ln -sf ../../../sysapps/$@/$@ $@; cd ../../../sysapps/$@; make $@; fi)
-	(if test -f ../../../sysapps/$@.a65; then ln -sf ../../../sysapps/$@ $@; cd ../../../sysapps; make $@; fi)
+	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
+	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
 
 ${files}:
 	(cd ${FILESDIR}; make $@;)
