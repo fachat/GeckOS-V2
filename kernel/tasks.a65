@@ -761,8 +761,10 @@ loop
 	; copy name
 #if TNAMLEN > TT_SLEN-TT_NAME
 	tocopy = TT_SLEN-TT_NAME
+	offset = 0
 #else
 	tocopy = TNAMLEN
+	offset = TT_SLEN-TT_NAME-TNAMLEN
 #endif
 	txa
 	clc
@@ -770,7 +772,7 @@ loop
 	tax
 name
 	dex
-	lda taskTab2 + TT_NAME,y
+	lda taskTab2 + TT_NAME + offset,y
 	sta SYSBUF + TN_NAME,x
 	iny
 	cpx div
