@@ -636,10 +636,6 @@ LINEFEED  LDA #10
 #print    syszp
 #endif
 
-#ifdef STDTST
-#define ROM
-#include "stdlib/stdio.a65"
-#endif
 
 ende      .)
           
