@@ -1,6 +1,6 @@
 
 apps = lsh
-sysapps = mon slipd ps
+sysapps = mon slipd ps kill 
 files = mkdir rmdir rm format chkdsk ls cat mv
 inet = tlogin telnet httpd
 
