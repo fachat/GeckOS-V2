@@ -56,7 +56,7 @@ strerr	rts
 	sta zth
 	sty zth+1
 
-	jsr GETSTR
+	jsr GETSTR		; stream to send environment
 	bcs strerr
 	txa
 	pha
@@ -66,7 +66,7 @@ strerr	rts
 	jsr PSEM		; get the sendbuf which we need to FORK
 
 	pla
-	sta PCBUF+FORK_NAME	; - no name, give comm stream as parameter
+	sta PCBUF+FORK_PAR	; - no name, give comm stream as parameter
 	pha			; save for later
 
 	ldy #0
@@ -107,7 +107,7 @@ ferr2	bcs ferr
 	pha
 
 	ldy #3
-	ldx #FORK_NAME+1	; copy cmdline + parameter
+	ldx #FORK_NAME		; copy cmdline + parameter
 l0	lda (zth),y
 l1	sta PCBUF,x
 	iny
@@ -115,9 +115,9 @@ l1	sta PCBUF,x
 	beq lerr
 	cmp #0
 	bne l0
-	cpx #FORK_NAME+2	; first char
+	cpx #FORK_NAME+1	; first char
 	beq l0
-	lda PCBUF-2,x
+	lda PCBUF-2,x		; do we have two null bytes at the end? if not, further pars follow
 	bne l0
 
 	pla
@@ -289,8 +289,7 @@ eok	rts
 
 
 libfork .(		/* this is the routine where the new task is started */
-	cli
-	lda PCBUF+FORK_NAME
+	cli		; AC is FORK_PAR, i.e. stream where environment is sent
 	pha
 ;.byt 2
 	jsr taskinit
@@ -333,8 +332,8 @@ re	iny
 	jmp re
 endenv
 			; call exec routine
-	lda #<PCBUF+FORK_NAME+1
-	ldy #>PCBUF+FORK_NAME+1
+	lda #<PCBUF+FORK_NAME
+	ldy #>PCBUF+FORK_NAME
 	jsr doload
 ;.byt 2
 	tax
