@@ -292,11 +292,15 @@ end_auto
 
 /************* Kernel					*/
           
+#print *
+
 #include  "kernel\kernel.a65"
+
+#print *
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$1600
+Memstart  =$1680
 Memend	  =ROMSTART
 Zerostart =$70
 

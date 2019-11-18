@@ -271,9 +271,10 @@ ifs1      lda s2
           sta PCBUF+FORK_ADDR+1
 
 	  lda #0
-	  sta PCBUF+FORK_NAME
-	  sta PCBUF+FORK_NAME+1
+	  sta PCBUF+FORK_PAR
 #if 0
+	  sta PCBUF+FORK_NAME
+#else
 	  ldy #P_NAME+1
 	  ldx #2
 cmdn	  iny

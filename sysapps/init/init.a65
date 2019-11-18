@@ -711,7 +711,7 @@ libbuf	.dsb 64
 	jsr PSEM
 	
 	pla
-	sta PCBUF+FORK_NAME
+	sta PCBUF+FORK_PAR	; stream number where environment is sent
 	pha
 
 	lda s1

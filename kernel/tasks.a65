@@ -28,6 +28,9 @@
  * TE_* 	for task environment handling - not needed for system without
  *       	memory management
  * TT_*		task table, contains STD streams, etc
+ *		Note that this table is divided into two tables, to accomodate
+ *		for larger entries without having to reduce the number of
+ *		potential tasks.
  * TH_*		thread table, has stack info and state
  */
 
@@ -50,6 +53,8 @@
  * SEND/RECEIVE by checking for waiting threads.
  */
 
+/****************************************************/
+/* first part of the taskTab */
 #define	TT_STDIN	0	/* Stdin */
 #define	TT_STDOUT	1	/* Stdout */
 #define	TT_STDERR	2	/* Stderr */
@@ -60,10 +65,18 @@
 #define	TT_NTHREADS	9	/* number of running threads */
 #define	TT_SIGMASK	10	/* mask of allowed signals */
 #define	TT_SIGPEND	11	/* mask of pending signals */
-#define	TT_PRIORITY	12	/* priority (i.e. irqcnt) of task */
-#define	TT_RETCODE	13	/* return code after kill */
-#define	TT_SLEN		14	/* length of task struct */
 
+/* second part of taskTab */
+#define	TT_PRIORITY	0	/* priority (i.e. irqcnt) of task */
+#define	TT_RETCODE	1	/* return code after kill */
+#define TT_EXECADDR	2	/* address where first thread was started */
+#define	TT_NAME		4	/* name of the forked tasks (note: stored backwards) */
+
+/* entries in both tables are the same size, to use the same index */
+#define	TT_SLEN		12	/* length of task struct */
+
+
+/****************************************************/
 #define	TH_ST		0	/* thread state */
 #define	TH_TASK		1	/* task ID */
 #define	TH_SP		2	/* stack pointer */
@@ -71,6 +84,7 @@
 #define	TH_PAR		5	/* 3 byte kernel parameter space */
 #define	TH_SLEN		8	/* length of thread struct */
 
+/****************************************************/
 #ifndef ST_LEN
 #define	ST_LEN	128		/* stack length */
 #endif
@@ -99,7 +113,8 @@ div3      .byt 0
 	  .data
 
 Xenv	  .dsb ANZXENV
-taskTab	  .dsb MAXNTASKS * TT_SLEN
+taskTab	  .dsb MAXNTASKS * TT_SLEN	/* first part of taskTab */
+taskTab2  .dsb MAXNTASKS * TT_SLEN	/* second part of taskTab */
 threadTab .dsb MAXNTHREADS * TH_SLEN
 
 	  .text
@@ -221,10 +236,10 @@ env 	  stx div3
 	  ldy actTask
 	  cpy #<-1
 	  beq prio_def
-	  lda taskTab + TT_PRIORITY,y
+	  lda taskTab2 + TT_PRIORITY,y
 	  .byt $2c
 prio_def  lda #IRQCNT
-prio_ok	  sta taskTab + TT_PRIORITY,x
+prio_ok	  sta taskTab2 + TT_PRIORITY,x
 	  lda actTask
 	  sta taskTab + TT_PARENT,x
 
@@ -246,7 +261,10 @@ nothread2 bcs nothread
           lda #TS_RDY
           sta threadTab + TH_ST,y	; reserve thread
 	  txa
-	  sta threadTab + TH_PAR,y
+	  sta threadTab + TH_PAR,y	; value of XR after fork
+
+	  lda SYSBUF+FORK_PAR
+	  sta threadTab + TH_PAR + 2,y	; value of AC after fork
 
           lda SYSBUF+FORK_STDIN
           sta taskTab+TT_STDIN,x
@@ -255,6 +273,19 @@ nothread2 bcs nothread
           lda SYSBUF+FORK_STDERR
           sta taskTab+TT_STDERR,x
 
+	  lda SYSBUF+FORK_ADDR
+	  sta taskTab2 + TT_EXECADDR,x
+	  lda SYSBUF+FORK_ADDR+1
+	  sta taskTab2 + TT_EXECADDR+1,x
+
+	  ldy #TT_SLEN-TT_NAME-1
+loopname
+	  lda SYSBUF+FORK_NAME,y
+	  sta taskTab2 + TT_NAME,x
+	  inx
+	  dey
+	  bpl loopname
+	  
 	  ldx div		; init new threads stack
 	  jsr initsp
 
@@ -382,7 +413,7 @@ suicide	  ldx actTask
 	  jmp k1
 &&kkill	  jsr memsys
 k1 	  .(
-	  sta taskTab + TT_RETCODE,x
+	  sta taskTab2 + TT_RETCODE,x
 	  stx div2
 
 	  .(
@@ -528,7 +559,7 @@ next                          ; check next thread
           .(
 &s1       
 	  ldx threadTab + TH_TASK,y
-	  lda taskTab + TT_PRIORITY,x
+	  lda taskTab2 + TT_PRIORITY,x
 	  sta Irqcnt
 	  tya
 	  jsr setthread
@@ -536,8 +567,7 @@ next                          ; check next thread
 	  ldy actThread
 	  lda threadTab+TH_PAR+2,y
           pha
-          lda threadTab+TH_PAR,y
-          tax
+          ldx threadTab+TH_PAR,y
           lda threadTab+TH_PAR+1,y
           tay
           pla
@@ -557,7 +587,7 @@ next                          ; check next thread
 	  jmp nexttask
 &s2	  
 	  ldx threadTab + TH_TASK,y
-	  lda taskTab + TT_PRIORITY,x
+	  lda taskTab2 + TT_PRIORITY,x
 	  sta Irqcnt
 	  tya
 	  jsr setthread
@@ -610,10 +640,10 @@ s2a	  ;jmp endirq
 &renice  .(
 	  jsr memsys
 	  ldy actTask
-	  ldx taskTab + TT_PRIORITY,y
+	  ldx taskTab2 + TT_PRIORITY,y
 	  clc
-	  adc taskTab + TT_PRIORITY,y
-	  sta taskTab + TT_PRIORITY,y
+	  adc taskTab2 + TT_PRIORITY,y
+	  sta taskTab2 + TT_PRIORITY,y
 	  txa
 	  clc
 	  jmp memtask
@@ -663,7 +693,7 @@ loop	tax
 	lda #<-1
 	cmp taskTab + TT_NTHREADS,x
 	bne next
-	lda taskTab + TT_RETCODE,x	; error code
+	lda taskTab2 + TT_RETCODE,x	; error code
 	inc taskTab + TT_NTHREADS,x	
 	clc
 	beq end
@@ -719,13 +749,41 @@ loop
 	lda taskTab + TT_SIGMASK,y
 	sta SYSBUF + TN_SIGMASK,x
 
+	lda taskTab2 + TT_EXECADDR,y
+	sta SYSBUF + TN_EXECADDR,x
+	lda taskTab2 + TT_EXECADDR + 1,y
+	sta SYSBUF + TN_EXECADDR + 1,x
+
+	lda taskTab2 + TT_PRIORITY,y
+	sta SYSBUF + TN_PRIO,x
+
+	; copy name
+#if TNAMLEN > TT_SLEN-TT_NAME
+	tocopy = TT_SLEN-TT_NAME
+	offset = 0
+#else
+	tocopy = TNAMLEN
+	offset = TT_SLEN-TT_NAME-TNAMLEN
+#endif
+	txa
+	clc
+	adc #tocopy
+	tax
+name
+	dex
+	lda taskTab2 + TT_NAME + offset,y
+	sta SYSBUF + TN_NAME,x
+	iny
+	cpx div
+	bne name
+
 	txa
 	clc
 	adc #TN_SLEN
 	sta div
 	tya
 	clc
-	adc #TT_SLEN
+	adc #TT_SLEN-tocopy
 	tay
 #if MAXNTASKS <= ANZ_ENV
 	cpy #TT_SLEN * MAXNTASKS

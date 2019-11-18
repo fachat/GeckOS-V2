@@ -2,7 +2,7 @@
 Howto Boot the C64 and the WWW server
 -------------------------------------
 
-1) transfer all files in this directory to a 1541 disk. (osa.d64)
+1) build the "osa.d64" boot disk images using "make osa.d64"
 
 2) put this disk to a VC1541 connected with a C64.
 
