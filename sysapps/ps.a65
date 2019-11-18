@@ -27,78 +27,85 @@
 
 main	.(
 
-	.bss
+	.zero
+argp	.word 0
+
+	.data
 cnt	.byt 0
 zei	.byt 0
-	.text
 
-          ldy #0
-i0        lda it,y
-          beq info
-          jsr SEROUT
-          iny
-          bne i0
-info
+	.text
+	jsr getopts
+
+	; print header line
+	.(
+	lda #<it0
+	ldy #>it0
+	jsr STROUT
+	bit optlong
+	bmi noname
+	lda #<it1
+	ldy #>it1
+	jsr STROUT
+noname	lda #<it2
+	ldy #>it2
+	jsr STROUT
+	bit optlong
+	bpl noenv
+	lda #<it3
+	ldy #>it3
+	jsr STROUT
+noenv	lda #<it4
+	ldy #>it4
+	jsr STROUT
+	.)
+
+info	.(
 #if 1 /* fdef NOMMU */
 	  clc
 	  ldx #SEM_SENDBUF
 	  jsr PSEM
 #endif
 	  jsr GETINFO
-          ldx #0
-          stx cnt
-	  stx zei
 infoloop  
           ldx zei
+          lda PCBUF+TN_NTHREADS,x
+	  bne print
+	  bit optall
+	  bmi print
+	  jmp next
+print
 	  lda PCBUF+TN_PID,x
           jsr HEXOUT
           jsr SSPOUT
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-          bne name
-          ldx #TNAMLEN
-i1        jsr SSPOUT
-          dex
-          bne i1
-          beq i2
-name      ldy #0
-          ldx zei
-i4        lda PCBUF+TN_NAME,x
-          beq i3
-          jsr SEROUT
-          iny
-          inx
-          cpy #TNAMLEN
-          bcc i4
-i3        cpy #TNAMLEN
-          bcs i2
-          jsr SSPOUT
-          iny
-          bne i3
+	bit optlong
+	bmi skipfrontname
+	jsr printname
 i2        jsr SSPOUT
-
+skipfrontname
           ldx zei
+	lda PCBUF+TN_EXECADDR+1,x
+	jsr HEXOUT
+	lda PCBUF+TN_EXECADDR,x
+	jsr HEXOUT
+	jsr SSPOUT
+
           lda PCBUF+TN_NTHREADS,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+
+	bit optlong
+	bpl noenv
           lda PCBUF+TN_ENV,x
 	  jsr HEXOUT
 	  jsr SSPOUT
-	  lda PCBUF+TN_PARENT,x
-	  jsr HEXOUT
-;          asl
-;          asl
-;          tax
-;          ldy #4
-;i5        lda st,x
-;          jsr SEROUT
-;          inx
-;          dey
-;          bne i5
-          jsr SSPOUT
           ldx zei
           lda PCBUF+TN_MEM,x
           jsr HEXOUT
+          jsr SSPOUT
+noenv
+	  lda PCBUF+TN_PARENT,x
+	  jsr HEXOUT
           jsr SSPOUT
 	  lda PCBUF+TN_SIGMASK,x
           jsr HEXOUT
@@ -117,8 +124,15 @@ i2        jsr SSPOUT
           lda PCBUF+TN_STDERR,x
           jsr HEXOUT
           jsr SSPOUT
-          jsr CRLFOUT
-	  lda zei
+	bit optlong
+	bpl nextline
+	jsr SSPOUT
+	jsr SSPOUT
+	jsr SSPOUT
+	jsr printname
+nextline
+	jsr CRLFOUT
+next	  lda zei
 	  clc
 	  adc #TN_SLEN
 	  sta zei
@@ -134,6 +148,88 @@ ie
 #endif
 	  clc
           rts
+	.)
+
+printname .(
+          ldx zei
+          lda PCBUF+TN_NTHREADS,x
+          bne name
+          ldx #TNAMLEN
+i1        jsr SSPOUT
+          dex
+          bne i1
+          beq i2
+name      ldy #0
+i4        lda PCBUF+TN_NAME,x
+          beq i3
+          jsr SEROUT
+          iny
+          inx
+          cpy #TNAMLEN
+          bcc i4
+i3        cpy #TNAMLEN
+          bcs i2
+          jsr SSPOUT
+          iny
+          bne i3
+i2	rts
+	.)
+
+	; parse command line options
+	; uses argp/+1
+getopts	.(
+	sta argp
+	sty argp+1
+
+	ldy #0
+skip	lda (argp),y
+	beq opts
+	iny
+	bne skip
+opts	iny
+argloop	lda (argp),y
+	beq argend
+	cmp #"-"
+	bne argend	; arg must start with "-"
+next	iny
+	lda (argp),y	
+	bne check	; only "-" means next arg is not an option
+	iny 		; point to either next arg or zerobyte
+	bne argend
+check 	; check option
+	ldx #0
+optchk	lda optlist,x
+	beq argerr	; end of list - not found, thus error
+	cmp (argp),y
+	beq found
+	inx
+	bne optchk
+found	lda #$ff
+	sta optall,x
+	bne next
+argerr	sec
+	rts
+argend	clc
+	rts
+		
+	; same order and len as optall/optlong/... option bytes above
+optlist	.asc "al",0 
+	; option list in same order/len as option args
+&optall	.byt 0
+&optlong .byt 0
+	.)
+
+STROUT	.(
+	sta argp
+	sty argp+1
+	ldy #0
+loop	lda (argp),y
+	beq end
+	jsr SEROUT
+	iny
+	bne loop
+end	rts
+	.)
 
 &HEXOUT	.(
 	pha
@@ -181,9 +277,13 @@ ok	pla
 	rts
 	.)
  
-it        .asc 13,10,"PID Name"
-	  .dsb TNAMLEN-5, 32
-	  .asc " Th En Pa Me Sm SigA In OutErr^M^J",0
+it0     .asc 13,10,"PID",0
+it1	.asc " Name"
+	.dsb TNAMLEN-4, 32
+	.byt 0
+it2	.asc "Exec Th", 0
+it3	.asc " En Me", 0
+it4	.asc " Pa Sm SigA In OutErr^M^J",0
 
 	.)
 
