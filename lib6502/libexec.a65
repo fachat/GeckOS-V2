@@ -391,6 +391,7 @@ loaderr
 ;.byt 2
 	jsr GETPID
 	jsr bcleanpid		; free all memory allocated by this task
+	jsr zpidfree
 	jmp TERM
 	
 	.)
@@ -459,6 +460,7 @@ l1	iny
 
 	jsr GETPID
 	jsr bcleanpid		; free all memory allocated by this task
+	jsr zpidfree
 	pha
 	jmp TERM
 

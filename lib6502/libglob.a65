@@ -34,7 +34,8 @@
  *
  *	zinit		init zeropage allocation
  *	zalloc		alloc zeropage area
- *	zfree		free zeropage are
+ *	zfree		free zeropage area
+ *	zpidfree	free all zeropage areas for current pid
  */
 
 
@@ -260,6 +261,25 @@ ende
 	clc
 	cli
 	rts
+
+/*
+ * All zeropage addresses
+ * belonging to this task are free'd.
+ */
+&&zpidfree
+	jsr GETPID
+	inx
+	ldy #0
+	sei
+l1	txa
+	cmp zmem,y
+	bne next
+	lda #0
+	sta zmem,y
+next	iny
+	cpy #64
+	bcc l1
+	bcs ende
 	.)
 
 	.)
