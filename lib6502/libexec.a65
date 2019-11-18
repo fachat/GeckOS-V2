@@ -359,10 +359,16 @@ noerr	lda #0
 	lda #SC_EOF
 	jsr STRCMD
 
+	; store exec address
 	pla
 	sta zth+1
+	tay
 	pla
 	sta zth
+	; and update in kernel table
+	ldx #TN_EXECADDR
+	jsr SETINFO
+
 	plp
 	bcs loaderr
 

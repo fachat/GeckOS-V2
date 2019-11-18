@@ -78,6 +78,8 @@
 #define		RENICE	  OSA2KERNEL+$60
 #define		CHECKCHLD OSA2KERNEL+$63
 
+#define		SETINFO	  OSA2KERNEL+$66
+
 #endif
 
 #ifdef    SYSTEM
@@ -134,6 +136,8 @@ jmp kgetpid
 jmp slock
 jmp renice
 jmp checkchld
+
+jmp setinfo
 
 #endif
 
