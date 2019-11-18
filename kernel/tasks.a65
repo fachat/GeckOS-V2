@@ -567,8 +567,7 @@ next                          ; check next thread
 	  ldy actThread
 	  lda threadTab+TH_PAR+2,y
           pha
-          lda threadTab+TH_PAR,y
-          tax
+          ldx threadTab+TH_PAR,y
           lda threadTab+TH_PAR+1,y
           tay
           pla

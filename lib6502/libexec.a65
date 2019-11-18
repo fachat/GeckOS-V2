@@ -56,7 +56,7 @@ strerr	rts
 	sta zth
 	sty zth+1
 
-	jsr GETSTR
+	jsr GETSTR		; stream to send environment
 	bcs strerr
 	txa
 	pha
@@ -66,7 +66,7 @@ strerr	rts
 	jsr PSEM		; get the sendbuf which we need to FORK
 
 	pla
-	sta PCBUF+FORK_NAME	; - no name, give comm stream as parameter
+	sta PCBUF+FORK_PAR	; - no name, give comm stream as parameter
 	pha			; save for later
 
 	ldy #0
@@ -289,8 +289,8 @@ eok	rts
 
 
 libfork .(		/* this is the routine where the new task is started */
-	cli
-	lda PCBUF+FORK_NAME
+	cli		; AC is FORK_PAR, i.e. stream where environment is sent
+	;lda PCBUF+FORK_NAME
 	pha
 ;.byt 2
 	jsr taskinit
