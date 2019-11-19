@@ -359,10 +359,16 @@ noerr	lda #0
 	lda #SC_EOF
 	jsr STRCMD
 
+	; store exec address
 	pla
 	sta zth+1
+	tay
 	pla
 	sta zth
+	; and update in kernel table
+	ldx #TN_EXECADDR
+	jsr SETINFO
+
 	plp
 	bcs loaderr
 
@@ -385,6 +391,7 @@ loaderr
 ;.byt 2
 	jsr GETPID
 	jsr bcleanpid		; free all memory allocated by this task
+	jsr zpidfree
 	jmp TERM
 	
 	.)
@@ -453,6 +460,7 @@ l1	iny
 
 	jsr GETPID
 	jsr bcleanpid		; free all memory allocated by this task
+	jsr zpidfree
 	pha
 	jmp TERM
 

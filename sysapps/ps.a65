@@ -27,98 +27,116 @@
 
 main	.(
 
-	.bss
+	.zero
+argp	.word 0
+
+	.data
 cnt	.byt 0
 zei	.byt 0
-	.text
 
-          ldy #0
-i0        lda it,y
-          beq info
-          jsr SEROUT
-          iny
-          bne i0
-info
+	.text
+	jsr getopts
+	bcc nohelp
+	lda #<helpstr
+	ldy #>helpstr
+	jmp strout	; and then terminate
+nohelp
+	; print header line
+	.(
+	lda #<it0
+	ldy #>it0
+	jsr strout
+	bit optlong
+	bmi noname
+	lda #<it1
+	ldy #>it1
+	jsr strout
+noname	lda #<it2
+	ldy #>it2
+	jsr strout
+	bit optlong
+	bpl noenv
+	lda #<it3
+	ldy #>it3
+	jsr strout
+noenv	lda #<it4
+	ldy #>it4
+	jsr strout
+	.)
+
+info	.(
 #if 1 /* fdef NOMMU */
 	  clc
 	  ldx #SEM_SENDBUF
 	  jsr PSEM
 #endif
 	  jsr GETINFO
-          ldx #0
-          stx cnt
-	  stx zei
 infoloop  
           ldx zei
+          lda PCBUF+TN_NTHREADS,x
+	  bne print
+	  bit optall
+	  bmi print
+	  jmp next
+print
 	  lda PCBUF+TN_PID,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
+	bit optlong
+	bmi skipfrontname
+	jsr printname
+i2        jsr spout
+skipfrontname
           ldx zei
-          lda PCBUF+TN_NTHREADS,x
-          bne name
-          ldx #TNAMLEN
-i1        jsr SSPOUT
-          dex
-          bne i1
-          beq i2
-name      ldy #0
-          ldx zei
-i4        lda PCBUF+TN_NAME,x
-          beq i3
-          jsr SEROUT
-          iny
-          inx
-          cpy #TNAMLEN
-          bcc i4
-i3        cpy #TNAMLEN
-          bcs i2
-          jsr SSPOUT
-          iny
-          bne i3
-i2        jsr SSPOUT
+	lda PCBUF+TN_EXECADDR+1,x
+	jsr hexout
+	lda PCBUF+TN_EXECADDR,x
+	jsr hexout
+	jsr spout
 
-          ldx zei
           lda PCBUF+TN_NTHREADS,x
-	  jsr HEXOUT
-	  jsr SSPOUT
+	  jsr hexout
+	  jsr spout
+
+	bit optlong
+	bpl noenv
           lda PCBUF+TN_ENV,x
-	  jsr HEXOUT
-	  jsr SSPOUT
-	  lda PCBUF+TN_PARENT,x
-	  jsr HEXOUT
-;          asl
-;          asl
-;          tax
-;          ldy #4
-;i5        lda st,x
-;          jsr SEROUT
-;          inx
-;          dey
-;          bne i5
-          jsr SSPOUT
+	  jsr hexout
+	  jsr spout
           ldx zei
           lda PCBUF+TN_MEM,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
+noenv
+	  lda PCBUF+TN_PARENT,x
+	  jsr hexout
+          jsr spout
 	  lda PCBUF+TN_SIGMASK,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
 	  lda PCBUF+TN_SIGNAL+1,x
-	  jsr HEXOUT
+	  jsr hexout
 	  lda PCBUF+TN_SIGNAL,x
-	  jsr HEXOUT
-	  jsr SSPOUT
+	  jsr hexout
+	  jsr spout
           lda PCBUF+TN_STDIN,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
           lda PCBUF+TN_STDOUT,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
           lda PCBUF+TN_STDERR,x
-          jsr HEXOUT
-          jsr SSPOUT
-          jsr CRLFOUT
-	  lda zei
+          jsr hexout
+          jsr spout
+	bit optlong
+	bpl nextline
+	jsr spout
+	jsr spout
+	jsr spout
+	jsr printname
+nextline
+	jsr crlfout
+next	  lda zei
 	  clc
 	  adc #TN_SLEN
 	  sta zei
@@ -134,56 +152,58 @@ ie
 #endif
 	  clc
           rts
-
-&HEXOUT	.(
-	pha
-	lsr
-	lsr
-	lsr
-	lsr
-	jsr nibble
-	pla
-nibble	and #$0f
-	clc
-	adc #"0"
-	cmp #"9"+1
-	bcc nibok
-	adc #6
-nibok	jmp SEROUT
 	.)
 
-CRLFOUT .(
-	.data
-tx	.byt 0
-	.text
-
-	lda #13
-	jsr SEROUT
-	lda #10
-	.byt $2c
-&SSPOUT	lda #" "
-&SEROUT
-	stx tx
-	ldx #STDOUT
-	bne loop
-
-&&OUT	stx tx
-loop	pha
-	jsr PUTC
-	bcc ok
-	cmp #E_NUL
-	beq ok
-	jsr YIELD
-	pla
-	jmp loop
-ok	pla
-	ldx tx
-	rts
+printname .(
+          ldx zei
+          lda PCBUF+TN_NTHREADS,x
+          bne name
+          ldx #TNAMLEN
+i1        jsr spout
+          dex
+          bne i1
+          beq i2
+name      ldy #0
+i4        lda PCBUF+TN_NAME,x
+          beq i3
+          jsr stdout
+          iny
+          inx
+          cpy #TNAMLEN
+          bcc i4
+i3        cpy #TNAMLEN
+          bcs i2
+          jsr spout
+          iny
+          bne i3
+i2	rts
 	.)
- 
-it        .asc 13,10,"PID Name"
-	  .dsb TNAMLEN-5, 32
-	  .asc " Th En Pa Me Sm SigA In OutErr^M^J",0
+
+	; references used by getopts
+	; same order and len as optall/optlong/... option bytes above
+optslst	.asc "al",0 
+	; option list in same order/len as option args
+optsflg
+optall	.byt 0
+optlong .byt 0
+
+it0     .asc 13,10,"PID",0
+it1	.asc " Name"
+	.dsb TNAMLEN-4, 32
+	.byt 0
+it2	.asc "Exec Th", 0
+it3	.asc " En Me", 0
+it4	.asc " Pa Sm SigA In OutErr^M^J",0
+
+helpstr	.asc 13,10
+	.asc "ps [opts]",13,10
+	.asc "Display the list of processes",13,10
+	.asc "Options:",13,10
+	.asc " -a     show all entries",13,10
+	.asc " -l     show all fields",13,10
+	.asc 0
+
+#include "../apps/common.a65"
 
 	.)
 

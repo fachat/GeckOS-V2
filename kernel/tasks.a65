@@ -683,7 +683,7 @@ unlock	  lda #0
 
 #ifdef NEED_CHECKCHLD
 
-&&checkchld .(
+&checkchld .(
 	jsr memsys
 	lda #0
 loop	tax
@@ -715,7 +715,7 @@ end	jmp memtask
 
 #ifdef NEED_GETINFO
 
-&&getinfo
+&getinfo
 	.(
 	jsr memsys
 	MAPSYSBUF
@@ -796,11 +796,36 @@ name
 	jmp memtask
 
 	.)
+
+#ifdef NEED_SETINFO
+
+&setinfo
+	.(
+	jsr memsys
+	cpx #TN_EXECADDR
+	bne err
+	ldx actTask
+	sta taskTab2 + TT_EXECADDR,x
+	tya
+	sta taskTab2 + TT_EXECADDR+1,x
+	clc
+	.byt $24
+err	sec
+	jmp memtask
+	.)
+
 #else
+
+&setinfo = notimp
+
+#endif
+
+#else	/* NEED_GETINFO */
 
 &getinfo = notimp
 
 #endif
+
 
 /************************************************************************/
 

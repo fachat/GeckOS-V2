@@ -36,6 +36,7 @@
 
 #include "lib6502/libdef.a65"
 #include "lib6502/libglob.a65"
+#include "lib6502/libzmem.a65"
 #include "lib6502/libmem.a65"
 #include "lib6502/libsem.a65"
 #include "lib6502/libsig.a65"
