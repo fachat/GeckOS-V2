@@ -1,0 +1,168 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Common code for lib6502-using programs
+    Code is only included if label is defined, so include as last entry
+
+    Copyright (C) 2019 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/* 
+ * Exported labels are:
+ *
+ * 	getopts	- parse command line options
+ *			in: a/y pointer to cmdline options
+ *			refs: argp    - zeropage ptr
+ *			      optslst - zero-terminated string of option chars
+ *			      optsflg - list of option bytes (pre-filled with zero)
+ *					in the same order as optslst
+ *					will be set to $ff when option is set
+ *			out: c=0	no error
+ *			     c=1 ac="?"	print help
+ *			     c=1 	other unknown option
+ *
+ *	strout - print a string on stdout
+ *			in: a/y pointer to zero-terminated string
+ *			refs: arpg    - zeropage ptr
+ *
+ *	hexout - print a hex byte
+ *			in: a value
+ * 	crlfout - print cr/lf on stdout
+ *	spout - print a space on stdout
+ *	stdout - print a character on stdout
+ *			in: a value to be printed
+ */
+
+#iflused getopts
+
+	; parse command line options
+	; uses argp/+1
+getopts	.(
+	sta argp
+	sty argp+1
+
+	ldy #0
+skip	lda (argp),y
+	beq opts
+	iny
+	bne skip
+opts	iny
+argloop	lda (argp),y
+	beq argend
+	cmp #"-"
+	bne argend	; arg must start with "-"
+next	iny
+	lda (argp),y	
+	bne check	; only "-" means next arg is not an option
+	iny 		; point to either next arg or zerobyte
+	bne argend	; always
+check 	; check option
+	cmp #"?"
+	beq help
+	ldx #0
+optchk	lda optslst,x
+	beq argerr	; end of list - not found, thus error
+	cmp (argp),y
+	beq found
+	inx
+	bne optchk
+found	lda #$ff
+	sta optsflg,x
+	bne next	; always
+help	
+argerr 	sec		; acc contains "?" for help, zero for error
+	rts
+argend	clc
+	rts
+	.)
+
+#endif	/* getopts */
+
+#iflused strout
+
+strout	.(
+	sta argp
+	sty argp+1
+	ldy #0
+loop	lda (argp),y
+	beq end
+	jsr stdout
+	iny
+	bne loop
+end	rts
+	.)
+
+#endif
+
+#iflused hexout
+
+hexout	.(
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr nibble
+	pla
+nibble	and #$0f
+	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc nibok
+	adc #6
+nibok	jmp stdout
+	.)
+
+#endif
+
+#iflused crlfout
+
+crlfout .(
+
+	lda #13
+	jsr stdout
+	lda #10
+#iflused spout		/* if spout is used, skip following lda */
+	.byt $2c
+#endif	/* spout */
+	.)
+#endif	/* crlfout */
+
+#iflused spout
+	.(
+&spout	lda #" "
+x=stdout	; ensure stdout is used
+	.)
+#endif	/* spout */
+
+#iflused stdout
+
+stdout	.(
+	stx tx
+	ldx #STDOUT
+	jsr fputc
+	ldx tx
+	rts
+	.data
+tx	.byt 0
+	.text
+	.)
+ 
+
+#endif
+

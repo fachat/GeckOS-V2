@@ -39,29 +39,29 @@ zei	.byt 0
 	bcc nohelp
 	lda #<helpstr
 	ldy #>helpstr
-	jmp STROUT	; and then terminate
+	jmp strout	; and then terminate
 nohelp
 	; print header line
 	.(
 	lda #<it0
 	ldy #>it0
-	jsr STROUT
+	jsr strout
 	bit optlong
 	bmi noname
 	lda #<it1
 	ldy #>it1
-	jsr STROUT
+	jsr strout
 noname	lda #<it2
 	ldy #>it2
-	jsr STROUT
+	jsr strout
 	bit optlong
 	bpl noenv
 	lda #<it3
 	ldy #>it3
-	jsr STROUT
+	jsr strout
 noenv	lda #<it4
 	ldy #>it4
-	jsr STROUT
+	jsr strout
 	.)
 
 info	.(
@@ -80,62 +80,62 @@ infoloop
 	  jmp next
 print
 	  lda PCBUF+TN_PID,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
 	bit optlong
 	bmi skipfrontname
 	jsr printname
-i2        jsr SSPOUT
+i2        jsr spout
 skipfrontname
           ldx zei
 	lda PCBUF+TN_EXECADDR+1,x
-	jsr HEXOUT
+	jsr hexout
 	lda PCBUF+TN_EXECADDR,x
-	jsr HEXOUT
-	jsr SSPOUT
+	jsr hexout
+	jsr spout
 
           lda PCBUF+TN_NTHREADS,x
-	  jsr HEXOUT
-	  jsr SSPOUT
+	  jsr hexout
+	  jsr spout
 
 	bit optlong
 	bpl noenv
           lda PCBUF+TN_ENV,x
-	  jsr HEXOUT
-	  jsr SSPOUT
+	  jsr hexout
+	  jsr spout
           ldx zei
           lda PCBUF+TN_MEM,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
 noenv
 	  lda PCBUF+TN_PARENT,x
-	  jsr HEXOUT
-          jsr SSPOUT
+	  jsr hexout
+          jsr spout
 	  lda PCBUF+TN_SIGMASK,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
 	  lda PCBUF+TN_SIGNAL+1,x
-	  jsr HEXOUT
+	  jsr hexout
 	  lda PCBUF+TN_SIGNAL,x
-	  jsr HEXOUT
-	  jsr SSPOUT
+	  jsr hexout
+	  jsr spout
           lda PCBUF+TN_STDIN,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
           lda PCBUF+TN_STDOUT,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
           lda PCBUF+TN_STDERR,x
-          jsr HEXOUT
-          jsr SSPOUT
+          jsr hexout
+          jsr spout
 	bit optlong
 	bpl nextline
-	jsr SSPOUT
-	jsr SSPOUT
-	jsr SSPOUT
+	jsr spout
+	jsr spout
+	jsr spout
 	jsr printname
 nextline
-	jsr CRLFOUT
+	jsr crlfout
 next	  lda zei
 	  clc
 	  adc #TN_SLEN
@@ -159,131 +159,34 @@ printname .(
           lda PCBUF+TN_NTHREADS,x
           bne name
           ldx #TNAMLEN
-i1        jsr SSPOUT
+i1        jsr spout
           dex
           bne i1
           beq i2
 name      ldy #0
 i4        lda PCBUF+TN_NAME,x
           beq i3
-          jsr SEROUT
+          jsr stdout
           iny
           inx
           cpy #TNAMLEN
           bcc i4
 i3        cpy #TNAMLEN
           bcs i2
-          jsr SSPOUT
+          jsr spout
           iny
           bne i3
 i2	rts
 	.)
 
-	; parse command line options
-	; uses argp/+1
-getopts	.(
-	sta argp
-	sty argp+1
-
-	ldy #0
-skip	lda (argp),y
-	beq opts
-	iny
-	bne skip
-opts	iny
-argloop	lda (argp),y
-	beq argend
-	cmp #"-"
-	bne argend	; arg must start with "-"
-next	iny
-	lda (argp),y	
-	bne check	; only "-" means next arg is not an option
-	iny 		; point to either next arg or zerobyte
-	bne argend	; always
-check 	; check option
-	cmp #"?"
-	beq help
-	ldx #0
-optchk	lda optlist,x
-	beq argerr	; end of list - not found, thus error
-	cmp (argp),y
-	beq found
-	inx
-	bne optchk
-found	lda #$ff
-	sta optall,x
-	bne next	; always
-help	
-argerr 	sec		; acc contains "?" for help, zero for error
-	rts
-argend	clc
-	rts
-		
+	; references used by getopts
 	; same order and len as optall/optlong/... option bytes above
-optlist	.asc "al",0 
+optslst	.asc "al",0 
 	; option list in same order/len as option args
-&optall	.byt 0
-&optlong .byt 0
-	.)
+optsflg
+optall	.byt 0
+optlong .byt 0
 
-STROUT	.(
-	sta argp
-	sty argp+1
-	ldy #0
-loop	lda (argp),y
-	beq end
-	jsr SEROUT
-	iny
-	bne loop
-end	rts
-	.)
-
-&HEXOUT	.(
-	pha
-	lsr
-	lsr
-	lsr
-	lsr
-	jsr nibble
-	pla
-nibble	and #$0f
-	clc
-	adc #"0"
-	cmp #"9"+1
-	bcc nibok
-	adc #6
-nibok	jmp SEROUT
-	.)
-
-CRLFOUT .(
-	.data
-tx	.byt 0
-	.text
-
-	lda #13
-	jsr SEROUT
-	lda #10
-	.byt $2c
-&SSPOUT	lda #" "
-&SEROUT
-	stx tx
-	ldx #STDOUT
-	bne loop
-
-&&OUT	stx tx
-loop	pha
-	jsr PUTC
-	bcc ok
-	cmp #E_NUL
-	beq ok
-	jsr YIELD
-	pla
-	jmp loop
-ok	pla
-	ldx tx
-	rts
-	.)
- 
 it0     .asc 13,10,"PID",0
 it1	.asc " Name"
 	.dsb TNAMLEN-4, 32
@@ -299,5 +202,8 @@ helpstr	.asc 13,10
 	.asc " -a     show all entries",13,10
 	.asc " -l     show all fields",13,10
 	.asc 0
+
+#include "../apps/common.a65"
+
 	.)
 
