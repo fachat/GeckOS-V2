@@ -36,7 +36,11 @@ zei	.byt 0
 
 	.text
 	jsr getopts
-
+	bcc nohelp
+	lda #<helpstr
+	ldy #>helpstr
+	jmp STROUT	; and then terminate
+nohelp
 	; print header line
 	.(
 	lda #<it0
@@ -195,8 +199,10 @@ next	iny
 	lda (argp),y	
 	bne check	; only "-" means next arg is not an option
 	iny 		; point to either next arg or zerobyte
-	bne argend
+	bne argend	; always
 check 	; check option
+	cmp #"?"
+	beq help
 	ldx #0
 optchk	lda optlist,x
 	beq argerr	; end of list - not found, thus error
@@ -206,8 +212,9 @@ optchk	lda optlist,x
 	bne optchk
 found	lda #$ff
 	sta optall,x
-	bne next
-argerr	sec
+	bne next	; always
+help	
+argerr 	sec		; acc contains "?" for help, zero for error
 	rts
 argend	clc
 	rts
@@ -285,5 +292,12 @@ it2	.asc "Exec Th", 0
 it3	.asc " En Me", 0
 it4	.asc " Pa Sm SigA In OutErr^M^J",0
 
+helpstr	.asc 13,10
+	.asc "ps [opts]",13,10
+	.asc "Display the list of processes",13,10
+	.asc "Options:",13,10
+	.asc " -a     show all entries",13,10
+	.asc " -l     show all fields",13,10
+	.asc 0
 	.)
 
