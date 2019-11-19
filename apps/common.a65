@@ -155,6 +155,7 @@ x=stdout	; ensure stdout is used
 stdout	.(
 	stx tx
 	ldx #STDOUT
+	sec
 	jsr fputc
 	ldx tx
 	rts
