@@ -33,6 +33,7 @@
  *					in the same order as optslst
  *					will be set to $ff when option is set
  *			out: c=0	no error
+ *			     y 		on c=0, (argp),y points to either next arg or zerobyte
  *			     c=1 ac="?"	print help
  *			     c=1 	other unknown option
  *
@@ -46,6 +47,16 @@
  *	spout - print a space on stdout
  *	stdout - print a character on stdout
  *			in: a value to be printed
+ *
+ *	longint2bcd - convert a long value to BCD
+ *			in: BIN       - Address of 4 byte integer value
+ *			    BCD	      - Address of 5 byte BCD buffer for output
+ *			out: value in BCD
+ *
+ *	wordint2bcd - convert a 2-byte value to BCD
+ *			in: BIN       - Address of 2 byte integer value
+ *			    BCD	      - Address of 3 byte BCD buffer for output
+ *			out: value in BCD
  */
 
 #iflused getopts
@@ -92,6 +103,121 @@ argend	clc
 	.)
 
 #endif	/* getopts */
+
+/***********************************************************/
+
+#iflused longint2bcd
+
+; algorithm adapted from http://www.6502.org/source/integers/hex2dec-more.htm
+
+longint2bcd .(
+	SED		; Switch to decimal mode
+	LDA #0		; Ensure the result is clear
+	STA BCD+0
+	STA BCD+1
+	STA BCD+2
+	STA BCD+3
+	STA BCD+4
+
+	LDX #32		; The number of source bits
+	ldy #0
+CNVBIT:	ASL BIN+0	; Shift out one bit
+	ROL BIN+1
+	ROL BIN+2
+	ROL BIN+3
+	LDA BCD+0	; And add into result
+	ADC BCD+0
+	STA BCD+0
+	LDA BCD+1	; propagating any carry
+	ADC BCD+1
+	STA BCD+1
+	LDA BCD+2	; ... thru whole result
+	ADC BCD+2
+	STA BCD+2
+	LDA BCD+3	; ... thru whole result
+	ADC BCD+3
+	STA BCD+3
+	LDA BCD+4	; ... thru whole result
+	ADC BCD+4
+	STA BCD+4
+	DEX		; And repeat for next bit
+	BNE CNVBIT
+	CLD		; Back to binary
+	RTS
+	.)
+#endif
+
+#iflused wordint2bcd
+
+wordint2bcd .(
+	SED		; Switch to decimal mode
+	LDA #0		; Ensure the result is clear
+	STA BCD+0
+	STA BCD+1
+	STA BCD+2
+
+	LDX #32		; The number of source bits
+	ldy #0
+CNVBIT:	ASL BIN+0	; Shift out one bit
+	ROL BIN+1
+	LDA BCD+0	; And add into result
+	ADC BCD+0
+	STA BCD+0
+	LDA BCD+1	; propagating any carry
+	ADC BCD+1
+	STA BCD+1
+	LDA BCD+2	; ... thru whole result
+	ADC BCD+2
+	STA BCD+2
+	DEX		; And repeat for next bit
+	BNE CNVBIT
+	CLD		; Back to binary
+	RTS
+	.)
+
+#endif	/* wordbin2bcd */
+
+
+/***********************************************************/
+
+#iflused bcdout
+
+; own algorithm. could probably be optimized using http://6502org.wikidot.com/software-output-decimal
+; y is number of decimal digits to print up to
+bcdout 	.(
+	lda #" "
+	sta fill
+	tya
+	lsr
+	tay
+	bcs next
+loop 	lda BCD,y
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr digit
+next	lda BCD,y
+	jsr digit
+	dey
+	bpl loop
+	rts
+
+digit	and #15
+	bne print
+	lda fill
+	jmp stdout
+print 	ora #"0"
+	jsr stdout
+	lda #"0"
+	sta fill
+	rts
+
+	.bss
+fill	.byt 0
+	.text	
+	.)
+#endif
 
 #iflused strout
 
@@ -164,6 +290,5 @@ tx	.byt 0
 	.text
 	.)
  
-
 #endif
 
