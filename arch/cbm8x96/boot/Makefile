@@ -1,20 +1,32 @@
 
-apps = lsh
-sysapps = mon # slipd
+lsh = lsh
+LSHDIR=../../../apps/lsh
+
+sysapps = mon ps kill #slipd
+SYSAPPSDIR=../../../sysapps
+
 files = mkdir rmdir rm format chkdsk ls cat mv
+FILESDIR=../../../apps/file
+
 inet = # tlogin telnet httpd
+INETDIR=../../../apps/inet
 
 XA=xa
 
-all: rom ${files} ${apps} ${sysapps} ${inet}
+#all: rom ${files} ${apps} ${sysapps} ${inet}
+all: osa.d64
 
 rom:
 	(cd ..; ${MAKE};)
 
 clean:
 	rm -f rom osa.d64 osa.x64
-	rm -f ${files} ${sysapps} ${apps} ${inet}
+	rm -f ${sysapps} 
 	rm -f vice.trace reltest
+
+topclean:
+	# convenience
+	(cd ../../../; make clean);
 
 tar ../boot.tgz: rom loader howto.boot
 	tar czvf ../boot.tgz rom loader howto.boot
@@ -24,35 +36,29 @@ tar ../boot.tgz: rom loader howto.boot
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${sysapps} ${apps} ${inet} rom loader
-	./mkdisk ${files} ${sysapps} ${apps} ${inet} rom loader
-	dd if=osa.x64 of=osa.d64 bs=64 skip=1
+osa.d64: ${files} ${sysapps} ${lsh} ${inet} rom loader
+	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} rom 
+	rm -f ${sysapps}
 
 emurun: osa.d64
-	xpet -model 8096 -8 osa.d64
+	xpet -model 8096 -drive8type 2031 -autostart osa.d64
 
-emuslip: all
-	x64+rs232 -kernal ~/csa/tmp/kernalb -speed 200
 
 ##############################################################################
 #
 # lib6502 programs
 #
 
-${apps}: 
-	(cd ../../../apps/lsh; make lsh;)
-	(if test ! -r lsh; then ln -s ../../../apps/lsh/lsh lsh; fi)
+${lsh}:
+	(cd ${LSHDIR}; make $@;)
 
 ${sysapps}: 
-	(cd ../../../sysapps/$@; make $@;)
-	(if test ! -r $@; then ln -s ../../../sysapps/$@/$@ $@; fi)
+	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
+	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
 
 ${files}:
-	(cd ../../../apps/file; make $@;)
-	(if test ! -r $@; then ln -s ../../../apps/file/$@ $@; fi)
+	(cd ${FILESDIR}; make $@;)
 
 ${inet}:
-	(cd ../../../apps/inet; make $@;)
-	(if test ! -r $@; then ln -s ../../../apps/inet/$@ $@; fi)
-
+	(cd ${INETDIR}; make $@;)
 	
