@@ -16,7 +16,7 @@ c64 ${TRG}: # $(wildcard *.a65)
 	
 
 clean:
-	rm -f ${TRG} c64rom.lab c64rom.o65 boot.tgz
+	rm -f ${TRG} c64rom.lab c64rom.l c64rom.o65 boot.tgz
 	(cd boot; ${MAKE} clean;)
 	(cd apps; ${MAKE} clean;)
 
