@@ -49,9 +49,17 @@ application.
 </ul>
 
 <h4><a name="kernel">Kernel Interface Description</a> </h4>
- 
+
+<p> 
 Most kernel routines return an error code in the accumlator (a), if the
-carry flag is reset upon return. Otherwise the ac might contain data.<p>
+carry flag is reset upon return. Otherwise the ac might contain data.
+</p><p>
+Please note that, while the addresses here are given as starting with $f000, 
+in the real system the address could be basically anywhere depending on the
+architecture. The loader relocates them on the basis of the "OSA2KERNEL"
+label: the file contains it as undefined label, and the loader relocates
+the kernel addresses that are stored as offset to this base as appropriate.
+</p>
 
 <hr>
 
@@ -354,7 +362,7 @@ $f030	GETINFO	getinfo returns process information about all (up to 16)
 		than TNAMLEN-1, the the last characters are cut off, and in
 		the table the ending nullbyte is missing.
 
-$xxxx	SETINFO	setinfo updates the task table with the correct 
+$f066	SETINFO	setinfo updates the task table with the correct 
 		start address of the active task (used by lib6502).
 
 		x   -&gt          field to update (must be TN_EXECADDR)
