@@ -92,8 +92,7 @@ optchk	lda optslst,x
 	beq found
 	inx
 	bne optchk
-found	lda #$ff
-	sta optsflg,x
+found	dec optsflg,x
 	bne next	; always
 help	
 argerr 	sec		; acc contains "?" for help, zero for error
@@ -197,7 +196,11 @@ loop 	lda BCD,y
 	lsr
 	lsr
 	jsr digit
-next	lda BCD,y
+next	tya
+	bne show
+	lda #"0"
+	sta fill
+show 	lda BCD,y
 	jsr digit
 	dey
 	bpl loop
@@ -272,7 +275,7 @@ crlfout .(
 #iflused spout
 	.(
 &spout	lda #" "
-x=stdout	; ensure stdout is used
+	bne stdout
 	.)
 #endif	/* spout */
 
