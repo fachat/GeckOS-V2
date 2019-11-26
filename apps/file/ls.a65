@@ -65,16 +65,87 @@ rd	ldx fileno
 	lda #<entry
 	ldy #>entry
 	jsr freaddir
-	bcs eof
-
+	bcc doit
+eof
+	ldx fileno
+	jsr fclose
+	lda #0
+	rts
+doit
 	bit optlong
-	bpl short
+	bpl shortx
 
+	lda entry+FD_PERM+1
+	and #>S_IFMT
+	cmp #>S_IFMNAME
+	bne chkperms
+shortx	jmp short
+
+chkperms
+	lda entry+FD_PERM+1
+	and #>S_IFMT
+	cmp #>S_IFMFREE
+	beq noperms
+	cmp #>S_IFMSIZE
+	beq noperms
+
+	; user
+	ror entry+FD_PERM+1
+	lda #"r"
+	jsr permout
+	rol entry+FD_PERM
+	lda #"w"
+	jsr permout
+	rol entry+FD_PERM
+	lda #"x"
+	jsr permout
+
+	; group
+	rol entry+FD_PERM
+	lda #"r"
+	jsr permout
+	rol entry+FD_PERM
+	lda #"w"
+	jsr permout
+	rol entry+FD_PERM
+	lda #"x"
+	jsr permout
+
+	; others
+	rol entry+FD_PERM
+	lda #"r"
+	jsr permout
+	rol entry+FD_PERM
+	lda #"w"
+	jsr permout
+	rol entry+FD_PERM
+	lda #"x"
+	jsr permout
+
+	jsr spout
+
+	lda entry+FD_OWNER
+	ldy entry+FD_OWNER+1
+	jsr intout
+
+	lda entry+FD_GROUP
+	ldy entry+FD_GROUP+1
+	jsr intout
+noperms
 	; long output
+	lda entry+FD_LENGTH
+	sta BIN
+	lda entry+FD_LENGTH+1
+	sta BIN+1
+	lda entry+FD_LENGTH+2
+	sta BIN+2
+	lda entry+FD_LENGTH+3
+	sta BIN+3
 	jsr longint2bcd
 	ldy #9
 	jsr bcdout
 	jsr spout
+	
 short
 	lda #<entry+FD_NAME
 	ldy #>entry+FD_NAME
@@ -83,10 +154,21 @@ short
 	jsr crlfout
 	jmp rd
 
-eof	ldx fileno
-	jsr fclose
-	lda #0
-	rts
+
+intout 	.(
+	sta BIN
+	sty BIN+1
+	jsr wordint2bcd
+	ldy #5
+	jsr bcdout
+	jmp spout
+	.)
+
+permout	.(
+	bcs out
+	lda #"-"
+out	jmp stdout
+	.)
 
 	.data
 
@@ -104,7 +186,7 @@ usagetxt
 	.bss
 fileno	.byt 0
 entry	.dsb FD_NAME+MAX_FILENAME
-BIN	=entry+FD_LENGTH
+BIN	.byt 0,0,0,0
 BCD	.byt 0,0,0,0,0
 	.text
 
