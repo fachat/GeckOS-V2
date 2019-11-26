@@ -247,11 +247,13 @@ $f01e	FORK	start a new task. parameter: yr = length of the following
 		FORK_STDOUT	4	stdout stream
 		FORK_STDERR	5	stderr stream
 		FORK_ADDR	6	start address of task
-		FORK_NAME	8	name of the program, ended by a 
+		FORK_PAR	8	parameter (passed to new task in AC)
+		FORK_NAME	9	name of the program, ended by a 
 					nullbyte. After that follows the 
 					command line that started the program.
 
-		FORK returns the PID of the new task in xr.
+		FORK returns the PID of the new task in xr 
+		and the parameter from FORK_PAR in ac.
 </pre>
 		The commandline is put into the PCBUF of the starting 
 		task. The new task gets its own task id in x
@@ -343,13 +345,20 @@ $f030	GETINFO	getinfo returns process information about all (up to 16)
 		TN_STDOUT	8	STDOUT stream
 		TN_STDERR	9	STDERR stream
 		TN_SIGMASK	10	signal mask value
-		TN_NAME		11	start of prog name (if available)
+		TN_EXECADDR	11	task start address
+		TN_PRIO		13	task priority
+		TN_NAME		14	start of prog name (if available)
 
-		each field is TN_SLEN bytes long and the
+		Each field is TN_SLEN bytes long and the
 		length of the name field is TNAMLEN. If the name is longer
 		than TNAMLEN-1, the the last characters are cut off, and in
 		the table the ending nullbyte is missing.
 
+$xxxx	SETINFO	setinfo updates the task table with the correct 
+		start address of the active task (used by lib6502).
+
+		x   -&gt          field to update (must be TN_EXECADDR)
+		a/y -&gt          task start address
 <!-- This is now internal only!
 		The thread status can have the values given below:
 
