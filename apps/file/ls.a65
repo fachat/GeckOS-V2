@@ -28,6 +28,7 @@ main	.(
 argp	.word 0
 	.text
 
+	.(
 	; stores argp in a/y to argp var
 	jsr getopts
 	bcc optsok
@@ -79,20 +80,21 @@ doit
 	and #>S_IFMT
 	cmp #>S_IFMNAME
 	bne chkperms
-shortx	jmp short
+shortx	jmp chklen
 
 chkperms
 	lda entry+FD_PERM+1
 	and #>S_IFMT
 	cmp #>S_IFMFREE
-	beq noperms
+	beq prlen
 	cmp #>S_IFMSIZE
-	beq noperms
+	beq prlen
 
 	; user
 	ror entry+FD_PERM+1
 	lda #"r"
 	jsr permout
+	asl entry+FD_PERM+1	; restore FD_PERM+1, at least upper three bits
 	rol entry+FD_PERM
 	lda #"w"
 	jsr permout
@@ -131,7 +133,14 @@ chkperms
 	lda entry+FD_GROUP
 	ldy entry+FD_GROUP+1
 	jsr intout
-noperms
+
+	jmp prlen
+chklen
+	lda entry+FD_PERM+1
+	and #>S_IFMT
+	cmp #>S_IFMFREE
+	bne short
+prlen
 	; long output
 	lda entry+FD_LENGTH
 	sta BIN
@@ -146,14 +155,24 @@ noperms
 	jsr bcdout
 	jsr spout
 	
-short
+short	
+	lda entry+FD_PERM+1
+	and #>S_IFMT
+	cmp #>S_IFMFREE
+	bne name
+	
+	lda #<bytesfree
+	ldy #>bytesfree
+	jsr strout
+	jmp next
+name
 	lda #<entry+FD_NAME
 	ldy #>entry+FD_NAME
 	jsr strout
-
+next
 	jsr crlfout
 	jmp rd
-
+	.)
 
 intout 	.(
 	sta BIN
@@ -182,6 +201,9 @@ usagetxt
 	.asc 13,10,"Options:"
 	.asc 13,10,"-l    print more file information"
 	.byt 0
+
+bytesfree 
+	.asc "Bytes free.",0
 
 	.bss
 fileno	.byt 0
