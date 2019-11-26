@@ -421,7 +421,7 @@ l4
           tax
           lda #SC_EOF
           jsr STRCMD
-          jsr close
+          jsr fsclose
           jmp nextl
 l4a       jsr clrbuf
           jsr loadbuf
@@ -440,6 +440,7 @@ eofonly
           ldy #F_FL
           lda #F_FL_EOF
           sta (fzei),y
+	  jsr iecclose
 l5        jmp nextl
 
 l5n       cmp #E_NUL
@@ -449,7 +450,7 @@ l5n       cmp #E_NUL
           tax
           lda #SC_EOF
           jsr STRCMD
-          jsr close
+          jsr eofclose
           jmp nextl
 
 l3        cmp #F_MODE_WR
@@ -752,9 +753,15 @@ gdy       php
 data      .byt 91,4,7,13,6,0
           .)
   
-close     jsr setfpar
-          jsr IECLOSE
-          lda #F_FL_FRE
+iecclose  jsr setfpar
+          jmp IECLOSE
+
+eofclose  ldy #F_FL
+	  lda (fzei),y
+	  cmp #F_FL_EOF
+	  beq fsclose
+close	  jsr iecclose
+fsclose	  lda #F_FL_FRE
           ldy #F_FL
           sta (fzei),y
           rts
@@ -1035,12 +1042,15 @@ rxc5      cmp #FS_CLOSE
           lda (fzei),y
           cmp #F_FL_FRE
           beq rxc5e
+	  cmp #F_FL_EOF
+	  beq rxc5b
           ldy #F_MODE
           lda (fzei),y
           cmp #F_MODE_WR
           bne rxc5a
           jsr savebuf
-rxc5a     jsr close
+rxc5a	  jsr iecclose
+rxc5b     jsr fsclose
           lda #E_OK
           .byt $2c
 rxc5e     lda #E_ILLPAR

@@ -26,41 +26,31 @@
 main	.(
 	.zero
 argp	.word 0
-	.bss
-fileno	.byt 0
-entry	.dsb FD_NAME+MAX_FILENAME
 	.text
 
+	; stores argp in a/y to argp var
+	jsr getopts
+	bcc optsok
+
+	lda #<usagetxt
+	ldy #>usagetxt
+	jmp strout
+
+optsok	lda (argp),y
+	beq jok
+	tya
+	adc argp
 	sta argp
-	sty argp+1
-
-	ldy #0
-l0	lda (argp),y
-	beq first
-	iny
-	bne l0
-
-first	iny
-	lda (argp),y
+	bcc ok
+	inc argp+1
 	bne ok
-	
-;usage	lda #<usagetxt
-;	ldy #>usagetxt
-;	jmp etxtout
 
-	lda #<joker
+jok	lda #<joker
 	sta argp
 	lda #>joker
 	sta argp+1	; always not null
-	bne l1
 
-ok	tya
-	clc
-	adc argp
-	sta argp
-	bcc l1
-	inc argp+1
-l1
+ok
 	jsr crlfout
 
 	lda argp
@@ -77,9 +67,18 @@ rd	ldx fileno
 	jsr freaddir
 	bcs eof
 
+	bit optlong
+	bpl short
+
+	; long output
+	jsr longint2bcd
+	ldy #9
+	jsr bcdout
+	jsr spout
+short
 	lda #<entry+FD_NAME
 	ldy #>entry+FD_NAME
-	jsr txtout
+	jsr strout
 
 	jsr crlfout
 	jmp rd
@@ -89,38 +88,26 @@ eof	ldx fileno
 	lda #0
 	rts
 
-crlfout	lda #13
-	sec
-	ldx #STDOUT
-	jsr fputc
-	lda #10
-	sec
-	jmp fputc
+	.data
 
-txtout	
-	.zero
-tp	.word 0
-	.text
-
-	ldx #STDOUT
-	.byt $2c
-etxtout	
-	ldx #STDERR
-	sta tp
-	sty tp+1
-	ldy #0
-t0	lda (tp),y
-	beq te
-	sec
-	jsr fputc
-	iny
-	bne t0
-te	rts
+optslst	.asc "l",0
+optsflg
+optlong	.byt 0
 
 joker	.asc "*", 0
+usagetxt
+	.asc 13,10,"Usage:",13,10," ls [opts] <dirmask>"
+	.asc 13,10,"Options:"
+	.asc 13,10,"-l    print more file information"
+	.byt 0
 
-;usagetxt
-;	.byt 13,10,"Usage:",13,10," ls dir1", 13,10,0
+	.bss
+fileno	.byt 0
+entry	.dsb FD_NAME+MAX_FILENAME
+BIN	=entry+FD_LENGTH
+BCD	.byt 0,0,0,0,0
+	.text
 
+#include ../common.a65
 	.)
 
