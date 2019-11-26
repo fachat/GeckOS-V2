@@ -3,7 +3,7 @@ files= mkdir rmdir rm chkdsk format ls cat mv
 
 all: ${files}
 
-${files}: %: %.a65
+${files}: %: %.a65 ../common.a65
 	xa -I../../include -R -LLIB6502 $@.a65 -o $@
 
 clean:
