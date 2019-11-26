@@ -26,6 +26,10 @@ clean:
 	rm -f ${sysapps}
 	rm -f vice.trace reltest
 
+topclean:
+	# convenience
+	(cd ../../../; make clean);
+
 tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 	tar czvf ../boot.tgz boot c64rom loader index.html slip howto.boot
 
