@@ -48,15 +48,25 @@
  *	stdout - print a character on stdout
  *			in: a value to be printed
  *
- *	longint2bcd - convert a long value to BCD
+ *	bcdout - print out value from BCD, using space as filler
+ *			in: BCD       - Address of BCD value
+ *			    y         - number of decimal digits to print up to
+ *	bcd0out - print out value from BCD, using "0" as filler
+ *		(same as bcdout)
+ *
+ *	long2bcd - convert a long value to BCD
  *			in: BIN       - Address of 4 byte integer value
  *			    BCD	      - Address of 5 byte BCD buffer for output
  *			out: value in BCD
  *
- *	wordint2bcd - convert a 2-byte value to BCD
+ *	word2bcd - convert a 2-byte value to BCD
  *			in: BIN       - Address of 2 byte integer value
  *			    BCD	      - Address of 3 byte BCD buffer for output
  *			out: value in BCD
+ *
+ *	byte2bcd - convert a byte value to BCD
+ *			in: AC	      - byte to convert
+ *			out: BCD      - address of 2 byte BCD buffer for output
  */
 
 #iflused getopts
@@ -105,11 +115,11 @@ argend	clc
 
 /***********************************************************/
 
-#iflused longint2bcd
+#iflused long2bcd
 
 ; algorithm adapted from http://www.6502.org/source/integers/hex2dec-more.htm
 
-longint2bcd .(
+long2bcd .(
 	SED		; Switch to decimal mode
 	LDA #0		; Ensure the result is clear
 	STA BCD+0
@@ -119,7 +129,6 @@ longint2bcd .(
 	STA BCD+4
 
 	LDX #32		; The number of source bits
-	ldy #0
 CNVBIT:	ASL BIN+0	; Shift out one bit
 	ROL BIN+1
 	ROL BIN+2
@@ -146,17 +155,16 @@ CNVBIT:	ASL BIN+0	; Shift out one bit
 	.)
 #endif
 
-#iflused wordint2bcd
+#iflused word2bcd
 
-wordint2bcd .(
+word2bcd .(
 	SED		; Switch to decimal mode
 	LDA #0		; Ensure the result is clear
 	STA BCD+0
 	STA BCD+1
 	STA BCD+2
 
-	LDX #32		; The number of source bits
-	ldy #0
+	LDX #16		; The number of source bits
 CNVBIT:	ASL BIN+0	; Shift out one bit
 	ROL BIN+1
 	LDA BCD+0	; And add into result
@@ -176,6 +184,29 @@ CNVBIT:	ASL BIN+0	; Shift out one bit
 
 #endif	/* wordbin2bcd */
 
+#iflused byte2bcd
+
+byte2bcd .(
+	sed
+	ldx #0
+	stx BCD
+	stx BCD+1
+	ldx #8
+cnvbit	asl
+	pha
+	lda BCD
+	adc BCD
+	sta BCD
+	lda BCD+1
+	adc BCD+1
+	sta BCD+1
+	pla
+	dex
+	bne cnvbit
+	cld
+	rts
+	.)
+#endif
 
 /***********************************************************/
 
@@ -183,13 +214,17 @@ CNVBIT:	ASL BIN+0	; Shift out one bit
 
 ; own algorithm. could probably be optimized using http://6502org.wikidot.com/software-output-decimal
 ; y is number of decimal digits to print up to
-bcdout 	.(
+bcd0out .(
+	lda #"0"
+	.byt $2c
+&bcdout 
 	lda #" "
 	sta fill
 	tya
 	lsr
 	tay
 	bcs next
+	bcc decy
 loop 	lda BCD,y
 	lsr
 	lsr
@@ -202,7 +237,7 @@ next	tya
 	sta fill
 show 	lda BCD,y
 	jsr digit
-	dey
+decy	dey
 	bpl loop
 	rts
 
@@ -275,10 +310,9 @@ crlfout .(
 #iflused spout
 	.(
 &spout	lda #" "
-	bne stdout
+	beq stdout
 	.)
 #endif	/* spout */
-
 #iflused stdout
 
 stdout	.(

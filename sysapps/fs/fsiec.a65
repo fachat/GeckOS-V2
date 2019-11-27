@@ -290,30 +290,6 @@ nib       clc
 out       jmp OUT
           .)
           
-&savdata  .(
-          pha
-          tya
-          pha
-          sei
-          lda #$18
-          sta $eff8
-          ldy #0
-sd1       lda $300,y
-          sta $8000,y
-          lda $400,y
-          sta $8100,y
-          lda $500,y
-          sta $8200,y
-          lda $600,y
-          sta $8300,y
-          iny
-          bne sd1
-          pla
-          tay
-          pla
-          cli
-          rts
-          .)
 #endif
 
 /**************************************************************************/
@@ -632,7 +608,7 @@ loadirbuf
           sta (bzei),y
           ldx #6
           ldy #FS_DIR_YEAR
-gd1       lda data-FS_DIR_YEAR,y
+gd1       lda date-FS_DIR_YEAR,y
           sta (bzei),y
           iny
           dex
@@ -750,7 +726,7 @@ gdy       php
           plp
           rts
 
-data      .byt 91,4,7,13,6,0
+date      .byt 2019-1990, 11, 27, 0, 0, 0
           .)
   
 iecclose  jsr setfpar

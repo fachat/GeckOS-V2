@@ -73,23 +73,138 @@ eof
 	lda #0
 	rts
 doit
-	bit optlong
-	bpl shortx
-
-	lda entry+FD_PERM+1
-	and #>S_IFMT
-	cmp #>S_IFMNAME
-	bne chkperms
-shortx	jmp chklen
-
-chkperms
+				; skip perms for bytes free and media size
 	lda entry+FD_PERM+1
 	and #>S_IFMT
 	cmp #>S_IFMFREE
 	beq prlen
 	cmp #>S_IFMSIZE
 	beq prlen
+				; skip extra info for disk name
+	cmp #>S_IFMNAME
+	beq name
+				; skip all for short output (except bytes 
+				; for bytes free and media size)
+	ldy optlong
+	bpl short
+				; skip perms/grp/owner for single -l 
+				; instead of -ll
+	iny	
+	iny			; if inc'd by two
+	bpl chkdate		; and still neg, then we have -lll
 
+	jsr showperms
+
+	jsr showgrpown
+
+	jmp prdate
+chkdate
+	dey
+	bpl prlen
+prdate
+	jsr showdate
+prlen
+	jsr showlen
+short	
+	lda entry+FD_PERM+1
+	and #>S_IFMT
+	cmp #>S_IFMFREE
+	bne name
+	
+	lda #<bytesfree
+	ldy #>bytesfree
+	jsr strout
+	jmp next
+name
+	lda #<entry+FD_NAME
+	ldy #>entry+FD_NAME
+	jsr strout
+next
+	jsr crlfout
+	jmp rd
+	.)
+
+showlen .(
+	; long output
+	lda entry+FD_LENGTH
+	sta BIN
+	lda entry+FD_LENGTH+1
+	sta BIN+1
+	lda entry+FD_LENGTH+2
+	sta BIN+2
+	lda entry+FD_LENGTH+3
+	sta BIN+3
+	jsr long2bcd
+	ldy #9
+	jsr bcdout
+	jmp spout
+	.)
+
+showdate .(
+	lda entry+FD_MDATE
+	clc
+	adc #<1990
+	pha
+	lda #>1990
+	adc #0
+	tay
+	pla
+	jsr intout
+	lda #"-"
+	jsr stdout
+	lda entry+FD_MDATE+1
+	jsr byte2bcd
+	ldy #2		; we only need two digits
+	jsr bcd0out
+	lda #"-"
+	jsr stdout
+	lda entry+FD_MDATE+2
+	jsr byte2bcd
+	ldy #2
+	jsr bcd0out
+
+	lda #" "
+	ldy entry+FD_MDATE+3
+	jsr twoxout
+	lda #":"
+	ldy entry+FD_MDATE+4
+	jsr twoxout
+	lda #":"
+	ldy entry+FD_MDATE+5
+	jsr twoxout
+
+	jmp spout
+	.)
+
+twoxout	.(
+	jsr stdout
+	tya
+&twoout	jsr byte2bcd
+	ldy #2
+	jmp bcd0out
+	.)
+
+showgrpown .(
+	lda entry+FD_OWNER
+	ldy entry+FD_OWNER+1
+	jsr intout
+	jsr spout
+
+	lda entry+FD_GROUP
+	ldy entry+FD_GROUP+1
+	jsr intout
+	jmp spout
+	.)
+
+intout 	.(
+	sta BIN
+	sty BIN+1
+	jsr word2bcd
+	ldy #5
+	jmp bcdout
+	.)
+
+showperms .(
 	; user
 	ror entry+FD_PERM+1
 	lda #"r"
@@ -124,62 +239,6 @@ chkperms
 	lda #"x"
 	jsr permout
 
-	jsr spout
-
-	lda entry+FD_OWNER
-	ldy entry+FD_OWNER+1
-	jsr intout
-
-	lda entry+FD_GROUP
-	ldy entry+FD_GROUP+1
-	jsr intout
-
-	jmp prlen
-chklen
-	lda entry+FD_PERM+1
-	and #>S_IFMT
-	cmp #>S_IFMFREE
-	bne short
-prlen
-	; long output
-	lda entry+FD_LENGTH
-	sta BIN
-	lda entry+FD_LENGTH+1
-	sta BIN+1
-	lda entry+FD_LENGTH+2
-	sta BIN+2
-	lda entry+FD_LENGTH+3
-	sta BIN+3
-	jsr longint2bcd
-	ldy #9
-	jsr bcdout
-	jsr spout
-	
-short	
-	lda entry+FD_PERM+1
-	and #>S_IFMT
-	cmp #>S_IFMFREE
-	bne name
-	
-	lda #<bytesfree
-	ldy #>bytesfree
-	jsr strout
-	jmp next
-name
-	lda #<entry+FD_NAME
-	ldy #>entry+FD_NAME
-	jsr strout
-next
-	jsr crlfout
-	jmp rd
-	.)
-
-intout 	.(
-	sta BIN
-	sty BIN+1
-	jsr wordint2bcd
-	ldy #5
-	jsr bcdout
 	jmp spout
 	.)
 
@@ -199,7 +258,9 @@ joker	.asc "*", 0
 usagetxt
 	.asc 13,10,"Usage:",13,10," ls [opts] <dirmask>"
 	.asc 13,10,"Options:"
-	.asc 13,10,"-l    print more file information"
+	.asc 13,10,"-l    print file size information"
+	.asc 13,10,"-ll   add modification date"
+	.asc 13,10,"-lll  add permissions"
 	.byt 0
 
 bytesfree 
