@@ -112,14 +112,70 @@ optchk	lda optslst,x
 	inx
 	bne optchk
 found	dec optsflg,x
+#ifldef optsadh
+	lda optsadh,x
+	beq nexto	; loop when no callback
+	iny		; point to param
+	lda (argp),y
+	bne c
+	iny
+	lda (argp),y
+	beq argerr	; long parameter expected, but none provided
+c	jsr chklong
+	bcc opts
+#else
 	bne nexto	; always
-#endif
+#endif /* optsadh */
+#endif /* optslst */
 help	
 argerr 	sec		; acc contains "?" for help, zero for error
 	rts
 argend	clc
 	rts
+
+#ifldef optsadh
+chklong	; optsadl/-adh contains the address of a check routine -1
+	; (argp),y points to the parameter to be checked
+	; must return c=1 for error or c=0 for ok
+	; when c=0, (argp),y must point to zero terminator
+	; after the parameter
+	; 
+	lda optsadh,x
+	pha
+	lda optsadl,x
+	pha
+	rts
+#endif
+
 	.)
+
+#if 0
+	; sample code how to check a long parameter
+pa     tya 
+       pha
+       ldy #0
+pa1    lda partxt,y
+       beq pa2
+       jsr stdout
+       iny
+       bne pa1
+pa2    pla
+       tay
+pa4    lda (argp),y
+       beq pa3
+       jsr stdout
+       iny
+       bne pa4
+pa3    jsr crlfout
+       clc
+       rts
+
+partxt 	.asc 13,10,"Parameter A:",0
+optslst .asc "abc",0
+optsflg .byt 0,0,0
+optsadh .byt >pa-1,0,0
+optsadl .byt <pa-1,0,0
+#endif 
 
 #endif	/* getopts */
 
