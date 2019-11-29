@@ -48,6 +48,10 @@
  *	stdout - print a character on stdout
  *			in: a value to be printed
  *
+ *	wordout - print integer value in a/y (using word2bcd, bcdout)
+ *			(print with variable length, i.e. without filler)
+ *			in: a/y	      - 16 bit integer (unsigned)
+ *			
  *	bcdout - print out value from BCD, using space as filler
  *			in: BCD       - Address of BCD value
  *			    y         - number of decimal digits to print up to
@@ -67,6 +71,10 @@
  *	byte2bcd - convert a byte value to BCD
  *			in: AC	      - byte to convert
  *			out: BCD      - address of 2 byte BCD buffer for output
+ *
+ *	iswhite	- check if character in AC is whitespace
+ *			in: AC	      - byte to check
+ *			out: Z	      - beq is whitespace
  */
 
 #iflused getopts
@@ -87,12 +95,13 @@ argloop	lda (argp),y
 	beq argend
 	cmp #"-"
 	bne argend	; arg must start with "-"
-next	iny
+nexto	iny
 	lda (argp),y	
 	bne check	; only "-" means next arg is not an option
 	iny 		; point to either next arg or zerobyte
 	bne argend	; always
 check 	; check option
+#ifldef optslst
 	cmp #"?"
 	beq help
 	ldx #0
@@ -103,7 +112,8 @@ optchk	lda optslst,x
 	inx
 	bne optchk
 found	dec optsflg,x
-	bne next	; always
+	bne nexto	; always
+#endif
 help	
 argerr 	sec		; acc contains "?" for help, zero for error
 	rts
@@ -112,6 +122,34 @@ argend	clc
 	.)
 
 #endif	/* getopts */
+
+/***********************************************************/
+
+#iflused wordout
+
+wordout	.(
+	sta BIN
+	sty BIN+1
+	jsr word2bcd
+	ldy #5
+	lda BCD+2
+	bne out 
+	dey
+	lda BCD+1
+	and #$f0
+	bne out
+	dey
+	lda BCD+1
+	bne out
+	dey
+	lda BCD
+	and #$f0
+	bne out
+	dey
+out	jmp bcdout
+	.)
+
+#endif
 
 /***********************************************************/
 
@@ -223,7 +261,7 @@ bcd0out .(
 	tya
 	lsr
 	tay
-	bcs next
+	bcs nextd
 	bcc decy
 loop 	lda BCD,y
 	lsr
@@ -231,7 +269,7 @@ loop 	lda BCD,y
 	lsr
 	lsr
 	jsr digit
-next	tya
+nextd	tya
 	bne show
 	lda #"0"
 	sta fill
@@ -327,5 +365,22 @@ tx	.byt 0
 	.text
 	.)
  
+#endif
+
+/***********************************************************/
+
+#iflused iswhite
+
+iswhite	.(		; return Z set when char in AC is whitespace
+	cmp #" "
+	beq r
+	cmp #9		; tab
+	beq r
+	cmp #13		; cr
+	beq r
+	cmp #10		; lf
+r	rts
+	.)
+
 #endif
 
