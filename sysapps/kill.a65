@@ -21,24 +21,21 @@
 #include "kernel.i65"
 #include "lib6502.i65"
 
-	.zero
+main .(
 
-string  .word 0
-argp    .word 0
+	.zero
+argp      .word 0
+argv      .word 0
 
   .data
-
 sigcnt    .byt 0    ;signal table counter
 sig       .byt 0    ;signal to send
 pid       .byt 0    ;PID to kill
 ysave	    .byt 0
-trail     .byt $ff  ;flag: print trailing space after two hex chars
-hexbyte   .byt 0, 0
 
   .text
-
-  sta argp
-  sty argp+1
+  sta argv
+  sty argv+1
   jsr parse
   bcc parseok
   lda #1
@@ -61,48 +58,49 @@ sendsig
   pha
   lda #<errmsg
   ldy #>errmsg
-  jsr prstring
+  jsr strout
   pla
   pha
-  jsr prhex
+  jsr hexout
+  jsr spout
   pla
 ckillsig
   cmp #E_ILLSIG ;The docs also mention E_ILLPID, but it doesn't exist.
   bne killdone  ;no signal description to print
   lda #<eillsig
   ldy #>eillsig
-  jsr prstring
+  jsr strout
 killdone
   lda #0
   jmp term
 
 /* Parse command-line arguments. Return carry clear if OK, set otherwise. */
-parse
+parse .(
   ldy #0
 argv0
-  lda (argp),y  ;past program name
+  lda (argv),y  ;past program name
   beq getargs
   iny
   bne argv0
 getargs
   iny
-  lda (argp),y
+  lda (argv),y
   bne ckargs
   lda #<usage   ;no arguments, abort
   ldy #>usage
-  jsr prstring
+  jsr strout
   sec
   rts
 ckargs
   tya
   clc
-  adc argp
-  sta argp      ;advance argp to first argument
-  lda argp+1
+  adc argv
+  sta argv      ;advance argv to first argument
+  lda argv+1
   adc #0
-  sta argp+1
+  sta argv+1
   ldy #0
-  lda (argp),y
+  lda (argv),y
   cmp #"-"      ;signal specified?
   beq ckarg0
   lda #$20      ;default to SIG_KILL
@@ -111,7 +109,7 @@ ckargs
 ckarg0
   ldx #0
 ckarg1
-  lda (argp),y
+  lda (argv),y
   beq argdone
 ckarg2
   cmp args,x
@@ -139,11 +137,11 @@ found
   iny           ;to PID
   tya
   clc
-  adc argp
-  sta argp
-  lda argp+1
+  adc argv
+  sta argv
+  lda argv+1
   adc #0
-  sta argp+1
+  sta argv+1
   ldx sigcnt
   lda signals,x
   sta sig  ;which signal to send
@@ -151,27 +149,28 @@ found
 notfound
   lda #<illsig
   ldy #>illsig
-  jsr prstring
-  lda argp
-  ldy argp+1
-  jsr prstring
+  jsr strout
+  lda argv
+  ldy argv+1
+  jsr strout
   sec
   rts
+.)
 
-readpid
+readpid .(
   ldy #0
-  lda (argp),y
+  lda (argv),y
   bne ckdollar
   lda #<usage   ;no PID argument, abort
   ldy #>usage
-  jsr prstring
+  jsr strout
   sec
   rts
 ckdollar
   cmp #"$"
   bne ckhex1
   iny
-  lda (argp),y  ;ignore dollar
+  lda (argv),y  ;ignore dollar
 ckhex1
   jsr ckhexbyt
   bcs badpid
@@ -183,7 +182,7 @@ ckhex1
   sta pid       ;temp
 ckhex2
   iny
-  lda (argp),y
+  lda (argv),y
   beq badpid    ;too short
   jsr ckhexbyt
   bcs badpid
@@ -191,24 +190,25 @@ ckhex2
   ora pid
   sta pid
   iny
-  lda (argp),y  ;too long?
+  lda (argv),y  ;too long?
   bne badpid
   jsr validpid
   bcs badpid
   rts
+.)
 
 badpid
   lda #<illpid
   ldy #>illpid
-  jsr prstring
-  lda argp
-  ldy argp+1
-  jsr prstring
+  jsr strout
+  lda argv
+  ldy argv+1
+  jsr strout
   sec
   rts
 
 ;binary PID in pid, check if valid PID number
-validpid
+validpid .(
   clc
   ldx #SEM_SENDBUF
   jsr PSEM
@@ -239,10 +239,11 @@ endpid
   ldx #SEM_SENDBUF
   jsr VSEM
   plp
-  rts           
+  rts
+.)      
 
 /* Convert valid hex character in .A to binary. */
-hex2bin
+hex2bin .(
   cmp #"9"+1
   bcc num
   and #$0f      ;"A"-"F"
@@ -252,10 +253,11 @@ hex2bin
 num
   and #$0f
   rts
+.)
 
 /* Check whether byte in .A is a hex byte. .A, .Y preserved, .X destroyed. 
    Returns carry clear if hex byte, set otherwise. */
-ckhexbyt
+ckhexbyt .(
   tax
   cmp #"0"
   bcc nothex
@@ -276,89 +278,14 @@ nothex
   txa
   sec
   rts
-
-/* Print a character to STDOUT (preserves .X) */
-prchar
-  tay
-  txa
-  pha
-  tya
-  ldx #STDOUT
-  jsr fputc
-  pla
-  tax
-  rts
-
-/* Print a byte to STDOUT as two hex characters (preserves .X) */
-prhex
-  tay
-  txa
-  pha
-  tya
-  jsr tohex
-  lda hexbyte
-  ldx #STDOUT	
-  jsr fputc
-  lda hexbyte+1
-  ldx #STDOUT	
-  jsr fputc
-  lda trail  ;print trailing space?
-  beq nt
-  lda #" "
-  ldx #STDOUT
-  jsr fputc
-nt
-  pla
-  tax
-  rts
-
-/* Convert byte in .A to two hex chars at hexbyte (preserves .X and .Y) */
-tohex 
-  pha
-  lsr
-  lsr
-  lsr
-  lsr
-  jsr tonib
-  sta hexbyte
-  pla
-  jsr tonib
-  sta hexbyte+1
-  rts
-tonib 
-  and #$0f
-  clc
-  adc #"0"
-  cmp #"9"+1
-  bcc ok
-  adc #"a"-"9"-2
-ok
-  rts
-	
-/* Print a string (address in .A/.Y) to STDOUT */
-prstring
-  sta string
-  sty string+1
-  ldy #0
-pr1 
-  sty ysave
-  lda (string),y
-  beq pr2
-  ldx #STDOUT	
-  jsr fputc
-  bcs pr2
-  ldy ysave
-  iny
-  bne pr1
-pr2
-  rts
+.)
 
 .data
 
 usage    .asc $0a,$0d,"Usage: kill [signal] PID",$0a,$0d
          .asc "(PID must be in hex)",$0a,$0d,0
 args     .asc "-9",0  ;kill -9
-         .asc "-SIG_KILL",0,"-SIG_BRK",0,"-SIG_USR1","-SIG_USR2",0
+         .asc "-SIG_KILL",0,"-SIG_BRK",0,"-SIG_USR1",0,"-SIG_USR2",0
          .asc "-SIG_USR3",0,"-SIG_USR4",0,0
 signals  .byt SIG_KILL,SIG_KILL,SIG_BRK, SIG_USR1,SIG_USR2,SIG_USR3,SIG_USR4
 ;               $20      $20      $10      $01      $02      $04      $08
@@ -368,3 +295,7 @@ sending  .asc $0a,$0d,"Sending ",0
 topid    .asc " to PID ",0
 errmsg   .asc $0a,$0d,"Error $",0
 eillsig   .asc " (E_ILLSIG)",0
+
+#include "../apps/common.a65"
+
+.)
