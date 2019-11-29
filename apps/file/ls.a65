@@ -256,12 +256,14 @@ optlong	.byt 0
 
 joker	.asc "*", 0
 usagetxt
-	.asc 13,10,"Usage:",13,10," ls [opts] <dirmask>"
+	.asc 13,10,"Usage:"
+	.asc 13,10," ls [opts] <dirmask>"
+	.asc 13,10,"List the contents of a directory"
 	.asc 13,10,"Options:"
-	.asc 13,10,"-l    print file size information"
-	.asc 13,10,"-ll   add modification date"
-	.asc 13,10,"-lll  add permissions"
-	.byt 0
+	.asc 13,10," -l    print file size information"
+	.asc 13,10," -ll   add modification date"
+	.asc 13,10," -lll  add permissions"
+	.byt 13,10,0
 
 bytesfree 
 	.asc "Bytes free.",0
