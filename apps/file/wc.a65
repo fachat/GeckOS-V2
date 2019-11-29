@@ -1,0 +1,232 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 more program
+
+    Copyright (C) 2019 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+
+#define	BUFLEN	256	/* optimized buffer but still single page/byte index */
+
+main	.(
+	.zero
+argp	.word 0
+
+	.data
+nfiles	.byt <-1
+
+	.text
+
+	jsr getopts
+	bcc optsok
+	
+	lda #<usagetxt
+	ldy #>usagetxt
+	jmp strout
+
+optsok	.(		; loop over files
+	lda (argp),y
+	bne ok
+	
+	ldx #STDIN
+	jsr docopy
+	pha
+	jsr crlfout
+	pla
+	rts
+	
+ok	tya
+	clc
+	adc argp
+	sta argp
+	bcc l1
+	inc argp+1
+l1
+	lda argp
+	ldy argp+1
+
+	jsr docat
+	bcs ende
+	/* TODO: print error code */
+	inc nfiles
+
+	jsr spout
+	lda argp
+	ldy argp+1
+	jsr strout
+
+	ldy #0
+l2	lda (argp),y
+	beq next
+	iny
+	bne l2
+next
+	iny
+	lda (argp),y
+	bne ok
+
+	jsr crlfout
+
+	lda nfiles
+	beq endok
+
+	jsr spout
+	lda tlines
+	ldy tlines+1
+	jsr wordout
+	jsr spout
+	lda twords
+	ldy twords+1
+	jsr wordout
+	jsr spout
+	lda tchars
+	ldy tchars+1
+	jsr wordout
+
+	jsr crlfout
+
+endok	lda #0
+ende	
+	rts
+	.)
+
+usagetxt 
+	.asc 13,10, "Usage:"
+	.asc 13,10, " wc [file1] ... [filen]"
+	.asc 13,10, "Print newline, word and byte counts for each file, "
+	.asc "and a total line if more than one file is given."
+	.asc 13,10, "If no file given, stdin is used."
+	.asc 13,10,0
+	
+	; ----------------------------------
+	; do the actual work (in docat resp. docopy)
+	;
+	.data
+
+fileno	.byt 0
+	; per file counter
+fchars	.word 0
+fwords	.word 0
+flines	.word 0
+	; total counters
+tchars	.word 0
+twords	.word 0
+tlines	.word 0
+
+prev	.byt 0
+isword	.byt 0
+
+	.bss
+BIN	.word 0
+BCD	.byt 0,0,0
+	.text
+
+&docat	ldx #OPEN_RD
+	jsr fopen
+	bcc docopy
+	rts
+docopy  stx fileno
+	lda #0
+	sta fchars
+	sta fchars+1
+	sta fwords
+	sta fwords+1
+	sta flines
+	sta flines+1
+
+	sta prev
+	sta isword
+rdloop	ldx fileno
+	sec
+	jsr fgetc
+	bcs rderr
+	; inc char count
+	inc fchars
+	bne tc
+	inc fchars+1
+tc	inc tchars
+	bne li
+	inc tchars+1
+li	; detect cr, cr/lf, or lf
+	cmp #10
+	beq lf
+	ldy prev
+	cpy #13
+	bne noline
+lf	; inc line count
+	inc flines
+	bne tl
+	inc flines+1
+tl	inc tlines
+	bne noline
+	inc tlines+1
+noline	sta prev
+	; detect word boundary
+	jsr iswhite
+	beq w		; whitespace
+	sta isword	; flag non-whitespace (!=0)
+	bne nx
+w	; whitespace
+	ldy isword	; was last one whitespace?
+	beq nx		; yes, don't count
+	lda #0 
+	sta isword
+	; inc word cound
+	inc fwords
+	bne tw
+	inc fwords+1
+tw	inc twords
+	bne nx
+	inc twords+1
+nx	jmp rdloop
+
+rderr	; end of file
+	pha
+	ldx fileno
+	cpx #STDIN
+	beq r1
+	jsr fclose
+
+	; print counters
+	jsr crlfout
+	jsr spout
+	lda flines
+	ldy flines+1
+	jsr wordout
+	jsr spout
+	lda fwords
+	ldy fwords+1
+	jsr wordout
+	jsr spout
+	lda fchars
+	ldy fchars+1
+	jsr wordout
+
+r1	pla
+	cmp #E_EOF
+	bne rde2
+	lda #E_OK
+rde2	cmp #1
+	rts
+
+#include "../common.a65"
+
+	.)
+
