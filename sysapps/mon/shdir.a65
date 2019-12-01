@@ -433,7 +433,7 @@ norom
           sta LZEI
 ;          jsr getdrv     ; drive ueberspringen
 ;          ldy LZEI
-          ldx #FORK_NAME+1
+          ldx #FORK_NAME
 ;          jsr setname    ; name in Fork-Struct
 ;          lda lzei
 ;          sta LZEI       ; das ganze von vorne
@@ -530,7 +530,7 @@ endnam    stx LZEI
 	bcc lbeyx
 	jmp lbey
 lbeyx
-	stx PCBUF+FORK_NAME
+	stx PCBUF+FORK_PAR
 	txa
           ldx tplen
 ;.byt 2
