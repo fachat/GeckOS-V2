@@ -71,6 +71,7 @@ next
 ende	
 	rts
 
+	.data
 usagetxt
 	.asc 13,10, "Usage:"
 	.asc 13,10, "  cat [file1] [file2] ... "
