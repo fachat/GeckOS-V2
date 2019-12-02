@@ -37,9 +37,18 @@
  *			     c=1 ac="?"	print help
  *			     c=1 	other unknown option
  *
+ *	parsebyte - parse an int command line parameter into a byte
+ *			in: argp      - pointer to string
+ *			    y         - pointer in string where value starts
+ *			out: c=1      - parse error
+ *			     c=0      - parse ok
+ *			     Y        - pointer to terminating zerobyte after arg
+ *			     AC	      - value
+ *			ref: BIN      - temporary value
+ *
  *	strout - print a string on stdout
  *			in: a/y pointer to zero-terminated string
- *			refs: arpg    - zeropage ptr
+ *			refs: strp    - zeropage ptr (will be defined if not def'd)
  *
  *	hexout - print a hex byte
  *			in: a value
@@ -178,6 +187,42 @@ optsadl .byt <pa-1,0,0
 #endif 
 
 #endif	/* getopts */
+
+/***********************************************************/
+
+#iflused parsebyte
+
+parsebyte .(
+	lda #0
+	sta BIN
+nextb
+	lda (argp),y
+	beq end
+	; multiply BIN by 10
+	asl BIN
+	bcs overflow
+	lda BIN
+	asl BIN
+	bcs overflow
+	asl BIN
+	bcs overflow
+	adc BIN
+	bcs overflow
+	sta BIN
+	lda (argp),y
+	and #$0f
+	adc BIN
+	bcs overflow
+	sta BIN
+	iny
+	bne nextb
+overflow
+end
+	lda BIN
+	rts
+	.)
+
+#endif
 
 /***********************************************************/
 
@@ -351,13 +396,23 @@ fill	.byt 0
 	.)
 #endif
 
+/***********************************************************/
+; string functions
+
 #iflused strout
 
+#ifldef strp
+#else
+	.zero
+strp	.word
+	.text
+#endif /* strp */
+
 strout	.(
-	sta argp
-	sty argp+1
+	sta strp
+	sty strp+1
 	ldy #0
-loop	lda (argp),y
+loop	lda (strp),y
 	beq end
 	jsr stdout
 	iny
