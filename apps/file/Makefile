@@ -1,5 +1,5 @@
 
-files= mkdir rmdir rm chkdsk format ls cat mv wc
+files= mkdir rmdir rm chkdsk format ls cat mv wc more
 
 all: ${files}
 

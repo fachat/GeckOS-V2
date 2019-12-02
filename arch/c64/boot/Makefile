@@ -5,7 +5,7 @@ LSHDIR=../../../apps/lsh
 sysapps = mon slipd ps kill 
 SYSAPPSDIR=../../../sysapps
 
-files = mkdir rmdir rm format chkdsk ls cat mv wc
+files = mkdir rmdir rm format chkdsk ls cat mv wc more
 FILESDIR=../../../apps/file
 
 inet = tlogind telnet httpd

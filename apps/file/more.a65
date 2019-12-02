@@ -1,0 +1,261 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 cat program
+
+    Copyright (C) 1997-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+
+#define	BUFLEN	128	/* single byte index, no overflow */
+
+main	.(
+	.zero
+argp	.word 0
+	.text
+
+	jsr getopts
+	bcc first
+
+	lda #<usagetxt
+	ldy #>usagetxt
+	jmp strout
+
+first	lda (argp),y
+	bne ok
+	
+	ldx #STDIN
+	jmp docopy
+	
+ok	tya
+	clc
+	adc argp
+	sta argp
+	bcc l1
+	inc argp+1
+l1
+	lda argp
+	ldy argp+1
+
+	jsr docat
+	bcs ende
+	/* TODO: print error code */
+
+	ldy #0
+l2	lda (argp),y
+	beq next
+	iny
+	bne l2
+next
+	iny
+	lda (argp),y
+	bne ok
+
+	lda #0
+ende	
+	rts
+
+	; -----------------------------
+	; intepret the command line options
+optL	jsr parsebyte
+	sta numL
+	rts
+optC	jsr parsebyte
+	sta numC
+	rts
+
+	.data
+numL	.byt 24
+numC	.byt 40
+	
+usagetxt
+	.asc 13,10, "Usage:"
+	.asc 13,10, "  more [opts] [file1] [file2] ... "
+	.asc 13,10, "Prints the given files (or stdin if no file given) "
+	.asc "page by page, expecting a keypress after each page"
+	.asc 13,10, "Options:"
+	.asc 13,10, " -C <n>    Assume <n> columns on screen (default: 40)"
+	.asc 13,10, " -L <n>    Assume <n> lines on screen (default: 25)"
+	.byt 13, 10, 0
+
+morestr	.asc 13,10, "<PRESS KEY>",0
+clrstr	.asc 13,    "           ", 13, 0
+
+	; no options (so far)
+optsflg	.byt 0,0
+optslst	.byt "CL",0
+optsadl .byt <optC-1, <optL-1
+optsadh	.byt >optC-1, >optL-1
+
+	; no need to initialize as it's .data
+prev	.byt 0
+curL	.byt 0
+curC	.byt 0
+
+	.bss
+BIN	.byt 0
+fileno	.byt 0
+prevwp	.byt 0
+rdlen	.byt 0
+frdat	.word 0,0
+fwdat	.word 0,0
+inbuf	.dsb BUFLEN
+outbuf	.dsb BUFLEN
+	.text
+
+docat	ldx #OPEN_RD
+	jsr fopen
+	bcc docopy
+	rts
+docopy  stx fileno
+
+	lda #0
+	sta prev
+rdloop	; prep write
+	lda #0
+	sta prevwp
+	lda #<outbuf
+	sta fwdat
+	lda #>outbuf
+	sta fwdat+1
+	; do read
+	lda #<inbuf
+	sta frdat
+	lda #>inbuf
+	sta frdat+1
+	lda #<BUFLEN
+	sta frdat+2
+	lda #>BUFLEN
+	sta frdat+3
+	lda #<frdat
+	ldy #>frdat
+	ldx fileno
+	sec
+	jsr fread
+	bcc copyloop
+
+rderr	cmp #E_EOF
+	sec
+	bne rde2
+copyloop	
+	pha
+	lda #<BUFLEN
+	sec 
+	sbc frdat+2
+	sta rdlen
+	jsr copy
+	pla
+	cmp #E_OK
+	beq rdloop
+rde2	php
+	pha
+	ldx fileno
+	cpx #STDIN
+	beq r1
+	jsr fclose
+r1	pla
+	plp
+	rts
+
+	; copy over from inbuf to outbuf
+copy	ldy #0
+cploop	lda inbuf,y
+	sta outbuf,y
+	iny
+	; reset column on CR
+	cmp #13
+	bne nocr
+	ldx #0
+	stx curC
+	beq cont
+nocr 	; detect lf
+	cmp #10
+	beq lf
+
+	inc curC
+	lda curC
+	cmp numC
+	bcc cont
+	; reached column count; assume wrap
+	lda #0
+	sta curC
+
+lf	; new line
+	inc curL
+	lda curL
+	cmp numL
+	bcc cont
+
+	lda #0
+	sta curL
+
+	; protect buf ptr
+	tya
+	pha
+	; write current fwdat up to outbuf+Y
+	jsr writebuf
+	; TODO error
+	lda #<morestr
+	ldy #>morestr
+	jsr strout
+	; wait keypress
+	sec
+	ldx #STDIN
+	jsr fgetc
+	; go to start line
+	lda #<clrstr
+	ldy #>clrstr
+	jsr strout
+	; restore ptr
+	pla
+	tay
+
+cont	cpy rdlen
+	bne cploop
+	; write current fwdat up to outbuf+Y
+
+	; fallthrough
+writebuf .(
+	tya
+	sec
+	sbc prevwp
+	sta fwdat+2
+	lda #0
+	sta fwdat+3
+	sty prevwp
+wrloop	
+	lda #<fwdat
+	ldy #>fwdat
+	ldx #STDOUT
+	sec
+	jsr fwrite
+	bcs wrerr
+	lda frdat+2
+	ora frdat+3
+	bne wrloop
+	clc
+	lda #E_OK
+wrerr	ldy prevwp
+	rts
+	.)
+
+
+#include "../common.a65"
+	.)
+
