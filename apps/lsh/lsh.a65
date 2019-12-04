@@ -41,18 +41,37 @@ argp	.word 0
 
 	.bss
 shin	.byt 0
-debug	.byt 0
 quiet	.byt 0		; bit 7 set -> no shell output
 waitfl	.byt 0		; bit 7 set -> wait for process termination
 
-piperd	.byt 0
-pipewr	.byt 0
-ispiped	.byt 0
+piperd	.byt 0		; read from pipe fnr
+pipewr	.byt 0		; write to pipe fnr
+ispiped	.byt 0		; when bit 7 set, then input is piped from previous
 
 buf	.dsb BUFLEN
 
 	.data
 version	.asc 13,10,"sh v0.1 21dec1997 (c) A. Fachat",13,10,0
+
+usage	.asc 13,10, "Usage:"
+	.asc 13,10, " lsh [opts] [input file]"
+	.asc 13,10, "libshell - command line interface"
+	.asc 13,10
+	.asc 13,10, "Options:"
+	.asc 13,10, " -v    run with debug"
+	.asc 13,10, " -d <drive>"
+	.asc 13,10, "       run in specified drive"
+	.asc 13,10, "A '-' as parameter ends the parameter list."
+ 	.asc 13,10, "The input file when given is executed instead of stdin."
+	.asc 13,10
+	.asc 13,10, "Command Line Input:"
+	.asc 13,10, "Use '<','>' and '!' to redirect input, output or stderr"
+	.asc 13,10, "Pipe commands using '"
+	.asc 13,10
+	.asc 13,10, "Example:"
+	.asc 13,10, " lsh -v -d c:"
+	.asc 13,10, " cat test.bat ' wc"
+	.asc 13,10, 0
 	.text
 
 &main 	.(
@@ -72,14 +91,27 @@ version	.asc 13,10,"sh v0.1 21dec1997 (c) A. Fachat",13,10,0
 	lda argp
 	ldy argp+1
 
-	jsr parse_myopts	/* needs argp in a/y */
+	jsr getopts	/* needs argp in a/y */
+	bcc nooptserr
 
+	lda #<usage
+	ldy #>usage
+	jsr strout
+
+	ldx shin
+	jmp fclose
+
+nooptserr
+	; check for command file parameter
+	; (needs yr from getopts)
+	jsr argfile
+	
 	lda debug
-	beq loop
+	beq nodbg
 	lda #<version
 	ldy #>version
 	jsr txtout
-
+nodbg
 	lda #0
 	sta ispiped	; init getcmd
 
@@ -164,7 +196,8 @@ nofile	pla
 	rts
 	.)
 
-crlfout	lda #13
+lcrlfout	
+	lda #13
 	jsr putc
 	lda #10
 putc	.(
@@ -175,13 +208,15 @@ putc	.(
 	jmp fputc
 end	rts
 	.)
+
+;----------------------------------------------
 /*
  * read and execute a command 
  */
 getcmd	.(
 	.bss
 tx	.byt 0
-ty	.byt 0
+ty	.byt 0		; index in ap (cmdline arguments)
 ta	.byt 0
 	.zero
 &ap	.word 0
@@ -191,12 +226,13 @@ ta	.byt 0
 	stx waitfl
 
 	bit ispiped
-	bmi pipe2	; ok, piped
+	bmi contpipe	; ok, piped
 	bvs dostdin	; last command ended with ";"
 
 	ldx shin
 	jsr readline
 	bcc docmd
+
 	pha
 	cmp #E_EOF
 	beq cmdend
@@ -210,6 +246,7 @@ werr	lda #E_OK
 ;perr	lda #E_FNOFIL
 	sec
 	rts
+
 docmd	; pass a/y	; warning, argp is used outside loop
 	jsr tokenize
 	sta ap
@@ -224,7 +261,7 @@ d0	lda (ap),y
 	jsr putc
 	iny
 	bne d0
-next	jsr crlfout
+next	jsr lcrlfout
 	iny
 	lda (ap),y
 	bne d0
@@ -239,26 +276,27 @@ next	jsr crlfout
 
 	lda #0
 	sta ty
-
-dostdin
+dostdin			; dup stdin to be used in fork
 	ldx #STDIN
 	jsr dup
 	stx buf+0	; stdin
 	jmp nopipe
 
-pipe2			; BUG - when only "|" then no files are opened 
+contpipe		; continue command with input piped from previous
+			; BUG - when only "|" then no files are opened 
 	lda piperd
 	sta buf+0	; stdin
 nopipe
-	ldx #STDOUT
+	ldx #STDOUT	; dup stdout to be used in fork
 	jsr dup
 	stx buf+1	; stdout
-	ldx #STDERR
+	ldx #STDERR	; dup stderr to be used in fork
 	jsr dup
 	stx buf+2	; stderr
 
 	lda ispiped
 	beq nopipew
+			; move args ptr to part behind pipe symbol
 	lda #0
 	sta ispiped
 	ldy ty
@@ -282,25 +320,23 @@ f0	lda (ap),y
 	iny
 	cmp #0
 	bne f0
-pars	
+pars			; y points to behind token end marker zero
 	lda (ap),y
 	sta buf,x
-	beq ende
+	beq ende	; end of token list
 	cmp #">"
-	beq out1
-	cmp #"<"
-	beq in1
+	beq out1	; output redir
+	cmp #"<"	
+	beq in1		; input redir
 	cmp #"!"
-	beq err1
+	beq err1	; error redir
 	cmp #"'"
-	beq pipe1
-	cmp #"&"
-	beq back1
+	beq redir_pipe	; pipe to next command
+	cmp #"&"	
+	beq back1	; run in background
 	cmp #";"
-	beq wait1
+	beq wait1	; end pipe (wait for completion)
 f1
-	/* TODO: interpret "\" escape codes, shell variables */
-
 	lda (ap),y
 	sta buf,x
 	jsr checkesc
@@ -343,20 +379,20 @@ wait1	.(
 	jmp pipe3
 	.)
 
-pipe1	.(
+redir_pipe .(
 	iny
-	sty ty
-	stx tx
+	sty ty		; save ptr in args
+	stx tx		; save ptr in target buf
 
-	jsr pipe
+	jsr pipe	; create a pipe
 	bcs pipend
-	stx piperd
-	sty pipewr
+	stx piperd	; fnr for reading
+	sty pipewr	; fnr for writing
 
-	ldx buf+2	; stdout
+	ldx buf+1	; close previous stdout
 	jsr fclose
-	ldx pipewr
-	stx buf+2
+	ldx pipewr	; replace with pipe
+	stx buf+1
 
 	lda #$80
 	sta ispiped	; set flag for piping
@@ -367,11 +403,7 @@ pipe1	.(
 	ldx tx
 	sta buf,x
 	sta buf+1,x
-
-	lda #<buf
-	ldy #>buf
-	clc
-	rts
+	jmp ende
 
 pipend
 	lda #"?"
@@ -431,7 +463,7 @@ inok 	sty ty
 	pha
 	txa
 	jsr txtout
-	jsr crlfout
+	jsr lcrlfout
 	pla
 	tay
 	; pla
@@ -548,7 +580,7 @@ inok 	sty ty
 	pha
 	txa
 	jsr txtout
-	jsr crlfout
+	jsr lcrlfout
 	pla
 	tay
 	pla
@@ -588,6 +620,7 @@ errtxt	.byt 13,10,"stderr from ",0
 #endif
 	.)
 
+;----------------------------------------------
 /* 
  * readline reads a line from stdin and puts it into buf. It returns a
  * pointer to the command line in a/y.
@@ -597,6 +630,7 @@ errtxt	.byt 13,10,"stderr from ",0
 readline .(
 	.bss
 instr	.byt 0
+prev 	.byt 0
 	.data
 promptxt .byt 13,10,">",0
 	.text
@@ -608,11 +642,18 @@ promptxt .byt 13,10,">",0
 	jsr txtout
 
 	ldy #0
+	sty prev
 l0
 	ldx instr
 	sec
 	jsr fgetc
 	bcs end
+	cmp #10
+	bne nolf
+	ldx prev
+	cpx #13
+	bne endline
+nolf	sta prev
 	cmp #13
 	beq endline
 	cmp #8
@@ -648,6 +689,7 @@ end
 	rts
 	.)
 
+;----------------------------------------------
 /*
  * Print the error string of the number given in xr
  */
@@ -682,6 +724,7 @@ errortxt .asc " error",10,13,0
 	.text
 	.)
 
+;----------------------------------------------
 /* 
  * print a null-terminated string (up to 254 char), addr in a/y, fileno in xr
  */
@@ -728,6 +771,8 @@ ok	ldx #STDERR
 	sec
 	jmp fputc
 	.)
+
+;----------------------------------------------
 /*
  * This interprets the command line options for the shell.
  * Currently only the debug print "-v" and "-d <drive>" to
@@ -735,115 +780,46 @@ ok	ldx #STDERR
  * A "--" ends the options list
  * 
  */
-#define	NUMOPTS	3
-
-parse_myopts .(
-	sta argp
-	sty argp+1
-	; ignore the filename
-parse_loop
-	jsr next
-	ldy #0
-	lda (argp),y
-	bne noend
-	clc
-	rts
-noend
-	cmp #"-"
-	bne argfile
-
-	iny
-	lda (argp),y
-	beq error
-
-	ldx #0
-pl	cmp optlist,x
-	beq found
-	inx
-	cpx #NUMOPTS
-	bcc pl
-	bcs unknown
-
-found	txa			; when jumping to an option, y holds the
-	asl			; offset of the command to argp. To return
-	tax			; either jmp to parse_loop or rts to
-	lda optaddr+1,x		; the main routine ("--" option)
-	pha
-	lda optaddr,x
-	pha
-	rts
-
-ferror	lda #4
-	.byt $2c
-error	lda #1
-	.byt $2c
-unknown	lda #2
-	pha
-	lda argp
-	ldy argp+1
-	jsr etxtout
-	pla
-	tax
-	jmp errout
 
 	.data
-
-optlist	.byt "vd-"
-optaddr	.word opt_debug-1, opt_drive-1, opt_end-1
+optslst	.asc "vd",0
+optsflg	
+debug	.byt 0
+	.byt 0	; unused for option d
+optsadl	.byt 0, <optdrv-1
+optsadh	.byt 0, >optdrv-1
 
 	.text
 
-/* 
- * This routine increments the argp pointer to the next argument -> argp
- */
-next	ldy #0
-n0	lda (argp),y
-	beq n1
-	iny
-	bne n0
-n1	iny
-	tya
+optdrv	tya
 	clc
 	adc argp
-	sta argp
-	bcc n2
-	inc argp+1
-n2	rts
+	pha
+	lda #0
+	adc argp+1
+	tay
+	pla
+	jmp chdir
 
-/*
- * Here are the command line options 
- */
-opt_debug .(
-	lda #<-1
-	sta debug
-	jmp parse_loop
-	.)
+;----------------------------------------------
+; open a file and use for stdin
+; used when a file is given as parameter on start
+;
 
-opt_drive .(
-	lda #<-1
-	sta debug
-	jsr next
-	ldy #0
-	lda (argp),y
-	beq error	; no drive
-	lda argp
-	ldy argp+1
-	jsr chdir
-	bcs n2
-	jmp parse_loop
-	.)
-
-opt_end	.(
-	jsr next
-
-&argfile
-	ldy #0
+argfile	.(
 	lda (argp),y
 	bne dofile
 	clc
 	rts
-dofile	lda argp
-	ldy argp+1
+
+dofile	tya
+	clc
+	adc argp
+	pha
+	lda #0
+	adc argp+1
+	tay
+	pla
 	ldx #OPEN_RD
 	jsr fopen
 	bcs ferror
@@ -857,10 +833,23 @@ dofile	lda argp
 	sta quiet
 	clc
 	rts
+
+ferror  lda #4
+;       .byt $2c
+;error  lda #1
+;       .byt $2c
+;unknown lda #2
+        pha
+        lda argp
+        ldy argp+1
+        jsr etxtout
+        pla
+        tax
+        jmp errout
+
 	.)
 
-	.)	; end of parse_myopts
-
+;----------------------------------------------
 /*
  * tokenize takes the one-string command line and generates 
  * the tokenized command line. The prompt is removed, too.
@@ -881,53 +870,54 @@ kx	iny
 	beq ende
 	cmp #" "
 	beq kx
-	cmp #">"
-	beq kx
+	cmp #">"	; is prompt?
+	beq kx		; yes, ignore
 
 	.byt $24	; ldy #<-1
 k0	iny
 	lda (argp),y
 	beq ende
 	cmp #" "
-	beq k0
+	beq k0		; ignore space
 
 	cmp #34
-	beq starthk
+	beq starthk	; we escape with "
 	lda #" "
 	.byt $24
 starthk	iny
 	sta hk
-
+			; loop over cmd
 k1	lda (argp),y
-	sta tbuf,x
+	sta tbuf,x	; store in buffer
 	beq ende
-	cmp hk
-	beq next
+	cmp hk		; are we done?
+	beq next	; yes
 	inx
 	iny
 	bne k1
 
-next	lda #0
+next	lda #0		; separate tokens with zero
 	sta tbuf,x
 	inx
 	jmp k0
-
+			; parsed until end of line
 ende	lda #0
-	sta tbuf,x
-	sta tbuf+1,x
+	sta tbuf,x	; end of token
+	sta tbuf+1,x	; end of token list
 	lda #<tbuf
 	ldy #>tbuf
 	rts
 	.)
 
+;----------------------------------------------
 /*
  * we get the three streams in buf+0,+1 and +2 and the command line in
  * buf+3. We now check for builtin commands, and if not found, 
  * fork a process.
  */
-stdin	=buf
-stdout	=buf+1
-stderr	=buf+2
+;lstdin	=buf
+;lstdout	=buf+1
+;lstderr	=buf+2
 cmdline	=buf+3
 
 execfork .(
@@ -1089,7 +1079,7 @@ bic_cd	.(
 	.)
 
 bic_pwd	.(
-	jsr crlfout
+	jsr lcrlfout
 	lda #<buf+3
 	ldy #>buf+3
 	ldx #BUFLEN-3
@@ -1102,6 +1092,15 @@ bic_pwd	.(
 	lda #0
 ende	rts
 	.)
+
+;----------------------------------------------
+; signal handling
+;
+; instsig	- install signal handler
+; sigrchld	- handle (store) child signal
+; checksig	- check for received signals
+; waitpid	- wait for the termination of given pid
+;
 
 	.(
 	.bss
@@ -1143,7 +1142,8 @@ noinc	plp
 	lda cnum
 	bne found
 	rts
-found	jsr crlfout
+
+found	jsr lcrlfout
 	lda ctabh
 	jsr ehexout
 	lda ctabl
@@ -1180,10 +1180,12 @@ f1	lda ctabl+1,y
 &waitpid .(
 	stx wpid
 	sty wpid+1
+
 loop	lda cnum
 	bne gotone
 	jsr yield
 	jmp loop
+
 gotone	lda wpid
 	cmp ctabl
 	bne notthis
@@ -1196,7 +1198,9 @@ found	jmp decnum
 	.)
 
 	.)	; signal handling
+;----------------------------------------------
 
+	; TODO process '\' escape codes
 checkesc .(	; command line escape handling
 	.bss
 i1	.byt 0
@@ -1310,5 +1314,7 @@ evar	.asc "^m^jgot var :",0
 	.)
 
 	.)	; command line escape handling
+
+#include "../common.a65"
 	
 	.)
