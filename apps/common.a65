@@ -417,6 +417,8 @@ loop	lda (strp),y
 	jsr stdout
 	iny
 	bne loop
+	inc strp+1
+	bne loop
 end	rts
 	.)
 
