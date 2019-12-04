@@ -38,8 +38,8 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${sysapps} ${lsh} ${inet} c64rom boot loader index.html
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html
+osa.d64: ${files} ${sysapps} ${lsh} ${inet} c64rom boot loader index.html test.bat
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html test.bat
 	rm -f ${sysapps}
 
 emurun: osa.d64
