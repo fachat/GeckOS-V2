@@ -203,7 +203,7 @@ rderr	; end of file
 	cpx #STDIN
 	beq r1
 	jsr fclose
-
+r1
 	; print counters
 	jsr crlfout
 	jsr spout
@@ -219,7 +219,7 @@ rderr	; end of file
 	ldy fchars+1
 	jsr wordout
 
-r1	pla
+	pla
 	cmp #E_EOF
 	bne rde2
 	lda #E_OK
