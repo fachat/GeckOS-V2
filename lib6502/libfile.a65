@@ -982,9 +982,9 @@ err1 err2
 
 &Dup	.(
 	jsr fllock
-	stx f1
-	ldy #LT_FTAB
-l0	lda (zta),y
+	stx f1		; store original fnr
+	ldy #LT_FTAB	; search for free fnr
+l0	lda (zta),y	; file mode
 	beq found
 	iny
 	cpy #LT_FTAB+MAXFILES
@@ -994,62 +994,62 @@ l0	lda (zta),y
 	sec
 	rts
 found
-	sty f1+1
-	lda f1
-	bmi stdio
+	sty f1+1	; store free fnr
+	lda f1		; is STDIO?
+	bmi stdio	; if yes, jump
 	clc
 	adc #LT_FTAB
-	sta f1
+	sta f1		; store index in (zta) for orig file
 	tay
 found1
-	lda (zta),y
-	ldy f1+1
-	sta (zta),y
+	lda (zta),y	; file mode from orig file
+	ldy f1+1	
+	sta (zta),y	; store as file mode to new file
 	pha
 
-	lda f1
+	lda f1		; compute ptr to FSTRR (read stream) table
 	clc
 	adc #MAXFILES
 	tay	
-	lda (zta),y
+	lda (zta),y	; OS stream number
 	tax
 	lda f1+1
 	clc
 	adc #MAXFILES
 	tay
 	txa
-	sta (zta),y
+	sta (zta),y	; store for new fnr
 
 	pla
 	pha
-	and #1
+	and #1		; is this a read stream?
 	beq nord
-	lda #SC_REG_RD
+	lda #SC_REG_RD	; if yes, register a reader (stream in X)
 	jsr STRCMD
 nord
-	lda f1
+	lda f1		; compute ptr to FSTRW (write stream) table
 	clc
 	adc #2*MAXFILES
 	tay
-	lda (zta),y
+	lda (zta),y	; OS write stream
 	tax
 	lda f1+1
 	clc
 	adc #2*MAXFILES
 	tay
 	txa
-	sta (zta),y
+	sta (zta),y	; store for new fnr
 
 	pla
-	pha
-	and #2
+	;pha
+	and #2		; is this a writer?
 	beq nowr
-	lda #SC_REG_WR
+	lda #SC_REG_WR	; if so, register a writer in OS
 	jsr STRCMD
 nowr
-	pla
+	;pla
 
-	lda f1+1
+	lda f1+1	; calculate new fnr to return
 	sec
 	sbc #LT_FTAB
 	tax
@@ -1090,16 +1090,16 @@ noin	lda #2
 
 &Stddup	.(
 	jsr fllock
-	stx f1
-	sty f2
+	stx f1		; original STDx
+	sty f2		; replacement fnr
 	tya
 	clc
 	adc #LT_FTAB
-	sta f1+1
+	sta f1+1	; pointer to FTAB (replacement fnr)
 	tay
 	cpx #STDIN
 	bne noread
-	lda (zta),y
+	lda (zta),y	; is replacement fnr a read fnr?
 	and #1
 	beq ferr
 	tya
@@ -1109,9 +1109,9 @@ x1	tay
 	sty f1+1
 	lda (zta),y
 	sec
-	jsr DUP
+	jsr DUP		; replace STDx with stream
 	ldy f1+1
-	sta (zta),y
+	sta (zta),y	; and store old stream in replacement fnr
 	clc
 	ldx f2
 	jsr flunlock
@@ -1123,9 +1123,9 @@ noread
 	cpx #STDERR
 	bne ferr
 write	lda (zta),y
-	and #2
+	and #2		; is replacement fnr a write stream?
 	beq ferr
-	tya
+	tya	
 	clc
 	adc #2*MAXFILES
 	bne x1		; always
