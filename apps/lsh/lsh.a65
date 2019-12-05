@@ -23,7 +23,7 @@
 
 #include "lib6502.i65"
 
-/* #define	LSH_DEBUG */
+/* #define	LSH_DEBUG  */
 
 #define	BUFLEN 	255
 
@@ -40,7 +40,6 @@
 argp	.word 0
 
 	.bss
-shin	.byt 0
 quiet	.byt 0		; bit 7 set -> no shell output
 waitfl	.byt 0		; bit 7 set -> wait for process termination
 
@@ -81,10 +80,6 @@ usage	.asc 13,10, "Usage:"
 	jsr instsig
 	; install signal handler
 
-	ldx #STDIN
-	jsr dup
-	stx shin
-
 	ldx #0
 	stx quiet
 
@@ -98,8 +93,7 @@ usage	.asc 13,10, "Usage:"
 	ldy #>usage
 	jsr strout
 
-	ldx shin
-	jmp fclose
+	jmp terminate
 
 nooptserr
 	; check for command file parameter
@@ -187,12 +181,6 @@ clear	.(
 	.)
 
 terminate
-	pha
-	ldx shin
-	cpx #STDIN
-	beq nofile
-	jsr fclose
-nofile	pla
 	rts
 	.)
 
@@ -229,7 +217,7 @@ ta	.byt 0
 	bmi contpipe	; ok, piped
 	bvs dostdin	; last command ended with ";"
 
-	ldx shin
+	ldx #STDIN
 	jsr readline
 	bcc docmd
 
@@ -445,7 +433,8 @@ redir_err .(
 	bne inok
 	iny
 	lda (ap),y
-	beq openend
+	bne inok
+	jmp openend
 inok 	sty ty
 	tya
 	clc
@@ -454,7 +443,6 @@ inok 	sty ty
 	lda #0
 	adc ap+1
 	tay
-	; pla
 #ifdef LSH_DEBUG
 	pla
 	pha
@@ -466,9 +454,7 @@ inok 	sty ty
 	jsr lcrlfout
 	pla
 	tay
-	; pla
 #endif
-	; pha
 	lda ta
 	and #4
 	beq noap
@@ -483,7 +469,6 @@ noap
 	pha
 	lsr ta
 	bcc noerr	; no stderr
-
 	jsr dup		; dups xr fileno
 	bcs noerr
 	txa
@@ -495,10 +480,10 @@ noap
 noerr
 	lsr ta
 	bcc nostd
-	ldx buf+1
+	ldx buf+1	; stdout
 	jsr fclose
 	pla
-	sta buf+1
+	sta buf+1	; stdout
 	jmp in0
 nostd	pla
 	tax
@@ -543,7 +528,7 @@ noappend
 	lda (ap),y
 	cmp #"!"
 	bne nocomb1
-	inc ta
+	inc ta		; 3 or 7
 	iny
 nocomb1	jmp nocombine
 	.)
@@ -825,15 +810,21 @@ dofile	tya
 	bcs ferror
 	txa
 	pha
-	ldx shin
+	tay
+	ldx #STDIN
+	jsr stddup
+	bcs duperr
 	jsr fclose
 	pla
-	sta shin
 	lda #<-1
 	sta quiet
 	clc
 	rts
-
+duperr	pla
+	tax
+	jsr fclose
+	lda #5
+	.byt $2c
 ferror  lda #4
 ;       .byt $2c
 ;error  lda #1
@@ -987,8 +978,9 @@ doit	jmp (cp)
 	.)
 
 	.data
-bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
+bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset, bic_dup
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
+	.asc "dup",0
 	.byt 0
 	.text
 
@@ -1002,14 +994,40 @@ xcrlfout .(
 	jmp fputc
 	.)
 
+	; set the shell's stdx streams to the redirected streams from the dup command
+bic_dup	.(
+	; stdin
+	ldx #STDIN
+	ldy buf+0
+	jsr stddup
+	bcs duperr
+	stx buf+0
+	; stdout
+	ldx #STDOUT
+	ldy buf+1
+	jsr stddup
+	bcs duperr
+	stx buf+1
+	; stderr
+	ldx #STDERR
+	ldy buf+2
+	jsr stddup
+	bcs duperr
+	stx buf+2
+	lda #E_OK
+duperr	rts
+	.)
+
+	; print out uname system information
 bic_uname .(
 	jsr xcrlfout
 	jsr getos
-	ldx buf+1
+	ldx buf+1	; stdout
 	jsr xtxtout
 	jmp xcrlfout
 	.)
 
+	; set environment value
 bic_set	.(
 	inx
 	txa
@@ -1024,14 +1042,17 @@ bic_set	.(
 	rts
 	.)
 
+	; exit the shell
 bic_exit .(
 	jmp term
 	.)
 
+	; reset the machine
 bic_reset .(
 	jmp ($fffc)
 	.)
 
+	; echo some output
 bic_echo .(
 	inx
 	txa
