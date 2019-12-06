@@ -22,6 +22,7 @@
 ****************************************************************************/
 
 #include "lib6502.i65"
+#include "kernel.i65"
 
 /* #define	LSH_DEBUG  */
 
@@ -217,6 +218,12 @@ ta	.byt 0
 	bmi contpipe	; ok, piped
 	bvs dostdin	; last command ended with ";"
 
+#ifdef LOCKSEM
+	ldx #SEM_SENDBUF
+	clc
+	JSR LOCKSEM
+#endif
+
 	ldx #STDIN
 	jsr readline
 	bcc docmd
@@ -253,6 +260,12 @@ next	jsr lcrlfout
 	iny
 	lda (ap),y
 	bne d0
+#endif
+
+#ifdef LOCKSEM
+	ldx #SEM_SENDBUF
+	sec
+	JSR LOCKSEM
 #endif
 
 	/* 

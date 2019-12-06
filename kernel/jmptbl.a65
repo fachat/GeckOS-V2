@@ -79,6 +79,7 @@
 #define		CHECKCHLD OSA2KERNEL+$63
 
 #define		SETINFO	  OSA2KERNEL+$66
+#define		LOCKSEM	  OSA2KERNEL+$69
 
 #endif
 
@@ -138,6 +139,7 @@ jmp renice
 jmp checkchld
 
 jmp setinfo
+jmp locksem
 
 #endif
 
