@@ -31,11 +31,6 @@
  *
  *	llock		get a lock on a semaphore bit set in ac
  *	lunlock		unlock semaphore bit in ac
- *
- *	zinit		init zeropage allocation
- *	zalloc		alloc zeropage area
- *	zfree		free zeropage area
- *	zpidfree	free all zeropage areas for current pid
  */
 
 

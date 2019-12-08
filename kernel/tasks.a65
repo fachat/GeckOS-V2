@@ -181,6 +181,7 @@ found
 /* 
  * returns next thread ID in a and y. 
  * zero flag and carry flag are set when overrun to thread no 0
+ * x is preserved
  */ 
 ynextthread .(
 	tya
@@ -1155,6 +1156,7 @@ l1	jmp push
 &&fresem	=notimp
 &&kpsem		=notimp
 &&kvsem		=notimp
+&&locksem	=notimp
 
 #else	/* NO_SEM */
 
@@ -1166,50 +1168,104 @@ l1	jmp push
 #endif
 SEMFRE    .dsb (ANZSEM+7)/8
 SEMVAL    .dsb (ANZSEM+SYSSEM+7)/8
+SEMLOCK   .dsb ANZSEM+SYSSEM
 
 	.text
 
-&&kpsem   .(
-          jsr memsys
-	  bcc ps1
-          jsr tstnset
-	  jmp memtask
+remap	.(
+	txa
+	clc
+	adc #SYSSEM
+	tax
+	cpx #ANZSEM+SYSSEM
+	rts
+	.)
+
+&&locksem .(
+	jsr memsys
+	php
+	jsr remap
+	bcs rtaskx
+	plp
+	bcc unlock
+	lda SEMLOCK,x
+	bne locked
+	lda actTask
+	adc #0		; c=1 from above
+	sta SEMLOCK,x
+	bne rtask
+unlock	lda #0
+	sta SEMLOCK,x
+	txa
+	pha
+	jsr gsetxy
+	and SEMVAL,x
+	bne ok		; still locked, so unlock will release other tasks
+	pla
+	jmp noillp	; search for tasks to release
+ok	pla
+	clc
+	jmp memtask
+	.)
+
+rtaskx	plp
+	lda #E_NOSEM
+	.byt $2c
+locked	lda #E_SEMSET
+	sec
+rtask	jmp memtask
+
+&&&kpsem .(  
+        jsr memsys
+	php
+	jsr remap
+	bcs rtaskx
+	plp
+	bcc ps1
+        jsr tstnset
+	jmp memtask
+
 ps1
           ldy actThread
           txa
-          sta threadTab+TH_PAR,y      ; Semaphor-Nummer
+          sta threadTab+TH_PAR,y      ; Semaphor-Number, translated
 	  jsr tstnset
 	  bcc rtask
           ldy actThread
           lda #TS_WFSEM
           sta threadTab+TH_ST,y
           jmp nexttask
-rtask	  jmp memtask
-	  ;jsr memtask
-	  ;rts
           .)
 
 &&kvsem    .(
 	  jsr memsys
 	  ; x has semaphore number
+	jsr remap
+	bcc noillp
+	jmp illpar
+&noillp	  tax
 
 	  ldy actThread
 l0	  lda threadTab + TH_ST,y
-	  cmp #TS_WFSEM
+	  cmp #TS_WFSEM	; wait for semaphore?
 	  bne next
 	  txa
 	  cmp threadTab + TH_PAR,y
-	  beq gotone
+	  bne next	; wait for _this_ semaphore?
+
+	; check lock
+	lda SEMLOCK,x
+	beq gotone	; not locked
+	sec
+	sbc #1
+	cmp threadTab + TH_TASK,y
+	beq gotone	; locked by task of thread
+
 next	  jsr ynextthread
 	  cpy actThread
 	  bne l0
 
-          txa
-          clc
-          adc #SYSSEM
-          cmp #ANZSEM+SYSSEM
-          bcs illpar
-          jsr asetxy
+          jsr gsetxy
           eor #$ff
           and SEMVAL,x
           sta SEMVAL,x
@@ -1221,8 +1277,6 @@ ok
 	  lda #E_OK
 	  clc
 	  jmp memtask
-	  ;jsr memtask
-	  ;rts
           .)
 
 /* Semaphore administration (alloc, free) */
@@ -1255,8 +1309,7 @@ found     lda POT2,y
           lda #E_OK
 gne       cmp #1
 	  jmp memtask
-	  ;jsr memtask
-          ;rts
+
 gnext     inx
           cpx #(ANZSEM+7)/8
           bcc l2
@@ -1299,6 +1352,11 @@ i1        sta SEMVAL,y
           dey
           bpl i1
 
+	ldy #ANZSEM+SYSSEM-1
+l2	sta SEMLOCK,y
+	dey
+	bpl l2
+
 	  lda #$ff
           ldy #(ANZSEM+7)/8-1
 if1       sta SEMFRE,y
@@ -1309,12 +1367,14 @@ if1       sta SEMFRE,y
 	  .)
 
 tstnset   .(
-          txa
-          clc
-          adc #SYSSEM
-          cmp #ANZSEM+SYSSEM
-          bcs illpar1
-          jsr asetxy
+	lda SEMLOCK,x
+	beq notlocked
+	sec
+	sbc #1
+	cmp actTask
+	bne set		; not locked by own task
+notlocked 	
+          jsr gsetxy
           and SEMVAL,x
           bne set
           lda POT2,y
