@@ -151,6 +151,12 @@ next	lda #" "
 	bcs loop	; no task forked, x/y invalid
 	bit waitfl
 	bpl loop	; no wait
+#ifdef LOCKSEM
+	; make sure other programs can run while we wait for completion
+	ldx #SEM_SENDBUF
+	clc
+	JSR LOCKSEM
+#endif
 	ldx argp
 	ldy argp+1
 	jsr waitpid
@@ -219,6 +225,7 @@ ta	.byt 0
 	bvs dostdin	; last command ended with ";"
 
 #ifdef LOCKSEM
+	; make sure other programs can run while we wait for user input
 	ldx #SEM_SENDBUF
 	clc
 	JSR LOCKSEM
@@ -262,12 +269,6 @@ next	jsr lcrlfout
 	bne d0
 #endif
 
-#ifdef LOCKSEM
-	ldx #SEM_SENDBUF
-	sec
-	JSR LOCKSEM
-#endif
-
 	/* 
 	 * now we have to parse the command line for I/O redirection and
 	 * piping, starting the right programs along the way.
@@ -288,6 +289,13 @@ contpipe		; continue command with input piped from previous
 	lda piperd
 	sta buf+0	; stdin
 nopipe
+#ifdef LOCKSEM
+	; make sure we lock sendbuf (used in forkto) for us, so
+	; other programs don't reserve it and lock up the system
+	ldx #SEM_SENDBUF
+	sec
+	JSR LOCKSEM
+#endif
 	ldx #STDOUT	; dup stdout to be used in fork
 	jsr dup
 	stx buf+1	; stdout
