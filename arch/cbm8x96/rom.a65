@@ -55,7 +55,7 @@
 
 /* These are changeable ****************************************************/
 
-#define ROMSTART        $0b03   /* where the ROM starts */
+#define ROMSTART        2905   /* where the ROM starts */
 
 #define	MEMINIVAL	$0	/* Clear memory to 0 on boot */
 
@@ -96,6 +96,9 @@
           .word *+2		/* load address */
 	  jmp RESET
 	  ; ROMSTART is here!
+#if ROMSTART-*
+	.x
+#endif
 .(
 
 /************* ROM entries 				*/
@@ -179,7 +182,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$6900
+Memstart  =$6800
 Memend	  =$f000
 Zerostart =$70
 

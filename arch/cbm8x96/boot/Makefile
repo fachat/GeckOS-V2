@@ -31,6 +31,9 @@ topclean:
 tar ../boot.tgz: rom loader howto.boot
 	tar czvf ../boot.tgz rom loader howto.boot
 
+loader: loader.bas
+	petcat -l 0401 -w40 -o loader loader.bas
+
 ##############################################################################
 #
 # d64 emulator disk image + run
@@ -41,7 +44,7 @@ osa.d64: ${files} ${sysapps} ${lsh} ${inet} rom loader
 	rm -f ${sysapps}
 
 emurun: osa.d64
-	xpet -model 8096 -drive8type 2031 -autostart osa.d64
+	xpet -model 8296 -drive8type 2031 -autostart osa.d64
 
 
 ##############################################################################
