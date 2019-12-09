@@ -256,13 +256,13 @@ ttab      .word ktab,stab,ctab,sctab
 
 				/* business keyboard */
 
-ktab      .asc ".", 0, TC_CRGT, "8",0, "8529",0,"^^70741"
+ktab      .asc ".", 0, TC_CRGT, "8-", "8529",0,"^^70741"
 	  .asc "5;k]hfs",TC_ESC,"6@l",TC_CR,"jgda"
 	  .asc TC_BS,"pi\yrw",0, "4[o", TC_CDWN, "uteq"
 	  .asc "3",0,0,"..bc",0,"2",0,0,"0,nvz"
 	  .asc "1/",0,TC_HOME,"m x",0,0,0,":",3,"963_"
 
-stab      .asc 0, 0, TC_CLFT, "8",0, "(%",34,"9^^",0,"70'$!"
+stab      .asc 0, 0, TC_CLFT, "8=", "(%",34,"9^^",0,"70'$!"
 	  .asc "5+K]HFS",TC_ESC,"6@L",TC_CR,"JGDA"
 	  .asc TC_INS,"PI\YRW",0, "4[O", TC_CUP, "UTEQ"
 	  .asc "3",0,0,".>BC",0,"2",0,0,"0<NVZ"
