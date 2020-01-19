@@ -55,16 +55,17 @@
 
 /****************************************************/
 /* first part of the taskTab */
-#define	TT_STDIN	0	/* Stdin */
-#define	TT_STDOUT	1	/* Stdout */
-#define	TT_STDERR	2	/* Stderr */
-#define	TT_PARENT	3	/* parent process ID */
-#define	TT_SIGADR	4	/* addr of signal routine */
-#define	TT_LIBSAVE	6	/* 2 byte stdlib pointer to process info */
-#define	TT_ENV		8	/* environment number */
-#define	TT_NTHREADS	9	/* number of running threads */
-#define	TT_SIGMASK	10	/* mask of allowed signals */
-#define	TT_SIGPEND	11	/* mask of pending signals */
+#define	TT_STDCIN	0	/* Std console in */
+#define	TT_STDIN	1	/* Stdin */
+#define	TT_STDOUT	2	/* Stdout */
+#define	TT_STDERR	3	/* Stderr */
+#define	TT_PARENT	4	/* parent process ID */
+#define	TT_SIGADR	5	/* addr of signal routine */
+#define	TT_LIBSAVE	7	/* 2 byte stdlib pointer to process info */
+#define	TT_ENV		9	/* environment number */
+#define	TT_NTHREADS	10	/* number of running threads */
+#define	TT_SIGMASK	11	/* mask of allowed signals */
+#define	TT_SIGPEND	12	/* mask of pending signals */
 
 /* second part of taskTab */
 #define	TT_PRIORITY	0	/* priority (i.e. irqcnt) of task */
@@ -73,7 +74,7 @@
 #define	TT_NAME		4	/* name of the forked tasks (note: stored backwards) */
 
 /* entries in both tables are the same size, to use the same index */
-#define	TT_SLEN		12	/* length of task struct */
+#define	TT_SLEN		13	/* length of task struct */
 
 
 /****************************************************/
@@ -236,25 +237,40 @@ env 	  stx div3
 	  bne prio_ok
 	  ldy actTask
 	  cpy #<-1
-	  beq prio_def
+	  beq prio_def			
+	  ; inherit from parent
+	  lda taskTab + TT_STDCIN,y
+	  sta taskTab + TT_STDCIN,x
 	  lda taskTab2 + TT_PRIORITY,y
-	  .byt $2c
-prio_def  lda #IRQCNT
+	  jmp prio_ok
+	  ; current task is -1 means initial boot
+prio_def  lda SYSBUF+FORK_STDIN
+	  sta taskTab + TT_STDCIN,x
+	  lda #IRQCNT
 prio_ok	  sta taskTab2 + TT_PRIORITY,x
-	  lda actTask
+	  tya
 	  sta taskTab + TT_PARENT,x
-
+	  
 	  jsr getthread
-nothread2 bcs nothread
-	  ; y has thread no
-	  sty div
+	  bcc gotthread
 
+nothread2 jmp nothread
+
+gotthread ; y has thread no
+	  sty div
 
 	  lda div2			; task id
 	  sta threadTab + TH_TASK,y	; new task id for thread
 	  tax
 	  lda #1
 	  sta taskTab + TT_NTHREADS,x	; reserve task
+
+	  ; register CIN
+	  lda taskTab + TT_STDCIN,x
+	  tax
+	  lda #SC_REG_RD
+	  jsr STRCMD
+	  ldx div2
 
 	  lda div3 
 	  sta taskTab + TT_ENV,x	; save env
@@ -322,8 +338,6 @@ nothread
 noenv	  lda #E_NOENV
 fend	  cmp #1
 	  jmp memtask
-	  ;jsr memtask
-          ;rts
           .)
 
 &&forkt	  .(
@@ -380,8 +394,6 @@ fend	  cmp #1
 	  lda #E_OK
 	  clc
 	  jmp memtask
-	  ;jsr memtask
-	  ;rts
 
 nothread  pla
 	  pla
@@ -457,6 +469,9 @@ k4	  txa
           jsr STRCMD
           ldx taskTab+TT_STDERR,y
           lda #SC_EOF
+          jsr STRCMD
+          ldx taskTab+TT_STDCIN,y
+          lda #SC_NUL
           jsr STRCMD
 	  .)
 
@@ -648,8 +663,6 @@ s2a	  ;jmp endirq
 	  txa
 	  clc
 	  jmp memtask
-	  ;jsr memtask
-	  ;rts
 	  .)
 
 #else
@@ -885,8 +898,6 @@ next
 serr	lda #E_NOENV
 serr2	cmp #1
 	jmp memtask
-	;jsr memtask
-	;rts
 copy
 #ifdef CPPCBUFTX
 	sty div
@@ -992,8 +1003,7 @@ copy	plp
 	ldy div
 	clc
 	jmp memtask
-	;jsr memtask
-	;rts
+
 setadr	php		; this address might be used in IRQ and exchange is 
 	sei 		; _not_ atomic without this SEI!
 	ldy taskTab + TT_SIGADR,x
@@ -1007,8 +1017,6 @@ setadr	php		; this address might be used in IRQ and exchange is
 	plp
 	clc
 	jmp memtask
-	;jsr memtask
-	;rts
 	.)
 
 /* 
@@ -1039,8 +1047,6 @@ ok	lda #E_OK
 not	lda #E_NOTASK
 	clc
 	jmp memtask
-	;jsr memtask
-	;rts
 	.)
 
 /*
@@ -1341,8 +1347,6 @@ asetxy    tax
 &illpar   lda #E_NOSEM
           cmp #1
           jmp memtask
-	  ;jsr memtask
-          ;rts
 	  .)
 
 &&inisem  .(
@@ -1400,16 +1404,16 @@ set       lda #E_SEMSET
 	  ldy actTask
 	  cpy #<-1
 	  beq stdok
-          cpx #STDIN
+          cpx #STDCIN
           bcc stdok
           pha
           txa
           sec
-          sbc #STDIN
+          sbc #STDCIN
           clc
           adc actTask
           tax
-          lda taskTab+TT_STDIN,x
+          lda taskTab+TT_STDCIN,x
           tax
           pla
 stdok     plp
@@ -1452,8 +1456,6 @@ te2       rts            ; c=1 on error
           .byt $24
 tdx       sec
           jmp memtask
-	  ;jsr memtask
-          ;rts
           .)
 
 /************************************************************************/
@@ -1470,7 +1472,7 @@ d         .byt 0
 
 &&kdup     jsr memsys
           php
-          cpx #STDIN
+          cpx #STDCIN
           bcc duperr
           stx d
           tax
@@ -1482,28 +1484,25 @@ d         .byt 0
           pha
 #endif
           lda d
-          clc
-          adc #<-STDIN
+          sec
+          sbc #STDCIN
           clc  
           adc actTask
           tax
-          lda taskTab+TT_STDIN,x
+          lda taskTab+TT_STDCIN,x
           tay
           pla
           plp
           bcc dupget
-          sta taskTab+TT_STDIN,x
+          sta taskTab+TT_STDCIN,x
 dupget    tya
           clc
           jmp memtask
-	  ;jsr memtask
-          ;rts     
+
 duperr    plp
           sec
           lda #E_NOSTR
           jmp memtask
-	  ;jsr memtask
-          ;rts
           .)
     
           .(

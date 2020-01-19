@@ -350,7 +350,8 @@
 
 /*        StdStream                */
 
-#define   STDNUL         $fc 	/* is ignored (see PK_FS)		*/
+#define   STDNUL         $fb 	/* is ignored (see PK_FS)		*/
+#define   STDCIN         $fc
 #define   STDIN          $fd
 #define   STDOUT         $fe
 #define   STDERR         $ff
