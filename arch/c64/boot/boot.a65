@@ -117,7 +117,7 @@ l2
 	dex
 	bne loop
 ;.byt 2			; x64 trap...
-	jmp $f000
+	jmp ($fffc)
 	rts
 
 

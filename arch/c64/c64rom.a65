@@ -289,7 +289,8 @@ end_auto
 #endif
 
 .dsb $d000-*,<-1
-.dsb $2000, <-1			/* from d000 to f000 */
+.dsb $1c00, <-1			/* from d000 to f000 
+				   ($e000-ebff is screen buffer) */
 
 /************* Kernel					*/
           
