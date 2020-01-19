@@ -239,15 +239,19 @@ env 	  stx div3
 	  cpy #<-1
 	  beq prio_def			
 	  ; inherit from parent
-	  lda taskTab + TT_STDCIN,y
-	  sta taskTab + TT_STDCIN,x
 	  lda taskTab2 + TT_PRIORITY,y
-	  jmp prio_ok
+	  sta taskTab2 + TT_PRIORITY,x
+	  lda taskTab + TT_STDCIN,y
+	  cmp #STDNUL
+	  bne cin_ok
+	  beq cin_def
 	  ; current task is -1 means initial boot
-prio_def  lda SYSBUF+FORK_STDIN
-	  sta taskTab + TT_STDCIN,x
+prio_def
 	  lda #IRQCNT
-prio_ok	  sta taskTab2 + TT_PRIORITY,x
+	  sta taskTab2 + TT_PRIORITY,x
+cin_def   lda SYSBUF+FORK_STDIN
+cin_ok	  sta taskTab + TT_STDCIN,x
+prio_ok	  
 	  tya
 	  sta taskTab + TT_PARENT,x
 	  
