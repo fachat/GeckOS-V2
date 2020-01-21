@@ -6,3 +6,5 @@ mkdir
 rmdir
 mv
 rm
+more
+wc

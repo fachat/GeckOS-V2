@@ -22,9 +22,9 @@
 
 ****************************************************************************/
 
-#define	MAX_SCREEN	4		/* hard maximum number of screens */
+#define	MAX_SCREEN	3		/* hard maximum number of screens */
 
-#define	MAX_ASCREEN	#4		/* soft maximum number of screens */
+#define	MAX_ASCREEN	#3		/* soft maximum number of screens */
 
 #define	SWITCHKEY	C64SWITCH
 

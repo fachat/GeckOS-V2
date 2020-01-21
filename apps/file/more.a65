@@ -216,7 +216,7 @@ lf	; new line
 	jsr strout
 	; wait keypress
 	sec
-	ldx #STDIN
+	ldx #STDCIN
 	jsr fgetc
 	; go to start line
 	lda #<clrstr
