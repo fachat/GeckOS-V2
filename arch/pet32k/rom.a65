@@ -48,11 +48,7 @@
 
 /* These are changeable ****************************************************/
 
-#ifdef HAVE_MON
-#define ROMSTART        $13ab   /* where the ROM starts */
-#else
-#define ROMSTART        $1303   /* where the ROM starts */
-#endif
+#define ROMSTART        $1343   /* where the ROM starts */
 
 #define	STACKCOPY		/* if defined, save stack area in memory
 				   when context switching, otherwise divide
@@ -112,7 +108,8 @@
 
 /************* fsdev - converts devices into files 	*/
 
-#define	FSDEV_NOROM
+
+#define	FSDEV_NOROM		/* do not implement ROM disk drive (to save space) */
 #include  "sysapps/fs/fsdev.a65"
 
 
@@ -157,7 +154,8 @@
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
 	.byt 0,0	; P_DEV
-	.byt BOOTDRV,":lsh",0,"-v", 0, "-d", 0,ROOTPATH,0,0
+	;.byt BOOTDRV,":lsh",0,"-v", 0, "-d", 0,ROOTPATH,0,0
+	.byt BOOTDRV,":lsh",0,"-v",0,"-d", 0,ROOTPATH,0,0
 end_auto
 	.)
 
@@ -178,11 +176,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-#ifdef HAVE_MON
-Memstart  =$6400
-#else
-Memstart  =$5440
-#endif
+Memstart  =$5500
 Memend	  =$7800
 Zerostart =$94		/* PET ROM irq vectors at $90-$93 */
 
