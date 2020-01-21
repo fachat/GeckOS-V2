@@ -262,7 +262,7 @@ end_slipd
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
 	.byt 0,0	; P_DEV
-	.byt BOOTDRV,":lsh",0,"-d",0,ROOTPATH, 0,0
+	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0,0
 end_auto
 	.)
 

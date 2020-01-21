@@ -798,6 +798,7 @@ optsadh	.byt 0, >optdrv-1
 	.text
 
 optdrv	tya
+	pha
 	clc
 	adc argp
 	pha
@@ -805,7 +806,13 @@ optdrv	tya
 	adc argp+1
 	tay
 	pla
-	jmp chdir
+	jsr chdir
+	pla
+	tay
+nextpar	iny
+	lda (argp),y
+	bne nextpar
+	rts
 
 ;----------------------------------------------
 ; open a file and use for stdin

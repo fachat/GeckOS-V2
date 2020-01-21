@@ -108,7 +108,7 @@ nexto	iny
 	lda (argp),y	
 	bne check	; only "-" means next arg is not an option
 	iny 		; point to either next arg or zerobyte
-	bne argend	; always
+	bne argloop	; always
 check 	; check option
 #ifldef optslst
 	cmp #"?"
