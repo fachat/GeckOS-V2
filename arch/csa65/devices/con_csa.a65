@@ -284,7 +284,7 @@ nshift    inc PIO
 x0        lda PIO+2
           cmp PIO+2
           bne x0
-          and #%00000001
+          and #%00000001	; RVS/OFF doubles as CTRL
           bne nctrl
           iny
           iny
