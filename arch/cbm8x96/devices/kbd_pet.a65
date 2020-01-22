@@ -166,25 +166,37 @@ tzei      .word 0
 &&getkey   .(
           lda PIO
           and #$f0
-          ora #6	; 8 for graphics
+#ifndef PET_KEYB_GRAPHICS
+          ora #6	; 6 for business
+#else
+          ora #8	; 8 for graphics
+#endif
           sta PIO
 ix1       
 	  lda PIO+2
           cmp PIO+2
           bne ix1   
           ldy #0
+#ifndef PET_KEYB_GRAPHICS
           and #%01000001
           cmp #%01000001
+#else
+          and #%00100001
+          cmp #%00100001
+#endif
           beq nshift
           iny
-nshift    inc PIO
+nshift    ; no CTRL on graphics keyboard
+#ifndef PET_KEYB_GRAPHICS	
+          inc PIO	; 7 for business, 9 for graphics
 x0        lda PIO+2
           cmp PIO+2
           bne x0
-          and #%00000001
+          and #%01000000	; REPEAT key doubles as CTRL
           bne nctrl
           iny
           iny
+#endif
 nctrl     sty shiftfl
 
           tya
@@ -250,7 +262,8 @@ lx        ldx #KEY_START
           rts
           .)
 
-ttab      .word ktab,stab,ctab,sctab
+ttab      .word ktab,stab
+	  .word ctab,sctab
 
 #ifndef PET_KEYB_GRAPHICS
 
