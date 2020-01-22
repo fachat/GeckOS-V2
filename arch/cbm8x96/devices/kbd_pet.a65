@@ -166,7 +166,11 @@ tzei      .word 0
 &&getkey   .(
           lda PIO
           and #$f0
-          ora #6	; 8 for graphics
+#ifndef PET_KEYB_GRAPHICS
+          ora #6	; 6 for business
+#else
+          ora #8	; 8 for graphics
+#endif
           sta PIO
 ix1       
 	  lda PIO+2
