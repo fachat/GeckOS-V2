@@ -50,6 +50,8 @@
  *			in: a/y pointer to zero-terminated string
  *			refs: strp    - zeropage ptr (will be defined if not def'd)
  *
+ *	hexwout - print a hex addr (2 byte into 4 hex chars)
+ *			in: a/y  value
  *	hexout - print a hex byte
  *			in: a value
  * 	crlfout - print cr/lf on stdout
@@ -424,6 +426,13 @@ end	rts
 
 #endif
 
+#iflused hexwout
+hexwout	pha
+	tya
+	jsr hexout
+	pla
+	; fall-through
+#endif
 #iflused hexout
 
 hexout	.(

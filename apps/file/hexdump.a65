@@ -1,0 +1,291 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 cat program
+
+    Copyright (C) 1997-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+
+#define	BUFLEN	1024
+
+main	.(
+	.zero
+argp	.word 0
+	.text
+
+	jsr getopts
+	bcc first
+
+	lda #<usagetxt
+	ldy #>usagetxt
+	jmp strout
+
+first	
+	; map option
+	lda #8
+	bit optlong
+	bpl short
+	lda #16
+short	sta optlong
+	jsr crlfout
+
+	; first file
+	lda (argp),y
+	bne ok
+	
+	ldx #STDIN
+	jmp docopy
+	
+ok	tya
+	clc
+	adc argp
+	sta argp
+	bcc l1
+	inc argp+1
+l1
+	lda argp
+	ldy argp+1
+
+	jsr docat
+	bcs ende
+	/* TODO: print error code */
+
+	ldy #0
+l2	lda (argp),y
+	beq next
+	iny
+	bne l2
+next
+	iny
+	lda (argp),y
+	bne ok
+
+	jsr endfiles
+
+	lda #0
+ende	
+	rts
+
+	.data
+usagetxt
+	.asc 13,10, "Usage:"
+	.asc 13,10, "  hexdump [options] [file1] [file2] ... "
+	.asc 13,10, "Prints the given file(s) (or stdin if no file given) "
+	.asc "to stdout as a hex dump"
+	.asc 13,10, "Options:"
+	.asc 13,10, "  -l  16 bytes per line instead of 8"
+	.byt 13, 10, 0
+
+	; options
+optslst	.asc "l",0
+optsflg	
+optlong	.byt 0
+
+	.bss
+fileno	.byt 0
+frdat	.word 0,0
+buf	.dsb BUFLEN
+
+	.text
+
+docat	ldx #OPEN_RD
+	jsr fopen
+	bcc docopy
+	rts
+docopy  stx fileno
+rdloop
+	lda #<buf
+	sta frdat
+	lda #>buf
+	sta frdat+1
+	lda #<BUFLEN
+	sta frdat+2
+	lda #>BUFLEN
+	sta frdat+3
+	lda #<frdat
+	ldy #>frdat
+	ldx fileno
+	sec
+	jsr fread
+	pha
+	php
+
+	lda #<BUFLEN
+	sec
+	sbc frdat+2
+	sta frdat+2
+	lda #>BUFLEN
+	sbc frdat+3
+	sta frdat+3
+	ora frdat+2
+	beq nodata
+	lda #<buf
+	sta frdat
+	lda #>buf
+	sta frdat+1
+wrloop	;lda #<frdat
+	;ldy #>frdat
+	jsr hexbufout
+	bcs wrerr
+	lda frdat+2
+	ora frdat+3
+	bne wrloop
+	pla
+	plp
+	bcs rderr
+	jmp rdloop
+
+wrerr	pha
+	ldx fileno
+	cpx #STDIN
+	beq w1
+	jsr fclose
+w1	pla
+	tay
+	pla
+	pla
+	tya
+	sec
+	rts
+nodata  pla
+	plp
+rderr	cmp #E_EOF
+	bne rde2
+	lda #E_OK
+rde2	pha
+	ldx fileno
+	cpx #STDIN
+	beq r1
+	jsr fclose
+r1	pla
+	clc
+	rts
+
+	;----------------------------------	
+hexbufout .(
+	.data
+offset	.word 0		; offset of line from start
+index	.byt 0		; index in line
+	.bss
+lbuf	.dsb 16		; line buffer for printed chars
+	.zero
+ptr	.word 0
+	.text
+	lda frdat
+	sec
+	sbc index
+	sta ptr
+	lda frdat+1
+	sbc #0
+	sta ptr+1
+line	; do we need an address?
+	lda index
+	bne noaddr
+	lda #"."
+	jsr stdout
+	lda offset
+	ldy offset+1
+	jsr hexwout
+noaddr
+	ldy index
+outl	jsr spout
+	lda (ptr),y
+	sta lbuf,y
+	jsr hexout
+
+	iny
+	cpy optlong
+	bne notdone
+
+	jsr endline
+	ldy #0
+notdone	
+	sty index
+	inc frdat
+	bne noover
+	inc frdat+1
+noover
+	lda frdat+2
+	bne nounder
+	dec frdat+3
+nounder	dec frdat+2
+	bne line
+	lda frdat+3
+	bne line	
+	clc
+ret	rts
+	
+	;----------------------------------	
+	; end the file
+&endfiles .(
+	lda index
+	beq ret
+	lda optlong
+	sec
+	sbc index
+	tay
+	beq end
+sploop	
+	jsr spout
+	jsr spout
+	jsr spout
+	dey
+	bne sploop
+end	lda index
+	sta optlong
+	; fallthrough	
+	.)
+
+	;----------------------------------	
+	; print printable version
+&endline .(
+	jsr spout
+	jsr spout
+	ldy #0
+prout	lda lbuf,y
+	and #127
+	cmp #32
+	bcs prok
+	lda #"."
+prok	jsr stdout
+	iny
+	cpy optlong
+	bcc prout
+	tya
+	clc
+	adc ptr
+	sta ptr
+	bcc noptrof
+	inc ptr+1
+noptrof	
+	tya
+	clc
+	adc offset
+	sta offset
+	bcc noofof
+	inc offset+1
+noofof
+	jmp crlfout
+	.)
+	.)
+
+#include "../common.a65"
+	.)
+

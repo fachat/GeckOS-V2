@@ -1,5 +1,5 @@
 
-files= mkdir rmdir rm chkdsk format ls cat mv wc more
+files= mkdir rmdir rm chkdsk format ls cat mv wc more hexdump
 
 all: ${files}
 
