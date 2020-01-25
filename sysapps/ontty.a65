@@ -1,0 +1,206 @@
+/****************************************************************************
+   
+    GeckOS/A65 Version 2.0.0
+    ontty program - run a program on another console
+
+    This program is used to set up the standard I/O streams, including
+    the - otherwise hidden - STDCIN, that keeps being connected to the 
+    console even with input redirection. This is used e.g. by "more" to
+    read commands from it, in an analogue to the original unix'es 
+    reading from STDERR.
+
+    In future versions this program may also set things like line 
+    discipline etc.
+
+    Copyright (C) 2020 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+#include "kernel.i65"
+#include "kdefs.i65"
+
+main	.(
+
+	.zero
+argp	.word 0
+
+	.data
+rdfile	.byt 0
+wrfile	.byt 0
+outstr	.byt 0
+instr	.byt 0
+owncin	.byt 0
+namep	.byt 0
+
+	.text
+	jsr getopts
+	bcc nohelp
+	lda #<helpstr
+	ldy #>helpstr
+	jmp strout	; and then terminate
+nohelp
+	tya
+	clc
+	adc argp
+	sta argp
+	lda argp+1
+	adc #0
+	sta argp+1
+
+	; find name to start
+	ldy #0
+n	lda (argp),y
+	beq nextarg
+	iny
+	bne n
+nextarg	iny
+	lda (argp),y
+	beq noname
+	sty namep
+
+	; open device for writing
+	; use lib6502 fopen to benefit from path handling etc
+	lda argp
+	ldy argp+1
+	ldx #OPEN_WR
+	jsr fopen
+	bcs wropenerr
+	stx wrfile
+
+	; map file to GeckOS stream number
+	jsr flib2osa_w
+	stx outstr
+
+	; open same device for reading
+	; (note we don't do R/W open just yet)
+	lda argp
+	ldy argp+1
+	ldx #OPEN_RD
+	jsr fopen
+	bcs rdopenerr
+	stx rdfile
+
+	; map file to GeckOS stream number
+	jsr flib2osa_r
+	stx instr
+
+	; register second writer for outstr (STDERR)
+	ldx outstr
+	lda #SC_REG_WR
+	jsr STRCMD
+
+	; register second reader for instr (STDCIN)
+	ldx instr 
+	lda #SC_REG_RD
+	jsr STRCMD
+
+	; dup our STDCIN, as it is copied to the forked task
+	lda instr
+	ldx #STDCIN
+	sec
+	jsr DUP
+	sta owncin
+
+	; get a comms stream for the lib6502 fork
+	jsr GETSTR
+	bcs strerr
+
+	; fork a new task
+	jsr dofork
+	php
+	pha
+
+	; re-dup our STDCIN
+	lda owncin
+	ldx #STDCIN
+	jsr DUP
+	
+	pla
+	plp
+	rts
+
+strerr	pha
+	ldx rdfile
+	jsr fclose
+	.byt $24	
+rdopenerr
+	pha
+	ldx wrfile
+	jsr fclose	
+	.byt $24
+wropenerr
+	pha
+	.byt $2c
+noname	lda #E_NOPAR
+	cmp #1
+	rts
+
+dofork	; re-do some of the lib6502 forkto code, as we have to set the 
+	; STD* streams ourselves
+	txa
+	pha
+
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	; store comms stream as parameter
+	pla
+	sta PCBUF+FORK_PAR
+	pha
+
+	lda instr
+	sta PCBUF+FORK_STDIN
+	lda outstr
+	sta PCBUF+FORK_STDOUT
+	sta PCBUF+FORK_STDERR
+
+	lda namep
+	clc
+	adc argp
+	pha
+	lda argp+1
+	adc #0
+	tay
+	pla
+	sec
+	sbc #3
+	sta THREADSAVE
+	bcs noof
+	dey
+noof	sty THREADSAVE+1
+	pla
+
+	jmp init_forkto
+
+	; ------------------------------
+	; references used by getopts
+	; same order and len as optall/optlong/... option bytes above
+optslst	.asc 0 
+	; option list in same order/len as option args
+optsflg
+
+helpstr	.asc 13,10
+	.asc "ontty <device> <command>",13,10
+	.asc "Start new command on new console.",13,10
+	.asc 0
+
+#include "../apps/common.a65"
+
+	.)
+

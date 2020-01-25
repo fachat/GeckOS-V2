@@ -1,7 +1,6 @@
 
-# appdirs= fs init mon slipd ibmon irtx basic mcopy
 
-files= ps kill 
+files= ps kill ontty
 
 all: ${files}
 
