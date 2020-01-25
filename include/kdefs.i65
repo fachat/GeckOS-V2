@@ -121,6 +121,8 @@
 
 #define	  E_TRYAGAIN	<-24	/* try again 				*/
 
+#define	  E_NOPAR	<-25	/* missing parameter			*/
+
 /* file handling errors */
 
 #define   E_FNODRV  	<-32	/* illegal drive number			*/
