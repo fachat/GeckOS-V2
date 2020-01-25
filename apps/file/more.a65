@@ -1,9 +1,9 @@
 /****************************************************************************
    
     OS/A65 Version 2.0.0
-    lib6502 cat program
+    lib6502 more program
 
-    Copyright (C) 1997-1998 Andre Fachat 
+    Copyright (C) 2020 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -94,7 +94,7 @@ usagetxt
 	.asc 13,10, " -L <n>    Assume <n> lines on screen (default: 25)"
 	.byt 13, 10, 0
 
-morestr	.asc 13,10, "<PRESS KEY>",0
+morestr	.asc 13, "<PRESS KEY>",0
 clrstr	.asc 13,    "           ", 13, 0
 
 	; no options (so far)
