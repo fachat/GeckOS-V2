@@ -26,6 +26,19 @@
  * Cursor handling
  */
 
+#ifndef PET_KEYB_GRAPHICS
+#define	SHIFT_ROW 	6
+#define	SHIFT_BITS	%01000001
+#else
+#define	SHIFT_ROW 	8
+#define	SHIFT_BITS	%00100001
+#endif
+
+#define	SCR_X		'X'	/* mapping X to screen code */
+#define	SCR_S		'S'	/* mapping S to screen code */
+#define	SCR_C		'C'	/* mapping C to screen code */
+#define	SCREEN_STAT_SC	32768+995
+
           .(
         .data
 crsrfl  .byt 0
@@ -136,6 +149,7 @@ tfrq      .byt 32,64,128,32,64,128,32
 kcnt       =zei2
 	.data
 rcnt      .byt 0
+doublefl  .byt 0	; both shift keys
 shiftfl   .byt 0
 prev      .byt 0
 	.zero
@@ -160,45 +174,73 @@ tzei      .word 0
 	  lda #4
           sta rcnt
           sta rspd
+	  stx shiftfl
+	  stx doublefl
           rts
           .)
 
 &&getkey   .(
           lda PIO
           and #$f0
-#ifndef PET_KEYB_GRAPHICS
-          ora #6	; 6 for business
-#else
-          ora #8	; 8 for graphics
-#endif
+	  ora #SHIFT_ROW
           sta PIO
 ix1       
 	  lda PIO+2
           cmp PIO+2
-          bne ix1   
+          bne ix1 
+	sta SCREEN_STAT_SC-1
+	  
           ldy #0
-#ifndef PET_KEYB_GRAPHICS
-          and #%01000001
-          cmp #%01000001
-#else
-          and #%00100001
-          cmp #%00100001
-#endif
-          beq nshift
-          iny
-nshift    ; no CTRL on graphics keyboard
-#ifndef PET_KEYB_GRAPHICS	
-          inc PIO	; 7 for business, 9 for graphics
-x0        lda PIO+2
-          cmp PIO+2
-          bne x0
-          and #%01000000	; REPEAT key doubles as CTRL
-          bne nctrl
-          iny
-          iny
-#endif
-nctrl     sty shiftfl
+          and #SHIFT_BITS	; both are zero, i.e. both shift keys?
+	  beq bothshift
 
+          cmp #SHIFT_BITS	; are both ones?
+          bne shift		; no, then single shift handling
+	  sty doublefl
+	  beq scankey		; no shift key pressed
+
+bothshift sty shiftfl
+	  dey			; at least ctrl
+	  sty doublefl
+	  lda #SCR_X
+	  sta SCREEN_STAT_SC
+	  sta SCREEN_STAT_SC+1
+	  jmp nokey
+
+shift     inc 32768
+	  iny
+	  bit doublefl
+	  bpl scankey
+	  and #1		; both SHIFT_BITS have bit 0
+	  tay
+	  iny
+	  iny
+
+scankey	  ; scan key depending on shift/ctrl
+	  ; y=0 no shift/ctrl
+	  ; y=1 shift
+ 	  ; y=2 ctrl
+	  ; y=3 shift+ctrl
+	  sty shiftfl
+
+	  lda #SCR_SPACE
+	  sta SCREEN_STAT_SC
+	  sta SCREEN_STAT_SC+1
+	  tya
+	  and #1
+	  beq noshift
+	  lda #SCR_S
+	  sta SCREEN_STAT_SC
+noshift	  tya
+	  and #2
+	  beq noctrl
+	  lda #SCR_C
+	  sta SCREEN_STAT_SC+1
+noctrl
+	lda shiftfl
+	sta SCREEN_STAT_SC+3
+	lda doublefl
+	sta SCREEN_STAT_SC+4
           tya
           asl
           tax
@@ -236,8 +278,10 @@ lc        iny
           sty prev
 nokey     
 /* TODO: check keyboard code - C64 works different */
-;	  ldx #KEY_START
-;	  stx rcnt
+	lda shiftfl
+	sta SCREEN_STAT_SC+3
+	lda doublefl
+	sta SCREEN_STAT_SC+4
 	  ldx shiftfl
           sec
           rts
