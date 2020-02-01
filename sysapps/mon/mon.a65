@@ -28,15 +28,12 @@
 /* wird aufgerufen mit :                                              */
 /*   SHORTMON       = Dis-/Assembler aus                              */
 /*   NOSYSFKT       = im Monitor nix mit Files/System-Aufrufen        */
-/*   NOMON          = kein Monitor                                    */
-/*   NOSH           = keine Shell                                     */
 /*   NOMMU          = sysmem/syszp werden 'durchgereicht'             */
 /*   ROM            = wird fuer Startrom assembliert                  */
 /*   NOPRG          = wird zum laden und testen ohne PRG-Header ass.  */
 /*   SHORTLINE      = if set, 8 bytes per line in hex dump at start   */
 /*                                                                    */
 /*nicht erlaubt sind :                                                */
-/*   NOMON && NOSH                                                    */
 /*   NOSYSFKT && !NOSH                                                */
 /**********************************************************************/
 
@@ -64,15 +61,12 @@
 
 /*
 #define SHORTMON
-/*#define NOMON*/
-/*#define NOSH*/
 /*#define NOSYSFKT*/
 #define NOPRG
 /*#define STDTST*/
 /*#define SHOW*/
 */
 #define	SHORTLINE
-#define NOSH 
 
 #endif	/* ROM */
 
@@ -103,21 +97,15 @@
 #ifndef MON_SHDEV
 #define	MON_SHDEV		0
 #endif
-#ifndef MON_MONDEV
-#define	MON_MONDEV		7
-#endif
 #ifndef MON_SHEXE
 #define	MON_SHEXE 		$80
-#endif
-#ifndef MON_MONEXE
-#define	MON_MONEXE		$80
 #endif
 
 /* 
  * These have both the same execution start address - works only
  * with MMU
  */
-start     .word start2			; pointer to end of file in ROM
+start     .word PRGEND			; pointer to end of file in ROM
           .byt  MON_SHEXE		; file type = prg + auto-execute bit
           .word PRG1			; execution start
           .byt  16			; RAM size in 256-byte blocks
@@ -125,15 +113,6 @@ start     .word start2			; pointer to end of file in ROM
           .byt  0              	 	; priority
           .byt  MON_SHDEV, MON_SHDEV	; stdin, stdout/stderr device number
           .asc  "shell",0,"b",0,"c:auto.bat",0,0 ; command line
-
-start2    .word PRGEND			; pointer to end of file in ROM
-          .byt  MON_MONEXE		; file type = prg + auto-execute bit
-          .word PRG2			; execution start
-          .byt  16			; RAM size in 256-byte blocks
-          .byt  >$ff-ROMSTART; $ff-start2 ; shared mem size in 256-byte blocks
-          .byt  0               	; priority
-          .byt  MON_MONDEV, MON_MONDEV	; stdin, stdout/stderr device number
-          .asc  "mon",0,0		; command line
 
 #else /* ROM ------------------------------------------------------------*/
 
@@ -163,12 +142,10 @@ IOBUF     .dsb MAXLEN
 
 
           .(
-#ifndef NOSH
 MESSAGE   ="#"
 	.data
 bef       .byt 0
 	.text
-#endif
 
 &notimp	lda #E_NOTIMP
 	sec
@@ -181,8 +158,8 @@ s1	.byt 0
 	.text
 
 &PRG1	ldy #0
-	.byt $2c
-&PRG2	ldy #start2-start
+;	.byt $2c
+;&PRG2	ldy #start2-start
 	lda start+2,y
 	and #3
 	cmp #3
@@ -269,13 +246,10 @@ as_initproc
 #ifndef NOSYSFKT
           jsr inipfad
 #endif
-#ifndef NOSH
           jsr inistdin
-#endif
 #ifndef NOSYSFKT
           jsr inistdout
 #endif
-#ifndef NOSH
           lda #<initxt
           ldy #>initxt
           jsr TSERO
@@ -327,9 +301,6 @@ LOGOFF    pla
           pla
 sterm      ;jsr clrpfad
           jsr clrbatch
-#else
-          jsr MONITOR
-#endif
 xterm
 #ifdef NOPRG
           RTS
@@ -342,7 +313,6 @@ xterm
 #endif
 
 
-#ifndef NOSH
 exebef    txa
           asl
           tay
@@ -384,11 +354,7 @@ tbok1     sty LZEI
           ldx bef
 tbx       rts
 
-#ifdef NOMON
 anzbef    =23
-#else
-anzbef    =24
-#endif
 
 #ifndef ROM
 	 .data
@@ -396,9 +362,6 @@ anzbef    =24
 
 beftab    .asc "DIR^@TYPE^@DEL^@FORMAT^@CHKDSK^@RENAME^@"
           .asc "B^@BATCH^@"
-#ifndef NOMON
-&montxt   .asc "MONITOR^@"
-#endif
           .asc "LOGOFF^@"
           .asc "COPYCON^@DUP^@CD^@DEVCMD^@COPY^@"
           .asc "GETSTR^@FRESTR^@SETMEM^@"
@@ -406,9 +369,6 @@ beftab    .asc "DIR^@TYPE^@DEL^@FORMAT^@CHKDSK^@RENAME^@"
 
 befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word RENAME-1,BATCH-1,BATCH-1
-#ifndef NOMON
-          .word MONITOR-1
-#endif
           .word LOGOFF-1,COPYCON-1,PDUP-1,CD-1
           .word PDEVCMD-1,COPY-1,PGETSTR-1,PFRESTR-1
           .word SETMEM-1,PINFO-1,PKILL-1
@@ -420,18 +380,14 @@ initxt    .asc "^M^JSHELL V"
 errtxt    .asc " ?^M^J^@"
 metxt     .asc "^M^J"
           .byt MESSAGE,0
-#endif
+
 	.text
 
           .)
-#ifndef NOMON
-#include  "sysapps/mon/shmon.a65"
-#endif
 #ifndef NOSYSFKT 
 #include  "sysapps/mon/shdir.a65"
 #endif
 
-#ifndef NOSH
 PINFO     .(
 	.data
 cnt       .byt 0
@@ -556,26 +512,17 @@ it        .asc "^M^JPID Name"
           jsr KILL
 pke       rts
           .)
-#endif            
+
           .(
 	.data
 Z0        .byt 0
 Z1        .byt 0
 	.text
 
-#ifndef NOSH
 &SETMEM   jsr GETADR
           bcs MOP1
-#endif
-#ifndef NOMON
-&Setmem   
-#endif
           cmp #0
           beq MOP1
-#if 0
-          cmp #(PRG>>12)&$f ; bis maximal Programmstart umsetzen erlauben
-          bcs MOP1
-#endif
           sta Z0
           lda #7 
           sta Z1
@@ -617,9 +564,6 @@ tok       rts
 LINEFEED  LDA #10:.BYT $2C
 #ifndef NOSYSFKT
 PNTOUT    lda #".":.byt $2c
-#endif
-#ifndef NOMON
-CROUT     LDA #13:.BYT $2C
 #endif
 SSPOUT    LDA #" ":JMP SEROUT
 
@@ -754,21 +698,17 @@ thok      clc
           .)
 
 &MLINEIN  .(
-#ifndef NOSH
 	.data
 li1       .byt 0
 	.text
 
-#endif
           LDY #0
 MO1       JSR SERIN
           bcc mo1a
-#ifndef NOSH
           sty li1
           jsr clstdin
           ldy li1
           bcc MO1
-#endif
           bcs MO2S
 
 mo1a     ; cmp #127		; delete
@@ -813,7 +753,6 @@ MO2       CLC
           RTS
           .)
 #ifndef NOMMU
-#ifndef NOSH
 &copycmd  .(
           ldx #<-1
           ldy #0
@@ -829,20 +768,7 @@ cc1       inx
           sta LZEI
           inx
 cc2c  
-#ifndef NOMON
-          lda PCBUF,x
-          cmp #"m"
-          bne cc2d
-          ldx #0
-cc2a      lda montxt,x
-          sta IOBUF,x
-          beq cc2b
-          jsr SEROUT
-          inx
-          bne cc2a 
-#else
           dex
-#endif
 cc2       inx
 cc2d      lda PCBUF,x
           beq cce   
@@ -868,9 +794,8 @@ cce       sec
           rts
           .)
 #endif
-#endif
           .)
-#ifndef NOSH
+
           .(
 	.data
 insp      .byt 0
@@ -938,7 +863,6 @@ ope       rts
           jmp clrbatch
           .)
           .)
-#endif
 
 #ifdef NOSYSFKT
 setout    rts

@@ -233,7 +233,7 @@ xterm
 	.text
 
           .)
-#include  "../mon/shmon.a65"
+#include  "shmon.a65"
 
 #ifndef NOSYSFKT 
 /*#include  "sysapps/mon/shdir.a65"*/
