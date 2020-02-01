@@ -28,6 +28,17 @@
  * 
  */
 
+/*
+ * These are the modifiers for the code:
+ *
+ * NOSYSFKT     if defined, do not include the system functions
+ * SHORTMON     if defined, do not include dis-/assembly and the U command
+ * SHORTLINE    if defined, use 8 hex chars per line in M, 16 otherwise
+ * NOSH         if defined, do not include Shell integration
+ * RETRTS       if defined, return from X with RTS, do not call TERM
+ * NOMMU        if defined, call PSEM to protect PCBUF on syscalls
+ */
+
           .(
 
 	.zero

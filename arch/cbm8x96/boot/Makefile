@@ -2,7 +2,7 @@
 lsh = lsh
 LSHDIR=../../../apps/lsh
 
-sysapps = mon ps kill ontty #slipd
+sysapps = lmon ps kill ontty #slipd
 SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls cat mv more hexdump
