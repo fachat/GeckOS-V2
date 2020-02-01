@@ -48,7 +48,7 @@
 #undef	ANDRE			/* my personal configuration... :-) */
 #undef	EMUSLIP			/* my personal configuration... :-) */
 
-#define	ROMSTART	$7800	/* where the ROM starts */
+#define	ROMSTART	$8400	/* where the ROM starts */
 
 #define	RAMSTART	1
 
@@ -170,7 +170,7 @@
 
 #define	STDIOADDR	$d000
 
-          .word $1800		/* load address */
+          .word $2400		/* load address */
 
 .(
 

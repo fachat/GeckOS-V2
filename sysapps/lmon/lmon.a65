@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-2020 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,26 +22,26 @@
 ****************************************************************************/
 
 
-/**********************************************************************/
-/*                            Shell-Prg                               */
-/*                                                                    */
-/* wird aufgerufen mit :                                              */
-/*   SHORTMON       = Dis-/Assembler aus                              */
-/*   NOSYSFKT       = im Monitor nix mit Files/System-Aufrufen        */
-/*   NOMMU          = sysmem/syszp werden 'durchgereicht'             */
-/*   ROM            = wird fuer Startrom assembliert                  */
-/*   NOPRG          = wird zum laden und testen ohne PRG-Header ass.  */
-/*   SHORTLINE      = if set, 8 bytes per line in hex dump at start   */
-/*                                                                    */
-/*nicht erlaubt sind :                                                */
-/*   NOSYSFKT && !NOSH                                                */
-/**********************************************************************/
+/**********************************************************************
+ *                            Monitor-Prg                             
+ *
+ * This is the binding to run atmon as a lib6502 program.
+ *                                                                    
+ * wird aufgerufen mit :                                              
+ *   SHORTMON       = Dis-/Assembler aus                              
+ *   NOSYSFKT       = im Monitor nix mit Files/System-Aufrufen        
+ *   NOMMU          = sysmem/syszp werden 'durchgereicht'             
+ *   SHORTLINE      = if set, 8 bytes per line in hex dump at start   
+ *                                                                    
+ *nicht erlaubt sind :                                                
+ *   NOSYSFKT && !NOSH                                                
+ *
+ **********************************************************************/
 
 /*
  * This is a monitor only - we should use NOSH anyway!
  */
-/* #define NOSH */
-#undef MON_USE_STDLIB
+#define NOSYSFKT
 
 /*
  * We have a new kernel...
@@ -57,19 +57,20 @@
 
 /*************************************************************************/
 
-#ifndef ROM
 
 /*
 #define SHORTMON
+/*#define NOMON*/
+/*#define NOSH*/
 /*#define NOSYSFKT*/
 #define NOPRG
 /*#define STDTST*/
 /*#define SHOW*/
 */
 #define	SHORTLINE
+#define NOSH 
 
-#endif	/* ROM */
-
+/*
 #ifdef MON_USE_STDLIB
 
 #define	  OUT	    Fputc
@@ -90,31 +91,8 @@
 #define	  Set2name  set2name
 
 #endif	/* MON_USE_STDLIB */
-
+*/
           .(
-#ifdef ROM
-
-#ifndef MON_SHDEV
-#define	MON_SHDEV		0
-#endif
-#ifndef MON_SHEXE
-#define	MON_SHEXE 		$80
-#endif
-
-/* 
- * These have both the same execution start address - works only
- * with MMU
- */
-start     .word PRGEND			; pointer to end of file in ROM
-          .byt  MON_SHEXE		; file type = prg + auto-execute bit
-          .word PRG1			; execution start
-          .byt  16			; RAM size in 256-byte blocks
-          .byt  >$ff-ROMSTART; $ff-start ; shared mem size in 256-byte blocks
-          .byt  0              	 	; priority
-          .byt  MON_SHDEV, MON_SHDEV	; stdin, stdout/stderr device number
-          .asc  "shell",0,"b",0,"c:auto.bat",0,0 ; command line
-
-#else /* ROM ------------------------------------------------------------*/
 
 #include  "kdefs.i65"
 #include  "kernel.i65"
@@ -124,10 +102,9 @@ start     .word PRGEND			; pointer to end of file in ROM
 
 +main	jmp as_stdproc
 
-#endif /* ROM */
-
 /**********************************************************************/
 
+/* versions */
 #ifndef VSA
 #define   MAXLEN    82
 #define   VSA       1
@@ -142,77 +119,11 @@ IOBUF     .dsb MAXLEN
 
 
           .(
-MESSAGE   ="#"
-	.data
-bef       .byt 0
-	.text
 
 &notimp	lda #E_NOTIMP
 	sec
 	rts
 
-#ifdef ROM
-	.data
-offs	.byt 0
-s1	.byt 0
-	.text
-
-&PRG1	ldy #0
-;	.byt $2c
-;&PRG2	ldy #start2-start
-	lda start+2,y
-	and #3
-	cmp #3
-	bne as_stdproc
-;.byt 2	
-	sty offs
-	jsr GETSTR
-	bcs nostr1
-	stx s1
-	ldx offs
-        lda start+8,x
-	pha
-	tax
-	ldy s1
-        lda #DC_PS
-        jsr DEVCMD
-	pla
-	tax
-        lda #DC_RX_ON
-        jsr DEVCMD
-        sec
-        ldx #STDIN
-        lda s1
-        jsr DUP
-
-        jsr GETSTR
-        bcs nostr1
-        stx s1
-        ldx offs
-        lda start+9,x
-        tax
-	pha
-        ldy s1
-        lda #DC_GS
-        jsr DEVCMD
-	pla
-	tax
-        lda #DC_TX_ON
-        jsr DEVCMD
-        sec 
-        ldx #STDOUT
-        lda s1
-        jsr DUP
-	ldx s1
-	lda #SC_REG_WR
-	jsr STRCMD
-	sec
-	ldx #STDERR
-	lda s1
-	jsr DUP
-	jmp as_initproc
-nostr1	jmp xterm	
-#endif
 &as_stdproc	
 /*
 	; see if we can read the command line 
@@ -246,10 +157,13 @@ as_initproc
 #ifndef NOSYSFKT
           jsr inipfad
 #endif
+#ifndef NOSH
           jsr inistdin
+#endif
 #ifndef NOSYSFKT
           jsr inistdout
 #endif
+#ifndef NOSH
           lda #<initxt
           ldy #>initxt
           jsr TSERO
@@ -301,6 +215,9 @@ LOGOFF    pla
           pla
 sterm      ;jsr clrpfad
           jsr clrbatch
+#else
+          jsr MONITOR
+#endif
 xterm
 #ifdef NOPRG
           RTS
@@ -313,205 +230,14 @@ xterm
 #endif
 
 
-exebef    txa
-          asl
-          tay
-          lda befadr+1,y
-          pha
-          lda befadr,y
-          pha
-          rts
-
-testbef   ldx #0
-          stx bef
-tb1       ldy LZEI
-tb0       lda beftab,x
-          beq tbok
-          eor IOBUF,y
-          beq tb2a
-          cmp #$20
-          bne tb2
-tb2a      inx
-          iny
-          bne tb0
-tb2       inc bef
-          lda bef
-          cmp #anzbef
-          bcs tbx
-tb3       lda beftab,x
-          inx
-          cmp #0
-          bne tb3
-          beq tb1
-tbok      lda IOBUF,y
-          beq tbok1
-          cmp #" "
-          beq tbok1
-          cmp #"/"
-          bne tb2 
-tbok1     sty LZEI
-          clc
-          ldx bef
-tbx       rts
-
-anzbef    =23
-
-#ifndef ROM
-	 .data
-#endif
-
-beftab    .asc "DIR^@TYPE^@DEL^@FORMAT^@CHKDSK^@RENAME^@"
-          .asc "B^@BATCH^@"
-          .asc "LOGOFF^@"
-          .asc "COPYCON^@DUP^@CD^@DEVCMD^@COPY^@"
-          .asc "GETSTR^@FRESTR^@SETMEM^@"
-          .asc "INFO^@KILL^@MKDIR^@RMDIR^@CHDIR^@"
-
-befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
-          .word RENAME-1,BATCH-1,BATCH-1
-          .word LOGOFF-1,COPYCON-1,PDUP-1,CD-1
-          .word PDEVCMD-1,COPY-1,PGETSTR-1,PFRESTR-1
-          .word SETMEM-1,PINFO-1,PKILL-1
-          .word MKDIR-1,RMDIR-1,CD-1
-
-initxt    .asc "^M^JSHELL V"
-          .byt VSA+"0",".",VSB+"0"
-          .asc "^M^J(C) 1990-97 BY A.FACHAT^M^J^@"
-errtxt    .asc " ?^M^J^@"
-metxt     .asc "^M^J"
-          .byt MESSAGE,0
-
 	.text
 
           .)
+#include  "shmon.a65"
+
 #ifndef NOSYSFKT 
-#include  "sysapps/mon/shdir.a65"
+/*#include  "sysapps/mon/shdir.a65"*/
 #endif
-
-PINFO     .(
-	.data
-cnt       .byt 0
-zei       .byt 0
-	.text
-
-          ldy #0
-i0        lda it,y
-          beq info
-          jsr SEROUT
-          iny
-          bne i0
-          
-info      .(
-#ifdef NOMMU
-	  clc
-	  ldx #SEM_SENDBUF
-	  jsr PSEM
-#endif
-	  jsr GETINFO
-          ldx #0
-          stx cnt
-	  stx zei
-infoloop  
-          ldx zei
-	  lda PCBUF+TN_PID,x
-          jsr HEXOUT
-          jsr SSPOUT
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-          bne name
-          ldx #TNAMLEN
-i1        jsr SSPOUT
-          dex
-          bne i1
-          beq i2
-name      ldy #0
-          ldx zei
-i4        lda PCBUF+TN_NAME,x
-          beq i3
-          jsr SEROUT
-          iny
-          inx
-          cpy #TNAMLEN
-          bcc i4
-i3        cpy #TNAMLEN
-          bcs i2
-          jsr SSPOUT
-          iny
-          bne i3
-i2        jsr SSPOUT
-
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-	  jsr HEXOUT
-	  jsr SSPOUT
-          lda PCBUF+TN_ENV,x
-	  jsr HEXOUT
-	  jsr SSPOUT
-	  lda PCBUF+TN_PARENT,x
-	  jsr HEXOUT
-;          asl
-;          asl
-;          tax
-;          ldy #4
-;i5        lda st,x
-;          jsr SEROUT
-;          inx
-;          dey
-;          bne i5
-          jsr SSPOUT
-          ldx zei
-          lda PCBUF+TN_MEM,x
-          jsr HEXOUT
-          jsr SSPOUT
-	  lda PCBUF+TN_SIGMASK,x
-          jsr HEXOUT
-          jsr SSPOUT
-	  lda PCBUF+TN_SIGNAL+1,x
-	  jsr HEXOUT
-	  lda PCBUF+TN_SIGNAL,x
-	  jsr HEXOUT
-	  jsr SSPOUT
-          lda PCBUF+TN_STDIN,x
-          jsr HEXOUT
-          jsr SSPOUT
-          lda PCBUF+TN_STDOUT,x
-          jsr HEXOUT
-          jsr SSPOUT
-          lda PCBUF+TN_STDERR,x
-          jsr HEXOUT
-          jsr SSPOUT
-          jsr CRLFOUT
-	  lda zei
-	  clc
-	  adc #TN_SLEN
-	  sta zei
-          inc cnt
-          lda cnt
-          cmp #ANZ_ENV
-          bcs ie
-          jmp infoloop
-ie        
-#ifdef NOMMU
-	  ldx #SEM_SENDBUF
-	  jsr VSEM
-#endif
-	  clc
-          rts
-	  .)
-          
-; st        .asc "FRE ENV IBRKBRK RDY IRQ WFRXWFTXWSEMWTRM"
-it        .asc "^M^JPID Name"
-	  .dsb TNAMLEN-5, 32
-	  .asc " Th En Pa Me Sm SigA In OutErr^M^J",0
-
-&PKILL    jsr GETADR
-          bcs pke
-          sta cnt
-          jsr GETADR
-          ldx cnt
-          jsr KILL
-pke       rts
-          .)
 
           .(
 	.data
@@ -519,8 +245,7 @@ Z0        .byt 0
 Z1        .byt 0
 	.text
 
-&SETMEM   jsr GETADR
-          bcs MOP1
+&Setmem   
           cmp #0
           beq MOP1
           sta Z0
@@ -565,6 +290,7 @@ LINEFEED  LDA #10:.BYT $2C
 #ifndef NOSYSFKT
 PNTOUT    lda #".":.byt $2c
 #endif
+CROUT     LDA #13:.BYT $2C
 SSPOUT    LDA #" ":JMP SEROUT
 
           .(
@@ -698,17 +424,9 @@ thok      clc
           .)
 
 &MLINEIN  .(
-	.data
-li1       .byt 0
-	.text
-
           LDY #0
 MO1       JSR SERIN
           bcc mo1a
-          sty li1
-          jsr clstdin
-          ldy li1
-          bcc MO1
           bcs MO2S
 
 mo1a     ; cmp #127		; delete
@@ -723,144 +441,17 @@ del	 ; lda #TC_BS
 	  cpy #0:beq MO1
           dey
           jsr SEROUT
-/*#ifdef SHOW         
-          ldx #STDERR
-          jsr OUT
-#endif*/
           jmp MO1
 
 MO1A      STA IOBUF,Y
           jsr SEROUT
-/*#ifdef SHOW
-     ldx #STDERR
-     jsr OUT
-#endif*/
           INY:CPY #MAXLEN
           BCC MO1:bcs MO2
 MO2S      sec:.byt $24
 MO2       CLC
-/*#ifdef SHOW
-          php
-          lda #13
-          ldx #STDERR
-          jsr OUT
-          lda #10
-          jsr OUT
-          plp
-#endif*/
           LDA #0:STA IOBUF,Y
           sta LZEI
           RTS
-          .)
-#ifndef NOMMU
-&copycmd  .(
-          ldx #<-1
-          ldy #0
-          lda #" "
-          sta LZEI
-cc1       inx
-          lda PCBUF,x
-          beq cce
-          cmp #" "
-          beq cc1
-          cmp #34
-          bne cc2c
-          sta LZEI
-          inx
-cc2c  
-          dex
-cc2       inx
-cc2d      lda PCBUF,x
-          beq cce   
-          cmp LZEI
-          bne cc2
-cc3       inx
-          lda PCBUF,x
-          beq cce
-          cmp #" "
-          beq cc3
-cc4       lda PCBUF,x
-          sta IOBUF,y
-          jsr SEROUT
-          iny
-cc2b      inx
-          cmp #0
-          bne cc4
-          lda #0
-          sta LZEI
-          clc
-          rts
-cce       sec
-          rts
-          .)
-#endif
-          .)
-
-          .(
-	.data
-insp      .byt 0
-inst      .dsb INDEPTH
-	.text
-
-&inistdin .(
-          lda #0
-          sta insp
-          rts
-          .)
-
-&&setin    .(
-          jsr CHRGOT
-          cmp #"<"
-          beq s1
-s2        rts
-s1        inc LZEI
-          jsr ropenfile
-          bcs s2
-          txa  
-	  ; jmp opstdin
-          .)
-
-&opstdin  .(        /* a=neuer StdIn-Stream  */
-          ldx insp
-          cpx #INDEPTH
-          bcs ope
-          ldx #STDIN
-          sec
-          jsr DUP
-          ldx insp
-          sta inst,x
-          inc insp
-          clc
-ope       rts
-          .)
-
-&clstdin  .(
-          ldx insp
-          sec
-          beq ope
-          dex
-          lda inst,x
-          stx insp
-          sec
-          ldx #STDIN
-          jsr DUP
-          tax
-          lda #SC_NUL
-          jsr STRCMD
-          clc
-&ope      rts
-          .)
-
-&clrbatch .(
-          ldx insp
-          beq ope
-          dex
-          lda inst,x
-          stx insp
-          tax
-          lda #SC_NUL
-          jsr STRCMD
-          jmp clrbatch
           .)
           .)
 
