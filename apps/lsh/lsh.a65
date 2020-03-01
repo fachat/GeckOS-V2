@@ -26,6 +26,8 @@
 
 /* #define	LSH_DEBUG  */
 
+#define	PROMPTCHAR	"#"
+
 #define	BUFLEN 	255
 
 #define	MAXVAR	16
@@ -66,6 +68,8 @@ usage	.asc 13,10, "Usage:"
 	.asc 13,10
 	.asc 13,10, "Command Line Input:"
 	.asc 13,10, "Use '<','>' and '!' to redirect input, output or stderr"
+	.asc 13,10, "Use '>>' to append output to a file"
+	.asc 13,10, "Use '<< PATTERN' to pipe input to command until line with just 'PATTERN'"
 	.asc 13,10, "Pipe commands using '"
 	.asc 13,10
 	.asc 13,10, "Example:"
@@ -112,6 +116,8 @@ nodbg
 
 	/* command loop */
 loop
+	jsr bgclr
+
 	jsr checksig
 
 	jsr getcmd
@@ -171,6 +177,7 @@ errclr
 	jmp loop
 
 clear	.(
+	jsr dobg
 	ldx buf+0
 	jsr fclose
 	ldx buf+1
@@ -638,7 +645,7 @@ readline .(
 instr	.byt 0
 prev 	.byt 0
 	.data
-promptxt .byt 13,10,">",0
+promptxt .byt 13,10,PROMPTCHAR,0
 	.text
 
 	stx instr
@@ -742,11 +749,13 @@ tp	.word 0
 	bit quiet
 	bpl doit
 	rts
+&xtxtout
+	ldx buf+1
+	.byt $2c
 doit	ldx #STDOUT
 	.byt $2c
 &etxtout
 	ldx #STDERR
-&xtxtout
 	sta tp
 	sty tp+1
 	ldy #0
@@ -755,6 +764,8 @@ t1	lda (tp),y
 	sec
 	jsr fputc
 	iny
+	bne t1
+	inc tp+1
 	bne t1
 te	rts
 	.)
@@ -889,7 +900,7 @@ kx	iny
 	beq ende
 	cmp #" "
 	beq kx
-	cmp #">"	; is prompt?
+	cmp #PROMPTCHAR	; is prompt?
 	beq kx		; yes, ignore
 
 	.byt $24	; ldy #<-1
@@ -943,7 +954,7 @@ execfork .(
 	.zero
 &cp	.word 0
 	.bss
-cnt	.byt 0
+&cnt	.byt 0
 	.text
 
 	/* search builtin table */
@@ -1002,13 +1013,35 @@ found	cmp cmdline,x	; cmdline token must be at end too
 	jsr doit
 	sec	; means to close the stdio streams; ac gives return code
 	rts
-doit	jmp (cp)
+&doit	jmp (cp)
+	.)
+
+dobg 	.(
+	; pull stuff from background buffer and execute background code
+	jsr bgpull
+	bcc next
+	rts
+next	asl
+	tay
+	lda bgcaddr+1,y
+	; beq illegal, should not happen
+	sta cp+1
+	lda bgcaddr,y
+	sta cp
+	jsr doit
+	jmp dobg
 	.)
 
 	.data
-bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset, bic_dup
+	; immediate execution
+bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
+	.word bic_dup, bic_help
+	; background execution after parsing
+bgcaddr .word bgc_echo,        0,      0,       0,       0, bgc_uname,         0
+	.word       0, bgc_help
+	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0
+	.asc "dup",0, "help",0
 	.byt 0
 	.text
 
@@ -1020,6 +1053,20 @@ xcrlfout .(
 	lda #10
 	sec
 	jmp fputc
+	.)
+
+	; print the usage text
+bgc_help .(
+jam
+	jsr bgpull
+	sta buf+1
+	lda #<usage
+	ldy #>usage
+	jsr xtxtout
+	ldx buf+1
+	jsr fclose
+	lda #E_OK
+	rts
 	.)
 
 	; set the shell's stdx streams to the redirected streams from the dup command
@@ -1047,12 +1094,14 @@ duperr	rts
 	.)
 
 	; print out uname system information
-bic_uname .(
+bgc_uname .(
+	jsr bgpull
+	sta buf+1
 	jsr xcrlfout
 	jsr getos
-	ldx buf+1	; stdout
 	jsr xtxtout
-	jmp xcrlfout
+	jsr xcrlfout
+	jmp bgc_end
 	.)
 
 	; set environment value
@@ -1094,6 +1143,25 @@ bic_echo .(
 	sta cp
 	sty cp+1
 
+	jsr bgpushpar
+&bic_help
+&bic_uname
+	ldx buf+1 
+	jsr dup
+	bcs err
+	txa
+	jsr bgpush
+	lda cnt
+	jmp bgpush
+	.)
+	; second half of command
+bgc_echo .(
+	jsr bgpull
+	sta buf+1	; stdout
+	jsr bgpullpar
+	sta cp
+	sty cp+1
+
 	jsr xcrlfout
 	ldx buf+1	; stdout
 
@@ -1111,7 +1179,13 @@ n1
 	iny
 	lda (cp),y
 	bne l0
-	rts
+	lda cp
+	ldy cp+1
+	jsr mfree
+&bgc_end
+	ldx buf+1	; stdout
+	jmp fclose
+&err	rts
 	.)
 
 bic_cd	.(
@@ -1136,10 +1210,98 @@ bic_pwd	.(
 	bcs ende
 	lda #<buf+3
 	ldy #>buf+3
-	ldx buf+1
 	jsr xtxtout
 	lda #0
 ende	rts
+	.)
+
+;----------------------------------------------
+; background command buffer handling
+;
+; When piping together commands, internal and external commands can be mixed.
+; For example you can do 'help | more' to pipe the help output through the
+; more command. When immediately executing the command at plumbing time (when
+; commands are wired together using pipes), the command blocks, as the output
+; stream is not flushed, as more is not started yet, and the buffer runs full.
+; Therefore we only buffer a command here while plumbing, until it is time
+; for the shell to wait for the end of a command (e.g. on ';', or end of line)
+; At that point in time we execute the commands in this buffer.
+;
+	.(
+	; max value is 128, anything above detects overflow immediately
+#define	BGBUF_LEN	20
+	.bss
+bgbuf	.dsb BGBUF_LEN
+bglen	.byt 0
+	.zero
+bgp	.word 0
+	.text
+
+&bgclr	.(
+	lda #BGBUF_LEN
+	sta  bglen
+	rts
+	.)
+
+&bgpush	.(
+	ldx bglen
+	dex
+	bmi errs
+	sta bgbuf,x
+	stx bglen
+	clc
+	rts
+errs	sec
+	rts
+	.)
+
+; set carry on empty
+&bgpull	.(
+	ldx bglen
+	cpx #BGBUF_LEN
+	bcs errx
+	lda bgbuf,x
+	inx
+	stx bglen
+&errx	rts
+	.)
+
+	; find the length of a parameter (address in cp)
+	; malloc a buffer, copy it there and push address
+ 	; of buffer
+&bgpushpar .(
+	ldy #0
+f0	lda (cp),y
+	beq gotlen
+	iny
+	bne f0
+gotlen	iny	; include terminating zero
+	tya
+	ldy #0
+	jsr malloc
+	bcs errx
+	sta bgp
+	sty bgp+1
+
+	ldy #<-1
+copy	iny
+	lda (cp),y
+	sta (bgp),y
+	bne copy
+
+	lda bgp
+	jsr bgpush
+	lda bgp+1
+	jmp bgpush
+	.)
+
+	; returns address in a/y
+&bgpullpar .(
+	jsr bgpull
+	tay
+	jmp bgpull
+	.)
+
 	.)
 
 ;----------------------------------------------
@@ -1363,6 +1525,8 @@ evar	.asc "^m^jgot var :",0
 	.)
 
 	.)	; command line escape handling
+
+ 
 
 #include "../common.a65"
 	
