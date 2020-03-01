@@ -114,9 +114,10 @@ nodbg
 	lda #0
 	sta ispiped	; init getcmd
 
+	jsr bgclr
+
 	/* command loop */
 loop
-	jsr bgclr
 
 	jsr checksig
 
@@ -163,6 +164,8 @@ next	lda #" "
 	clc
 	JSR LOCKSEM
 #endif
+	jsr dobg
+
 	ldx argp
 	ldy argp+1
 	jsr waitpid
@@ -177,7 +180,6 @@ errclr
 	jmp loop
 
 clear	.(
-	jsr dobg
 	ldx buf+0
 	jsr fclose
 	ldx buf+1
@@ -237,6 +239,8 @@ ta	.byt 0
 	clc
 	JSR LOCKSEM
 #endif
+
+	jsr dobg
 
 	ldx #STDIN
 	jsr readline
@@ -994,12 +998,13 @@ nextw2	inc cnt
 sret	sec
 ok	rts 
 
-found	cmp cmdline,x	; cmdline token must be at end too
+found	
+	cmp cmdline,x	; cmdline token must be at end too
 	bne nextw2
 
-	lda #E_ILLPAR
-	bit waitfl
-	bpl sret		; internal commands cannot go background
+	;lda #E_ILLPAR
+	;bit waitfl
+	;bpl sret		; internal commands cannot go background
 
 	lda cnt
 	asl
@@ -1057,7 +1062,6 @@ xcrlfout .(
 
 	; print the usage text
 bgc_help .(
-jam
 	jsr bgpull
 	sta buf+1
 	lda #<usage
