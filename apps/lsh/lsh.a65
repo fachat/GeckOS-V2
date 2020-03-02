@@ -1176,13 +1176,14 @@ l0	lda (cp),y
 	jsr fputc
 	iny
 	bne l0
-n1
+n1	iny
+	lda (cp),y
+	beq bgc_echo_end
 	lda #" "
 	sec
 	jsr fputc
-	iny
-	lda (cp),y
-	bne l0
+	jmp l0
+bgc_echo_end
 	lda cp
 	ldy cp+1
 	jsr mfree
@@ -1279,7 +1280,10 @@ f0	lda (cp),y
 	beq gotlen
 	iny
 	bne f0
-gotlen	iny	; include terminating zero
+gotlen	iny		; check second terminating zero-byte
+	lda (cp),y
+	bne f0
+	iny		; include terminating zero
 	tya
 	ldy #0
 	jsr malloc
@@ -1289,6 +1293,10 @@ gotlen	iny	; include terminating zero
 
 	ldy #<-1
 copy	iny
+	lda (cp),y
+	sta (bgp),y
+	bne copy
+	iny
 	lda (cp),y
 	sta (bgp),y
 	bne copy
