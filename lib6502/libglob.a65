@@ -71,7 +71,7 @@ doit 	; alloc memory block for LT_* struct
 	tya
 l0	sta (zta),y
 	iny
-	; cpy #LT_SLEN
+	;cpy #LT_SLEN
 	bne l0
 
 	ldy #LT_NTHREADS
@@ -94,8 +94,8 @@ done	rts
 
 llock	.(
 	php
-	pha
-l1	sei
+l1	pha
+	sei
 	and zen+1
 	bne loop
 	pla
@@ -104,10 +104,9 @@ l1	sei
 	plp
 	rts
 loop	pla
-	plp
+	plp		; restore interrupt bit
 	php
 	jsr YIELD
-	pha
 	jmp l1	
 	.)
 

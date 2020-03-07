@@ -159,8 +159,9 @@ copyloop
 	sec 
 	sbc frdat+2
 	sta rdlen
+	beq nocpy
 	jsr copy
-	pla
+nocpy	pla
 	cmp #E_OK
 	beq rdloop
 rde2	php
