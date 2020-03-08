@@ -1191,7 +1191,9 @@ n1	iny
 	sec
 	jsr fputc
 	jmp l0
-&bgc_echo_end
+bgc_echo_end
+	jsr xcrlfout
+&bgc_free_end
 	lda cp
 	ldy cp+1
 	jsr mfree
@@ -1216,7 +1218,7 @@ ip_prompt
 	; now read data from (real) STDIN of the shell
 	; and pipe to the output stream given, until we
 	; encounter a string that is the first parameter
-	; in cp; end with bgc_echo_end
+	; in cp; end with bgc_free_end
 
 	jsr lcrlfout
 	lda #<ip_prompt
@@ -1249,7 +1251,7 @@ endofread
 	ldx #STDERR
 	sec
 	jsr fputc
-	jmp bgc_echo_end
+	jmp bgc_free_end
 match
 	iny
 	lda (cp),y
@@ -1285,7 +1287,7 @@ outloop3
 	bcc outloop3
 	bcs endofread
 found
-	jmp bgc_echo_end
+	jmp bgc_free_end
 
 pipeinchar
 	ldx #STDIN
