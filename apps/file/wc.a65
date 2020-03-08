@@ -33,7 +33,6 @@ argp	.word 0
 nfiles	.byt <-1
 
 	.text
-
 	jsr getopts
 	bcc optsok
 	
@@ -86,6 +85,14 @@ next
 
 	lda nfiles
 	beq endok
+
+	lda prev
+	cmp #13
+	bne notrunctotal
+	inc tlines
+	bne notrunctotal
+	inc tlines+1
+notrunctotal
 
 	jsr spout
 	lda tlines
@@ -199,6 +206,15 @@ nx	jmp rdloop
 
 rderr	; end of file
 	pha
+
+	; detect single CR at end of file as line	
+	lda prev
+	cmp #13
+	bne trunclast
+	inc flines
+	bne trunclast
+	inc flines+1
+trunclast	
 	ldx fileno
 	cpx #STDIN
 	beq r1
