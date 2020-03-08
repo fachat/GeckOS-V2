@@ -85,6 +85,8 @@ usage	.asc 13,10, "Usage:"
 	jsr instsig
 	; install signal handler
 
+	jsr source_init
+
 	ldx #0
 	stx quiet
 
@@ -171,7 +173,12 @@ next	lda #" "
 	jsr waitpid
 	jmp loop
 
-errclr
+errclr	cmp #E_EOF
+	bne noteof
+	jsr source_pull	; check if we are "source'ing" a file, and restore old STDIN
+	bcc loop
+	bcs terminate
+noteof
 	cmp #E_OK
 	bne terminate
 	lda #0
@@ -197,6 +204,7 @@ clear	.(
 	.)
 
 terminate
+	jsr source_term
 	rts
 	.)
 
@@ -816,6 +824,91 @@ nextpar	iny
 	rts
 
 ;----------------------------------------------
+; source handling; stddup source'd files into STDIN,
+; restoring the original on EOF
+;
+; source_init 	- init source stack
+; source_push	- open new file and stddup as STDIN
+; source_pull	- close current file, restore prev STDIN
+; source_term	- cleanup
+
+#define	MAX_SOURCE_DEPTH	4
+	.(
+	.bss
+s_stack	.dsb MAX_SOURCE_DEPTH
+s_sp	.byt 0
+	.text
+
+&source_init
+	lda #0
+	sta s_sp
+	rts
+
+&source_term .(
+	ldx s_sp
+	beq done
+	dex
+	lda s_stack,x
+	tax
+	jsr fclose	; close old STDIN
+	dec s_sp
+	bne source_term
+done 	rts
+	.)
+
+&source_pull .(
+	sec
+	ldx s_sp
+	beq done
+	dec s_sp
+	dex
+	lda s_stack,x
+	tay
+	ldx #STDIN
+	jsr stddup
+	bcs duperr
+	jsr fclose	; close old STDIN
+done 	rts
+duperr	ldx s_sp
+	lda s_stack,x
+	tax
+	jsr fclose
+	rts
+	.)
+	
+	; a/y is address of filename
+&source_push .(
+	ldx s_sp
+	cpx #MAX_SOURCE_DEPTH
+	bcc ok
+	lda #E_NOMEM
+ferror	rts
+
+ok 	ldx #OPEN_RD
+	jsr fopen
+	bcs ferror
+	txa
+	pha
+	tay
+	ldx #STDIN
+	jsr stddup
+	bcs duperr
+	pla		; cleanup
+	txa
+	ldx s_sp
+	sta s_stack,x
+	inc s_sp
+	clc
+	rts
+
+duperr	jsr s_duperr
+	sec
+	rts	
+	.)
+
+	.)
+
+;----------------------------------------------
 ; open a file and use for stdin
 ; used when a file is given as parameter on start
 ;
@@ -850,6 +943,7 @@ dofile	tya
 	clc
 	rts
 duperr	pla
+&s_duperr
 	tax
 	jsr fclose
 	lda #5
@@ -1029,13 +1123,13 @@ next	asl
 	.data
 	; immediate execution
 bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
-	.word bic_dup, bic_help
+	.word bic_dup, bic_help, bic_source
 	; background execution after parsing
 bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
-	.word       0, bgc_help
+	.word       0, bgc_help,          0
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0, "help",0
+	.asc "dup",0, "help",0, "source", 0
 	.byt 0
 	.text
 
@@ -1312,6 +1406,19 @@ bic_cd	.(
 	tay
 	pla
 	jmp chdir
+	.)
+
+bic_source .(
+	inx
+	txa
+	clc
+	adc #<buf+3
+	pha
+	lda #0
+	adc #>buf+3
+	tay
+	pla
+	jmp source_push
 	.)
 
 bic_pwd	.(
