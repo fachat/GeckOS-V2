@@ -1,9 +1,9 @@
 /****************************************************************************
    
-    OS/A65 Version 2.0.0
+    OS/A65 Version 2.1
     lib6502 lsh shell program
 
-    Copyright (C) 1997-1998 Andre Fachat 
+    Copyright (C) 1997-2020 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -53,7 +53,7 @@ ispiped	.byt 0		; when bit 7 set, then input is piped from previous
 buf	.dsb BUFLEN
 
 	.data
-version	.asc 13,10,"sh v0.1 21dec1997 (c) A. Fachat",13,10,0
+version	.asc 13,10,"sh v0.2 Mar2020 (c) A. Fachat",13,10,0
 
 usage	.asc 13,10, "Usage:"
 	.asc 13,10, " lsh [opts] [input file]"
@@ -437,14 +437,6 @@ pipend
 
 redir_err .(
 	stx tx
-#ifdef LSH_DEBUG
-	sty ty
-	lda #<errtxt
-	ldy #>errtxt
-	jsr txtout
-	ldy ty
-	ldx tx
-#endif
 	lda #1
 	sta ta		; ta bit 0 = error out
 	iny
@@ -475,18 +467,6 @@ inok 	sty ty
 	lda #0
 	adc ap+1
 	tay
-#ifdef LSH_DEBUG
-	pla
-	pha
-	tax
-	tya
-	pha
-	txa
-	jsr txtout
-	jsr lcrlfout
-	pla
-	tay
-#endif
 	lda ta
 	and #4
 	beq noap
@@ -539,14 +519,6 @@ openend
 
 redir_out .(
 	stx tx
-#ifdef LSH_DEBUG
-	sty ty
-	lda #<outxt
-	ldy #>outxt
-	jsr txtout
-	ldy ty
-	ldx tx
-#endif
 	lda #2
 	sta ta		; std out
 	iny
@@ -565,19 +537,48 @@ noappend
 nocomb1	jmp nocombine
 	.)
 
-redir_in .(
-	stx tx
-#ifdef LSH_DEBUG
-	sty ty
-	lda #<intxt
-	ldy #>intxt
-	jsr txtout
-	ldy ty
-	ldx tx
-#endif
+redir_inpipe .(
 	iny
 	lda (ap),y
 	bne inok
+	iny 
+	lda (ap),y
+	bne inok
+	lda #"?"
+	jsr putc
+	lda #E_OK
+	sec
+	rts
+inok	sty ty
+	tya
+	clc
+	adc ap
+	pha
+	lda ap+1
+	adc #0
+	pha
+
+	ldx buf+0
+	jsr fclose
+	jsr pipe
+	stx buf+0
+	pla
+	tax
+	pla
+	; y is stream to write, a/x is the par address
+	jsr bic_inpipe	
+	jmp inend		; end of redir in redir_in below
+	.)
+
+redir_in .(
+	stx tx
+	iny
+	lda (ap),y
+	beq notlinked
+	cmp #"<"	; input pipe
+	beq redir_inpipe
+	bne inok
+notlinked
 	iny
 	lda (ap),y
 	beq openend
@@ -590,18 +591,6 @@ inok 	sty ty
 	adc ap+1
 	tay
 	pla
-#ifdef LSH_DEBUG
-	pha
-	tax
-	tya
-	pha
-	txa
-	jsr txtout
-	jsr lcrlfout
-	pla
-	tay
-	pla
-#endif
 	ldx #OPEN_RD
 	jsr fopen
 	bcs openend
@@ -611,7 +600,7 @@ inok 	sty ty
 	jsr fclose
 	pla
 	sta buf+0;	stdin
-	ldx tx
+&inend	ldx tx
 	ldy ty
 in2	lda (ap),y
 	iny
@@ -629,9 +618,6 @@ openend
 
 #ifdef LSH_DEBUG
 	.data
-intxt	.byt 13,10,"stdin from ",0
-outxt	.byt 13,10,"stdout from ",0
-errtxt	.byt 13,10,"stderr from ",0
 &runtxt	.byt 13,10,"run: ",0
 	.text
 #endif
@@ -1037,12 +1023,15 @@ next	asl
 	jmp dobg
 	.)
 
+	; data tables for built-in command execution
+	; note - bgc_inpipe patched into place for bic_exit, as bic_exit is immediate
+#define	INPIPE_CNT	1
 	.data
 	; immediate execution
-bicaddr .word bic_echo, bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
+bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
 	.word bic_dup, bic_help
 	; background execution after parsing
-bgcaddr .word bgc_echo,        0,      0,       0,       0, bgc_uname,         0
+bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
 	.word       0, bgc_help
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
@@ -1133,6 +1122,24 @@ bic_reset .(
 	jmp ($fffc)
 	.)
 
+	; input redirection from STDIN
+	; y is stream to write, a/x is the par address
+bic_inpipe
+	sta cp
+	stx cp+1
+	tya
+	pha
+#if 0
+	lda cp
+	ldy cp+1
+	jsr txtout
+#endif
+	jsr bgpushpar
+	pla
+	jsr bgpush
+	lda #INPIPE_CNT
+	jmp bgpush
+	
 	; echo some output
 bic_echo .(
 	inx
@@ -1144,6 +1151,7 @@ bic_echo .(
 	adc #>buf+3
 	tay
 	pla
+&bic_pushpar
 	sta cp
 	sty cp+1
 
@@ -1183,7 +1191,7 @@ n1	iny
 	sec
 	jsr fputc
 	jmp l0
-bgc_echo_end
+&bgc_echo_end
 	lda cp
 	ldy cp+1
 	jsr mfree
@@ -1191,6 +1199,104 @@ bgc_echo_end
 	ldx buf+1	; stdout
 	jmp fclose
 &err	rts
+	.)
+
+	; second half of command
+bgc_inpipe .(
+	.data
+ip_prompt	
+	.asc "> ",0
+	.text
+	jsr bgpull
+	sta buf+1	; stdout
+	jsr bgpullpar
+	sta cp
+	sty cp+1
+
+	; now read data from (real) STDIN of the shell
+	; and pipe to the output stream given, until we
+	; encounter a string that is the first parameter
+	; in cp; end with bgc_echo_end
+
+	jsr lcrlfout
+	lda #<ip_prompt
+	ldy #>ip_prompt
+	jsr txtout
+
+loop0	ldy #0
+loop	jsr pipeinchar
+	bcs endofread
+	cmp (cp),y
+	beq match
+	bne outloop2
+
+contcr  tya
+	pha
+	lda #10
+	jsr putc
+	lda #<ip_prompt
+	ldy #>ip_prompt
+	jsr txtout
+	pla
+	tay
+	lda #13
+cont	ldx buf+1
+	sec
+	jsr fputc
+	bcc loop
+endofread
+	lda #"?"
+	ldx #STDERR
+	sec
+	jsr fputc
+	jmp bgc_echo_end
+match
+	iny
+	lda (cp),y
+	beq found
+	jsr pipeinchar
+	cmp (cp),y
+	beq match
+	; no match
+	sty cnt
+	pha
+	ldy #0
+outloop
+	lda (cp),y
+	ldx buf+1
+	sec
+	jsr fputc
+	iny
+	dec cnt
+	bne outloop
+	pla
+outloop2		; loop until cr/lf
+	ldy #0
+outloop3
+	cmp #10
+	beq cont
+	cmp #13
+	beq contcr
+
+	ldx buf+1
+	sec
+	jsr fputc
+	jsr pipeinchar
+	bcc outloop3
+	bcs endofread
+found
+	jmp bgc_echo_end
+
+pipeinchar
+	ldx #STDIN
+	sec
+	jsr fgetc
+	php
+	pha
+	jsr putc	; terminal out
+	pla
+	plp
+	rts
 	.)
 
 bic_cd	.(
@@ -1273,7 +1379,7 @@ errs	sec
 
 	; find the length of a parameter (address in cp)
 	; malloc a buffer, copy it there and push address
- 	; of buffer
+ 	; of malloc'd buffer
 &bgpushpar .(
 	ldy #0
 f0	lda (cp),y
