@@ -50,7 +50,7 @@ namep	.byt 0
 	.text
 	jsr getopts
 	bcc nohelp
-	lda #<helpstr
+prhelp	lda #<helpstr
 	ldy #>helpstr
 	jmp strout	; and then terminate
 nohelp
@@ -64,13 +64,21 @@ nohelp
 
 	; find name to start
 	ldy #0
+	lda (argp),y
+	beq noname
 n	lda (argp),y
 	beq nextarg
 	iny
 	bne n
 nextarg	iny
 	lda (argp),y
-	beq noname
+	bne gotname
+
+noname	ldx #6
+	jsr errout
+	jmp prhelp
+
+gotname
 	sty namep
 
 	; open device for writing
@@ -135,18 +143,24 @@ nextarg	iny
 	rts
 
 strerr	pha
+	ldx #0
+	jsr errout
 	ldx rdfile
 	jsr fclose
-	.byt $24	
+	jmp _closewr
 rdopenerr
 	pha
+	ldx #2
+	jsr errout
+_closewr
 	ldx wrfile
 	jsr fclose	
-	.byt $24
+	jmp _parerr
 wropenerr
 	pha
-	.byt $2c
-noname	lda #E_NOPAR
+	ldx #4
+	jsr errout
+_parerr	pla
 	cmp #1
 	rts
 
@@ -189,6 +203,22 @@ noof	sty THREADSAVE+1
 	jmp init_forkto
 
 	; ------------------------------
+	; error display
+	.data
+err0	.asc "Could not allocate pipe",0
+err2	.asc "Could not re-open device for reading",0
+err4	.asc "Could not open device for writing",0
+err6	.asc "Did not get device/command name as parameter",0
+errtab	.word err0, err2, err4, err6
+	.text
+errout	jsr crlfout
+	lda errtab,x
+	ldy errtab+1,x
+	jsr strout
+	jmp crlfout
+
+	.data
+	; ------------------------------
 	; references used by getopts
 	; same order and len as optall/optlong/... option bytes above
 optslst	.asc 0 
@@ -197,8 +227,10 @@ optsflg
 
 helpstr	.asc 13,10
 	.asc "ontty <device> <command>",13,10
-	.asc "Start new command on new console.",13,10
+	.asc "Start new <command> on new console on <device>.",13,10
 	.asc 0
+
+	.text
 
 #include "../apps/common.a65"
 
