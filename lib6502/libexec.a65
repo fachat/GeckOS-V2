@@ -360,10 +360,10 @@ noerr	lda #0
 	jsr STRCMD
 
 	; store exec address
-	pla
+	pla		; YR from doload
 	sta zth+1
 	tay
-	pla
+	pla		; AC from dload
 	sta zth
 	; and update in kernel table
 	ldx #TN_EXECADDR
@@ -389,9 +389,12 @@ noerr	lda #0
 
 loaderr
 ;.byt 2
+	lda zth
+	pha
 	jsr GETPID
 	jsr bcleanpid		; free all memory allocated by this task
 	jsr zpidfree
+	pla
 	jmp TERM
 	
 	.)
@@ -538,16 +541,19 @@ c0	lda (zth),y
 
 
 	php
+	pha
 	txa
 	pha
 	ldx #SEM_SENDBUF
 	jsr VSEM
 	pla
+	tax
+	pla
 	plp
 
 	bcs ende
+	txa
 	pha
-	tax
 
 	jsr loader
 
