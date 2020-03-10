@@ -264,7 +264,7 @@ ord	lda #1
 	tya
 	sec
 	sbc #LT_FTAB
-	tax
+	tax			; return fs in XR
 
 	lda #E_OK
 	clc
@@ -282,7 +282,7 @@ lengtherr
 	sec
 	rts
 
-fserr	tay
+fserr	tay	; error number
 	pla	; fs command
 	pla	; fd
 	tax
