@@ -714,7 +714,7 @@ loop	tax
 	lda taskTab2 + TT_RETCODE,x	; error code
 	inc taskTab + TT_NTHREADS,x	
 	clc
-	beq end
+	bcc end				; always
 next	txa
 	clc
 	adc #TT_SLEN
