@@ -137,9 +137,10 @@ gotname
 	lda owncin
 	ldx #STDCIN
 	jsr DUP
-	
+
 	pla
 	plp
+	bcs _parerr2
 	rts
 
 strerr	pha
@@ -162,6 +163,10 @@ wropenerr
 	ldx #4
 	jsr errout
 _parerr	pla
+_parerr2
+	pha
+	jsr crlfout
+	pla
 	pha
 	jsr strerror
 	jsr strout
