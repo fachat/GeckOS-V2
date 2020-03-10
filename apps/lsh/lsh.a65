@@ -729,7 +729,7 @@ t1	.asc " : Command line syntax",0
 t2	.asc " : Unknown option",0
 t3	.asc "Input I/O",0
 t4	.asc " : File",0
-t5	.asc " : Received sigchld",0
+t5	.asc "Received sigchld:",0
 
 errortxt .asc " error",10,13,0
 	.text
@@ -782,6 +782,7 @@ nibout	and #$0f
 	cmp #"9"+1
 	bcc ok
 	adc #"a"-"9"-2
+&estdout
 ok	ldx #STDERR
 	sec
 	jmp fputc
@@ -1073,8 +1074,20 @@ nextw2	inc cnt
 	ldy #>buf
 	jsr forkto
 	bcc ok
+	pha
 	lda #"?"
 	jsr putc
+	jsr crlfout
+	pla
+	pha
+	jsr hexout
+	jsr spout
+	pla
+	pha
+	jsr strerror
+	jsr strout
+	jsr crlfout
+	pla
 sret	sec
 ok	rts 
 
@@ -1581,7 +1594,8 @@ noinc	plp
 	bne found
 	rts
 
-found	jsr lcrlfout
+found	ldx #5
+	jsr errout
 	lda ctabh
 	jsr ehexout
 	lda ctabl
@@ -1592,8 +1606,11 @@ found	jsr lcrlfout
 	jsr fputc
 	lda ctabr
 	jsr ehexout
-	ldx #5
-	jsr errout
+	lda #" "
+	jsr estdout
+	lda ctabr
+	jsr strerror
+	jsr etxtout
 	jsr decnum
 	jmp checksig
 	.)

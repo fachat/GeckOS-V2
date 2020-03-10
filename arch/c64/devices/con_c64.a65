@@ -292,7 +292,7 @@ ktab      .byt TC_BS, TC_CR, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CDWN
           .byt "5rd6cftx7yg8bhuv"
           .byt "9ij0mkon+pl-.:@,"
           .byt "\*;", TC_HOME, 1 /* shift */, "=^^/"
-          .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /* stop */
+          .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "q", 3 /* stop */
 
 stab      .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
           .byt "#WA$ZSE", 1 /* shift */

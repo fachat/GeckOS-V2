@@ -86,6 +86,12 @@
  *	iswhite	- check if character in AC is whitespace
  *			in: AC	      - byte to check
  *			out: Z	      - beq is whitespace
+ *
+ * 	strerror - returns a pointer to a readable error message
+ *			in: AC	      - error number (E_*)
+ *			out: A/Y      - error text
+ *			   C=0	      - error number found
+ *			   C=1        - error number of found, should be printed
  */
 
 #iflused getopts
@@ -504,5 +510,102 @@ iswhite	.(		; return Z set when char in AC is whitespace
 r	rts
 	.)
 
+#endif
+
+/***********************************************************/
+
+
+#iflused strerror
+
+strerror .(
+	ldy #0
+idxloop	cmp stre_idx,y
+	beq errfound
+	iny
+	cpy #stre_idx_end-stre_idx
+	bcc idxloop
+	lda #<stre_unknown
+	ldy #>stre_unknown
+	rts
+errfound
+	tya
+	asl
+	tay
+	lda stre_addr,y
+	pha
+	lda stre_addr+1,y
+	tay
+	pla
+	clc
+	rts
+
+stre_idx	
+	.byt E_OK, E_NOTIMP, E_CONFIG, E_ILLPAR, E_NOMEM
+	.byt E_NOSTR, E_SFULL, E_SEMPTY, E_SLWM, E_SHWM, E_EOF, E_NUL
+	.byt E_NODEV, E_DON, E_DOFF, E_NOTX
+	.byt E_NOENV, E_NOSEM, E_SEMSET, E_NOIRQ, E_VERSION, E_NOTASK
+	.byt E_INT, E_ILLSIG, E_TRYAGAIN, E_NOPAR
+	.byt E_FNODRV, E_FNOPATH, E_FILLNAM, E_FNAMLEN, E_FNOFIL, E_FWPROT, E_FILEXIST
+	.byt E_FDISKFULL, E_FDNEMPTY, E_FLOCKED, E_FMEDIA, E_FLOGICAL, E_FINTERNAL
+	.byt E_ILLADDR, E_NOFILE, E_NOSEEK, E_NOREAD, E_NOWRITE, E_FVERSION
+stre_idx_end
+stre_addr
+	.word se_ok, se_notimp, se_config, se_illpar, se_nomem
+	.word se_nostr, se_sfull, se_sempty, se_slwm, se_shwm, se_eof, se_nul
+	.word se_nodev, se_don, se_doff, se_notx
+	.word se_noenv, se_nosem, se_semset, se_noirq, se_version, se_notask
+	.word se_int, se_illsig, se_tryagain, se_nopar
+	.word se_fnodrv, se_fnopath, se_fillnam, se_fnamlen, se_fnofil, se_fwprot, se_filexist
+	.word se_fdiskfull, se_fdnempty, se_flocked, se_fmedia, se_flogical, se_finternal
+	.word se_illaddr, se_nofile, se_noseek, se_noread, se_nowrite, se_fversion
+
+stre_unknown	.asc "UNKNOWN",0
+se_ok		.asc "OK",0
+se_notimp 	.asc "NOT IMPLEMENTED",0
+se_config 	.asc "NOT IN THIS CONFIG",0
+se_illpar	.asc "ILLEGAL PARAMETER",0
+se_nomem	.asc "OUT OF MEMORY",0
+se_nostr	.asc "NO STREAM AVAILABLE",0
+se_sfull	.asc "STREAM FULL",0
+se_sempty	.asc "STREAM EMPTY",0
+se_slwm		.asc "STREAM LOW",0
+se_shwm		.asc "STREAM HIGH",0
+se_eof		.asc "STREAM EOF",0
+se_nul		.asc "STREAM NO LISTENER",0
+se_nodev	.asc "ILLEGAL DEVICE NUMBER",0
+se_noenv	.asc "NO ENVIRONMENT",0
+se_don		.asc "DEVICE IN USE",0
+se_doff		.asc "DEVICE NOT IS USE",0
+se_notx		.asc "DEVICE DOES NOT SEND",0
+se_nosem	.asc "NO FREE SEMAPHORE",0
+se_semset	.asc "SEMAPHORE ALREADY SET",0
+se_noirq	.asc "IRQ NOT CLEARED",0
+se_version	.asc "WRONG EXEC FILE VERSION",0
+se_notask	.asc "NO FREE TASK",0
+se_int		.asc "INTERRUPTED",0
+se_illsig	.asc "ILLEGAL SIGNAL",0
+se_tryagain	.asc "TRY AGAIN",0
+se_nopar	.asc "MISSING PARAMETER",0
+se_fnodrv	.asc "ILLEGAL DRIVE NUMBER",0
+se_fnopath	.asc "ILLEGAL PATH",0
+se_fillnam	.asc "ILLEGAL FILE NAME",0
+se_fnamlen	.asc "FILE NAME TOO LONG",0
+se_fnofil	.asc "FILE NOT FOUND",0
+se_fwprot	.asc "WRITE PROTECTED",0
+se_filexist	.asc "FILE EXISTS",0
+se_fdiskfull	.asc "DISK FULL",0
+se_fdnempty	.asc "DIRECTORY NOT EMPTY",0
+se_flocked	.asc "FILE LOCKED",0
+se_fmedia	.asc "MEDIA ERROR",0
+se_flogical	.asc "BAD LOGICAL STRUCTS",0
+se_finternal	.asc "FS INTERNAL",0
+se_illaddr	.asc "ILLEGAL MEM ADDRESS",0
+se_nofile	.asc "ILLEGAL FILE NUMBER",0
+se_noseek	.asc "NOT SEEKABLE",0
+se_noread	.asc "READ WOULD BLOCK",0
+se_nowrite	.asc "WRITE WOULD BLOCK",0
+se_fversion	.asc "FILE VERSION NOT SUPPORTED",0
+
+	.)
 #endif
 
