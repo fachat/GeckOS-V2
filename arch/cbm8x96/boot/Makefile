@@ -5,8 +5,11 @@ LSHDIR=../../../apps/lsh
 sysapps = lmon ps kill ontty #slipd
 SYSAPPSDIR=../../../sysapps
 
-files = mkdir rmdir rm format chkdsk ls cat mv more hexdump
+files = mkdir rmdir rm format chkdsk ls mv
 FILESDIR=../../../apps/file
+
+filter = cat wc more hexdump
+FILTERDIR=../../../apps/filter
 
 inet = # tlogin telnet httpd
 INETDIR=../../../apps/inet
@@ -39,8 +42,8 @@ loader: loader.bas
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${sysapps} ${lsh} ${inet} rom loader
-	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} rom 
+osa.d64: ${files} ${filter} ${sysapps} ${lsh} ${inet} rom loader
+	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} rom 
 	rm -f ${sysapps}
 
 emurun: osa.d64
@@ -61,6 +64,9 @@ ${sysapps}:
 
 ${files}:
 	(cd ${FILESDIR}; make $@;)
+
+${filter}:
+	(cd ${FILTERDIR}; make $@;)
 
 ${inet}:
 	(cd ${INETDIR}; make $@;)
