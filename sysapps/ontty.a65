@@ -148,6 +148,7 @@ strerr	pha
 	ldx rdfile
 	jsr fclose
 	jmp _closewr
+
 rdopenerr
 	pha
 	ldx #2
@@ -161,6 +162,10 @@ wropenerr
 	ldx #4
 	jsr errout
 _parerr	pla
+	pha
+	jsr strerror
+	jsr strout
+	pla
 	cmp #1
 	rts
 
