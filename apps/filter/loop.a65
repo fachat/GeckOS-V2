@@ -27,7 +27,8 @@ fileloop .(
 	bne ok
 	
 	ldx #STDIN
-	jmp docopy
+	jsr docopy
+	jmp ende
 donext
 ok	tya
 	clc
@@ -59,6 +60,55 @@ next	; check next par
 ende 	rts
 	.)
 
+#iflused showerr
+
+showerr .(
+	bcc noerr
+	php
+	pha
+	cmp #E_OK
+	beq noprint
+	cmp #E_EOF
+	beq noprint
+
+	jsr ecrlfout
+	lda argp
+	ldy argp+1
+	jsr estrout
+	lda #":"
+	jsr ecout	
+	pla
+	pha
+	jsr strerror
+	jsr estrout
+	jsr ecrlfout
+noprint
+	pla
+	plp
+noerr
+	rts
+
+ecrlfout
+	lda #13
+	jsr ecout
+	lda #10
+ecout	ldx #STDERR
+	jmp fputc
+
+	.zero
+zp	.word 0
+	.text
+estrout	sta zp
+	sty zp+1
+	ldy #0
+es1	lda (zp),y
+	beq ese
+	jsr ecout
+	iny
+	bne es1
+ese	rts
+	.)
+#endif
 
 #iflused dataloop
 

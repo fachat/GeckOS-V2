@@ -38,7 +38,8 @@ argp	.word 0
 	jmp strout
 
 first	jsr crlfout
-	jmp fileloop
+	jsr fileloop
+	jmp showerr
 
 	.data
 usagetxt

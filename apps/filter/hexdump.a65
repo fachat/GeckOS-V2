@@ -48,10 +48,14 @@ short	sta optlong
 
 	jsr fileloop
 
+	php
+	pha
+
 	jsr endfiles
 
-	lda #0
-	rts
+	pla
+	plp
+	jmp showerr
 
 	.data
 usagetxt

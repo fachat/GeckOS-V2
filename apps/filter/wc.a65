@@ -42,6 +42,9 @@ nfiles	.byt <-1
 first	.(		; loop over files
 	jsr fileloop
 
+	php
+	pha
+
 	jsr crlfout
 
 	lda nfiles
@@ -70,8 +73,9 @@ notailtotal
 
 	jsr crlfout
 
-endok	lda #0
-	rts
+endok	pla
+	plp
+	jmp showerr
 	.)
 
 usagetxt 
