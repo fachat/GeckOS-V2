@@ -5,8 +5,11 @@ LSHDIR=../../../apps/lsh
 sysapps = lmon slipd ps kill ontty
 SYSAPPSDIR=../../../sysapps
 
-files = mkdir rmdir rm format chkdsk ls cat mv wc more hexdump
+files = mkdir rmdir rm format chkdsk ls mv
 FILESDIR=../../../apps/file
+
+filter = cat wc more hexdump
+FILTERDIR=../../../apps/filter
 
 XA=xa
 
@@ -35,8 +38,8 @@ tar ../boot.tgz: rom loader howto.boot
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${sysapps} ${lsh} rom loader 
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} rom 
+osa.d64: ${files} ${filter} ${sysapps} ${lsh} rom loader 
+	./mkdisk loader  ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} rom 
 	dd if=osa.x64 of=osa.d64 bs=64 skip=1
 	rm osa.x64
 
@@ -51,13 +54,15 @@ emurun: osa.d64
 ${lsh}: 
 	(cd ${LSHDIR}; make $@;)
 
-
 ${sysapps}:
 	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
 	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
 
 ${files}:
 	(cd ${FILESDIR}; make $@;)
+
+${filter}:
+	(cd ${FILTERDIR}; make $@;)
 
 
 	

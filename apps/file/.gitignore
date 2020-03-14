@@ -1,4 +1,3 @@
-cat
 ls
 chkdsk
 format
@@ -6,6 +5,3 @@ mkdir
 rmdir
 mv
 rm
-more
-wc
-hexdump
