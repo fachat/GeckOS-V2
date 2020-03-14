@@ -71,7 +71,7 @@ optlong	.byt 0
 	.bss
 fileno	.byt 0
 frdat	.word 0,0
-buf	.dsb BUFLEN
+inbuf	.dsb BUFLEN
 
 	.text
 
@@ -80,76 +80,12 @@ docat	ldx #OPEN_RD
 	bcc docopy
 	rts
 docopy  stx fileno
-rdloop
-	lda #<buf
-	sta frdat
-	lda #>buf
-	sta frdat+1
-	lda #<BUFLEN
-	sta frdat+2
-	lda #>BUFLEN
-	sta frdat+3
-	lda #<frdat
-	ldy #>frdat
-	ldx fileno
-	sec
-	jsr fread
-	pha
-	php
 
-	lda #<BUFLEN
-	sec
-	sbc frdat+2
-	sta frdat+2
-	lda #>BUFLEN
-	sbc frdat+3
-	sta frdat+3
-	ora frdat+2
-	beq nodata
-	lda #<buf
-	sta frdat
-	lda #>buf
-	sta frdat+1
-wrloop	;lda #<frdat
-	;ldy #>frdat
-	jsr hexbufout
-	bcs wrerr
-	lda frdat+2
-	ora frdat+3
-	bne wrloop
-	pla
-	plp
-	bcs rderr
-	jmp rdloop
+	jmp dataloop
 
-wrerr	pha
-	ldx fileno
-	cpx #STDIN
-	beq w1
-	jsr fclose
-w1	pla
-	tay
-	pla
-	pla
-	tya
-	sec
-	rts
-nodata  pla
-	plp
-rderr	cmp #E_EOF
-	bne rde2
-	lda #E_OK
-rde2	pha
-	ldx fileno
-	cpx #STDIN
-	beq r1
-	jsr fclose
-r1	pla
-	clc
-	rts
 
 	;----------------------------------	
-hexbufout .(
+writeout .(
 	.data
 offset	.word 0		; offset of line from start
 index	.byt 0		; index in line

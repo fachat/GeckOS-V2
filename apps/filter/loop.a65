@@ -60,4 +60,81 @@ ende 	rts
 	.)
 
 
+#iflused dataloop
+
+dataloop .(
+rdloop
+        lda #<inbuf
+        sta frdat
+        lda #>inbuf
+        sta frdat+1
+        lda #<BUFLEN
+        sta frdat+2
+        lda #>BUFLEN
+        sta frdat+3
+        lda #<frdat
+        ldy #>frdat
+        ldx fileno
+        sec
+        jsr fread
+        php
+        pha
+
+        ; compute write len by subtracting the read position from the 
+        ; read buffer length
+        lda #<BUFLEN
+        sec
+        sbc frdat+2
+        sta frdat+2     ; write len lo
+        lda #>BUFLEN
+        sbc frdat+3
+        sta frdat+3     ; write len hi
+        ora frdat+2     ; did we actually read anything?
+        beq nowrite     ; no
+        ; write buffer start
+        lda #<inbuf
+        sta frdat
+        lda #>inbuf
+        sta frdat+1
+
+wrloop  lda #<frdat
+        ldy #>frdat
+
+	jsr writeout
+;        ldx #STDOUT
+;        sec
+;        jsr fwrite
+        bcs wrerr
+        lda frdat+2
+        ora frdat+3
+        bne wrloop
+nowrite
+        pla
+        plp
+        bcs rderr
+        jmp rdloop
+
+wrerr   tay
+        pla             ; ignore read status
+        pla
+        tya
+
+rderr   cmp #E_EOF
+        bne rde2
+        lda #E_OK
+        clc
+        .byt $24        ; skip sec
+rde2    sec
+        php
+        pha
+        ldx fileno
+        cpx #STDIN
+        beq r1
+        jsr fclose
+r1      pla
+        plp
+        rts
+	.)
+
+#endif
 

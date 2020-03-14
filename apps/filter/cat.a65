@@ -55,84 +55,25 @@ optslst	.byt 0
 	.bss
 fileno	.byt 0
 frdat	.word 0,0
-buf	.dsb BUFLEN
+inbuf	.dsb BUFLEN
 	.text
 
+	; called from dataloop
+writeout .(
+        ldx #STDOUT
+        sec
+        jmp fwrite
+	.)
+
+	; called from fileloop
 docat	ldx #OPEN_RD
 	jsr fopen
 	bcc docopy
 	rts
 docopy  stx fileno
-rdloop
-	lda #<buf
-	sta frdat
-	lda #>buf
-	sta frdat+1
-	lda #<BUFLEN
-	sta frdat+2
-	lda #>BUFLEN
-	sta frdat+3
-	lda #<frdat
-	ldy #>frdat
-	ldx fileno
-	sec
-	jsr fread
-	php
-	pha
 
-	; compute write len by subtracting the read position from the 
-	; read buffer length
-	lda #<BUFLEN
-	sec
-	sbc frdat+2
-	sta frdat+2	; write len lo
-	lda #>BUFLEN
-	sbc frdat+3
-	sta frdat+3	; write len hi
-	ora frdat+2	; did we actually read anything?
-	beq nowrite	; no
-	; write buffer start
-	lda #<buf
-	sta frdat
-	lda #>buf
-	sta frdat+1
+	jmp dataloop
 
-wrloop	lda #<frdat
-	ldy #>frdat
-	ldx #STDOUT
-	sec
-	jsr fwrite
-	bcs wrerr
-	lda frdat+2
-	ora frdat+3
-	bne wrloop
-nowrite
-	pla
-	plp
-	bcs rderr
-	jmp rdloop
-
-wrerr	tay
-	pla		; ignore read status
-	pla
-	tya
-jsr hexout
-tya
-rderr	cmp #E_EOF
-	bne rde2
-	lda #E_OK
-	clc
-	.byt $24	; skip sec
-rde2	sec
-	php
-	pha
-	ldx fileno
-	cpx #STDIN
-	beq r1
-	jsr fclose
-r1	pla
-	plp
-	rts
 
 #include "loop.a65"
 #include "../common.a65"

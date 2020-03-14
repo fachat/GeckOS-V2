@@ -134,55 +134,15 @@ docat	ldx #OPEN_RD
 	rts
 docopy  stx fileno
 
-	lda #0
-	sta prev
-rdloop	; prep write
-	lda #0
-	sta prevwp
-	lda #<outbuf
-	sta fwdat
-	lda #>outbuf
-	sta fwdat+1
-	; do read
-	lda #<inbuf
-	sta frdat
-	lda #>inbuf
-	sta frdat+1
-	lda #<BUFLEN
-	sta frdat+2
-	lda #>BUFLEN
-	sta frdat+3
-	lda #<frdat
-	ldy #>frdat
-	ldx fileno
-	sec
-	jsr fread
-	pha
-	php
+	jmp dataloop
 
-	lda #<BUFLEN
-	sec 
-	sbc frdat+2
+	; called from dataloop
+writeout
+	lda frdat+2
 	sta rdlen
-	beq nocpy
-	jsr copy
-nocpy	
-	plp
-	pla
-	beq rdloop	; 0 == E_OK
-
-	cmp #E_EOF
-	bne rde2
-	lda #E_OK
-rde2
-	pha
-	ldx fileno
-	cpx #STDIN
-	beq r1
-	jsr fclose
-r1	pla
-	cmp #1
-	rts
+	lda #0
+	sta frdat+2
+	sta prevwp
 
 	; copy over from inbuf to outbuf
 copy	ldy #0
@@ -250,6 +210,10 @@ writebuf .(
 	lda #0
 	sta fwdat+3
 	sty prevwp
+	lda #<outbuf
+	sta fwdat
+	lda #>outbuf
+	sta fwdat+1
 wrloop	
 	lda #<fwdat
 	ldy #>fwdat
