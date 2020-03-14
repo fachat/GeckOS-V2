@@ -1,0 +1,45 @@
+
+
+# NAME
+
+more - page files on screen
+
+# SYNOPSIS
+
+    more [OPTION]... [FILE]...
+    
+# DESCRIPTION
+
+more is a filter that prints the contents of one or more files page-wise to screen, and waits for a key-press after each screen.
+
+With no file read standard input.
+
+	**-C <n>**
+		Assume <n> columns on screen (default: 40)
+
+	**-L <n>**
+		Assume <n> lines on screen (default: 25)
+
+# EXAMPLES
+
+more f g
+    Output f's content, then g's content
+        
+more 
+    Copy standard input to standard output
+
+# AUTHOR
+
+Written by André Fachat.
+
+# REPORTING BUGS
+
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+# COPYRIGHT
+
+Copyright 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+# SEE ALSO
+

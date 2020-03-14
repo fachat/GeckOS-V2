@@ -1,0 +1,42 @@
+
+
+# NAME
+
+wc - print newline, word, and byte counts for each file
+
+# SYNOPSIS
+
+    wc [OPTION]... [FILE]...
+    
+# DESCRIPTION
+
+Print newline, word, and byte counts for each FILE, and a total line if more than one FILE is specified.
+A word is a non-zero-length sequence of non-whitespace characters deliminated by whitespace.
+
+With no FILE, read standard input.
+
+A new line is detected by either a single CR, a single LF, or a CR/LF combination.
+
+# EXAMPLES
+
+wc f g
+    Output counts for f's content, then for g's content, then a total count
+        
+wc 
+    read standard input and print out the newline, word and byte counts.
+
+# AUTHOR
+
+Written by André Fachat.
+
+# REPORTING BUGS
+
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+# COPYRIGHT
+
+Copyright 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+# SEE ALSO
+

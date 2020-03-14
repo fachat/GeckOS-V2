@@ -1,0 +1,125 @@
+
+
+# NAME
+
+lsh - Lib6502-based SHell
+
+# SYNOPSIS
+
+    lsh [OPTION]... [FILE]
+    
+# DESCRIPTION
+
+*lsh* is a simple somewhat unix-alike shell for GeckOS. It reads commands from standard input or from an input file.  lsh provides input/output redirection and piping.
+
+# OPTIONS
+
+	*-v*	Run with debug output
+	
+	*-d <drive>*
+		Use specified drive as working directory
+
+A *-* ends the parameter list.
+
+The input file when given is executed instead of standard input.
+
+
+# COMMANDS
+
+The shell has a number of built-in commands:
+
+	*echo <arguments>*
+		Echo the given arguments to standard output
+	*exit*
+		Exit the shell
+	*cd <newpath>*
+		Use the given new path as new working directory
+	*pwd*
+		Print the current working directory
+	*uname*
+		Print the system information
+	*set <NAME>=<VALUE>*
+		Set an evironment variable to a given value
+	*reset*
+		Reset the computer (reboot)
+	*dup <REDIRECTION>*
+		Replace the input / output / error streams with the ones given for dup
+	*source <FILE>*
+		Execute the contents of the given file
+	*help*
+		Print a short description
+
+# ENVIRONMENT VARIABLES
+
+None are used (so far).
+
+# INPUT / OUTPUT REDIRECTION AND PIPING
+
+The shell provides input / output redirection for commands that are executed, as well as piping output of one command to the input of another command.
+
+Each command has four streams, of which three can be redirected:
+
+* standard input - this is where the commands read their input from
+* standard output - here the output is sent to
+* standard error - for error messages
+* console input - input directly from console, e.g. used in more to read key presses.
+
+Only standard input, output and error streams can be redirected. For running a process on a different console, see also the *ontty* command.
+
+## Redirecting input
+
+To send the contents of a specific file to a command to be executed, use the *<* character followed by the file name to be read as input:
+
+	hexdump < file
+
+## Redirecting output
+
+To send the output of a command to new file, use the *>* character, followed by the target file.
+
+	hexdump infile > outfile
+
+To append the output of a command to a file use double *>>*:
+
+	hexdump infile >> appendfile
+
+## Redirecting error output
+
+To redirect the error output, use the *!* character. 
+
+	hexdump infile ! errfile
+
+## Redirecting combined standard and error output
+
+Both the standard output and error streams can be sent to the same output stream. Use a logical combination of the *!* and *>* resp. *>>* tokens:
+
+	hexdump !> stdout_and_err_file
+	hexdump >>! append_stdout_and_err
+
+# Piping
+
+The output of one command can be piped into the input for another command. This can be done using the *'* character:
+
+	cat file ' hexdump
+
+Note: the character might change in the future.
+
+# EXAMPLES
+
+lsh -v -d c:
+    Start the shell in verbose mode, using *c:* as working directory.
+        
+# AUTHOR
+
+Written by André Fachat.
+
+# REPORTING BUGS
+
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+# COPYRIGHT
+
+Copyright 1997, 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+# SEE ALSO
+
