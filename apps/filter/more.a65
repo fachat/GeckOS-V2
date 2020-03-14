@@ -37,39 +37,8 @@ argp	.word 0
 	ldy #>usagetxt
 	jmp strout
 
-first	lda (argp),y
-	bne ok
-	
-	ldx #STDIN
-	jmp docopy
-	
-ok	tya
-	clc
-	adc argp
-	sta argp
-	bcc l1
-	inc argp+1
-l1
-	lda argp
-	ldy argp+1
-
-	jsr docat
-	bcs ende
-	/* TODO: print error code */
-
-	ldy #0
-l2	lda (argp),y
-	beq next
-	iny
-	bne l2
-next
-	iny
-	lda (argp),y
-	bne ok
-
-	lda #0
-ende	
-	rts
+first	jsr crlfout
+	jmp fileloop
 
 	; -----------------------------
 	; intepret the command line options
@@ -81,6 +50,7 @@ optC	jsr parsebyte
 	rts
 
 	.data
+nfiles	.byt <-1
 numL	.byt 24
 numC	.byt 40
 	
@@ -94,10 +64,12 @@ usagetxt
 	.asc 13,10, " -L <n>    Assume <n> lines on screen (default: 25)"
 	.byt 13, 10, 0
 
+nextfilestr
+	.asc 13,10,"## NEXT FILE: ",0
 morestr	.asc 13, "<PRESS KEY>",0
 clrstr	.asc 13,    "           ", 13, 0
 
-	; no options (so far)
+	; options
 optsflg	.byt 0,0
 optslst	.byt "CL",0
 optsadl .byt <optC-1, <optL-1
@@ -119,6 +91,43 @@ inbuf	.dsb BUFLEN
 outbuf	.dsb BUFLEN
 	.text
 
+	; called from fileloop
+beforenext .(
+	inc nfiles
+	; check of other files follow
+	ldy #0
+l	lda (argp),y
+	beq endl
+	iny
+	bne l
+endl	iny
+	lda (argp),y
+	bne moreexist
+	lda nfiles
+	beq singlefile
+moreexist
+	; TODO error
+	lda #<nextfilestr
+	ldy #>nextfilestr
+	jsr strout
+	lda argp
+	ldy argp+1
+	jsr strout
+	; wait keypress
+	sec
+	ldx #STDCIN
+	jsr fgetc
+	jsr crlfout
+	lda #0
+	sta curL
+	sta curC
+	sta prev
+singlefile
+	rts
+	.)
+
+
+	; docat/docopy called from fileloop
 docat	ldx #OPEN_RD
 	jsr fopen
 	bcc docopy
@@ -148,30 +157,31 @@ rdloop	; prep write
 	ldx fileno
 	sec
 	jsr fread
-	bcc copyloop
-
-rderr	cmp #E_EOF
-	sec
-	bne rde2
-copyloop	
 	pha
+	php
+
 	lda #<BUFLEN
 	sec 
 	sbc frdat+2
 	sta rdlen
 	beq nocpy
 	jsr copy
-nocpy	pla
-	cmp #E_OK
-	beq rdloop
-rde2	php
+nocpy	
+	plp
+	pla
+	beq rdloop	; 0 == E_OK
+
+	cmp #E_EOF
+	bne rde2
+	lda #E_OK
+rde2
 	pha
 	ldx fileno
 	cpx #STDIN
 	beq r1
 	jsr fclose
 r1	pla
-	plp
+	cmp #1
 	rts
 
 	; copy over from inbuf to outbuf
@@ -256,7 +266,7 @@ wrerr	ldy prevwp
 	rts
 	.)
 
-
+#include "loop.a65"
 #include "../common.a65"
 	.)
 

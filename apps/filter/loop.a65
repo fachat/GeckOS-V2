@@ -1,0 +1,63 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    lib6502 common filter code 
+
+    Copyright (C) 2019 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+fileloop .(
+	; first file
+	lda (argp),y
+	bne ok
+	
+	ldx #STDIN
+	jmp docopy
+donext
+ok	tya
+	clc
+	adc argp
+	sta argp
+	bcc l1
+	inc argp+1
+l1
+#iflused beforenext
+	jsr beforenext
+#endif	
+	lda argp
+	ldy argp+1
+
+	jsr docat
+	bcs ende
+
+	; skip par
+	ldy #0
+l2	lda (argp),y
+	beq next
+	iny
+	bne l2
+next	; check next par
+	iny
+	lda (argp),y
+	bne donext
+	; AC == 0
+ende 	rts
+	.)
+
+
+

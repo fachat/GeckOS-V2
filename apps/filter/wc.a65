@@ -1,9 +1,9 @@
 /****************************************************************************
    
     OS/A65 Version 2.0.0
-    lib6502 more program
+    lib6502 wc program
 
-    Copyright (C) 2019 Andre Fachat 
+    Copyright (C) 2020 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@
 
 #include "lib6502.i65"
 
-#define	BUFLEN	256	/* optimized buffer but still single page/byte index */
 
 main	.(
 	.zero
@@ -34,52 +33,14 @@ nfiles	.byt <-1
 
 	.text
 	jsr getopts
-	bcc optsok
+	bcc first
 	
 	lda #<usagetxt
 	ldy #>usagetxt
 	jmp strout
 
-optsok	.(		; loop over files
-	lda (argp),y
-	bne ok
-	
-	ldx #STDIN
-	jsr docopy
-	pha
-	jsr crlfout
-	pla
-	rts
-	
-ok	tya
-	clc
-	adc argp
-	sta argp
-	bcc l1
-	inc argp+1
-l1
-	lda argp
-	ldy argp+1
-
-	jsr docat
-	bcs ende
-	/* TODO: print error code */
-	inc nfiles
-
-	jsr spout
-	lda argp
-	ldy argp+1
-	jsr strout
-
-	ldy #0
-l2	lda (argp),y
-	beq next
-	iny
-	bne l2
-next
-	iny
-	lda (argp),y
-	bne ok
+first	.(		; loop over files
+	jsr fileloop
 
 	jsr crlfout
 
@@ -88,11 +49,11 @@ next
 
 	lda prev
 	cmp #13
-	bne notrunctotal
+	bne notailtotal
 	inc tlines
-	bne notrunctotal
+	bne notailtotal
 	inc tlines+1
-notrunctotal
+notailtotal
 
 	jsr spout
 	lda tlines
@@ -110,7 +71,6 @@ notrunctotal
 	jsr crlfout
 
 endok	lda #0
-ende	
 	rts
 	.)
 
@@ -235,6 +195,17 @@ r1
 	ldy fchars+1
 	jsr wordout
 
+	inc nfiles
+
+	ldx fileno
+	cpx #STDIN
+	beq nofilename
+
+	jsr spout
+	lda argp
+	ldy argp+1
+	jsr strout
+nofilename
 	pla
 	cmp #E_EOF
 	bne rde2
@@ -242,6 +213,7 @@ r1
 rde2	cmp #1
 	rts
 
+#include "loop.a65"
 #include "../common.a65"
 
 	.)
