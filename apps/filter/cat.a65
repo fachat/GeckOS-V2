@@ -60,6 +60,10 @@ inbuf	.dsb BUFLEN
 
 	; called from dataloop
 writeout .(
+	; buffer position is already in frdat+0/+1
+	; buffer len is already in frdat+2/+3
+	lda #<frdat
+	ldy #>frdat
         ldx #STDOUT
         sec
         jmp fwrite

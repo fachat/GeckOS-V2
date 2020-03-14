@@ -97,13 +97,8 @@ rdloop
         lda #>inbuf
         sta frdat+1
 
-wrloop  lda #<frdat
-        ldy #>frdat
-
+wrloop  
 	jsr writeout
-;        ldx #STDOUT
-;        sec
-;        jsr fwrite
         bcs wrerr
         lda frdat+2
         ora frdat+3
