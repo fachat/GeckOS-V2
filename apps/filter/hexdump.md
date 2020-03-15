@@ -6,7 +6,7 @@ hexdump - hexdecimal dump
 
 # SYNOPSIS
 
-    hexdump [OPTION]... [FILE]...
+	hexdump [OPTION]... [FILE]...
     
 # DESCRIPTION
 
@@ -14,16 +14,19 @@ hexdump is a filter to display the specified files in a hexadecimal dump. With n
 
 In the output each line starts with the offset from the start in hexadecimal, then eight bytes of hexadecimal data, then the same eight bytes as printable characters.
 
-    **-l**    16 byte wide output 
+# OPTIONS
+
+	-l    
+16 byte wide output 
     
 
 # EXAMPLES
 
-hexdump f g
-    Output f's content, then g's content as hex dump
+	hexdump f g
+Output f's content, then g's content as hex dump
         
-hexdump
-    Dump standard input to standard output as hex dump
+	hexdump
+Dump standard input to standard output as hex dump
 
 # AUTHOR
 

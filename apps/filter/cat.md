@@ -6,8 +6,8 @@ cat - concatenate files and print on standard output
 
 # SYNOPSIS
 
-    cat [OPTION]... [FILE]...
-    
+	cat [OPTION]... [FILE]...
+
 # DESCRIPTION
 
 Concatenate FILE(s) to standard output.
@@ -17,11 +17,11 @@ With no file read standard input.
 
 # EXAMPLES
 
-cat f g
-    Output f's content, then g's content
-        
-cat 
-    Copy standard input to standard output
+	cat f g
+Output f's content, then g's content
+
+	cat
+Copy standard input to standard output
 
 # AUTHOR
 
