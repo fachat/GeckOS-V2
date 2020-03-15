@@ -1,21 +1,22 @@
 
+# cat
 
-# NAME
+## NAME
 
 cat - concatenate files and print on standard output
 
-# SYNOPSIS
+## SYNOPSIS
 
 	cat [OPTION]... [FILE]...
 
-# DESCRIPTION
+## DESCRIPTION
 
 Concatenate FILE(s) to standard output.
 
 With no file read standard input.
 
 
-# EXAMPLES
+## EXAMPLES
 
 	cat f g
 Output f's content, then g's content
@@ -23,18 +24,18 @@ Output f's content, then g's content
 	cat
 Copy standard input to standard output
 
-# AUTHOR
+## AUTHOR
 
 Written by André Fachat.
 
-# REPORTING BUGS
+## REPORTING BUGS
 
 Please report bugs at https://github.com/fachat/GeckOS-V2/issues
 
-# COPYRIGHT
+## COPYRIGHT
 
 Copyright 2020 André Fachat. License GPL2 or later.
 This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
 
-# SEE ALSO
+## SEE ALSO
 

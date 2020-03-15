@@ -1,29 +1,30 @@
 
+# mv
 
-# NAME
+## NAME
 
 mv - move (rename) files
 
-# SYNOPSIS
+## SYNOPSIS
 
     mv [OLDFILENAME] [NEWFILENAME]
     
-# DESCRIPTION
+## DESCRIPTION
 
 Rename [OLDFILENAME] to [NEWFILENAME]
 
-# AUTHOR
+## AUTHOR
 
 Written by André Fachat.
 
-# REPORTING BUGS
+## REPORTING BUGS
 
 Please report bugs at https://github.com/fachat/GeckOS-V2/issues
 
-# COPYRIGHT
+## COPYRIGHT
 
 Copyright 1997,2020 André Fachat. License GPL2 or later.
 This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
 
-# SEE ALSO
+## SEE ALSO
 
