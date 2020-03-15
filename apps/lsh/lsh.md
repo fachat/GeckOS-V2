@@ -97,7 +97,7 @@ Both the standard output and error streams can be sent to the same output stream
 	hexdump !> stdout_and_err_file
 	hexdump >>! append_stdout_and_err
 
-## Piping
+### Piping
 
 The output of one command can be piped into the input for another command. This can be done using the *'* character:
 
