@@ -62,7 +62,8 @@
 
 				/* if you have a 16550A UART with FIFO */
 #undef	UARTBASE	$d600
-#define ACIABASE	$d600
+				/* ACIA 6551 */
+#undef	ACIABASE	$d600
 /* #define ACIABASE	$df00 */
 
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
@@ -122,8 +123,9 @@
 		   computer at IEEE id 10, mapping its fsibm drive there */
 
 #define	PARALLEL
-#define	OLDHACK
+#define	OLDHACK	
 
+#if 0
 #undef 	ACIABASE
 #define	UARTBASE	$d600
 #undef 	UARTXTAL
@@ -134,6 +136,8 @@
 
 #undef WWWDRV
 #define	WWWDRV		"c"
+
+#endif
 
 #endif	/* ANDRE */
 

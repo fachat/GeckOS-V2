@@ -155,6 +155,7 @@ l0	lsr
 
 	lda #$df
 	sta C64CIA1+CIA_SDR	; send byte $ff
+	jsr delay
 	lda #$ff
 	sta C64CIA1+CIA_SDR	; 
 
@@ -169,6 +170,9 @@ l0	lsr
 	sta C64CIA2+CIA_CRA	; set SDR for input
 
 	; program CIA2 for I/O
+	; bit 7 = DSR out
+	; bit 2 = DTR out
+	; bit 1 = RTS out
 	lda #%10000110
 	sta C64CIA2+CIA_PRB
 	lda C64CIA2+CIA_DDRB
@@ -183,6 +187,9 @@ l0	lsr
 	lda #<NMIserial
 	ldy #>NMIserial
 	jsr SETNMI		; old NMIvector is saved by SETNMI 
+
+	lda #%10000010		; dtr low
+	sta C64CIA2+CIA_PRB
 
 	plp
           clc
@@ -215,7 +222,7 @@ noirq	lda #E_NOIRQ
 	bvc endtx		; we don't send
 
 	bit C64CIA2+CIA_PRB
-	bvc endtx		; CTS hi
+	bvs endtx		; CTS hi
 
         ldx instr		; send new data byte
         jsr GETC
@@ -227,6 +234,7 @@ noirq	lda #E_NOIRQ
 	sta C64CIA1+CIA_SDR	; 7 data bits, 1 start bit
 	ror
 	ora #$7f
+	jsr delay
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
 
 	lda #0
@@ -370,7 +378,6 @@ startbit
 	pla
 	bit C64CIA2+CIA_ICR
 	jmp (oldnmi)
-
 	.)
 
 nmion   .(
@@ -434,6 +441,28 @@ rts_lo
 	sta C64CIA2+CIA_PRB
 nolo
 	rts
+
+#if 0
+dtrhi
+	lda C64CIA2+CIA_PRB
+	and #%11111011
+	sta C64CIA2+CIA_PRB
+	rts
+dtrlo
+	lda C64CIA2+CIA_PRB
+	ora #%00000100
+	sta C64CIA2+CIA_PRB
+	rts
+#endif
+
+delay	; wait for ~100 cycles between both writes for a byte to the SDR
+	; so at least the first bit has been put on the wire
+	; this may make output on VICE work
+	ldx #15
+dl	dex
+	bne dl
+	rts
+
 
 /*****************************************************************/
 
