@@ -1,23 +1,22 @@
 #!/bin/sh
 
-device=cua2
+device=ttyUSB1
 
 pidfile=/var/run/slattach.pid
-lockfile=/var/spool/uucp/LCK..$device
 
 if [ "$1" != "off" ]; then 
   if [ -f $pidfile ]; then 
     echo "SLIP already running!"
     exit 1;
   fi
-  slattach -l -s 9600 -p slip /dev/$device &
+  slattach -d -L -l -s 9600 -p slip /dev/$device &
 
   echo $! > $pidfile
 
   sleep 1
 
-  ifconfig sl0 192.168.0.1 up
-  route add -host 192.168.0.13 sl0
+  ifconfig sl0 192.168.0.1/24 up
+  #route add -host 192.168.0.64 sl0
 
 else
   if [ ! -f $pidfile ]; then 
@@ -26,6 +25,5 @@ else
   fi
   kill -HUP `cat $pidfile`
   rm -f $pidfile
-  rm -f $lockfile
 fi;
 
