@@ -1,0 +1,55 @@
+
+= KILL(1)
+:doctype: manpage
+
+== NAME
+kill - send signal to task
+
+== SYNOPSIS
+*kill* [signal] PID
+
+== DESCRIPTION
+kill(1) is similar to the Unix command of the same name. PID must be in hex; a leading dollar sign is optional.
+
+== OPTIONS
+*signal*
+The following signals may be sent, and must be preceded by a dash:
+
+* SIG_KILL
+* SIG_BRK
+* SIG_USR1
+* SIG_USR2
+* SIG_USR3
+* SIG_USR4
+* The traditional -9 argument may be used in place of SIG_KILL.
+
+If no signal is given, SIG_KILL is assumed (kernel *KILL* call).
+
+== ENVIRONMENT VARIABLES
+
+None used.
+
+== EXAMPLES
+
+*kill 41*
+Kills the task with PID $41.
+
+*kill -SIG_USR1 $41*
+Sends SIG_USR1 to PID $41.
+
+== AUTHOR
+
+Written by Glenn Holmer.
+
+== REPORTING BUGS
+
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+== COPYRIGHT
+
+Copyright 1997, 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+== SEE ALSO
+
+*ps*
