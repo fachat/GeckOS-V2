@@ -42,6 +42,14 @@
  *
  * Only 9600 Baud are supported now. Timer values etc are taken from
  * the miniterm program by Daniel Dallmann
+ *
+ * As it seems, VICE is more picky than the real hardware. I needed
+ * the following changes:
+ * - add a delay between writing the first and the second byte of 
+ *   payload, so that VICE has at least the first bit shifted out
+ * - set RTS hi when start bit is received, so next data byte is
+ *   not coming in too quickly after the previous byte, and release
+ *   RTS when the byte has been read from the shift register
  */
 
           .(
@@ -255,6 +263,8 @@ endtx
 	beq nobyt	; no byte to fetch
 
 fetch	lda inbuf,x
+	tax
+	lda bytetab,x
 	ldx outstr
 
 	cmp brkkey
@@ -346,7 +356,7 @@ databyte
 
 	lda #%00010010
 	sta C64CIA2+CIA_CRB	; stop timer
-	lsr
+	lda #%00001000		; lsr was one byte less but more difficult to understand
 	sta C64CIA2+CIA_ICR	; disable SDR NMI
 	lda #%10010000
 	sta C64CIA2+CIA_ICR	; enable Flag2 NMI
@@ -355,26 +365,34 @@ databyte
 
 	lda C64CIA2+CIA_SDR	; only SDR NMI should be set
 
-	tax
-	lda bytetab,x
+	bit C64CIA2+CIA_ICR	; clear NMI bit
+
 	ldx inp
 	sta inbuf,x
 	inc inp
+	; rts lo - allow next byte
+	lda C64CIA2+CIA_PRB
+	ora #%00000010
+	sta C64CIA2+CIA_PRB
 
 	pla
 	tax
 	pla
-	bit C64CIA2+CIA_ICR
 	jmp (oldnmi)
 
 startbit	
 	dec rmode		; $80 -> $7f
 	lda C64CIA2+CIA_SDR
-	lda #%00010011
-	sta C64CIA2+CIA_CRB	; start timer
+	lda #%00010001
+	sta C64CIA2+CIA_CRB	; start timer, force load latch
 	sta C64CIA2+CIA_ICR	; disable Flag2 NMI
 	lda #%10001000
 	sta C64CIA2+CIA_ICR	; enable SR NMI
+	; rts hi - so next byte is delayed until we got this one
+	lda C64CIA2+CIA_PRB
+	and #%11111101
+	sta C64CIA2+CIA_PRB
+	;
 	pla
 	bit C64CIA2+CIA_ICR
 	jmp (oldnmi)

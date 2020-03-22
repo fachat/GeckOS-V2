@@ -1,29 +1,59 @@
-#!/bin/sh
+#!/bin/bash
+#
+# You can use VICE using this command line to start with "socat" as serial device, creating
+# a Pseudo TTY for this slattach to use:
+#
+#	x64sc -rsuser -rsuserdev 2 -rsuserbaud 9600 -rsdev3 "|socat - PTY,link=/tmp/viceser"  -autostart osa.d64
+#
+# Then run this script as
+#
+#	sudo ./csaip -d /tmp/viceser
+#
+# and to debug you can use 
+#
+#	sudo tcpdump -i sl0 -XX -tttt -v
+#
+# Then, in GeckOS in x64sc, run
+#
+#	slipd <a:ser1 >a:ser1
+#
+# as a minimum slip daemon that uses "a:ser1" as I/O, which is the 9600 baud userport on the C64 arch.
+#
 
-device=ttyUSB1
+device=/dev/cua2
+force=0
 
-pidfile=/var/run/slattach.pid
+while [[ $# -gt 0 ]]; do
+	key="$1"
+	case $key in 
+	-d)
+		device=$2;
+		shift 
+		shift
+		;;
+	*)
+		break
+		;;
+	esac
+done
 
-if [ "$1" != "off" ]; then 
-  if [ -f $pidfile ]; then 
-    echo "SLIP already running!"
-    exit 1;
-  fi
-  slattach -d -L -l -s 9600 -p slip /dev/$device &
+device="`readlink -f $device`"
 
-  echo $! > $pidfile
+if [ "$1" != "stop" ]; then 
 
-  sleep 1
+  slattach -e -s 9600 -p slip $device 
 
-  ifconfig sl0 192.168.0.1/24 up
-  #route add -host 192.168.0.64 sl0
+  echo "slattach returns $?"
 
+  if [ $? -eq 0 ]; then
+	sleep 1
+
+	ifconfig sl0 192.168.0.1/24 up
+	#route add -host 192.168.0.64 sl0
+  else
+	echo "slattach failed"
+  fi;
 else
-  if [ ! -f $pidfile ]; then 
-    echo "SLIP not running!"
-    exit 1;
-  fi
-  kill -HUP `cat $pidfile`
-  rm -f $pidfile
+  ifconfig sl0 down
 fi;
 
