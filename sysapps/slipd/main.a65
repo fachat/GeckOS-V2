@@ -69,8 +69,7 @@
 #undef	NO_RSH		/* if defined no telnet port */
 #undef	NO_LIBIP	/* if defined no lib6502 ip connections */
 
-#define	MAXOQUEUE	2
-#define	INBUF		64
+#define	MAXOQUEUE	3
 #define	MTU		1024
 #define	MAXSLOT		24
 #define	IPBUFFER	32*256	/* must be within one (4k) page for MMU! */
@@ -105,7 +104,7 @@
 
 /* #define	DEBUG */
 /* #define	DEBUGMEM*/
-#define	DEBUGPKT
+/* #define	DEBUGPKT*/
 /* #define	DEBUGTCP*/
 /* #define	DEBUGTCP2*/
 /* #define	DEBUGICMP*/

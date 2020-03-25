@@ -39,6 +39,8 @@ done
 
 device="`readlink -f $device`"
 
+echo "Using device $device"
+
 if [ "$1" != "stop" ]; then 
 
   slattach -e -s 9600 -p slip $device 
@@ -46,7 +48,9 @@ if [ "$1" != "stop" ]; then
   echo "slattach returns $?"
 
   if [ $? -eq 0 ]; then
-	sleep 1
+
+	# wait for slattch to do its work
+	sleep 2
 
 	ifconfig sl0 192.168.0.1/24 up
 	#route add -host 192.168.0.64 sl0
