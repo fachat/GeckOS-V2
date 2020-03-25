@@ -79,6 +79,8 @@ smode	  .byt 0
 inp	  .byt 0
 outp	  .byt 0
 nmistate  .byt 0
+prefetch  .byt 0
+prevalid  .byt 0
 
 	.zero
 rmode	  .byt 0
@@ -122,11 +124,12 @@ devini  .(
 
 	lda #$80
 	sta smode		; sending mode
-	sta rmode		; receiving <0 = wait stop bit; >0 = wait SR
+	sta rmode		; receiving <0 = wait for stop bit; >0 = wait SR
 
 	lda #0
 	sta inp
 	sta outp
+	sta prevalid		; prefetch data not valid
 
 	; generate bit reversed data field
 	ldx #0
@@ -210,7 +213,7 @@ devirq  .(
 	lda C64CIA1+CIA_ICR
 	bpl noirq
 	and #%00001000
-	bne notmyirq		; due to the 6526 design, all irq flags are lost now
+	bne notmyirq		; due to the broken 6526 design, all irq flags are lost now
 
 	lda smode
 	ora #$80
@@ -227,16 +230,21 @@ noirq	lda #E_NOIRQ
 	bpl endtx
 
 	bit status
-	bvc endtx		; we don't send
+	bvc endtx		; we don't send (DC_SW_TX)
 
 	bit C64CIA2+CIA_PRB
 	bvs endtx		; CTS hi
 
+	bit prevalid		; prefetched byte is valid
+	bmi valid
+
         ldx instr		; send new data byte
         jsr GETC
         bcs test2
-	
-	tax
+	sta prefetch
+	dec prevalid		; make valid
+valid
+	ldx prefetch
 	lda bytetab,x
 	lsr
 	sta C64CIA1+CIA_SDR	; 7 data bits, 1 start bit
@@ -245,17 +253,26 @@ noirq	lda #E_NOIRQ
 	jsr delay
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
 
+	; prefetch next byte, so can be served quickly in next IRQ
+	ldx instr
+	jsr GETC
+	bcs test1
+	sta prefetch
+
 	lda #0
 	sta smode
 	beq endtx
 
-test2   cmp #E_EOF
+test1	lda #0
+	sta prevalid	; not valid anymore
+test2   ; failed GETC
+	cmp #E_EOF
         bne endtx
         jsr txoff
 
 			; now let's see if there's something to receive
 endtx
-	bit status
+	bit status	; check DC_SW_RX
 	bpl endirq
 
 	ldx outp
@@ -327,7 +344,7 @@ ctrlnmi	.(
 	cmp #NMI_ON
 	bne off
 	lda status
-	and #%00100000
+	and #DC_SW_RXHW
 	bne norts
 	jsr rts_lo
 norts	lda status
@@ -370,11 +387,16 @@ databyte
 	ldx inp
 	sta inbuf,x
 	inc inp
+
+	lda status		; are we at high water mark?
+	and #DC_SW_RXHW
+	bne endnmi		; no, then do not allow next byte
+
 	; rts lo - allow next byte
 	lda C64CIA2+CIA_PRB
 	ora #%00000010
 	sta C64CIA2+CIA_PRB
-
+endnmi
 	pla
 	tax
 	pla
@@ -400,7 +422,7 @@ startbit
 
 nmion   .(
 	lda status
-	ora #%00010000
+	ora #%00110000
 	sta status
 	lda nmistate
 	cmp #NMI_ON
@@ -438,7 +460,7 @@ nmioff	.(
 
 rtshi
 	lda status
-	ora #%00100000
+	ora #DC_SW_RXHW
 	sta status	
 rts_hi
 	lda C64CIA2+CIA_PRB
@@ -448,7 +470,10 @@ rts_hi
 
 rtslo
 	lda status
-	and #%11011111
+	and #DC_SW_RXHW
+	beq nolo		; is already low
+	lda status
+	and #255-DC_SW_RXHW
 	sta status	
 	lda nmistate
 	cmp #NMI_ON
