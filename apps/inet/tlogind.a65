@@ -184,7 +184,7 @@ pw_name	.asc "c64",0		/* replace this with login name */
 pw_passwd
 	.asc "guest",0		/* replace this with login password */
 pw_shell
-	.asc "mon",0,0		/* replace this with shell to exec when
+	.asc "c:lsh",0,0		/* replace this with shell to exec when
 				   login takes place - pwd as given to 
 				   tlogin, i.e. as given to slipd. */
 
