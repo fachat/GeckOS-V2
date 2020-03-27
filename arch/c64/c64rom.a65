@@ -78,13 +78,6 @@
 
 #define NMIDEV			/* necessary for fast RS232 */
 				
-/*#define C64NEEDCIA1*/		/* disables reading CIA1 ICR in kernel -
-				   needs to be done in device then, as
-				   kernel enables timer irq!! (reading 
-				   it causes all flags to be reset!) 
-				   If you use the plain C64 9600 baud RS232
-				   interface (ds3), this must not be defined! */
-		
 #undef	 PARALLEL		/* for IEEE488 interface from Commodore 
 				   disables serial bus interface! */
 

@@ -586,19 +586,18 @@ c2	jmp (tmp2)
           tya
           pha
 #endif
+          cld
           tsx
           lda $104,x
           and #$10
           beq pb1
 &petbrkjmp
-          cld
 #ifdef EMUTEST
 	.byt 2
 #endif
           jmp pbrk
 &petirqjmp
 pb1 
-          cld
           jsr memsys
 
 #ifdef SAVEMEM

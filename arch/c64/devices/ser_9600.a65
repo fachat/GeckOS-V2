@@ -156,7 +156,7 @@ l0	lsr
 	lda #%00000001
 	sta C64CIA1+CIA_ICR	; disable IRQ for CIA1 timer A
 	lda #%10001000		
-	sta C64CIA1+CIA_ICR	; enable IRQ for CIA1 SR full
+	sta C64CIA1+CIA_ICR	; enable IRQ for CIA1 SR empty/full
 	lda #<50
 	sta C64CIA1+CIA_TAL
 	lda #>50
@@ -211,20 +211,14 @@ l0	lsr
 
 devirq  .(
 	lda C64CIA1+CIA_ICR
-	bpl noirq
+	;bpl noirq
 	and #%00001000
 	bne notmyirq		; due to the broken 6526 design, all irq flags are lost now
 
-	lda smode
-	ora #$80
-	sta smode
+	lda #$80		; mark that we have an empty SDR
+	sta smode		; (so we remember even if we check for data to send later)
 	
 notmyirq
-	lda #E_OK
-	.byt $2c
-noirq	lda #E_NOIRQ
-	pha
-
 	; try to send something
 	lda smode
 	bpl endtx
@@ -240,10 +234,12 @@ noirq	lda #E_NOIRQ
 
         ldx instr		; send new data byte
         jsr GETC
-        bcs test2
+        bcs test2		; no data sent (keep smode)
 	sta prefetch
 	dec prevalid		; make valid
 valid
+	dec smode		; mark we use the SDR (clears bit 7 until next SDR empty interrupt)
+
 	ldx prefetch
 	lda bytetab,x
 	lsr
@@ -254,16 +250,13 @@ valid
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
 
 	; prefetch next byte, so can be served quickly in next IRQ
-	; note: this takes only about 350-400 cycles, a far cry from the
-	; 100x16 bits to send a single data byte down the line
+	; note - this takes only about 350-400 cycles, a far cry from the
+	; 16x100 cycles to send a single data byte down the line
 	ldx instr
 	jsr GETC
 	bcs test1
 	sta prefetch
-
-	lda #0
-	sta smode
-	beq endtx
+	bcc endtx
 
 test1	lda #0
 	sta prevalid	; not valid anymore
@@ -333,8 +326,7 @@ rx2end	ldx outp
 	cpx inp
 	bne fetch
 
-endirq	pla
-	lda #E_NOIRQ
+endirq	lda #E_NOIRQ
 	rts
 
         .)
