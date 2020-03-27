@@ -254,6 +254,8 @@ valid
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
 
 	; prefetch next byte, so can be served quickly in next IRQ
+	; note: this takes only about 350-400 cycles, a far cry from the
+	; 100x16 bits to send a single data byte down the line
 	ldx instr
 	jsr GETC
 	bcs test1
