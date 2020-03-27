@@ -184,7 +184,8 @@
 #define	INIT_MERGE
 #define	INIT_LIB6502
 /* #define	INIT_USE_STDLIB */
-/* #define	INIT_OUTDEV	2*/
+#define	INIT_OUTDEV	1
+
 #include  "sysapps/init/init.a65"
 
 /************* fsdev - converts devices into files 	*/
@@ -213,9 +214,10 @@
 
 #define	MON_SHEXE $c0		/* ROM executable flag */
 #define	MON_MONEXE 0		/* ROM executable flag */
-#define	MON_SHDEV 1		/* start on device 0 = video1 */
+#define	MON_SHDEV 2		/* start on device 0 = video1 */
 #define	SHORTMON		/* no assembler/disassembler */
 #undef	NOSH
+
 #include  "sysapps/mon/mon.a65"
 
 
@@ -232,7 +234,7 @@
 	.byt 128	; P_RAM
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
-	.byt 7,7	; P_DEV
+	.byt 0,0	; P_DEV
 			; wwwsrv drive is WWWDRV, login prg is "BOOTDRV:tlogin",
 			; debug output to 4th console
 	.byt BOOTDRV,":slipd", 0 
@@ -258,7 +260,7 @@ end_slipd
 	.byt 16		; P_RAM
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
-	.byt 0,0	; P_DEV
+	.byt 1,1	; P_DEV
 	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0,0
 end_auto
 	.)

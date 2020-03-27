@@ -211,7 +211,8 @@ l0	lsr
 
 devirq  .(
 	lda C64CIA1+CIA_ICR
-	;bpl noirq
+	pha			; save to return 
+
 	and #%00001000
 	bne notmyirq		; due to the broken 6526 design, all irq flags are lost now
 
@@ -326,7 +327,12 @@ rx2end	ldx outp
 	cpx inp
 	bne fetch
 
-endirq	lda #E_NOIRQ
+endirq	pla
+	bmi endirqok
+	lda #E_NOIRQ
+	rts
+endirqok
+	lda #E_OK
 	rts
 
         .)
