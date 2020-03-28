@@ -44,9 +44,9 @@
 #define   OSA_ARCH	"C64"
 
 /* These are changeable ****************************************************/
+/* some specific configurations can be created using -D on the xa command line */
 
-#undef	ANDRE			/* my personal configuration... :-) */
-#undef	EMUSLIP			/* my personal configuration... :-) */
+/*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
 #define	ROMSTART	$8400	/* where the ROM starts */
 
@@ -115,6 +115,8 @@
 #ifdef ANDRE	/* C64 with parallel IEEE488, UART and booting from CS/A 
 		   computer at IEEE id 10, mapping its fsibm drive there */
 
+#echo "Creating ANDRE's personal configuration"
+
 #define	PARALLEL
 #define	OLDHACK	
 
@@ -134,24 +136,6 @@
 
 #endif	/* ANDRE */
 
-/***************************************************************************/
-
-#ifdef EMUSLIP	/* C64 emulator VICE with parallel IEEE488, ACIA emulation
-		   and a nullmodem cable between /dev/modem (VICE) and 
-		   a slip line */
-
-#undef	PARALLEL
-#undef	OLDHACK
-
-#undef 	UARTBASE
-#undef 	ACIABASE
-#undef 	UARTXTAL
-
-#undef BOOTDRV
-
-#undef WWWDRV
-
-#endif	/* EMUSLIP */
 
 /***************************************************************************
  * 
