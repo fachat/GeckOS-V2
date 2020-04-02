@@ -1,82 +1,73 @@
 
-# ps
+= PS(1)
+:doctype: manpage
 
-## NAME
-
+== NAME
 ps - show information on currently running processes
 
-## SYNOPSIS
+== SYNOPSIS
+*ps* [OPTION]...
 
-    ps [OPTION]...
+== OPTIONS
+*-a*::
+	Show all entries in the kernel's process table, even those that are not currently used
 
-## OPTIONS
-
-	-a
-Show all entries in the kernel's process table, even those that are not currently used
-
-	-l
-Show all fields in the table (see below for a description)
+*-l*::
+	Show all fields in the table (see below for a description)
     
-## DESCRIPTION
-
+== DESCRIPTION
 *ps* shows the list of processes in a table.
 
-### PROCESS SELECTION
+=== PROCESS SELECTION
+Normally the processes that are currently running, waiting, or otherwise using resources in the table (waiting for CHECKCHILD) are shown. Using the *-a* option, all entries in the table are shown.
 
-Normall the processes that are currently running, waiting, or otherwise using resources in the table (waiting for CHECKCHILD) are shows. Using the *-a* option, all entries in the table are shown.
-
-### TABLE OUTPUT
-
+=== TABLE OUTPUT
 The table contains a number of columns as described below. All numbers are shown in hexadecimal.
 
-	PID
-The process ID of the task
-	Name
-Name of the executable
-	Exec
-Executing start address of the task (see below)
-	Th
-Number of threads running in the tasks
-	Pa
-Task ID of the parent task. FF for a task started by the kernel on boot.
-	Sm
-Signal mask
-	SigA
-Signal handler address (see below)
-	In
-Standard input stream ('FB' for 'not connected')
-	Out
-Standard output stream ('FB' for 'not connected')
-	Err
-Standard error stream ('FB' for 'not connected')
+*PID*::
+	The process ID of the task
+*Name*::
+	Name of the executable
+*Exec*::
+	Executing start address of the task (see below)
+*Th*::
+	Number of threads running in the tasks
+*Pa*::
+	Task ID of the parent task. FF for a task started by the kernel on boot.
+*Sm*::
+	Signal mask
+*SigA*::
+	Signal handler address (see below)
+*In*::
+	Standard input stream ('FB' for 'not connected')
+*Out*::
+	Standard output stream ('FB' for 'not connected')
+*Err*::
+	Standard error stream ('FB' for 'not connected')
 
 The following columns are only shown with the *-l* option:
 
-	En
-Environment number of the task (see below)
-	Me
-Available memory size in blocks (basically the are below the "ROM" starts, see below)
+*En*::
+	Environment number of the task (see below)
+*Me*::
+	Available memory size in blocks (basically the are below the "ROM" starts, see below)
 
-### KERNEL AND LIB6502 NOTES
-
+=== KERNEL AND LIB6502 NOTES
 GeckOS in itself can be run on a number of different architectures. Therefore if can handle different memory mapping configurations, that it calls *Environments*. In some architecture (like CS/A) each task (process) gets its own environment. In others, like the C64, there is only one Environment. The CBM8x96 has a mixed model - some system tasks run in one environment, user tasks in another.
 
 Note that due to the fact that the lib6502 code is mapped to memory only once, lib6502 programs would have the same lib6502 entry point as start address. However, lib5602 changes the entry in the kernel table using the *SETINFO* call so it becomes clear where the program starts.
 
 Similarly, the Signal handler address is the same for all lib6502 programs, as the signal handler is part of lib6502, and multi-tasks between processes and threads in the same memory mapped environment.
 
-## AUTHOR
-
+== AUTHOR
 Written by André Fachat.
 
-## REPORTING BUGS
-
+== REPORTING BUGS
 Please report bugs at https://github.com/fachat/GeckOS-V2/issues
 
-## COPYRIGHT
-
+== COPYRIGHT
 Copyright 2020 André Fachat. License GPL2 or later.
 This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
 
-## SEE ALSO
+== SEE ALSO
 
