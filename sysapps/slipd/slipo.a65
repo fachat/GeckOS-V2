@@ -206,8 +206,8 @@ jsr ECrlfout
 	clc
 	rts
 drop
-#ifdef DEBUGSLIP
-	DB("Packet dropped due to full queue^m^j")
+#if 1 /*def DEBUGSLIP*/
+	DB("Packet dropped due to full out queue^m^j")
 #endif
 	jsr bfree
 	sec

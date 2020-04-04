@@ -194,8 +194,9 @@
 #define   DC_GNUM   17
 #define   DC_REGDEV 18
 
-#define   DC_SW_RX  %10000000
-#define   DC_SW_TX  %01000000
+#define   DC_SW_RX  %10000000		/* we do receive */
+#define   DC_SW_TX  %01000000		/* we do transmit */
+#define   DC_SW_RXHW  %00100000		/* receiver is on high water mark */
 
 /*
 #define   REGDEV_MPOS    0
