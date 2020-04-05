@@ -144,8 +144,8 @@ ok	tya
 	.)
 */
 	; we now have to release PCBUF, which we inherited from FORK
-	ldx #SEM_SENDBUF
-	jsr VSEM
+	;ldx #SEM_SENDBUF
+	;jsr VSEM
 
 as_initproc
 
@@ -307,28 +307,42 @@ Z0        .word 0
           CMP #" "
           BEQ CHRGET
           CMP #0
-          RTS
+rwerr     RTS
 
-&GETADR   LDY LZEI:LDA #0:STA Z0:STA Z0+1
+&REWIND	  sec
+	  lda LZEI
+	  beq rwerr
+	  dec LZEI
+	  clc
+	  rts
+
+&GETADRC  jsr CHRGET
+&GETADRD  lda #<-1	; use decimal as default
+	  .byt $2c
+&GETADR   lda #0:sta div:LDY LZEI:LDA #0:STA Z0:STA Z0+1
 GA1       LDA IOBUF,Y:bne get
           jmp GAE
 get       INY
           CMP #" ":BEQ GA1
 
           CMP #"%"
-          BEQ GETBIN
+          BEQ GETBINI
+          cmp #"#"
+	  beq GETDEZ1
           cmp #"."
           beq GETDEZ1
           cmp #"$"
-          beq GETHEX
+          beq GETHEXI
           cmp #"&"
-          beq GETOKT
+          beq GETOKTI
           DEY
-          JMP GETHEX
+	  bit div
+	  bmi GETDEZ1
+          JMP GETHEXI
 
-GETDEZ1   jmp GETDEZ
+GETDEZ1   jmp GETDEZI
 
-GETHEX    lda IOBUF,y
+GETHEXI	  lda IOBUF,y
           jsr tsthex
           bcs gae
 GA2       INY
@@ -348,7 +362,7 @@ gb1       SEC:SBC #"0"
           iny
           lsr
           rol Z0:rol Z0+1
-GETBIN    lda IOBUF,Y
+GETBINI   lda IOBUF,Y
           beq GAE1
           bne gb1
 
@@ -360,7 +374,7 @@ go1       sec:sbc #"0"
           asl Z0:rol Z0+1
           asl Z0:rol Z0+1
           ora Z0:sta Z0
-GETOKT    lda IOBUF,y
+GETOKTI   lda IOBUF,y
           beq GAE1
           bne go1
           
@@ -379,9 +393,9 @@ gd1       sec:sbc #"0"
           clc
           adc Z0
           sta Z0
-          bcc GETDEZ
+          bcc GETDEZI
           inc Z0+1
-GETDEZ    lda IOBUF,y
+GETDEZI   lda IOBUF,y
           beq GAE1
           bne gd1
 

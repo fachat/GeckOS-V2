@@ -44,9 +44,9 @@
 #define   OSA_ARCH	"C64"
 
 /* These are changeable ****************************************************/
+/* some specific configurations can be created using -D on the xa command line */
 
-#undef	ANDRE			/* my personal configuration... :-) */
-#undef	EMUSLIP			/* my personal configuration... :-) */
+/*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
 #define	ROMSTART	$8400	/* where the ROM starts */
 
@@ -62,7 +62,8 @@
 
 				/* if you have a 16550A UART with FIFO */
 #undef	UARTBASE	$d600
-#define ACIABASE	$d600
+				/* ACIA 6551 */
+#undef	ACIABASE	$d600
 /* #define ACIABASE	$df00 */
 
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
@@ -77,13 +78,6 @@
 
 #define NMIDEV			/* necessary for fast RS232 */
 				
-/*#define C64NEEDCIA1*/		/* disables reading CIA1 ICR in kernel -
-				   needs to be done in device then, as
-				   kernel enables timer irq!! (reading 
-				   it causes all flags to be reset!) 
-				   If you use the plain C64 9600 baud RS232
-				   interface (ds3), this must not be defined! */
-		
 #undef	 PARALLEL		/* for IEEE488 interface from Commodore 
 				   disables serial bus interface! */
 
@@ -121,9 +115,12 @@
 #ifdef ANDRE	/* C64 with parallel IEEE488, UART and booting from CS/A 
 		   computer at IEEE id 10, mapping its fsibm drive there */
 
-#define	PARALLEL
-#define	OLDHACK
+#echo "Creating ANDRE's personal configuration"
 
+#define	PARALLEL
+#define	OLDHACK	
+
+#if 0
 #undef 	ACIABASE
 #define	UARTBASE	$d600
 #undef 	UARTXTAL
@@ -135,26 +132,10 @@
 #undef WWWDRV
 #define	WWWDRV		"c"
 
+#endif
+
 #endif	/* ANDRE */
 
-/***************************************************************************/
-
-#ifdef EMUSLIP	/* C64 emulator VICE with parallel IEEE488, ACIA emulation
-		   and a nullmodem cable between /dev/modem (VICE) and 
-		   a slip line */
-
-#undef	PARALLEL
-#undef	OLDHACK
-
-#undef 	UARTBASE
-#undef 	ACIABASE
-#undef 	UARTXTAL
-
-#undef BOOTDRV
-
-#undef WWWDRV
-
-#endif	/* EMUSLIP */
 
 /***************************************************************************
  * 
@@ -187,7 +168,8 @@
 #define	INIT_MERGE
 #define	INIT_LIB6502
 /* #define	INIT_USE_STDLIB */
-/* #define	INIT_OUTDEV	2*/
+#define	INIT_OUTDEV	1
+
 #include  "sysapps/init/init.a65"
 
 /************* fsdev - converts devices into files 	*/
@@ -216,9 +198,10 @@
 
 #define	MON_SHEXE $c0		/* ROM executable flag */
 #define	MON_MONEXE 0		/* ROM executable flag */
-#define	MON_SHDEV 1		/* start on device 0 = video1 */
+#define	MON_SHDEV 2		/* start on device 0 = video1 */
 #define	SHORTMON		/* no assembler/disassembler */
 #undef	NOSH
+
 #include  "sysapps/mon/mon.a65"
 
 
@@ -235,7 +218,7 @@
 	.byt 128	; P_RAM
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
-	.byt 7,7	; P_DEV
+	.byt 0,0	; P_DEV
 			; wwwsrv drive is WWWDRV, login prg is "BOOTDRV:tlogin",
 			; debug output to 4th console
 	.byt BOOTDRV,":slipd", 0 
@@ -261,7 +244,7 @@ end_slipd
 	.byt 16		; P_RAM
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
-	.byt 0,0	; P_DEV
+	.byt 1,1	; P_DEV
 	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0,0
 end_auto
 	.)

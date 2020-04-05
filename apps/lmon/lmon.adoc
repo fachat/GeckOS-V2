@@ -1,0 +1,212 @@
+
+= LMON(1)
+:doctype: manpage
+
+== NAME
+lmon - machine language monitor
+
+== SYNOPSIS
+*lmon*
+
+== DESCRIPTION
+Machine language monitor, derived from the C64 @MON monitor.
+
+When started, the monitor prints the CPU registers, and waits for
+the commands at the prompt.
+
+== COMMANDS
+The commands shown here in general print their output as hexadecimal values.
+However, when inputting a number in any command, either hex, decimal, octal,
+or binary values can be used by prefixing them with either "$", "." or "#", "&"
+or "%" respectively. Note that decimal has two prefixes for convenience.
+In the assembler, "." should be used to avoid conflicts with the immediate 
+addressing mode. The default (without prefix) is hexadecimal (except 
+for the "=" command, see below, that uses decimal).
+
+=== GENERAL
+*R*::
+	print the internal copy of the CPU registers
+
+*+* <pc> <ac> <xr> <yr> <sp> <flags>::
+	change the internal copy of the CPU registers.
+	Values at the end are optional.
+	A '-' skips a value (left unchanged).
+	Numbers are entered in hex, except when preceeded with "%"
+	in which case they are binary.
+
+*G* <addr>::
+	Start executing code at <addr>. Set CPU registers with the
+	values of the internal Registers
+	Returns to monitor on RTS.
+
+*X*::
+	exit the monitor
+
+=== MEMORY
+*M* <start> [<end>]::
+	Display memory area from <start> to <end> in hex (with printable display)
+
+*B* <start> [<end>]::
+	Display memory area from <start> to <end> in binary
+	
+*,* <addr> <byte> [<byte2>...]::
+	Enter / change memory at address <addr> (from output of *M*)
+
+=== ASSEMBLER
+*D* <start> [<end>]::
+	print disassembly from <start> to <end> address
+
+*A* <start> [<assembler code>]::
+	Start assembling at given start address; optionally enter first 
+	assembler opcode
+
+*;* <start> [<assembler code>]::
+	Like *A*, but from output of *D*.
+
+*U* <startfrom> <endfrom> <starttarget> <endtarget> <newtarget>::
+	In the area between <startfrom> and <endfrom>, re-calculate
+	all 3-byte addresses in machine code that point to between
+	<starttarget> and <endtarget> to a new area starting at
+	<newtarget>
+
+*FR* <start> <end>::
+	Search for relative jump opcodes in given area.
+	Outputs the assembler listing of the given opcodes
+
+*FA* <adr1> <adr2> xxx::
+	search for a special addressing mode:
+        you give the adressing mode in the same syntax
+        as in the assembler, instead of the real address
+        you may replace some or all of the Hex digits 
+        by an asterix ('*').
+        example: FA A437 A500 A32*,X
+	Note that you must not enter the leading '$' hex
+	indicator. Note that embedded data may confuse
+	the disassmbler. For examples see below.
+
+=== NUMBERS
+=number::
+	prints the hex, decimal and binary values of
+	the given number. The number can be in any
+	of hex, decimal, octal, or binary format, if 
+	prefixed with "$", "." or "#", "&", or "%"
+	respectively. If no prefix is used, decimal
+	is assumed.
+
+=num1 operator num2::
+	performs arithmetik operation, valid operators are:
+        - "+"   addition
+        - "-"   substraction
+        - "*"   multiplication
+        - "/"   division
+	Again, numbers can be entered in any format as described
+	above. The result is printed, in hex, decimal and binary.
+	Division prints two numbers, first the integer result,
+	then the rest of the division.
+
+=== FILES
+*S* "filename" <start> <end>::
+	save a memory are to a file
+
+*L* "filename" <start>::
+	load a file into memory area starting at <start>.
+
+=== SYSTEM
+*P* <drive> [<memsize>]::
+	Set the default drive for file operations, and the 
+	maximum available memory (in MMU systems).
+	If drive is "-" then the drive is not changed.
+
+*I* <byte1> <byte2>::
+	Sets output to Disk to device byte1 and
+	output to printer to device byte2
+
+*E* <page> <block>::
+	In MMU systems, set page <page> to memory mapped block <block>.
+
+=== COMPLEX 
+*C* <startsrc> <endsrc> <starttrg>::
+	show differences between the area <startsrc> - <endsrc> 
+	and the area starting at <starttrg>.
+
+*F* <start> <end> <byte1> [<byte2> ...]::
+*F* <start> <end> "text"::
+	Search for <search> in the memory area between <start> and <end>.
+	<search> can be either hex numbers, quoted strings, or both mixed.
+
+*F-* <start> <end> <value>::
+	Search for bytes that are *not* of the given value.
+
+*T* <start> <end> <trg>::
+	Transfer memory area from <start> to <end> to the memory
+	area at <trg>
+
+*O* <start> <end> <value>::
+	Fill (Occupy) memory area from <start> to <end> with <value>
+
+== EXAMPLES
+
+=== NUMBERS
+
+*=345*::
+*=#345*::
+*=.345*::
+	prints out the decimal value 345 in various formats
+	
+	$0159,345,0000000101011001
+
+*=$345*::
+	prints out the hexadecimal value $345
+
+	$0345,837,0000001101000101
+
+*=123/$a*::
+	divides the decimal value 123 by 10:
+
+	$000c,12,00001100,
+	$0003,3,00000011
+
+=== SEARCH (FIND)
+
+*f 8400 8800 "devices"*::
+	Finds all occurances of the string "devices" in the 
+	memory area between $8400 and $8800. Here an example 
+	from the C64 GeckOS boot ROM:
+
+	840a
+
+*fa f000 f100 0\**::
+	Finds all occurances of zeropage addressing modes
+	in the area of $00-$0f and prints the disassembly for
+	those occurances. Note that embedded data may confuse
+	the disassmbler.
+
+	;f000 sta $06
+	;f005 sta $07
+
+*fa f000 f100 (+**+),y*::
+	Finds all occurances of indirect y-indexed addressing modes
+
+	;f029 lda ($56),y
+
+*fr f000 f100*::
+	Finds occurances of relative addressing modes
+
+	;f027 bcs $f031
+	;f027 bne $f025
+	...
+
+== AUTHOR
+Written by André Fachat
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+== COPYRIGHT
+Copyright 1997, 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+== SEE ALSO
+
+
+

@@ -79,7 +79,7 @@ BRKYR     .byt 0
 	.text
 
 MA        =1
-MB        =3
+MB        =4
 MEBYT     =","
 MEASS     =";"
 MEREG     ="+"
@@ -850,9 +850,15 @@ mofother  cmp #"R":beq mofr
 mofr
 18060 LDA #6:STA IOBUF+2:LDA #2:STA IOBUF+1:LDA #%11111111:STA IOBUF
 18065 BNE BFA1
-mofrn     cmp #"-":beq mofneg:JSR CHRGET:JSR GETAUF:BCS BFA0
-18075 LDA #0:STA IOBUF:STA IOBUF+2:JSR CHRGOT:Beq BFA0
-      JSR GADR:bcs mofe:JSR GETZU:bcs BFA3
+mofrn     cmp #"-":beq mofneg:
+	JSR CHRGET:JSR GETAUF:BCS BFA0
+18075 LDA #0:STA IOBUF:STA IOBUF+2:
+	JSR CHRGOT
+	Beq BFA0
+      	JSR GADR
+	bcs mofe
+	JSR GETZU
+	bcs BFA3
 18080 STA IOBUF+2
 18085 BFA0 LDA LEN:STA IOBUF+1
 18090 BFA1 JSR GETPAR:LDA LEN:PHA:CMP IOBUF+1:BNE BFA1N:DEC LEN:BEQ BFA1OK
@@ -895,7 +901,95 @@ GADR ldy LZEI:INC LEN:CLC:ROR STBYT
 1145 PLP:BEQ GAR:CLC:RTS:GAR SEC:RTS
 #endif
           .)
-          
+
+	.(
+	; these routines just rewind CHRGET one char, and use our general 
+	; number parser that handles all bases
+&bdec
+&bhex
+&bbin
+&boct	jsr REWIND
+	jsr GETADR
+prax	sta Z1
+	stx Z1+1
+
+ 30055 bdend jsr CRLFOUT:lda #"$":jsr SEROUT
+ 30060 
+	lda Z1
+	ldx Z1+1
+	jsr SADRO
+	jsr kmout:jsr decout:jsr kmout
+ 30065 binout ldx #16:lda Z1+1:bne bo4:lda Z1:bin8out sta Z1+1:ldx #8
+ 30070 bo4 lda #%11000;"0"/2
+ 30075 asl Z1:rol Z1+1:rol:jsr SEROUT:dex:bne bo4:rts
+
+ 30077 ;********
+ 30080 &bfz 
+	jsr GETADRD:sta Z1:stx Z1+1:jsr CHRGOT:beq bdend:ldx #3:bfz1 cmp bft,x:beq bfz2
+ 30085 dex:bpl bfz1:bfzerr jmp ERR
+ 30090 bfz2 jsr bfz3:jmp prax
+ 29839 bfz3 txa:pha:jsr GETADRC:sta Z2:pla:tay:
+	lda Z2
+	cpy #0:bne bfz4
+ 30100 jmp addax:bfz4 dey:bne bfz5:jmp subax
+ 30105 bfz5 dey:bne bfz6:jmp multax
+ 30110 bfz6 cmp #0:bne bfz7:cpx #0:beq bfzerr
+ 30115 bfz7 jsr divax:tay:lda Z1:pha:lda Z1+1:pha:tya:jsr prax:jsr kmout
+	pla:tax:pla
+	rts
+        
+kmout	lda #","
+	jmp SEROUT
+
+addax 	clc:adc Z1:sta Z1:txa:adc Z1+1:sta Z1+1:tax
+ 	lda Z1:rts
+subax 	sta INP:lda Z1:sec:sbc INP:sta Z1
+	stx INP:lda Z1+1:sbc INP:sta Z1+1:tax:lda Z1:rts 
+
+multax 	sta INP
+ 1335 lda #0:sta Z2:sta Z2+1
+ 1340 mul1 txa:lsr:tax:ror INP:ora INP:bcs mul2:beq mule
+ 1345 bcc mul3
+ 1350 mul2 lda Z2:clc:adc Z1:sta Z2:lda Z2+1:adc Z1+1:sta Z2+1
+ 1355 mul3 asl Z1:rol Z1+1:jmp mul1
+mule	lda Z2
+	ldx Z2+1
+	rts
+
+ 1360 decdiv lda dechi,y:tax:lda declo,y
+	; divide Z1 by A/X
+ 1365 divax stx Z2+1:sta Z2:sty LEN:
+	ldx #1:lda #0:sta Z3:sta Z3+1
+	; shift divider left as many times as needed
+ 1370 div1 lda Z2:asl:tay:lda Z2+1:rol:bcs div3; overflow
+	; or larger than value to be divided
+ 1375 cmp Z1+1:bcc div2:bne div3
+ 1380 cpy Z1:bcc div2:bne div3
+	; not yet shifted enough, continue
+ 1385 div2 sta Z2+1:sty Z2:inx:bne div1; always loop
+	; divider is shifted, X contains number of shifts
+	; are we done yet (no more shifts)
+	; on return, A/X contains result, Z1 contains rest
+ 1390 div3 dex:bpl div6:ldy LEN:ldx Z3+1:lda Z3:rts
+	; is value smaller than shifted divider?
+ 1395 div6 lda Z1+1:cmp Z2+1:bcc div4:bne div5
+ 1400 lda Z1:cmp Z2:bcc div4; yes, then record a zero
+	; value is larger, subtract shifted divider, record 1
+ 1405 div5 lda Z1:sec:sbc Z2:sta Z1:lda Z1+1:sbc Z2+1:sta Z1+1
+	; record result
+ 1410 sec:.byt $24:div4 clc:rol Z3:rol Z3+1
+	; shift back divider and continue loop
+ 1415 lsr Z2+1:ror Z2:jmp div3
+
+ 1420 ;****
+ 1425 decout lda Z1:pha:lda Z1+1:pha
+ 1430 ldy #3:do2 jsr decdiv:bne do1:dey:bpl do2:bmi do3
+ 1435 do4 jsr decdiv
+ 1440 do1 clc:adc #"0":jsr SEROUT:dey:bpl do4
+ 1445 do3 lda Z1:clc:adc #"0":jsr SEROUT
+ 1450 pla:sta Z1+1:pla:sta Z1:rts
+	.)
+ 
 MOT       .(
           JSR MOC3:BCS MOCEO
 30710 LDA Z3+1:CMP Z2+1:BCC MOT1
@@ -1003,11 +1097,12 @@ R1TXT     .ASC "^M^J   PC  AC XR YR SP   NV1BDIZC^M^J^@"
 
 MONBEF    .ASC "ESMGLCTOPUIFXDBRA"
           .BYT MEBYT,MEREG,MEASS
+	  .BYT "="
 #ifndef NOSYSFKT
           .byt "Y"
-ANZBEF    =21
+ANZBEF    =22
 #else
-ANZBEF    =20
+ANZBEF    =21
 #endif
 
 MONADR    .WORD MOE-1,MOS-1,MOM-1,MOG-1
@@ -1015,6 +1110,7 @@ MONADR    .WORD MOE-1,MOS-1,MOM-1,MOG-1
           .WORD MOP-1,BU-1,BI-1,MOF-1
           .WORD MOX-1,BD-1,BB-1,BR-1,BA-1
           .word MOI-1,BGR-1,BGD-1
+	  .word bfz-1
 
 #ifndef NOSYSFKT
           .word MOY-1
@@ -1066,6 +1162,10 @@ MONADR    .WORD MOE-1,MOS-1,MOM-1,MOG-1
 61500 ;****
 61505 VORSP .ASC "#(":.BYT 0
 61510 NAHSP .ASC ",X ,Y )  ,X)),Y"
+
+61515 dechi .byt >10,>100,>1000,>10000
+61520 declo .byt <10,<100,<1000,<10000
+61525 bft .asc "+-*/"
 
 #endif
           .)

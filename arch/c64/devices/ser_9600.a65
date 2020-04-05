@@ -42,7 +42,18 @@
  *
  * Only 9600 Baud are supported now. Timer values etc are taken from
  * the miniterm program by Daniel Dallmann
+ *
+ * As it seems, VICE is more picky than the real hardware. I needed
+ * the following changes:
+ * - add a delay between writing the first and the second byte of 
+ *   payload, so that VICE has at least the first bit shifted out
+ * - set RTS hi when start bit is received, so next data byte is
+ *   not coming in too quickly after the previous byte, and release
+ *   RTS when the byte has been read from the shift register
  */
+
+#define	VICE
+;#define	RTSINVERT
 
           .(
 	  .word devend2
@@ -71,6 +82,8 @@ smode	  .byt 0
 inp	  .byt 0
 outp	  .byt 0
 nmistate  .byt 0
+prefetch  .byt 0
+prevalid  .byt 0
 
 	.zero
 rmode	  .byt 0
@@ -114,11 +127,12 @@ devini  .(
 
 	lda #$80
 	sta smode		; sending mode
-	sta rmode		; receiving <0 = wait stop bit; >0 = wait SR
+	sta rmode		; receiving <0 = wait for stop bit; >0 = wait SR
 
 	lda #0
 	sta inp
 	sta outp
+	sta prevalid		; prefetch data not valid
 
 	; generate bit reversed data field
 	ldx #0
@@ -145,7 +159,7 @@ l0	lsr
 	lda #%00000001
 	sta C64CIA1+CIA_ICR	; disable IRQ for CIA1 timer A
 	lda #%10001000		
-	sta C64CIA1+CIA_ICR	; enable IRQ for CIA1 SR full
+	sta C64CIA1+CIA_ICR	; enable IRQ for CIA1 SR empty/full
 	lda #<50
 	sta C64CIA1+CIA_TAL
 	lda #>50
@@ -155,6 +169,9 @@ l0	lsr
 
 	lda #$df
 	sta C64CIA1+CIA_SDR	; send byte $ff
+#ifdef VICE
+	jsr delay
+#endif
 	lda #$ff
 	sta C64CIA1+CIA_SDR	; 
 
@@ -169,6 +186,9 @@ l0	lsr
 	sta C64CIA2+CIA_CRA	; set SDR for input
 
 	; program CIA2 for I/O
+	; bit 7 = DSR out
+	; bit 2 = DTR out
+	; bit 1 = RTS out
 	lda #%10000110
 	sta C64CIA2+CIA_PRB
 	lda C64CIA2+CIA_DDRB
@@ -184,6 +204,9 @@ l0	lsr
 	ldy #>NMIserial
 	jsr SETNMI		; old NMIvector is saved by SETNMI 
 
+	lda #%10000010		; dtr low
+	sta C64CIA2+CIA_PRB
+
 	plp
           clc
           rts
@@ -193,53 +216,66 @@ l0	lsr
 
 devirq  .(
 	lda C64CIA1+CIA_ICR
-	bpl noirq
-	and #%00001000
-	bne notmyirq		; due to the 6526 design, all irq flags are lost now
+	pha			; save to return 
 
-	lda smode
-	ora #$80
-	sta smode
+	and #%00001000
+	bne notmyirq		; due to the broken 6526 design, all irq flags are lost now
+
+	lda #$80		; mark that we have an empty SDR
+	sta smode		; (so we remember even if we check for data to send later)
 	
 notmyirq
-	lda #E_OK
-	.byt $2c
-noirq	lda #E_NOIRQ
-	pha
-
 	; try to send something
 	lda smode
 	bpl endtx
 
 	bit status
-	bvc endtx		; we don't send
+	bvc endtx		; we don't send (DC_SW_TX)
 
 	bit C64CIA2+CIA_PRB
-	bvc endtx		; CTS hi
+	bvs endtx		; CTS hi
+
+	bit prevalid		; prefetched byte is valid
+	bmi valid
 
         ldx instr		; send new data byte
         jsr GETC
-        bcs test2
-	
-	tax
+        bcs test2		; no data sent (keep smode)
+	sta prefetch
+	dec prevalid		; make valid
+valid
+	dec smode		; mark we use the SDR (clears bit 7 until next SDR empty interrupt)
+
+	ldx prefetch
 	lda bytetab,x
 	lsr
 	sta C64CIA1+CIA_SDR	; 7 data bits, 1 start bit
 	ror
 	ora #$7f
+#ifdef VICE
+	jsr delay
+#endif
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
 
-	lda #0
-	sta smode
-	beq endtx
+	; prefetch next byte, so can be served quickly in next IRQ
+	; note - this takes only about 350-400 cycles, a far cry from the
+	; 16x100 cycles to send a single data byte down the line
+	ldx instr
+	jsr GETC
+	bcs test1
+	sta prefetch
+	bcc endtx
 
-test2   cmp #E_EOF
+test1	lda #0
+	sta prevalid	; not valid anymore
+test2   ; failed GETC
+	cmp #E_EOF
         bne endtx
         jsr txoff
 
 			; now let's see if there's something to receive
 endtx
-	bit status
+	bit status	; check DC_SW_RX
 	bpl endirq
 
 	ldx outp
@@ -247,6 +283,8 @@ endtx
 	beq nobyt	; no byte to fetch
 
 fetch	lda inbuf,x
+	tax
+	lda bytetab,x
 	ldx outstr
 
 	cmp brkkey
@@ -297,7 +335,11 @@ rx2end	ldx outp
 	bne fetch
 
 endirq	pla
+	bmi endirqok
 	lda #E_NOIRQ
+	rts
+endirqok
+	lda #E_OK
 	rts
 
         .)
@@ -309,7 +351,7 @@ ctrlnmi	.(
 	cmp #NMI_ON
 	bne off
 	lda status
-	and #%00100000
+	and #DC_SW_RXHW
 	bne norts
 	jsr rts_lo
 norts	lda status
@@ -338,7 +380,7 @@ databyte
 
 	lda #%00010010
 	sta C64CIA2+CIA_CRB	; stop timer
-	lsr
+	lda #%00001000		; lsr was one byte less but more difficult to understand
 	sta C64CIA2+CIA_ICR	; disable SDR NMI
 	lda #%10010000
 	sta C64CIA2+CIA_ICR	; enable Flag2 NMI
@@ -347,35 +389,56 @@ databyte
 
 	lda C64CIA2+CIA_SDR	; only SDR NMI should be set
 
-	tax
-	lda bytetab,x
+	bit C64CIA2+CIA_ICR	; clear NMI bit
+
 	ldx inp
 	sta inbuf,x
 	inc inp
 
+	lda status		; are we at high water mark?
+	and #DC_SW_RXHW
+	bne endnmi		; no, then do not allow next byte
+
+	; rts lo - allow next byte
+	lda C64CIA2+CIA_PRB
+#ifdef RTSINVERT
+	ora #%00000010
+#else
+	and #%11111101
+#endif
+	sta C64CIA2+CIA_PRB
+endnmi
 	pla
 	tax
 	pla
-	bit C64CIA2+CIA_ICR
 	jmp (oldnmi)
 
 startbit	
 	dec rmode		; $80 -> $7f
 	lda C64CIA2+CIA_SDR
 	lda #%00010011
-	sta C64CIA2+CIA_CRB	; start timer
+	sta C64CIA2+CIA_CRB	; start timer, force load latch
 	sta C64CIA2+CIA_ICR	; disable Flag2 NMI
 	lda #%10001000
 	sta C64CIA2+CIA_ICR	; enable SR NMI
+
+	; rts hi - so next byte is delayed until we got this one
+	lda C64CIA2+CIA_PRB
+#ifdef RTSINVERT
+	and #%11111101
+#else
+	ora #%00000010
+#endif
+	sta C64CIA2+CIA_PRB
+
 	pla
 	bit C64CIA2+CIA_ICR
 	jmp (oldnmi)
-
 	.)
 
 nmion   .(
 	lda status
-	ora #%00010000
+	ora #%00110000
 	sta status
 	lda nmistate
 	cmp #NMI_ON
@@ -413,27 +476,61 @@ nmioff	.(
 
 rtshi
 	lda status
-	ora #%00100000
+	ora #DC_SW_RXHW
 	sta status	
 rts_hi
 	lda C64CIA2+CIA_PRB
+#ifdef RTSINVERT
 	and #%11111101
+#else
+	ora #%00000010
+#endif
 	sta C64CIA2+CIA_PRB
 	rts
 
 rtslo
 	lda status
-	and #%11011111
+	and #DC_SW_RXHW
+	beq nolo		; is already low
+	lda status
+	and #255-DC_SW_RXHW
 	sta status	
 	lda nmistate
 	cmp #NMI_ON
 	bne nolo
 rts_lo
 	lda C64CIA2+CIA_PRB
+#ifdef RTSINVERT
 	ora #%00000010
+#else
+	and #%11111101
+#endif
 	sta C64CIA2+CIA_PRB
 nolo
 	rts
+
+#if 0
+dtrhi
+	lda C64CIA2+CIA_PRB
+	and #%11111011
+	sta C64CIA2+CIA_PRB
+	rts
+dtrlo
+	lda C64CIA2+CIA_PRB
+	ora #%00000100
+	sta C64CIA2+CIA_PRB
+	rts
+#endif
+
+#ifdef VICE
+delay	; wait for ~100 cycles between both writes for a byte to the SDR
+	; so at least the first bit has been put on the wire
+	; this may make output on VICE work
+	ldx #15
+dl	dex
+	bne dl
+	rts
+#endif
 
 /*****************************************************************/
 
