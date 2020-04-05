@@ -175,7 +175,7 @@ for the "=" command, see below, that uses decimal).
 
 	840a
 
-*fa f000 f100 0+*+*::
+*fa f000 f100 0\**::
 	Finds all occurances of zeropage addressing modes
 	in the area of $00-$0f and prints the disassembly for
 	those occurances. Note that embedded data may confuse
