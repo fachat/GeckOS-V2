@@ -1,8 +1,8 @@
 
-lsh = lsh
-LSHDIR=../../../apps/lsh
+apps = lsh lmon
+APPSDIR=../../../apps
 
-sysapps = lmon slipd ps kill ontty
+sysapps = slipd ps kill ontty
 SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls mv
@@ -38,10 +38,10 @@ tar ../boot.tgz: rom loader howto.boot
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${lsh} rom loader 
-	./mkdisk loader  ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} rom 
+osa.d64: ${files} ${filter} ${sysapps} ${apps} rom loader 
+	./mkdisk loader  ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} rom 
 	dd if=osa.x64 of=osa.d64 bs=64 skip=1
-	rm osa.x64
+	rm osa.x64 ${apps} ${sysapps}
 
 emurun: osa.d64
 	xpet -model 4032 -autostart osa.d64
@@ -51,8 +51,9 @@ emurun: osa.d64
 # lib6502 programs
 #
 
-${lsh}: 
-	(cd ${LSHDIR}; make $@;)
+${apps}: 
+	(if test -d ${APPSDIR}/$@; then ln -sf ${APPSDIR}/$@/$@; cd ${APPSDIR}/$@; make $@; fi)
+	(if test -f ${APPSDIR}/$@.a65; then ln -sf ${APPSDIR}/$@;cd ${APPSDIR}; make $@;  fi)
 
 ${sysapps}:
 	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
