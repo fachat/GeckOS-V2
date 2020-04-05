@@ -1,8 +1,8 @@
 
-lsh = lsh
-LSHDIR=../../../apps/lsh
+apps = lsh lmon
+APPSDIR=../../../apps
 
-sysapps = lmon ps kill ontty #slipd
+sysapps = ps kill ontty #slipd
 SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls mv
@@ -42,9 +42,9 @@ loader: loader.bas
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${lsh} ${inet} rom loader
-	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} rom 
-	rm -f ${sysapps}
+osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader
+	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} rom 
+	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
 	xpet -model 8296 -drive8type 2031 -autostart osa.d64
@@ -55,8 +55,9 @@ emurun: osa.d64
 # lib6502 programs
 #
 
-${lsh}:
-	(cd ${LSHDIR}; make $@;)
+${apps}:
+	(if test -d ${APPSDIR}/$@; then ln -sf ${APPSDIR}/$@/$@; cd ${APPSDIR}/$@; make $@; fi)
+	(if test -f ${APPSDIR}/$@.a65; then ln -sf ${APPSDIR}/$@;cd ${APPSDIR}; make $@;  fi)
 
 ${sysapps}: 
 	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)

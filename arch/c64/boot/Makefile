@@ -1,8 +1,8 @@
 
-lsh = lsh
-LSHDIR=../../../apps/lsh
+apps = lsh lmon
+APPSDIR=../../../apps
 
-sysapps = slipd ps kill ontty lmon
+sysapps = slipd ps kill ontty 
 SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls mv
@@ -41,9 +41,9 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${lsh} ${inet} c64rom boot loader index.html test.bat
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${addprefix ${LSHDIR}/, ${lsh}} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html test.bat
-	rm -f ${sysapps}
+osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} c64rom boot loader index.html test.bat
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html test.bat
+	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
 	x64 -autostart osa.d64
@@ -56,8 +56,9 @@ emuslip: all
 # lib6502 programs
 #
 
-${lsh}: 
-	(cd ${LSHDIR}; make $@;)
+${apps}: 
+	(if test -d ${APPSDIR}/$@; then ln -sf ${APPSDIR}/$@/$@; cd ${APPSDIR}/$@; make $@; fi)
+	(if test -f ${APPSDIR}/$@.a65; then ln -sf ${APPSDIR}/$@;cd ${APPSDIR}; make $@;  fi)
 
 ${sysapps}: 
 	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
