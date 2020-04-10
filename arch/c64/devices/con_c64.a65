@@ -271,13 +271,11 @@ nobit     inx
 	  bcc nextbyte		; not done yet
 #ifdef CHECK_C128
 	  bne next128
-	  sta C64CIA1+CIA_PRA
-	  lda is128		; only at =64
+	  sta C64CIA1+CIA_PRA	; AC is $ff
+	  bit is128		; only at =64 (bit ANDs value with AC)
 	  beq endkey 		; not a C128
-	  lda #%11111110
-	  .byt $24		; skip rol
-next128	  rol			; C is already set from above (after bcc nextbyte)
-	  cpx #88
+	  asl			; AC becomes $fe
+next128	  cpx #88
 	  bcs endkey
 	  sta C64VIC+VIC_C128_KEYB
 	  bcc nextbyt128	; always
