@@ -22,6 +22,8 @@
 
 ****************************************************************************/
 
+#define	CHECK_C128
+
 #define	MAX_SCREEN	3		/* hard maximum number of screens */
 
 #define	MAX_ASCREEN	#3		/* soft maximum number of screens */
@@ -178,6 +180,9 @@ kcnt       =zei2
 rcnt      .byt 0
 shiftfl   .byt 0
 prev      .byt 0
+#ifdef CHECK_C128
+is128	  .byt 0
+#endif
         .zero
 tzei      .word 0
         .text
@@ -188,67 +193,99 @@ tzei      .word 0
           lda #$ff
           sta C64CIA1+CIA_DDRA
           sta C64CIA1+CIA_PRA
-          lda #4
 
+#ifdef CHECK_C128
+	; according to http://cbm-hackers.2304266.n4.nabble.com/Re-Detect-a-C128-from-C64-mode-td4656728i20.html
+	inc $d02f
+	lda $d02f
+	dec $d02f
+	eor $d02f
+	sta is128
+#endif
+
+          lda #4
           sta rcnt
           sta rspd
           rts
           .)
 
 &&getkey  .(
-          lda #0
+          lda #0		; clear shift key flag
           sta shiftfl
           ldy #$ff
-          sty kcnt
+          sty kcnt		; key count
 
-          sta C64CIA1+CIA_PRA
-l0        lda C64CIA1+CIA_PRB
+          sta C64CIA1+CIA_PRA	; set all pins
+#ifdef CHECK_C128
+	  lda #%11111000
+	  sta C64VIC+VIC_C128_KEYB
+#endif
+l0        lda C64CIA1+CIA_PRB	; check input
           cmp C64CIA1+CIA_PRB
           bne l0
-          cmp #$ff
-          beq nokey
+          cmp #$ff		; if none is set
+#ifdef CHECK_C128
+	  beq nokey2
+#else
+          beq nokey		; no scan necessary (faster)
+#endif
 
-          lda #%11111110
-          sta C64CIA1+CIA_PRA
-	  pha			; we need to save this, as more pressed
-				; keys can change the value read back!
 	  ldx #0
 
+#ifdef CHECK_C128
+	  lda #$ff
+	  sta C64VIC+VIC_C128_KEYB
+#endif
+          lda #%11111110	; set only a single line
+nextbyte  sta C64CIA1+CIA_PRA
+nextbyt128
+	  pha			; we need to save this, as more pressed
+				; keys can change the value read back!
+
 l1        lda C64CIA1+CIA_PRB
-          cmp C64CIA1+CIA_PRB
+          cmp C64CIA1+CIA_PRB	; read input from keyboard matrix
           bne l1
           ldy #8
 
-nextbit   lsr
+nextbit   lsr			; check each bit
           bcs nobit
           pha
-          lda ktab,x
-          cmp #5
+          lda ktab,x		; read from keyboard table
+          cmp #5		; all below 6 are special keys
           bcs realkey
-          cmp #3
+          cmp #3		; also 3
           beq realkey
-          ora shiftfl
+          ora shiftfl		; save special key into shiftflag
           sta shiftfl
-          bpl l3
+          bpl l3		; always
 realkey   stx kcnt
-l3        pla
+l3        pla			; next
 nobit     inx
-          cpx #65
-          bcs endkey
-          dey
-          bne nextbit           ; test next bit
+	  dey
+	  bne nextbit
+
 	  pla
           sec
           rol 
+	  cpx #64		; end of C64 table
+	  bcc nextbyte		; not done yet
+#ifdef CHECK_C128
+	  bne next128
 	  sta C64CIA1+CIA_PRA
-	  pha
-          bne l1                ; always
-
-endkey    pla
-	  lda kcnt
+	  lda is128		; only at =64
+	  beq endkey 		; not a C128
+	  lda #%11111110
+	  .byt $24		; skip rol
+next128	  rol			; C is already set from above (after bcc nextbyte)
+	  cpx #88
+	  bcs endkey
+	  sta C64VIC+VIC_C128_KEYB
+	  bcc nextbyt128	; always
+#endif
+endkey    lda kcnt
           cmp #$ff
-          beq nokey
-          cmp prev
+nokey2    beq nokey
+          cmp prev		; detect key repeat
           bne lx
 
           dec rcnt
@@ -289,31 +326,60 @@ ttab      .word ktab, stab, ctab, sctab
 
 ktab      .byt TC_BS, TC_CR, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CDWN
           .byt "3wa4zse", 1 /* shift */
-          .byt "5rd6cftx7yg8bhuv"
-          .byt "9ij0mkon+pl-.:@,"
-          .byt "\*;", TC_HOME, 1 /* shift */, "=^^/"
+          .byt "5rd6cftx"
+	  .byt "7yg8bhuv"
+          .byt "9ij0mkon"
+	  .byt "+pl-.:@,"
+          .byt "|*;", TC_HOME, 1 /* shift */, "=^^/"
           .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "q", 3 /* stop */
+#ifdef CHECK_C128
+	  .byt TC_HELP, "85", TC_HT, "2471"
+	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
+	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
+#endif
 
 stab      .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
           .byt "#WA$ZSE", 1 /* shift */
-          .byt "%RD&CFTX'YG(BHUV"
-          .byt ")IJ0MKON+PL->[@<"
+          .byt "%RD&CFTX"
+	  .byt "'YG(BHUV"
+          .byt ")IJ0MKON"
+	  .byt "+PL_>[@<"
           .byt "\*]", TC_CLR, 1 /* shift */, "=^^?"
           .byt "!", TC_ESC, 2 /* control */, 34," ", 6 /* C= */, "Q", 3 /*stop*/
+#ifdef CHECK_C128
+	  .byt TC_HELP, "85", TC_HT, "2471"
+	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
+	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
+#endif
 
 ctab      .byt TC_DEL, TC_EOL, TC_WRU, 0, 6 /* F1 */, 0, 0, TC_WLO
           .byt "3^w^a4^z^s^e", 1 /* shift */
-          .byt "5^r^d6^c^f^t^x7^y^g8^b^h^u^v"
-          .byt "9^i^j0^m^k^o^n+^p^l-.:@,"
-          .byt "\*;", TC_WCLS, 1 /* shift */, "=^^/"
+          .byt "5^r^d6^c^f^t^x"
+	  .byt "7^y^g8^b^h^u^v"
+          .byt "9^i^j0^m^k^o^n"
+	  .byt "+^p^l-.{@,"
+          .byt "|*}", TC_WCLS, 1 /* shift */, "=^^/"
           .byt "1", TC_CLL, 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /*stop*/
+#ifdef CHECK_C128
+	  .byt TC_HELP, "85", TC_HT, "2471"
+	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
+	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
+#endif
 
 sctab     .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
           .byt "3^W^A4^Z^S^E", 1 /* shift */
-          .byt "5^R^D6^C^F^T^X7^Y^G8^B^H^U^V"
-          .byt "9^I^J0^M^K^O^N+^P^L-.:@,"
+          .byt "5^R^D6^C^F^T^X"
+	  .byt "7^Y^G8^B^H^U^V"
+          .byt "9^I^J0^M^K^O^N"
+	  .byt "+^P^L_.:@,"
           .byt "\*;", TC_CLR, 1 /* shift */, "=^^/"
           .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /* stop */
+#ifdef CHECK_C128
+	  .byt TC_HELP, "85", TC_HT, "2471"
+	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
+	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
+#endif
+
 
 	.)
 

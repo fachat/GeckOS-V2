@@ -276,6 +276,10 @@
 
 #define	  TC_CPOS   $8f		/* next chars are row and column */
 
+#define	  TC_HELP   $90
+#define	  TC_ALT    $91		/* what used for? */
+#define	  TC_NOSCRL $92
+
 /*********************** System Semaphores *************************/
 /* System semaphores cannot be allocated and/or freed with 
  * GETSEM/FRESEM, but can be used with PSEM and VSEM.
