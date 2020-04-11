@@ -1,0 +1,101 @@
+
+= STREAMS(7)
+:doctype: manpage
+
+== NAME
+streams - streaming I/O between tasks
+
+== DESCRIPTION
+To mass-transfer data between tasks, streams are used. Streams are single-directional 
+data pipes. One (or more) task(s) can write data at one end one (or also more) can read
+from the other end.
+
+Streams are for example used to transfer file data after an open to the file system, or
+as STDIO streams for tasks.
+
+== USAGE
+As an example, for a task to open a file for reading, first a call to GETSTR is made, to get a stream number.
+This stream number is given to the FS_OPEN_RD call. if that call was successful, the task "owns" the
+reading side of the stream, while the filesystem "owns" the writing side of the stream.
+
+The filesystem then sends data by calling PUTC(2), and the task receives data by calling GETC(2).
+If the filesystem has sent all the data, it calls STRCMD(2) and sends an SC_EOF command.
+The task reads as long as the stream is not empty, and after that receives an E_EOF from GETC(2),
+as indicator of the end-of-file.
+
+== RESOURCE MANAGEMENT
+Each stream keeps a counter of readers and of writers, that are managed mostly independently.
+When a stream is allocated with GETSTR(2), both the read and the write counters are set to one.
+
+The reader and writer counts can be increased by STRCMD(2) with the SC_REG_RD and SC_REG_WR commands
+respectively. This is for example done when a stream like STDIN or STDOUT is given to a forked
+tasks that inherits these streams.
+
+When a tasks that writes to a stream has no more data, it should call STRCMD(2) with the
+SC_EOF command, to indicate that no more data is coming. The command decreases the writer count
+by one. A task reading from the stream
+will get an E_EOF, if the stream is empty, and no more writers are left (i.e. the write counter
+is zero).
+
+When a task wants to indicate that it is no more interested in reading from the stream, it
+should call STRCMD(2) with the SC_NUL command. This decreases the reader count by one.
+A stream that wants to write to a stream that has no readers, gets an E_NUL error.
+
+== STREAM STATUS
+The status is returned by the STRCMD(2) command using SC_STAT. It can be any of the following 
+values:
+
+E_NUL::
+	Noone is reading from a stream (reader count is zero)
+E_EOF::
+	Noone is writing to the stream (writer count is zero) and the stream is empty
+E_SEMPTY::
+	Stream is empty
+E_SFULL::
+	Stream is full
+E_SLWM::
+	Number of bytes in stream below low water mark (1/4 buffer size)
+E_SHWM::
+	Number of bytes in stream above high water mark (3/4 buffer size)
+
+The Low and High Water Marks can be used to initiate handshaking in upstream communications. 
+For example on High Water Mark the RTS/CTS handshake in the serial line could be set to prevent
+further input, while on Low Water Mark, the RTS/CTS handshake could be released again.
+
+== OUT-OF-BAND
+Since GeckOS 2.0 streams have a means of sending out-of-band information using the error code byte.
+The bits in this byte can be set and cleared using the SC_SSTAT and SC_CSTAT STRCMD(2) commands.
+The error code byte can be retrieved using the SC_ESTAT command.
+
+The error code byte has the following definitions:
+
+SCE_PULL::	%10000000  reader pulls data from sender
+SCE_PUSH::	%01000000  writer pushes data to receiver
+SCE_BRK::	%00100000  writer sends 'break' signal
+SCE_RERRM::	%00001100  reader error condition mask
+SCE_WERRM::	%00000011  writer error condition mask
+
+The error condition byte can be set and read from both ends. This byte is cleared when the stream is allocated. If the reader "pulls" data, this is a sign for the writer to flush all its internal buffers into the stream. When this is done, the writer clears the pull flag.
+
+If the writer wants to push his data (like after an CR on a terminal, for example) the reader should get the number of bytes in the stream to have an indication of how many bytes to read as "pushed" (or urgent in Internet speak). Then it removes the push flag and gets the bytes from the stream
+
+If an error occurs, e.g. a read error when reading a file, the writer sets all the bits in the error code byte masked by SCE_WERRM to 1 (which is general error code - other codes still have to be defined). The reader of the stream then reads this and can handle the error.
+
+If an error on the reading side occurs (like disk full when writing a file), The reader sets all the error bits masked by SCE_RERRM to 1 (which is general error code - other codes still have to be defined). The writer can then close the file on his side.
+
+If the writer wants to send a Break (i.e. a Ctrl-C equivalent) code to the reader, it sets the SCE_BRK bit. The reader must clear it itself. 
+
+NOTE: Ctrl-C / break handling is experimental and not further supported by or integrated with signal handling.
+
+== IMPLEMENTATION NOTES
+The streams are currently implemented as kernel-space buffers that hold 64 bytes each.
+
+== SEE ALSO
+GETSTR(2), FRESTR(2), PUTC(2), GETC(2), UNGETC(2), STRCMD(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -1,0 +1,41 @@
+
+= UNGETC(2)
+:doctype: manpage
+
+== NAME
+UNGETC - return a character to the top of the stream
+
+== SYNOPSIS
+Input::
+	* AC - byte to put back to stream
+	* XR - stream number
+Call::
+	jsr UNGETC
+Output::
+	* C=0
+		** AC - byte put to stream
+	* C=1
+		** AC - error code
+
+NOTE: XR and YR are not modified (except STDIO streams return true stream number)
+
+== DESCRIPTION
+Gives byte from stream back. parameter: stream number in x,
+data byte in a, returns error code in a
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSTR:: no valid stream number
+E_NUL:: no reader in stream
+E_SFULL:: stream is already full
+
+== SEE ALSO
+STREAMS(7), GETSTR(2), FRESTR(2), GETC(2), PUTC(2), STRCMD(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

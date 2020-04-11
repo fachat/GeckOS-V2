@@ -1,0 +1,41 @@
+
+= GETC(2)
+:doctype: manpage
+
+== NAME
+GETC - get a character from a stream
+
+== SYNOPSIS
+Input::
+	* XR - stream number
+Call::
+	jsr GETC
+Output::
+	* C=0
+		** AC - byte read from stream
+	* C=1
+		** AC - error code
+
+NOTE: XR and YR are not modified (except STDIO streams return true stream number)
+
+== DESCRIPTION
+Get a byte from the stream. parameter: stream number in x,
+returns data byte in a (with carry=0) or error code 
+(carry=1)
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSTR:: no valid stream number
+E_SEMPTY:: stream is empty
+E_EOF:: stream is empty and no writer left
+
+== SEE ALSO
+STREAMS(7), GETSTR(2), FRESTR(2), UNGETC(2), PUTC(2), STRCMD(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

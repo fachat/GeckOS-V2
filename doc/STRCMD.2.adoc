@@ -1,0 +1,82 @@
+
+= STRCMD(2)
+:doctype: manpage
+
+== NAME
+STRCMD - various stream commands
+
+== SYNOPSIS
+Input::
+	* AC - command to execute on stream
+	* XR - stream number (except for SC_GET)
+	* YR - bits to set/clear in SC_SSTAT/SC_CSTAT
+Call::
+	jsr STRCMD
+Output::
+	* C=0
+		** AC - value depending on command
+		** YR - value depending on command
+	* C=1
+		** AC - error code 
+
+NOTE: XR and YR are not modified (except STDIO streams return true stream number, and YR is modified for SC_RWANZ)
+
+== DESCRIPTION
+Executes a stream command. parameter: stream number in x,
+stream command in a, returns error code in a.
+
+Possible commands are:
+
+----
+		SC_GET		0	same as GETSTR
+		SC_REG_RD	1	increase read task counter by one
+		SC_REG_WR	2	increase write task counter by one
+		SC_CLR		3	empty the stream
+		SC_EOF		4	closing the stream from the sender 
+					side, i.e. decrease write task 
+					counter by one
+		SC_NUL		5	closing the stream from the receiver
+					side, i.e. decrease read task 
+					counter.
+		SC_FRE		6	same as FRESTR
+		SC_STAT		7	read stream status into ac
+		SC_GANZ		8	returns number of bytes in stream in a
+		SC_RWANZ	9	returns the stream write pointer in
+					a and the stream read pointer in y
+
+		SC_ESTAT	10	Get the error code byte in yr,
+					and the normal (i.e. what you get
+					with SC_STAT) stream state in ac.
+		SC_SSTAT	11	Set bits in the error code byte
+					each bit set in yr is set in error byte
+		SC_CSTAT	12	Clear bits in the error code byte
+					each bit set in yr is cleared in error 
+					byte
+----
+
+The error code byte has the following bits:
+
+----
+		SCE_PULL	%10000000  reader pulls data from sender
+		SCE_PUSH	%01000000  writer pushes data to receiver
+		SCE_BRK		%00100000  writer sends 'break' signal
+		SCE_RERRM	%00001100  reader error condition mask
+		SCE_WERRM	%00000011  writer error condition mask
+----
+
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSTR:: no valid stream number
+E_NOTIMP:: stream read counter was already zero
+
+== SEE ALSO
+STREAMS(7), GETSTR(2), FRESTR(2), GETC(2), UNGETC(2), PUTC(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
