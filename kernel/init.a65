@@ -383,9 +383,14 @@ l0 jmp l0
 #ifdef  NMIDEV
 	jmp (nmiadr)
          
+	.zero
+tmp	.word 0
+tmp2	.word 0
+
 	.data 
 nmiadr  .word 0
 nmicnt 	.byt 0
+
 	.text
 
 &ininmi   ;lda #<zend
@@ -465,9 +470,6 @@ ne        jmp memtask
 	  ;jsr memtask
           ;rts        
 
-	.zero
-tmp	.word 0
-tmp2	.word 0
 	.data
 cmd	.byt 0
 	.text
