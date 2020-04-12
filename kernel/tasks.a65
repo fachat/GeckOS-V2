@@ -431,8 +431,9 @@ suicide	  ldx actTask
 &&kkill	  jsr memsys
 k1 	  .(
 	  sta taskTab2 + TT_RETCODE,x
-	  stx div2
+	  stx div2		; XR / div2 is taskID of task to be killed
 
+	  ; free all threads with the task
 	  .(
 	  ldy #0
 k2	  txa
@@ -445,6 +446,10 @@ k2	  txa
 kn	  jsr ynextthread
 	  bcc k2
 ke	  .)
+	  ; check if killed task is a parent to another running task
+	  ; and set its parent to $ff instead.
+	  ; If the child is dead and just waiting for the parent to call
+	  ; CHECKCHILD (indicated by NTHREADS=$ff), then release it
 	  .(
 	  lda #0
 k3	  tax
@@ -462,7 +467,7 @@ k4	  txa
 	  cmp #TT_SLEN*MAXNTASKS
 	  bcc k3
 	  .)
-
+	  ; clear STDIO streams
 	  .(
 	  ldy div2
           ldx taskTab+TT_STDIN,y
@@ -478,7 +483,8 @@ k4	  txa
           lda #SC_NUL
           jsr STRCMD
 	  .)
-
+	  ; if the parent has SIG_CHLD enabled, set the pending signal,
+	  ; also mark the killed thread as waiting for CHECKCHILD
 	  .(
 	  ldy div2
 	  ldx taskTab + TT_PARENT,y
@@ -496,6 +502,8 @@ k4	  txa
 	  lda #<-1
 	  sta taskTab + TT_NTHREADS,y
 nosig	  .)
+	  ; clear the semaphores held by the task
+	  jsr clrsem	; y is task number to clear
 
 	  ldy div2
 	  ldx taskTab + TT_ENV,y
@@ -1176,9 +1184,9 @@ l1	jmp push
 #else
 	.data
 #endif
-SEMFRE    .dsb (ANZSEM+7)/8
-SEMVAL    .dsb (ANZSEM+SYSSEM+7)/8
-SEMLOCK   .dsb ANZSEM+SYSSEM
+SEMFRE    .dsb (ANZSEM+7)/8	; bit map of un-allocated application semaphores
+SEMOWN	  .dsb ANZSEM+SYSSEM	; field with taskId+1 of task that owns the semaphore
+SEMLOCK   .dsb ANZSEM+SYSSEM	; field with taskId+1 of task that has locked sem
 
 	.text
 
@@ -1201,19 +1209,16 @@ remap	.(
 	lda SEMLOCK,x
 	bne locked
 	lda actTask
-	adc #0		; c=1 from above
+	;sec		; c=1 from above
+	adc #0		
 	sta SEMLOCK,x
 	bne rtask
 unlock	lda #0
 	sta SEMLOCK,x
-	txa
-	pha
-	jsr gsetxy
-	and SEMVAL,x
-	bne ok		; still locked, so unlock will release other tasks
-	pla
-	jmp noillp	; search for tasks to release
-ok	pla
+	lda SEMOWN,x
+	bne ok
+	jsr vsemint	; search for tasks to release
+ok	lda #E_OK
 	clc
 	jmp memtask
 	.)
@@ -1247,14 +1252,9 @@ ps1
           jmp nexttask
           .)
 
-&&kvsem    .(
-	  jsr memsys
-	  ; x has semaphore number
-	jsr remap
-	bcc noillp
-	jmp illpar
-&noillp	  tax
-
+	; release semaphore in X and wake one thread waiting for it
+	; note destroys all registers
+vsemint	.(
 	  ldy actThread
 l0	  lda threadTab + TH_ST,y
 	  cmp #TS_WFSEM	; wait for semaphore?
@@ -1263,26 +1263,39 @@ l0	  lda threadTab + TH_ST,y
 	  cmp threadTab + TH_PAR,y
 	  bne next	; wait for _this_ semaphore?
 
-	; check lock
+	; check lock (if lock is set, only the lock owner may pass the semaphore)
 	lda SEMLOCK,x
 	beq gotone	; not locked
 	sec
 	sbc #1
 	cmp threadTab + TH_TASK,y
-	beq gotone	; locked by task of thread
+	beq gotone	; locked by thread of same task
 
 next	  jsr ynextthread
 	  cpy actThread
 	  bne l0
 
-          jsr gsetxy
-          eor #$ff
-          and SEMVAL,x
-          sta SEMVAL,x
-          jmp ok
+	lda #0		; free the actual semaphore
+	sta SEMOWN,x
+	rts
 
-gotone	  lda #TS_RDY
-	  sta threadTab + TH_ST,y
+	; found a thread waiting for it
+	; semaphore stays locked
+gotone	lda threadTab + TH_TASK,y
+	sta SEMOWN,x  	; change owner of semaphore
+	lda #TS_RDY
+	sta threadTab + TH_ST,y
+	rts
+	.)
+
+&&kvsem    .(
+	  jsr memsys
+	  ; x has semaphore number
+	jsr remap
+	bcc noillp
+	jmp illpar
+&noillp	  tax
+	jsr vsemint
 ok
 	  lda #E_OK
 	  clc
@@ -1327,25 +1340,23 @@ gnext     inx
           bcs gne
 	  .)
 
-&gsetxy    txa
-asetxy    tax
+gsetxy	  txa
 	  and #7
-          tay
-          txa
-          lsr
-          lsr
-          lsr
-          tax
-          lda POT2,y
-          rts
-          
+	  tay
+	  lsr
+	  lsr
+	  lsr
+	  tax
+	  lda POT2,y
+	  rts
+
 &&fresem  .(
 	  jsr memsys
           cpx #ANZSEM
           bcs illpar
-          jsr gsetxy
-          ora SEMFRE,x
-          sta SEMFRE,x
+	  jsr gsetxy
+	  ora SEMFRE,x
+	  sta SEMFRE,x
           lda #E_OK
           .byt $2c
 &illpar   lda #E_NOSEM
@@ -1354,16 +1365,12 @@ asetxy    tax
 	  .)
 
 &&inisem  .(
-	  ldy #(ANZSEM+SYSSEM+7)/8-1
+	  ldy #ANZSEM+SYSSEM-1
           lda #0
-i1        sta SEMVAL,y
+i1        sta SEMOWN,y
+	  sta SEMLOCK,y
           dey
           bpl i1
-
-	ldy #ANZSEM+SYSSEM-1
-l2	sta SEMLOCK,y
-	dey
-	bpl l2
 
 	  lda #$ff
           ldy #(ANZSEM+7)/8-1
@@ -1382,12 +1389,12 @@ tstnset   .(
 	cmp actTask
 	bne set		; not locked by own task
 notlocked 	
-          jsr gsetxy
-          and SEMVAL,x
+	lda SEMOWN,x
           bne set
-          lda POT2,y
-          ora SEMVAL,x
-          sta SEMVAL,x
+	lda actTask
+	sta SEMOWN,x
+	inc SEMOWN,x
+
           lda #E_OK
           .byt $2c
 illpar1	  lda #E_NOSEM
@@ -1396,6 +1403,30 @@ set       lda #E_SEMSET
           cmp #1
           rts
 	  .)
+
+	; clear semaphores when a task is killed
+	; task ID in yr
+&clrsem	.(
+	ldx #ANZSEM+SYSSEM-1
+	iny
+	tya
+	pha
+cls1	cmp SEMLOCK,x	
+	bne nolock
+	lda #0
+	sta SEMLOCK,x
+nolock	pla
+	pha
+	cmp SEMOWN,x
+	bne noown
+	jsr vsemint
+noown	pla
+	pha
+	dex
+	bpl cls1
+	pla
+	rts
+	.)
 
 	  .)
 

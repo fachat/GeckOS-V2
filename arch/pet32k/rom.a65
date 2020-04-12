@@ -48,7 +48,7 @@
 
 /* These are changeable ****************************************************/
 
-#define ROMSTART        $1343   /* where the ROM starts */
+#define ROMSTART        4940+5   /* where the ROM starts */
 
 #define	STACKCOPY		/* if defined, save stack area in memory
 				   when context switching, otherwise divide
@@ -177,7 +177,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$5500
+Memstart  =$5480
 Memend	  =$7800
 Zerostart =$94		/* PET ROM irq vectors at $90-$93 */
 
