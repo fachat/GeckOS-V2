@@ -22,6 +22,9 @@ devices/c64dev.a65::
 sysapps/init/init.a65::
 	The init program that starts all other progams, and is also able to restart them when they finish.
 	See *startup(7)*
+sysapps/fs/fsdev.a65::
+	A filesystem driver that allows accessing devices as files (see *fsdev(8)*).
+	Depending on configuration it also allows to access ROM content.
 sysapps/fs/fsiec.a65::
 	The filesystem driver for the IEC or IEEE488 interface of the C64.
 	Note that usually the serial IEC is used. Using the *PARALLEL* define, instead the 
@@ -72,6 +75,18 @@ lsh::
 	$ec00		kernel
 	$ffff		end of ROM
 ----
+
+=== SYSTEM SEMAPHORES
+These are the system semaphores defined in the C64 port
+Any program to access the named resource should aqcuire the relevant semaphore before doing so
+
+SEM_SERIEC::
+	Serial IEC interface. 
+SEM_PARIEC::
+	Parallel IEEE488 interface (when available)
+
+SEM_CIA2TB::
+	Will be defined as SEM_SERIEC, as fsiec uses this timer for its timeout handling
 
 == KERNEL CONFIGURATION
 The kernel is configured with these major configuration options:

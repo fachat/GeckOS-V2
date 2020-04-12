@@ -6,10 +6,51 @@
 startup - a description of the GeckOS boot process
 
 == DESCRIPTION
+When the GeckOS kernel starts up, the first thing is to initialize the memory mapping and system timer.
+After that the internal structures are initialized. 
+Then it expects to be able to access the boot "ROM" image, which is scanned for programs to execute.
+The boot ROM has a number of entries chained together, so the kernel can easily find the programs to run.
 
-TODO
+In this process, the kernel starts entries of type *PK_DEV* and *PK_INIT* only. 
+However, to be started, the type must be OR'd with *PK_AUTOEXEC* (bit 7 set).
+
+PK_DEV::
+	is to register the hardware device drivers (using *DEVCMD(2)*).
+
+PK_INIT:: 
+	usually only starts the *init(8)* program using the *FORK(2)* call. 
+
+The kernel uses a device number stored in the ROM link chain entry
+to open streams for STDIO of the programs.
+
+NOTE: as the kernel can not allocate a separate PCBUF (SEND/RECEIVE buffer) for each started program,
+these programs do not get their startup information from the PCBUF after FORK. 
+
+The *init(8)* program then re-scans the boot ROM image, and starts the other entries, of types
+*PK_FS*, *PK_PRG* and *PK_LIB*, using the *FORK(2)* system call. Again they are only started
+as long as the *PK_AUTOEXEC* bit is set.
+
+PK_FS::
+	This entry is used for filesystems, where the code is stored in the boot ROM as executable code
+	(as opposed to a relocatable file image that needs to be copied and relocated).
+	STDIO for filesystems is set to STDNUL, 
+PK_PRG::
+	This entry starts code that is embedded in the ROM. Similar to the kernel, it uses the device numbers
+	stored in the ROM link chain entry to open streams for STDIO.
+PK_LIB::
+	This entry is different in that it does not execute code in the ROM itself, but loads a lib6502 
+	executable from the filesystem, using a (hidden) entry point into the lib6502 library.
+	Again a device number from the link chain is used to determine the STDIO.
+
+As these programs are started by init with the kernel already fully up and running, the normal
+rules for getting startup information in PCBUF etc apply.
+
+NOTE: the *init(8)* program also notes a specific *PK_RESTART* bit in the type byte, 
+to identify programs that need restarting
+when they finish. This way, init monitors these programs and re-starts them. 
 
 == SEE ALSO
+init(8)
 
 == AUTHOR
 Written by André Fachat.
