@@ -1241,11 +1241,15 @@ rtask	jmp memtask
 	jmp memtask
 
 ps1
-          ldy actThread
-          txa
-          sta threadTab+TH_PAR,y      ; Semaphor-Number, translated
 	  jsr tstnset
 	  bcc rtask
+
+	sty div
+          ldy actThread
+          txa
+          sta threadTab+TH_PAR,y      ; Semaphor-Number, translated, to check for wakeup
+	lda div
+	sta threadTab+TH_PAR+1,y	; YR after wakeup
           ldy actThread
           lda #TS_WFSEM
           sta threadTab+TH_ST,y
@@ -1283,6 +1287,8 @@ next	  jsr ynextthread
 	; semaphore stays locked
 gotone	lda threadTab + TH_TASK,y
 	sta SEMOWN,x  	; change owner of semaphore
+	lda #0
+	sta threadTab + TH_PAR+2	; AC return value
 	lda #TS_RDY
 	sta threadTab + TH_ST,y
 	rts

@@ -298,7 +298,7 @@
  * and fsibm (with changed interface for VC1571) for PC style disks.
  */
 
-#define	SEM_STDIO	<-2	/* parts of the STDIO library (NOMMU) */
+;#define	SEM_STDIO	<-2	/* parts of the STDIO library (NOMMU) */
 #define	SEM_PARIEC	<-3	/* parallel IEC bus */
 #define	SEM_SERIEC	<-4	/* serial IEC bus */
 #define	SEM_IBMDISK	<-5	/* IBM floppy interface */
