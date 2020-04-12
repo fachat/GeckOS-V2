@@ -1,0 +1,97 @@
+
+= DEVCMD(2)
+:doctype: manpage
+
+== NAME
+DEVCMD - manipulate devices.
+
+== SYNOPSIS
+Input::
+	* AC - command to execute on a device
+	* XR - device number (except for DC_REGDEV)
+	* YR - optional parameter
+Call::
+	jsr DEVCMD
+Output::
+	* C=0
+		** AC/YR - return value
+	* C=1
+		** AC - error code 
+
+NOTE: may modify any register
+
+== DESCRIPTION
+executes device commands. parameter: device number in x,
+device command in a, optional parameter in y.
+returns error code in a.
+
+Possible stream commands are:
+
+----
+                DC_IRQ          0       execute IRQ routine
+                                        the interrupt routine has to return
+                                        E_OK if an interrupt source is cleared
+                                        or E_NOIRQ if not.
+                DC_RES          1       initialize device
+                DC_GS           2       sets the stream (in y) the device
+                                        reads from
+                DC_PS           3       sets the stream (in y) the device
+                                        writes to
+                DC_RX_ON        4       switch on receive
+                DC_TX_ON        5       switch off receive
+                DC_RX_OFF       6       switch on send
+                DC_TX_OFF       7       switch off send
+
+                DC_SPD          8       set speed (in y), device dependend
+                DC_HS           9       set handshake (in y), device dependend
+                DC_ST           10      get device status, device dependend
+                DC_EXIT         11      disable device, including IRQ sources
+
+                DC_GNAM         16      get the name of a device, parameter:
+                                        device number in x, returns
+                                        name PCBUF ($0200)
+                DC_GNUM         17      get number of a device from name,
+                                        parameter: name in PCBUF, length
+                                        of name in x, returns device number
+                                        in x
+                DC_REGDEV       18      register new device(s)
+----
+
+With the registration of the device the system has to know
+what to do with it and where to put it in memory.
+Therefore you have to put the address of the following
+struct into x/y registers.
+
+----
+                x/y -&gt          2 byte pointer to label1
+                                JMP Start_of_1st_device
+                                Name_of_device,0
+                                ...
+                label1          2 byte pointer to label2
+                                JMP Start_of_2nd_device
+                                Name_of_2nd_device,0
+                                ...
+                labeln          $ffff
+----
+
+With this method it is possible to register several devices,
+as long as they are in one memory block, with one call.
+
+The devices are started with DC_RESET. In y they get a
+system feature byte. Currently only bit 7 is defined,
+where $00 is 1 MHz system clock and $80 is 2 MHz system clock.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NODEV:: no valid device number
+
+== SEE ALSO
+devices(7)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

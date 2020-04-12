@@ -1,0 +1,19 @@
+
+= STARTUP(7)
+:doctype: manpage
+
+== NAME
+startup - a description of the GeckOS boot process
+
+== DESCRIPTION
+
+TODO
+
+== SEE ALSO
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

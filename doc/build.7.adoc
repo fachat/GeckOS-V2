@@ -1,0 +1,19 @@
+
+= BUILD(7)
+:doctype: manpage
+
+== NAME
+build - a description how to build GeckOS
+
+== DESCRIPTION
+
+TODO
+
+== SEE ALSO
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
