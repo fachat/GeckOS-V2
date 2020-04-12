@@ -1,0 +1,70 @@
+
+= SEMAPHORES(7)
+:doctype: manpage
+
+== NAME
+semaphores - usage
+
+== DESCRIPTION
+Semaphores are used to protect critical sections of data or a system resource from concurrent modification.
+GeckOS provides two types of semaphores, that can be used with the same kernel interface:
+
+system semaphores::
+	As defined during the build process, using negative semaphore numbers
+application semaphores::
+	These semaphores need to be allocated and freed after use. They use positive semaphore numbers.
+	To allocate, use *GETSEM(2)*, to release it use *FRESEM(2)*
+
+== USAGE
+An system semaphore can be directly used using its system-defined semaphore number.
+An application semaphore must first be allocated using *GETSEM(2)*.
+
+Then a task that wants to use the protected resource, must call *PSEM(2)* to "pass" the semaphore.
+Once passed, no other thread may pass the semaphore (even threads from the owning task).
+A thread that calls *PSEM(2)* can decide whether it wants to block until it gets the semaphore,
+or whether the call immediately returns.
+
+Only when a thread of the owning task has called *VSEM(2)*, one of the threads waiting on the
+semaphore (having called the blocking variant of *PSEM(2)*) is woken up and its task is declared
+owner of the semaphore.
+
+NOTE: the PSEM and VSEM names come from the dutch names Dijkstra gave these operations.
+ 
+=== LOCKING
+GeckOS semaphores have an extra functionality - locking. Locking here means that only the locking
+task can successfully pass the *PSEM(2)* call even if threads of other tasks are waiting.
+This is specifically implemented for the shell, as the shell must fork multiple tasks for example
+in a pipe. If that pipe includes a task that uses SENDBUF, and locks it, the shell is blocked.
+This especially happens when *ps(1)* is piped into *more(1)*: *ps(1)* locks SENDBUF to get the 
+information from the kernel, and tries to send the information through the pipe to *more*.
+The shell, however, cannot fork the *more* program, as it requires the SENDBUF that is locked
+by *ps*. So ps blocks writing to the pipe, and does not release SENDBUF, the shell cannot "open"
+the pipe as it cannot get SENDBUF.
+
+Therefore, the shell uses *LOCKSEM(2)* to lock the semaphore to its own task for the duration
+it needs to build the pipeline. After that the shell releases the lock using *LOCKSEM(2)*, and 
+any command that uses SENDBUF can run as intended.
+
+=== SYSTEM SEMAPHORES
+
+Currently only one architecture-independent system semaphore is defined:
+
+SEM_SENDBUF::
+	Protects the use of the *SENDBUF* structure at $0200 that is used for various 
+	kernel calls like *FORK(2)* or *GETINFO(2)*
+
+Other semaphores may be defined by the architecture port. See there for more information.
+
+== RESOURCE MANAGEMENT
+Semaphores are "unlocked" and "disowned" when a task dies, i.e. its last thread dies.
+In this process waiting threads (of other tasks) may be woken up.
+
+== SEE ALSO
+GETSEM(2), FRESEM(2), PSEM(2), VSEM(2), LOCKSEM(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

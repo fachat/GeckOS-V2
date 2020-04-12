@@ -1,0 +1,43 @@
+
+= LOCKSEM(2)
+:doctype: manpage
+
+== NAME
+LOCKSEM - lock a semaphore to the current task or unlock it
+
+== SYNOPSIS
+Input::
+	* XR - semaphore to lock
+	* C=0 - unlock
+	* C=1 - lock the semaphore
+Call::
+	jsr LOCKSEM
+Output::
+	* C=0
+		** AC - error code E_OK
+	* C=1
+		** AC - error code
+
+NOTE: all registers are modified
+
+== DESCRIPTION
+If C=1 when called, locks a semaphore to the current task. I.e. only threads of the current
+task may pass the *PSEM(2)* call.
+
+If C=0 when called, unlock the semaphore. I.e. any thread may pass the *PSEM(2)* call.
+If the semaphore is not held, the call wakes a thread that is waiting for the semaphore.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_SEMSET:: semaphore is already locked
+
+== SEE ALSO
+semaphores(7), FRESEM(2), PSEM(2), VSEM(2), PSEM(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
