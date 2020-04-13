@@ -299,6 +299,9 @@ gotthread ; y has thread no
 	  lda SYSBUF+FORK_ADDR+1
 	  sta taskTab2 + TT_EXECADDR+1,x
 
+	  txa
+	  jsr sendbufowner	; switch ownership of SEM_SENDBUF to new task
+
 	  ldy #TT_SLEN-TT_NAME-1
 loopname
 	  lda SYSBUF+FORK_NAME,y
@@ -306,7 +309,7 @@ loopname
 	  inx
 	  dey
 	  bpl loopname
-	  
+ 
 	  ldx div		; init new threads stack
 	  jsr initsp
 
@@ -877,7 +880,7 @@ err	sec
 	jsr fm		; needs ac for FM_REG check
 	bcs serr2
 #endif
-send1	jsr testenv
+send1	jsr testsystask
 	bcs serr
 	cpx actTask
 	beq serr
@@ -887,18 +890,19 @@ send1	jsr testenv
 	lda div
 	sta threadTab + TH_PAR+1,y
 
+	; loop through threads if one is waiting for a message
 	ldy #0
-l0	txa
+l0	txa		; thread in target task?
 	cmp threadTab + TH_TASK,y
-	bne next
+	bne next	; no
 	lda threadTab + TH_ST,y
-	cmp #TS_WFTX
-	beq copy
-	cmp #TS_WXTX
+	cmp #TS_WFTX	; waiting for a message?
+	beq copyto	; yes, y is target thread
+	cmp #TS_WXTX	; waiting for our message?
 	bne next
 	lda threadTab + TH_PAR,y
 	cmp actTask
-	beq copy
+	beq copyto	; y is target thread
 next
 	jsr ynextthread
 	bcc l0
@@ -910,12 +914,17 @@ next
 serr	lda #E_NOENV
 serr2	cmp #1
 	jmp memtask
-copy
+	
+	; y is target thread
+copyto
 #ifdef CPPCBUFTX
 	sty div
 	CPPCBUFTX()
 	ldy div
 #endif	
+	lda threadTab + TH_TASK,y
+	jsr sendbufowner
+
 	lda actTask
 	sta threadTab + TH_PAR,y
 	ldx actThread
@@ -948,18 +957,19 @@ copy
 	lda div
 	sta threadTab + TH_PAR+1,y
 
+	; scan all threads if one is waiting for send
 	ldy #0
 l0	lda threadTab + TH_ST,y
-	cmp #TS_WFRX
-	bne next
-	lda actTask
+	cmp #TS_WFRX	; waiting to deliver a message?
+	bne next	; no
+	lda actTask	; waiting for us to receive it?
 	cmp threadTab + TH_PAR,y
-	bne next
+	bne next	; no
 	bit div2
-	bpl copy
-	txa
+	bpl copyfrom	; kreceive - copy, y is source thread
+	txa		; xreceive - check if we want to rx from this task?
 	cmp threadTab + TH_TASK,y
-	beq copy
+	beq copyfrom	; yes, copy. y is source thread
 next
 	jsr ynextthread
 	bcc l0
@@ -977,12 +987,18 @@ nowait	lda #E_NOTX
 	sec
 	jmp memtask
 
-copy	plp
+	; y is source thread
+copyfrom
+	plp
 #ifdef CPPCBUFRX
 	sty div
 	CPPCBUFRX()
 	ldy div
 #endif
+	lda actTask
+	jsr sendbufowner
+
+	; wake up waiting thread
 	lda #TS_RDY
 	sta threadTab + TH_ST,y
 	lda actTask
@@ -1299,8 +1315,14 @@ gotone	lda threadTab + TH_TASK,y
 	  ; x has semaphore number
 	jsr remap
 	bcc noillp
-	jmp illpar
+illp	jmp illpar
 &noillp	  tax
+	lda SEMOWN,x
+	beq ok		; ignore if it was not set
+	sec
+	sbc #1
+	cmp actTask	; only owning task may free it
+	bne illp
 	jsr vsemint
 ok
 	  lda #E_OK
@@ -1434,6 +1456,16 @@ noown	pla
 	rts
 	.)
 
+	; sets a new SEM_SENDBUF owner after a successful copying
+	; of the message
+	; needs to preserve XR, YR
+&sendbufowner .(
+	clc
+	adc #1
+	sta SEMOWN+SYSSEM-1	; assume SEM_SENDBUF is -1
+	rts
+	.)
+
 	  .)
 
 #endif	/* NO_SEM */
@@ -1469,7 +1501,8 @@ stdok     plp
 	  .)
 
           .(
-&testenv  cpx #OWNTASK
+&testsystask
+	  cpx #OWNTASK
           bne te1
           ldx actTask
           clc
