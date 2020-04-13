@@ -1,0 +1,19 @@
+
+= PORTING(7)
+:doctype: manpage
+
+== NAME
+porting - how to port GeckOS onto a new architecture
+
+== DESCRIPTION
+
+TODO
+
+== SEE ALSO
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
