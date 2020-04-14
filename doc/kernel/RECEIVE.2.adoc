@@ -13,11 +13,11 @@ Call::
 	jsr RECEIVE
 Output::
 	* C=1 - error
-		* AC - error code
+		** AC - error code
 	* C=0 - success
-		* XR - sender task ID
-		* YR - number of bytes received in PCBUF
-		* AC - message type (if given by sender)
+		** XR - sender task ID
+		** YR - number of bytes received in PCBUF
+		** AC - message type (if given by sender)
 
 == DESCRIPTION
 RECEIVE	receives a message. It either waits for any message (if C=1) or returns immediately (if C=0), with

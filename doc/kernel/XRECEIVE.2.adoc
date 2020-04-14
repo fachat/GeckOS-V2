@@ -14,11 +14,11 @@ Call::
 	jsr XRECEIVE
 Output::
 	* C=1 - error
-		* AC - error code
+		** AC - error code
 	* C=0 - success
-		* XR - sender task ID
-		* YR - number of bytes received in PCBUF
-		* AC - message type (if given by sender)
+		** XR - sender task ID
+		** YR - number of bytes received in PCBUF
+		** AC - message type (if given by sender)
 
 == DESCRIPTION
 XRECEIVE receives a message. It behaves exactly like the *RECEIVE(2)* call, with the exception

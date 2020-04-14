@@ -117,12 +117,21 @@ The keyboard is mapped such that it can run on the real hardware, but also in th
 Here are the important key mappings:
 
 C=::
-	switch between virtual consoles (left Ctrl on VICE)
+	switch between virtual consoles 
 Ctrl::
-	The Ctrl-key. (VICE uses the Tab key to emulate Ctrl)
-|::
-	The pound symbol on the C64 enters the pipe symbol in GeckOS. In VICE the pipe can be entered just 
-	as on the PC.
+	The Ctrl-key.
+Pound::
+	The pound symbol on the C64 enters the pipe symbol in GeckOS. 
+
+Here is a comparison of the real machine, VICE and what GeckOS uses.
+
+[options="header",frame="topbot"]
+|====
+|GeckOS|C64|VICE on PC
+|Ctrl | Ctrl | Tab 
+|Console switch | C= | Left Ctrl 
+|\| | Pound | \| 
+|====
 
 === SER
 The serial devices supported are based on the 9600 baud userport interface, the 6551 ACIA chip, and the 16550 UART.

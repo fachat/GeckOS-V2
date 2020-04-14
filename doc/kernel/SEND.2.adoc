@@ -15,9 +15,9 @@ Call::
 	jsr SEND
 Output::
 	* C=1 - error
-		* AC - error code
+		** AC - error code
 	* C=0 - success
-		* XR - the real destination task number (unmodified if real number given as input, redirected number if system task
+		** XR - the real destination task number (unmodified if real number given as input, redirected number if system task
 
 NOTE: AC and YR are preserved, XR may be modified.
 
