@@ -233,28 +233,31 @@ env 	  stx div3
 	  stx div2
 	  ; x is new task
 
-	  lda SYSBUF+FORK_PRIORITY
-	  bne prio_ok
-	  ldy actTask
+	  ldy actTask	; parent task ID
 	  cpy #<-1
-	  beq prio_def			
-	  ; inherit from parent
-	  lda taskTab2 + TT_PRIORITY,y
-	  sta taskTab2 + TT_PRIORITY,x
-	  lda taskTab + TT_STDCIN,y
-	  cmp #STDNUL
-	  bne cin_ok
-	  beq cin_def
-	  ; current task is -1 means initial boot
-prio_def
+	  bne setprio
+
+	  ; initial boot (from kernel startup)
 	  lda #IRQCNT
 	  sta taskTab2 + TT_PRIORITY,x
-cin_def   lda SYSBUF+FORK_STDIN
+	  bne cin_boot
+
+setprio	  ; normal fork, inherit priority and STDCIN (if possible)
+	  lda SYSBUF+FORK_PRIORITY
+	  bne prio_ok
+	  ; inherit from parent
+	  lda taskTab2 + TT_PRIORITY,y
+prio_ok	  sta taskTab2 + TT_PRIORITY,x
+	  ; check STDCIN from parent
+	  lda taskTab + TT_STDCIN,y
+	  cmp #STDNUL	; replace STDNUL with STDIN from FORK param
+	  bne cin_ok
+cin_boot  lda SYSBUF+FORK_STDIN
 cin_ok	  sta taskTab + TT_STDCIN,x
-prio_ok	  
+
 	  tya
 	  sta taskTab + TT_PARENT,x
-	  
+
 	  jsr getthread
 	  bcc gotthread
 
@@ -1319,6 +1322,8 @@ next	  jsr ynextthread
 	; found a thread waiting for it
 	; semaphore stays locked
 gotone	lda threadTab + TH_TASK,y
+	clc
+	adc #1
 	sta SEMOWN,x  	; change owner of semaphore
 	lda #0
 	sta threadTab + TH_PAR+2	; AC return value
