@@ -229,7 +229,7 @@ l0	tay
 env 	  stx div3
 
 	  jsr gettask
-	  bcs nothread2
+	  bcs notask2
 	  stx div2
 	  ; x is new task
 
@@ -261,7 +261,8 @@ cin_ok	  sta taskTab + TT_STDCIN,x
 	  jsr getthread
 	  bcc gotthread
 
-nothread2 jmp nothread
+nothread2 jmp enothread
+notask2	  jmp enotask
 
 gotthread ; y has thread no
 	  sty div
@@ -339,11 +340,15 @@ loopname
 
 	  ldx div2		; return task ID 
 	  lda #E_OK
-	  beq fend
-nothread
+	  beq fend		; always
+
+enothread lda #E_NOTHREAD
+	  .byt $2c
+enotask	  lda #E_NOTASK
+	  pha
 	  ldx div3
 	  jsr freenv
-	  lda #E_NOTASK
+	  pla
 	  .byt $2c
 noenv	  lda #E_NOENV
 fend	  cmp #1
@@ -407,7 +412,7 @@ fend	  cmp #1
 
 nothread  pla
 	  pla
-	  lda #E_NOENV
+	  lda #E_NOTHREAD
 	  sec
 	  jmp memtask
 	  .)
@@ -840,9 +845,9 @@ name
 	sta taskTab2 + TT_EXECADDR,x
 	tya
 	sta taskTab2 + TT_EXECADDR+1,x
-	clc
-	.byt $24
-err	sec
+	lda #E_OK
+	.byt $2c
+err	lda #E_ILLPAR
 	jmp memtask
 	.)
 

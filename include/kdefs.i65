@@ -123,6 +123,8 @@
 
 #define	  E_NOPAR	<-25	/* missing parameter			*/
 
+#define	  E_NOTHREAD  	<-26	/* no more free thread */
+
 /* file handling errors */
 
 #define   E_FNODRV  	<-32	/* illegal drive number			*/
@@ -329,7 +331,6 @@
 
 /* AC = function number */
 #define   SP_FORK        0	
-#define   SP_SETIRQ      1
 #define   SP_RESET       2
 
 /* struct in PCBUF when FORK'ing */
@@ -344,11 +345,6 @@
 #define   FORK_ADDR      6	/* startaddress of task execution 	*/
 #define	  FORK_PAR	 8	/* value of AC in new task 		*/
 #define   FORK_NAME      9    	/* task name (ended with nullbyte)	*/
-
-/* struct in PCBUF when SETIRQ */
-#define   SETIRQ_ENV     0	/* env to set irq address in 		*/
-#define   SETIRQ_ADR     1	/* irq address to set			*/
-#define   SETIRQ_SLEN    3
 
 /* struct in PCBUF when RESET */
 #define   RESET_ENV      0	/* env to restart			*/
