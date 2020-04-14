@@ -16,6 +16,8 @@ INETDIR=../../../apps/inet
 
 XA=xa
 
+X64=x64sc
+
 all: osa.d64
 
 c64 c64rom:
@@ -46,7 +48,7 @@ osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} c64rom boot loader index.
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
-	x64 -autostart osa.d64
+	${X64} -autostart osa.d64
 
 emuslip: all
 	x64+rs232 -kernal ~/csa/tmp/kernalb -speed 200
