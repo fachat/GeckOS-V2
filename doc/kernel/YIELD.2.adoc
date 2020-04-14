@@ -1,0 +1,29 @@
+
+= YIELD(2)
+:doctype: manpage
+
+== NAME
+YIELD - give control back to kernel resp. other threads
+
+== SYNOPSIS
+Input::
+Call::
+	jsr YIELD
+Output::
+
+NOTE: all registers are preserved
+
+== DESCRIPTION
+Just give control back to the scheduler, as there is nothing
+to do at the moment - but keep running (not needed for
+preemtive multitasking, an interrupt interrupts any task!)
+
+== SEE ALSO
+scheduler(7),FORK(2),TERM(2),KILL(2),FORKT(2),GETINFO(2),DUP(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

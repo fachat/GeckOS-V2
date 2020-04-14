@@ -1,0 +1,78 @@
+
+= FORK(2)
+:doctype: manpage
+
+== NAME
+FORK - create a new task and start executing it
+
+== SYNOPSIS
+Input::
+	* SENDBUF - contains the FORK structure 
+	* YR - length of the data in the SENDBUF
+Call::
+	jsr FORK
+Output::
+	* C=0
+		** caller task
+			*** XR - return the PID of the new task
+		** forked task
+			*** AC - value from FORK_PAR
+			*** XR - own task ID
+			*** SENDBUF - command line as given in FORK_NAME
+	* C=1
+		** AC - error code 
+
+NOTE: may modify any register
+
+== DESCRIPTION
+The *FORK* call starts a new thread and a new task.
+When calling, the SENDBUF must contain the following structure:
+
+----
+/* struct in PCBUF when FORK'ing */
+	FORK_SIZE      0      size of needed memory in blocks (256
+                              byte) from address 0 up
+	FORK_SHARED    1      size of shared memory mapping in
+                              blocks from address $ffff down
+	FORK_PRIORITY  2      priority of task - 0 = parent's
+	FORK_STDIN     3      stdin stream
+	FORK_STDOUT    4      stdout stream
+	FORK_STDERR    5      stderr stream
+	FORK_ADDR      6      start address of task execution
+	FORK_PAR       8      value of AC in new task
+	FORK_NAME      9      task name (ended with nullbyte)
+			      After that follows the command line as
+			      list of null-terminated strings, ended
+			      with a separate nullbyte
+----
+
+The commandline is put into the PCBUF of the starting task. The new task gets its own task id in x The stream read/write task counter are not changed. I.e. a thread that wants to use the end given to fork too has to increase the read/write counters itself. 
+
+The priority is a hack to allow to run tasks with different execution priorities. The priority counts the number of interruptions before a thread switch occurs. Default value is 3. A value of 0 lets the new task inherit the priority of the current task. 
+
+It is now somewhat difficult to really start a new task, as the READ/WRITE routines to access another tasks memory have been removed. The execution address of a new task should thus be code in a shared memory area, like the 
+*lib6502(7)* loader code. This code can then load the actual file from disk (which is also much faster than
+piping it though another task).
+
+The FORK_PAR value is what is given to AC in the forked thread.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOENV:: 
+	no free environment available
+E_NOTASK::
+	no task available
+E_NOTHREAD::
+	no thread available
+
+
+== SEE ALSO
+scheduler(2),TERM(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),DUP(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

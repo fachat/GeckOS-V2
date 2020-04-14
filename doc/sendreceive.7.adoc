@@ -52,7 +52,10 @@ SEND_TIME::
 	set/get actual time (reserved and not yet used/implemented)
 SEND_NET::
 	Communicate with the (TCP/IP) network handler
- 
+
+The task numbers are just numbers - if there is no real task behind it, the message cannot be delivered.
+A task can thus register itself as destination task behind this system destination using *TDUP(2)*.
+
 === SYSTEM SEMAPHORES
 The *SENDBUF* is protected by a system semaphore:
 
@@ -64,7 +67,7 @@ Note that the "ownership" of the semaphore is transferred from the sending task 
 resource management.
 
 == SEE ALSO
-SEND(2), RECEIVE(2), XRECEIVE(2),filesystems(7),semaphores(7)
+SEND(2), RECEIVE(2), XRECEIVE(2),TDUP(2),filesystems(7),semaphores(7)
 
 == AUTHOR
 Written by André Fachat.

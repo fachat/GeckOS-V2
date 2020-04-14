@@ -1,0 +1,50 @@
+
+= DUP(2)
+:doctype: manpage
+
+== NAME
+DUP - get or replace the STDIO streams of a task
+
+== SYNOPSIS
+Input::
+	* C=0 - get redirected STDIO stream
+		** XR - STDIN/STDOUT/STDERR/STDCIN constant
+	* C=1 - replace STDIO stream
+		** XR - STDIN/STDOUT/STDERR/STDCIN constant
+		** AC - new stream number for STDIO stream
+Call::
+	jsr DUP
+Output::
+	* getting STDIO (C=0)
+		** AC - redirected (true) STDIO stream number
+	* setting STDIO (C=1)
+		** AC - old stream
+
+NOTE: registers are not preserved.
+
+== DESCRIPTION
+Each task has STDIO streams available. They can be used anywhere with their constants
+*STDIN*, *STDOUT*, *STDERR*, and *STDCIN*. In some cases a task may need to know the real
+stream number, or even replace the streams used for STDIO.
+
+(carry=1): set new STD* stream. parameter: STD* number in x,
+new stream in a, returns old stream in ac;
+read/write task counters are not touched!
+
+(carry=0): get redirected STD* stream number. parameter:
+STD* number in x, returns stream in a
+
+== ERROR CODES
+
+E_NOSTR::
+	invalid stream number (not any of STDIN, STDOUT, STDERR, STDCERR)
+
+== SEE ALSO
+scheduler(7),FORK(2),TERM(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

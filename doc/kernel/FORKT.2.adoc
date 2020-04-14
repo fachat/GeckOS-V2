@@ -1,0 +1,39 @@
+
+= FORKT(2)
+:doctype: manpage
+
+== NAME
+FORKT - fork a new thread within the current task
+
+== SYNOPSIS
+Input::
+	* AC/YR - execution start address of new thread
+Call::
+	jsr FORKT
+Output::
+	* C=0 - success
+		** calling thread
+			*** XR - thread ID of new thread
+		** called thread
+			*** all registers are uninitialized
+	* C=1 - failure
+		** AC - error return code
+
+== DESCRIPTION
+Forks a new thread in the current task. Execution start
+address must be in a/y.
+
+== RETURN CODES
+
+E_NOTHREAD::
+	no free thread available
+
+== SEE ALSO
+scheduler(7),FORK(2),TERM(2),KILL(2),YIELD(2),GETINFO(2),DUP(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -1,0 +1,40 @@
+
+= SETINFO(2)
+:doctype: manpage
+
+== NAME
+SETINFO - change info on the current task in the task table
+
+== SYNOPSIS
+Input::
+	* XR - type of value to change
+Call::
+	jsr SETINFO
+Output::
+	* C=0 - success
+		** AC=E_OK
+	* C=1 - error
+		** AC - error code
+
+== DESCRIPTION
+Modifies entries in the task table of the current task. 
+These modifiers are currently defined:
+
+----
+	TN_EXECADDR	- change the execution address entry, replace with value from AC/YR
+----
+
+== ERROR CODES
+
+E_ILLPAR::
+	wrong modifier specified
+
+== SEE ALSO
+scheduler(7),FORK(2),TERM(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),DUP(2),GETPID(2),SLOCK(2),RENICE(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

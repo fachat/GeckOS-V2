@@ -1,0 +1,30 @@
+
+= SLOCK(2)
+:doctype: manpage
+
+== NAME
+SLOCK - lock the scheduler to own thread
+
+== SYNOPSIS
+Input::
+	* C=1 - lock scheduler to current thread
+	* C=0 - unlock scheduler
+Call::
+	jsr SLOCK
+Output::
+
+NOTE: Deprecated
+
+== DESCRIPTION
+
+== ERROR CODES
+
+== SEE ALSO
+scheduler(7),FORK(2),TERM(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),DUP(2),GETPID(2),RENICE(2),SETINFO(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

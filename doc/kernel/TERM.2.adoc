@@ -1,0 +1,28 @@
+
+= TERM(2)
+:doctype: manpage
+
+== NAME
+TERM - terminate current thread, or task if last running thread of task
+
+== SYNOPSIS
+Input::
+	* AC - return code for task (if last thread)
+Call::
+	jsr TERM
+Output::
+
+== DESCRIPTION
+Ends the current thread. If still threads in the tasks are
+running, the return code is ignored. Otherwise the return 
+code is sent to the parent with SIGCHLD.
+
+== SEE ALSO
+scheduler(7),FORK(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),DUP(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
