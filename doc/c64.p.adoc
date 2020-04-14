@@ -191,7 +191,7 @@ Pound::
 
 Here is a comparison of the real machine, VICE and what GeckOS uses.
 
-[options="header",frame="topbot"]
+[options="header",frame="top"]
 |====
 |GeckOS|C64|VICE on PC
 |Ctrl | Ctrl | Tab 

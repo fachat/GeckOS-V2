@@ -29,6 +29,29 @@ ROM             mandatory for a rom build. All local options are ignored.
 
 ROMSTART        Where in CPU memory (with MMU with the upper 4 bits set
                 to zero, i.e. $00000-$0ffff) starts the ROM.
+
+MIN_MEM		minimum amount of memory for the kernel to start
+RAMTEST		If set, RAM is tested on boot
+SHORTRAMTEST	if defined, do a short memory test only
+MEMINIVAL	clear memory to this value on boot
+----
+
+The following options customize the kernel functionaly:
+
+----
+NEED_CHECKCHLD	Do we need the CHECKCHLD call?
+NEED_GETINFO	Should GETINFO be included in kernel?
+NEED_RENICE	Should RENICE be included in kernel?
+NEED_SLOCK	Should SLOCK be included in kernel?
+
+NO_STREAMS	if set, no streams are available
+NO_FSM		if set, no filesystem interface
+NO_SEM		if set, semaphores are no available
+NO_SEND		if set, no SEND/RECEIVE interface
+
+EOK_SEPARATE	if set kernel is not at top of memory (do not include
+		CPU interrupt vectors)
+EOK_NOFILL	Do not fill memory in ROM between kernel and end
 ----
 
 C64 specific options, to be set in arch/c64//c64rom.a65:

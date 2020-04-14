@@ -6,8 +6,74 @@
 porting - how to port GeckOS onto a new architecture
 
 == DESCRIPTION
+Porting has been made much easier with this kernel version. In general, there is a proto architecture subdirectory that holds some prototype files for a non-MMU system. that can easily be changed to fit own needs.
 
-TODO
+The kernel needs two files in the arch/*/kernel subdirectory, namely kenv.a65 and kinit.a65. The kinit.a65 file is included in the kernel startup code, i.e. after setting the interrupt flag and clearing the decimal flag this file is executed, and it is expected that the CPU gets out of this file at the end of it.
+
+=== kinit.a65
+This file must initialize the stack, the memory management and mapping of the system ROM and RAM. Then the system preemption timer must be set up. When including kernel/zerotest.a65 and kernel/ramtest.a65 here all the memory options from above are available. Also the ramtest file returns the size of memory found in 256-byte blocks in a. This value must be passed to the end of the init routine in this file.
+
+In addition to this some Macros have to be defined, that are used in the kernel later. 
+
+----
+  	GETFREQ()	returns a=0 for 1Mhz, a=128 for 2MHz
+  	LEDPORT		address of LED port to signal hardware failures
+  	LED_LED		bit of LED bit in LEDPORT address
+  	H_ERROR()	if LEDPORT is not defined, then H_ERROR replaces
+    	                the LED toggle routine if needed.
+  	CLRTIMER()	clear the system preemption timer interrupt
+  	KERNELIRQ()	returns if an interrupt occured in the kernel
+     	                or outside. Is checked by "BNE IRQ_in_Kernel"
+  	SAVEMEM()	save system mem config for interrupt
+  	RESTOREMEM()	restore system mem config after interrupt
+  	STARTMEM()	This is used to alloc/enable memory pages found
+     	                during kernel init. Takes mem size in AC as given
+   	                by the kernel init. It is called _after_ inimem!
+
+----
+
+=== kenv.a65
+The kenv.a65 file is included in another part of the kernel. It is the part that maps the memory according to the environment number for each task. Several routines must be defined here: 
+
+----
+	inienv		init environment handling
+	setthread	set active thread
+	initsp		init task for thread (no in xr)
+	push		push a byte to active threads stack 
+	pull		pull a byte from active threads stack
+	memtask		jump to active thread
+	memsys		enter kernel
+
+	getenv		get e free environment
+	freenv		free an environmen
+	sbrk		reduce/increase process memory in an environment
+
+	enmem		enable memory blocks for environments
+			(this kernel call is used for MMU systems and
+			heavily system specific)
+	setblk		sets a specific memory block in the memory map	
+			of the active task. Also for MMU systems only
+
+----
+Also some macros must be defined:
+
+----
+	MEMTASK2()	This is equivalent to memtask above, but it
+			is used for returns from interrupt
+	MAPSYSBUF	maps the PCBUF of the active task to the
+			address given by SYSBUF in system memory
+	SYSBUF		mapped tasks PCBUF
+	MAPENV()	maps the address given in a/y in env x to somewhere
+			in the kernel map, returns mapped address in a/y
+	MAPAENV()	as MAPENV, but does it for actual env.
+	GETTASKMEM	returns (in AC) how much memory a task has
+			(task id in y)
+	CPPCBUFRX	copies PCBUF from other task (yr) to active one
+	CPPCBUFTX	copies PCBUF from active task to another one (yr)
+	CPFORKBUF()	copies the PCBUF from the FORK call to the task.
+	GETACTENV()	returns active environment in ac
+----
+The full descriptions can be found in the C64 kenv file for example. This may look complicated, but it isn't. If you have a simple 6502 system without memory management, just copy (or set a link) to the C64 file. If you have a more complicated system, have a look at the CS/A65 file. 
 
 == SEE ALSO
 
