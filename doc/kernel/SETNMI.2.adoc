@@ -1,0 +1,85 @@
+
+= SETNMI(2)
+:doctype: manpage
+
+== NAME
+SETNMI - register a device for NMI handling (or clear NMI handling)
+
+== SYNOPSIS
+Input::
+	* C=0: clear the NMI handler chain
+	* C=1: add a new NMI routine
+		** AC/YR - lo/hi of NMI routine to add
+Call::
+	jsr SETNMI
+Output::
+	undetermined
+
+NOTE: this call changes all registers
+
+== DESCRIPTION
+At NMI address -2 there must be the address of a ctrl routine
+that can be called via CTRLNMI. Expect that the 
+ctrlnmi routine is called during this SETNMI  with either
+NMI_ON of NMI_OFF in AC, to set the initial state.
+The ctrlnmi routines is called with JSR, i.e. return with RTS.
+
+At NMI address -4 is a pointer to a memory location
+where the address of the next NMI routine can be found.
+If the address found there is $ffff, then the list is at
+its end.
+
+A possible scenario then is:
+
+Task calls SETNMI with NEWNMI in a/y. We then have the 
+structure:
+
+----
+(NEWNMI-4)	address of oldvec -->   address of OLDNMI
+(NEWNMI-2)	address of nmictrl			
+NEWNMI -->  	NMI routine code
+----
+
+This way the structure can be held in ROM, and still allow
+flexible NMI chaining. If CTRLNMI is called, each of the 
+nmictrl routines is called with the given value in AC.
+
+Each NMI routine must save all registers itself.
+The NMI routine then at the end must perform a jump
+to the oldvec address that *SETNMI* has stored in the vector pointed
+to by the struct described above.
+
+----
+	.data
+oldnmi	.word 0		; NMI vector in RAM
+
+	.text		; this could be in ROM
+
+	; NMI routine
+
+	.word oldnmi	; address of oldnmi vector
+	.word ctrlnmi	; address of own NMI control routine
+newnmi	pha		; NMI routine
+	cld
+	...
+	jmp (oldnmi)	; jump to next routine
+
+	;Initialization code
+
+init	lda #<newnmi	; register newnmi 
+	ldy #>newnmi
+	sec
+	jsr SETNMI
+----
+
+== RETURN CODES
+
+== SEE ALSO
+devices(7),CTRLNMI(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

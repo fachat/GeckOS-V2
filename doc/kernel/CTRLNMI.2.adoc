@@ -1,0 +1,42 @@
+
+= CTRLNMI(2)
+:doctype: manpage
+
+== NAME
+CTRLNMI - control use of NMI
+
+== SYNOPSIS
+Input::
+	* AC - either NMI_ON or NMI_OFF to allow or disallow NMIs
+Call::
+	jsr CTRLNMI
+Output::
+
+NOTE: this call changes all registers
+
+== DESCRIPTION
+This controls whether NMIs are enabled in the system. 
+A task that wants to disallow NMIs for a while must call *CTRLNMI(2)* with the *NMI_OFF* value.
+Devices or tasks that use NMIs are then instructed to not use NMIs until *CTRLNMI* is called
+again with *NMI_ON*. 
+
+The *CTRLNMI* code maintains a counter on the number of *NMI_ON* and *NMI_OFF* calls. 
+Only if there are as many on calls than there are off calls, NMIs will be enabled.
+
+To enable or disable NMIs, the NMI_ON or NMI_OFF flag is sent to all devices that 
+use NMIs, using the NMI chain established by *SETNMI(2)* (for details see there).
+
+== RETURN CODES
+
+E_NOTIMP::
+	Using a control code other than *NMI_ON* or *NMI_OFF*
+
+== SEE ALSO
+devices(7),SETNMI(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

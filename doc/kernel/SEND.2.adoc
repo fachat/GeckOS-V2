@@ -33,9 +33,12 @@ Error return codes are given when at return, C=1.
 
 E_NOENV::
 	illegal task number has been given as destination
+E_INT::
+        a blocking SEND call was interrupted by a signal handler, while SIG_INT was set.
+	On this error, X and Y are preserved, so that the call can easily be restarted
 
 == SEE ALSO
-sendreceive(7),RECEIVE(2),XRECEIVE(2)
+sendreceive(7),RECEIVE(2),XRECEIVE(2),signals(7)
 
 == AUTHOR
 Written by André Fachat.

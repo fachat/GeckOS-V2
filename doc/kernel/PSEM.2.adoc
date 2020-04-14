@@ -23,10 +23,14 @@ Passes a semaphore. The semaphore number can be negative (system semaphore) or p
 == RETURN CODES
 Error return codes are given when at return, C=1.
 
-E_SEMSET:: semaphore is already set (when not blocking)
+E_SEMSET:: 
+	semaphore is already set (when not blocking)
+E_INT::
+        a blocking PSEM call was interrupted by a signal handler, while SIG_INT was set.
+	On E_INT, the X and Y registers are preserved
 
 == SEE ALSO
-semaphores(7), GETSEM(2), FRESEM(2), VSEM(2), LOCKSEM(2)
+semaphores(7), GETSEM(2), FRESEM(2), VSEM(2), LOCKSEM(2),signals(7)
 
 == AUTHOR
 Written by André Fachat.

@@ -103,7 +103,7 @@ a certain number of streams can be handled before an error is returned
 on open.
 
 == SEE ALSO
-DEVCMD(2)
+DEVCMD(2),SETNMI(2),CTRLNMI(2)
 
 == AUTHOR
 Written by André Fachat.
