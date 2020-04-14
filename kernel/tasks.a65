@@ -654,13 +654,13 @@ s2a	  ;jmp endirq
           sty div
           ldy actThread
           sta threadTab+TH_PAR+2,y
+          lda #TS_RDY
+&wsigentry
+          sta threadTab+TH_ST,y
           txa
           sta threadTab+TH_PAR,y
           lda div
           sta threadTab+TH_PAR+1,y
-          lda #TS_RDY
-&wsigentry
-          sta threadTab+TH_ST,y
           jmp nexttask
           .)
 
@@ -723,7 +723,7 @@ loop	tax
 	cmp taskTab + TT_NTHREADS,x
 	bne next
 	lda taskTab2 + TT_RETCODE,x	; error code
-	inc taskTab + TT_NTHREADS,x	
+	inc taskTab + TT_NTHREADS,x	; release task resources for new use
 	clc
 	bcc end				; always
 next	txa
@@ -885,9 +885,9 @@ send1	jsr testsystask
 	cpx actTask
 	beq serr
 	ldy actThread
-	txa
-	sta threadTab + TH_PAR,y
-	lda div
+	txa		; save destination task in X
+	sta threadTab + TH_PAR,y	
+	lda div		; save message length in y
 	sta threadTab + TH_PAR+1,y
 
 	; loop through threads if one is waiting for a message
@@ -1055,6 +1055,7 @@ setadr	php		; this address might be used in IRQ and exchange is
 
 &sendsig .(		; ac = signal mask, xr = target task
 	jsr memsys
+	sty div
 	bcs sends
 	lda #TS_WSIG
 	jmp wsigentry
@@ -1073,7 +1074,8 @@ sends
 ok	lda #E_OK
 	.byt $2c
 not	lda #E_NOTASK
-	clc
+	ldy div
+	cmp #1
 	jmp memtask
 	.)
 
@@ -1107,7 +1109,7 @@ checksig .(
 	cmp #TS_WFTX
 	beq sigint
 	cmp #TS_WFSEM
-	beq sigint
+	beq sigintsem
 none	rts		/* TODO: check interruptable flag, interrupt */
 	
 sigrdy	.(
@@ -1152,7 +1154,9 @@ sigirq	.(
 	bne sig1			; always
 	.)
 
-sigint	.(				; interrupted system call 
+sigintsem .(
+	jsr semunmap			; restore semaphore number in X
+&sigint					; interrupted system call 
 	tya
 	jsr setthread
 	jsr incretadr
@@ -1206,12 +1210,25 @@ SEMLOCK   .dsb ANZSEM+SYSSEM	; field with taskId+1 of task that has locked sem
 
 	.text
 
+	; map semaphores from negative system to positive application sem's
+	; to all-positiv numbers
 remap	.(
 	txa
 	clc
 	adc #SYSSEM
 	tax
 	cpx #ANZSEM+SYSSEM
+	rts
+	.)
+
+	; remap the internal (all-positive) numbers back to user space numbers
+	; with negative system semaphores to recover the semaphore number
+	; on an interrupted PSEM
+&semunmap .(
+	lda threadTab+TH_PAR,y
+	sec
+	sbc #SYSSEM
+	sta threadTab+TH_PAR,y
 	rts
 	.)
 
