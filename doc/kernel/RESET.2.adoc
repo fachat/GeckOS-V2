@@ -1,0 +1,22 @@
+
+= RESET(2)
+:doctype: manpage
+
+== NAME
+RESET - re-initialize the system and start from scratch
+
+== SYNOPSIS
+Input::
+Call::
+	jmp RESET
+Output::
+
+== DESCRIPTION
+Resets the system and start from scratch
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
