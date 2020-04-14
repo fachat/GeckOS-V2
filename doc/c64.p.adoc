@@ -8,6 +8,72 @@ c64 - describes the GeckOS port to the C64
 The C64 is a machine that has a single environment with almost 60k usable RAM, and no memory management unit.
 
 
+== BUILDING
+To build the program, you have to have my 6502 cross assembler 'xa-2.1.4e'
+Current testing takes place on 'VICE' (x64), the versatile Commodore emulator.
+
+In the file c64rom/c64rom.a65, a few options can be set by setting
+the defines appropriately. See doc/build.html.
+
+Go to the arch/c64/boot directory and type "make" this will build
+all necessary files in this directory, including links to all
+important applications. Typing "make osa.d64" will produce a
+d64 disk image with all necessary files. This disk image can be
+transfered to a C64 and used.
+
+If you change something in the code and reassemble, check from the file65
+output that the data and bss segments don't overlap. Also the
+memory that is dynamically allocated starts at $1600 (see
+arch/c64/c64rom.a65). Only if nothing overlaps there is no danger.
+
+See also *build(7)*.
+
+=== BUILD OPTIONS
+
+==== Parallel IEEE488
+I have an original C64 parallel IEEE488 expansion board, so that
+I use this for better performance. I also implemented the hardware
+emulation for the CBM IEEE488 interface for the C64 in the VICE
+Commodore emulator (from version 0.11 on). So if you have this interface,
+use it for better file transfer performance on the real C64 or
+for file access in VICE. Change the line in c64rom/c64rom.a65 from
+'#undef PARALLEL' to '#define PARALLEL'. For the C64, the
+devices 9 to 11 are mapped to the drives c: to f:
+
+== BOOTING
+In VICE (i.e. x64) or on the C64 load the (BASIC) program 'loader', which
+is in the boot directory and the osa.d64 disk image. When run, this
+program loads the charom, the program ROM and
+a small machine language program (boot.obj, which is made from
+boot.a65). It then starts the boot routine that copies the ROMs to
+their places and jumps to the kernel RESET routine.
+
+When using osa.d64 in VICE, you have to enable the true1541 emulation.
+
+== USAGE
+The video device is able to handle up to three screen output windows.
+The C= key switches between the different windows (You can change the
+switch key in arch/c64/devices/con_c64.a65, but when you're using
+the "C=" key, don't try to use the Ctrl-Alt-Fx keys in XFree when the
+mouse cursor is in the vice window. GeckOS will detect a Ctrl-Switchkey
+and therefore send an EOF to the program....)
+
+On the first window, a lib6502  "lsh" is started. On the second one, the
+old shell is started. As the C64 has no MMU, these two programs
+have to use different memory locations. The shell is assembled into the
+ROM and can be started only once from the ROM. The lsh is a lib6502
+program and is loaded by the init process. The ROM only contains a
+command to the init process to start the lib6502 program. It uses
+a relocatable fileformat and can thus started more than once.
+
+In the shell you can use "c:ls" on drives a: (registered devides) and
+b: (rom inventory). If the iec bus works, then drive c: is disk unit 8
+and drive d: is disk unit 9, till drive f: is device 11.
+
+For the shell commands see the docs.
+The memory map is described below. When writing and using lib6502
+programs they are relocated automagically.
+
 == ROM CONFIGURATION
 The "ROM" is a boot image that is loaded into memory from ROMSTART to end of memory, where the C64 ROMs are 
 completely mapped out and only RAM is used. In $dxxx of course the I/O area is used.
