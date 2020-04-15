@@ -1,0 +1,56 @@
+
+= FSIEC(8)
+:doctype: manpage
+
+== NAME
+fsiec - filesystem driver for Commodore IEC and IEEE488 disk drives.
+
+== SYNOPSIS
+*fsiec*
+    
+== DESCRIPTION
+fsiec is a filesystem driver that has two main tasks:
+
+. provide access to files on disk drives on the IEC/IEEE488 bus (acts as client)
+. provide computers on the IEC/IEEE488 bus access to files on GeckOS (acts as server), if the hardware supports it
+
+The filesystem driver registers one drive for each of the drives from unit 8 up to 8+FSIEC_ANZDRV.
+
+== BUILD OPTIONS
+The fsiec filesystem can be built and used for multiple architectures, for example, the PET/CBM8296, the
+C64 or the CS/A, all depending on different hardware interfaces. Therefore the actual hardware interface
+is taken out of the fsiec.a65 source file and will be included during build in the different 
+architectures.
+
+ROM::
+	if set, include boot ROM header
+FSIEC_AS_INIT::
+	if in ROM, use PK_INIT instead of PK_FS (see *startup(7)*)
+NOLOOP::
+	do not include server functionality
+NOFS::
+	do not include client functionality
+
+FSIEC_ANZDRV::
+	optional define for the number of disk drives included, starting at unit 8
+
+FSIEC_DEVICE::
+	filename that is included on build, that contains the actual hardware driver.
+
+== AUTHOR
+
+Written by André Fachat.
+
+== REPORTING BUGS
+
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+== COPYRIGHT
+
+Copyright 1997, 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+== SEE ALSO
+
+fsdev(8), fsibm(8)
+
