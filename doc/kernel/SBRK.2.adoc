@@ -1,0 +1,44 @@
+
+= SBRK(2)
+:doctype: manpage
+
+== NAME
+SBRK - set a memory block in the current task's memory mapping
+
+== SYNOPSIS
+Input::
+	* C=1 - set the new size of available memory for an environment
+	* C=0 - return the length of available memory in task, in 256 byte blocks
+Call::
+	jsr SBRK
+Output::
+	* C=0 - success
+		** AC contains the length of available memory in environment, in 256 byte blocks
+
+NOTE: this call changes all registers
+
+== DESCRIPTION
+The *SBRK* call allows to change the available memory for a given environment.
+
+It sets the freely available RAM area in the active environment to ac blocks with 256 byte
+each, by adding memory to or removing memory mappings
+from the end of the already available memory area. Returns in ac the length
+of the available memory in 256 byte blocks, if c=0 on return. Otherwise returns error.
+
+This call assumes that each environent starts at the CPU address zero, and then counts the 
+number of available memory pages. This can be used for example by a library that does memory
+management within an environment.
+
+== RETURN CODES
+The call returns the number of 256 byte blocks available for the environment, counted from
+the start of memory.
+
+== SEE ALSO
+mmu(7),ENMEM(2),SETBLK(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

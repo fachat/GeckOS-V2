@@ -40,7 +40,7 @@ E_INT::
         a blocking RECEIVE call was interrupted by a signal handler, while SIG_INT was set.
 
 == SEE ALSO
-sendreceive(7),SEND(2),RECEIVE(2),semaphores(7),signals(7)
+sendreceive(7),SEND(2),RECEIVE(2),TDUP(2),semaphores(7),signals(7)
 
 == AUTHOR
 Written by André Fachat.

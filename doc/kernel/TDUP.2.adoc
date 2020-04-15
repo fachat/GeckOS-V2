@@ -1,0 +1,37 @@
+
+= TDUP(2)
+:doctype: manpage
+
+== NAME
+TDUP - register a task for a system send destination address
+
+== SYNOPSIS
+Input::
+	* XR - task number to replace (system destination number)
+	* AC - task number to be used
+Call::
+	jsr TDUP
+Output::
+	* C=1 - error - illegal system destination number
+	* C=0 - success
+
+NOTE: AC, XR and YR are preserved.
+
+== DESCRIPTION
+Registers a task for a system destination address. So for example the *slipd(8)* program registers as
+destination for the *SEND_NET* destination.
+
+NOTE: the SEND_FM and SEND_SYS destinations can not be overwritten.
+
+== RETURN CODES
+On C=1 an error has happened, i.e. an illegal system destination number has been provided.
+
+== SEE ALSO
+sendreceive(7),SEND(2),RECEIVE(2),XRECEIVE(2),signals(7)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

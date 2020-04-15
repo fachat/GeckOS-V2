@@ -38,7 +38,7 @@ E_INT::
 	On this error, X and Y are preserved, so that the call can easily be restarted
 
 == SEE ALSO
-sendreceive(7),RECEIVE(2),XRECEIVE(2),signals(7)
+sendreceive(7),RECEIVE(2),XRECEIVE(2),signals(7),TDUP(2)
 
 == AUTHOR
 Written by André Fachat.

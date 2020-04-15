@@ -1,0 +1,37 @@
+
+= SETBLK(2)
+:doctype: manpage
+
+== NAME
+SETBLK - set a memory block in the current task's memory mapping
+
+== SYNOPSIS
+Input::
+	* YR - index in task's memory mapping table
+	* new value
+Call::
+	jsr ENMEM
+Output::
+	* C=1 - invalid index in mapping table
+	* C=0 - success
+
+NOTE: this call changes all registers
+
+== DESCRIPTION
+In the CS/A architecture each environment has a mapping table that determines the mapping of the
+environment's 64k address space into the 1M physical address space using 16 entries, one for each 4k block.
+This mapping is loaded at any time the system switches to a new environment.
+
+Using *SETBLK* the task can change its own memory mapping.
+
+== RETURN CODES
+
+== SEE ALSO
+mmu(7),ENMEM(2),SBRK(2)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
