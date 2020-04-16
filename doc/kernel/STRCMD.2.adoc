@@ -25,7 +25,7 @@ NOTE: XR and YR are not modified (except STDIO streams return true stream number
 Executes a stream command. parameter: stream number in x,
 stream command in a, returns error code in a.
 
-Possible commands are:
+Possible commands (as defined in link:../../include/kdefs.i65[kdefs.i65] are:
 
 ----
 		SC_GET		0	same as GETSTR

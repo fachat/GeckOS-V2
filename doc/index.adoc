@@ -147,12 +147,14 @@ link:build.7.adoc[Build].
 
 == More Documentation
 
+* https://github.com/fachat/GeckOS-V2[GeckOS source repository]
 * link:../RELEASE.adoc[Release Notes]
 * link:lib6502.html[lib6502] description
 * link:filesystems.7.adoc[filesystem interface]
 * link:README[README] that comes with the binary.
 * The list of known bugs is maintained on https://github.com/fachat/GeckOS-V2/issues?q=is%3Aissue+is%3Aopen+label%3Abug[github bug tracker].
 * Using the shell is described in link:../apps/lsh/lsh.1.adoc[it's man page].
+* Cenbe's https://www.lyonlabs.org/commodore/GeckOS/geckos-analysis.html[commentary on GeckOS]
 
 === Older documentation
 

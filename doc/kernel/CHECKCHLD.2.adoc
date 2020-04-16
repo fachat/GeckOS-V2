@@ -1,14 +1,14 @@
 
-= CHECKCHILD(2)
+= CHECKCHLD(2)
 :doctype: manpage
 
 == NAME
-CHECKCHILD - check the status of a child after SIG_CHLD, and release the child's resources
+CHECKCHLD - check the status of a child after SIG_CHLD, and release the child's resources
 
 == SYNOPSIS
 Input::
 Call::
-	jsr CHECKCHILD
+	jsr CHECKCHLD
 Output::
 	* C=0 - found a child
 		** AC - child return code

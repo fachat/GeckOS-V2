@@ -12,6 +12,7 @@ Input::
 Call::
 	jsr KILL
 Output::
+	-
 
 == DESCRIPTION
 Ends a complete task, with all threads in them. 

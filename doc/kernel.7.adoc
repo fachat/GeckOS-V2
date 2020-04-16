@@ -127,6 +127,10 @@ $f054	link:kernel/SETNMI.2.adoc[SETNMI]::	in systems without MMU, set/add a syst
 
 $f057	link:kernel/CTRLNMI.2.adoc[CTRLNMI]::	Send NMI ON/OFF command in AC to all currently chained NMI ctrl routines
 
+=== ERROR CODES
+Error codes are described in section
+link:errors.7.adoc[Errors].
+
 === BOOT PROCESS
 The boot process is further discussed in section
 link:startup.7.adoc[Startup].
