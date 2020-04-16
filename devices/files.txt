@@ -1,0 +1,8 @@
+/***************** devices - devices/* ************************************/
+
+nulldev.a65             kind of /dev/null
+ser_acia.a65            two serial devices for ACIA 6551
+ser_uart.a65            a serial device for UART 16550A (16 byte FIFO)
+spooler.a65             spooler - serialize output requests
+console.a65             terminal device - video, keyboard, bell
+

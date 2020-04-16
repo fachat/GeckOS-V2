@@ -1,0 +1,24 @@
+/***************** slip client - sysapps/slipd/* **************************/
+
+fstcp.c                 fstcp server
+csaip                   small example script to prepare serial line on a host
+
+main.a65                main client wraparound
+fstcp.a65               fstcp client code
+fstcp.h                 fstcp defines
+icmp.a65                ICMP (ping echo) code
+mem.a65a                memory handling for packets
+slipi.a65               SLIP input loop
+slipo.a65               SLIP output loop
+sltcp.def               IP & TCP defines
+tcp.a65                 basic TCP code (when packet arrives)
+tcpuser.a65             basic TCP code (user calls)
+tcpsrv.a65              echo, discard, and chargen code
+putil.a65               protocl utility functions
+tutil.a65               TCP utility functions
+util.a65                utility functions
+mon.a65                 some general debug output
+rsh.a65                 telnetd server
+libip.a65               lib6502 binding
+
+

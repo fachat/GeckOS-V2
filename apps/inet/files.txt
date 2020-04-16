@@ -1,0 +1,8 @@
+/***************** inet apps - apps/inet/* ********************************/
+
+tlogin.a65              login program called by slipd when incoming telnet
+                        connection is opened.
+telnet.a65              telnet program
+httpd.a65               lib6502 WWW server - not yet working.
+
+
