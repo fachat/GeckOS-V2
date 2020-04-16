@@ -28,7 +28,12 @@ Error return codes are given when at return, C=1.
 E_NOSTR:: no free stream available
 
 == SEE ALSO
-STREAMS(7), FRESTR(2), GETC(2), UNGETC(2), PUTC(2), STRCMD(2)
+link:../streams.7.adoc[streams(7)], 
+link:FRESTR.2.adoc[FRESTR(2)], 
+link:GETC.2.adoc[GETC(2)], 
+link:UNGETC.2.adoc[UNGETC(2)], 
+link:PUTC.2.adoc[PUTC(2)], 
+link:STRCMD.2.adoc[STRCMD(2)]
 
 == AUTHOR
 Written by André Fachat.

@@ -29,7 +29,11 @@ Error return codes are given when at return, C=1.
 E_NOSEM:: no valid semaphore number
 
 == SEE ALSO
-semaphores(7), GETSEM(2), PSEM(2), VSEM(2), LOCKSEM(2)
+link:../semaphores.7.adoc[semaphores(7)], 
+link:GETSEM.2.adoc[GETSEM(2)], 
+link:PSEM.2.adoc[PSEM(2)], 
+link:VSEM.2.adoc[VSEM(2)], 
+link:LOCKSEM.2.adoc[LOCKSEM(2)]
 
 == AUTHOR
 Written by André Fachat.

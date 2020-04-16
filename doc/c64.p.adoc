@@ -231,7 +231,8 @@ After the disappointing results with the ACIA, replaced it with a 16550 UART, th
 Defining *UARTBASE* includes this device driver.
 
 == SEE ALSO
-DEVCMD(2), devices(7)
+link:kernel/DEVCMD.2.adoc[DEVCMD(2)], 
+link:devices.7.adoc[devices(7)]
 
 == AUTHOR
 Written by André Fachat.

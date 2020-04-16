@@ -83,7 +83,9 @@ value it has returned. A child whose parent has set SIG_CHLD will linger around 
 active task until the parent calls *CHECKCHILD(2)* to get this information.
  
 == SEE ALSO
-SETSIG(2),SENDSIG(2),CHECKCHILD(2)
+link:kernel/SETSIG.2.adoc[SETSIG(2)]
+link:kernel/SENDSIG.2.adoc[,SENDSIG(2)],
+link:kernel/CHECKCHLD.2.adoc[CHECKCHLD(2)]
 
 == AUTHOR
 Written by André Fachat.

@@ -25,7 +25,9 @@ NOTE: this information is only available when the child died while in the parent
 
 
 == SEE ALSO
-signals(7),SENDSIG(2),SETSIG(2)
+link:../signals.7.adoc[signals(7)],
+link:SENDSIG.2.adoc[SENDSIG(2)],
+link:SETSIG.2.adoc[SETSIG(2)]
 
 == AUTHOR
 Written by André Fachat.

@@ -85,7 +85,8 @@ disk, allocates main and zeropage memory for it, relocates it to
 the given addresses and starts it via the kernel.
 
 == SEE ALSO
-sendreceive(7),semaphores(7)
+link:sendreceive.7.adoc[sendreceive(7)],
+link:semaphores.7.adoc[semaphores(7)]
 
 Suggested reading: "Operating Systems, design and implementation", Andrew S. Tanenbaum, Prentice-Hall
 

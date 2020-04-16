@@ -90,7 +90,17 @@ When a task terminates (i.e. the last thread dies), e.g. through *TERM(2)* or *K
 set to waiting for CHECKCHILD
 
 == SEE ALSO
-FORK(2),TERM(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),DUP(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+link:kernel/FORK.2.adoc[FORK(2)],
+link:kernel/TERM.2.adoc[TERM(2)],
+link:kernel/KILL.2.adoc[KILL(2)],
+link:kernel/YIELD.2.adoc[YIELD(2)],
+link:kernel/FORKT.2.adoc[FORKT(2)],
+link:kernel/GETINFO.2.ado¢[GETINFO(2)],
+link:kernel/DUP.2.adoc[DUP(2)],
+link:kernel/GETPID.2.adoc[GETPID(2)],
+link:kernel/SLOCK.2.adoc[SLOCK(2)],
+link:kernel/RENICE.2.adoc[RENICE(2)],
+link:kernel/SETINFO.2.adoc[SETINFO(2)]
 
 == AUTHOR
 Written by André Fachat.

@@ -67,7 +67,12 @@ Note that the "ownership" of the semaphore is transferred from the sending task 
 resource management.
 
 == SEE ALSO
-SEND(2), RECEIVE(2), XRECEIVE(2),TDUP(2),filesystems(7),semaphores(7)
+link:kernel/SEND.2.adoc[SEND(2)], 
+link:kernel/RECEIVE.2.adoc[RECEIVE(2)],
+link:kernel/XRECEIVE.2.adoc[XRECEIVE(2)],
+link:kernel/TDUP.2.adoc[TDUP(2)],
+link:filesystems.7.adoc[filesystems(7)],
+link:semaphores.7.adoc[semaphores(7)]
 
 == AUTHOR
 Written by André Fachat.

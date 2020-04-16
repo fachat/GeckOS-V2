@@ -70,7 +70,9 @@ These ports to MMU systems are currently available:
 |====
 
 == SEE ALSO
-sendreceive(7),semaphores(7),nommu(7)
+link:sendreceive.7.adoc[sendreceive(7)],
+link:semaphores.7.adoc[semaphores(7)],
+link:nommu.7.adoc[nommu(7)]
 
 Suggested reading: "Operating Systems, design and implementation", Andrew S. Tanenbaum, Prentice-Hall
 

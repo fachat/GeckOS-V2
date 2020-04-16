@@ -27,7 +27,11 @@ NOTE: the SEND_FM and SEND_SYS destinations can not be overwritten.
 On C=1 an error has happened, i.e. an illegal system destination number has been provided.
 
 == SEE ALSO
-sendreceive(7),SEND(2),RECEIVE(2),XRECEIVE(2),signals(7)
+link:../sendreceive.7.adoc[sendreceive(7)],
+link:SEND.2.adoc[SEND(2)],
+link:RECEIVE.2.adoc[RECEIVE(2)],
+link:XRECEIVE.2.adoc[XRECEIVE(2)],
+link:../signals.7.adoc[signals(7)]
 
 == AUTHOR
 Written by André Fachat.

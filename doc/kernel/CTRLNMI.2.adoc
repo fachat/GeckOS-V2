@@ -32,7 +32,8 @@ E_NOTIMP::
 	Using a control code other than *NMI_ON* or *NMI_OFF*
 
 == SEE ALSO
-devices(7),SETNMI(2)
+link:../devices.7.adoc[devices(7)],
+link:SETNMI.2.adoc[SETNMI(2)]
 
 == AUTHOR
 Written by André Fachat.

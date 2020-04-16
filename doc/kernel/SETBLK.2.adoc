@@ -27,7 +27,9 @@ Using *SETBLK* the task can change its own memory mapping.
 == RETURN CODES
 
 == SEE ALSO
-mmu(7),ENMEM(2),SBRK(2)
+link:../mmu.7.adoc[mmu(7)],
+link:ENMEM.2.adoc[ENMEM(2)],
+link:SBRK.2.adoc[SBRK(2)]
 
 == AUTHOR
 Written by André Fachat.

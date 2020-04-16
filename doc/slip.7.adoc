@@ -290,7 +290,7 @@ You can also start the slipd program directly from the C64
    - lib6502 binding seems to bug. 
 
 == SEE ALSO
-c64(p)
+link:c64.p.adoc[c64(p)]
 
 == AUTHOR
 Written by André Fachat.

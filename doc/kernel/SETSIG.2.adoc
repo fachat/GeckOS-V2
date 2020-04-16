@@ -28,7 +28,9 @@ Sets the new signal mask or signal handler address, and returns the original val
 The call returns the original signal mask resp. the original signal handler address.
 
 == SEE ALSO
-signals(7),SENDSIG(2),CHECKCHILD(2)
+link:../signals.7.adoc[signals(7)],
+link:SENDSIG.2.adoc[SENDSIG(2)],
+link:CHECKCHLD.2.adoc[CHECKCHLD(2)]
 
 == AUTHOR
 Written by André Fachat.

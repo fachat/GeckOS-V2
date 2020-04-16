@@ -37,7 +37,7 @@ Using the PCBUF without locking with a semaphore should be handled with
 care, however.
 
 == SEE ALSO
-nommu(7)
+link:nommu.7.adoc[nommu(7)]
 
 == AUTHOR
 Written by André Fachat.

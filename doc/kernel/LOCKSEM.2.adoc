@@ -33,7 +33,11 @@ Error return codes are given when at return, C=1.
 E_SEMSET:: semaphore is already locked
 
 == SEE ALSO
-semaphores(7), FRESEM(2), PSEM(2), VSEM(2), PSEM(2)
+link:../semaphores.7.adoc[semaphores(7)], 
+link:FRESEM.2.adoc[FRESEM(2)], 
+link:PSEM.2.adoc[PSEM(2)], 
+link:VSEM.2.adoc[VSEM(2)], 
+link:PSEM.2.adoc[PSEM(2)]
 
 == AUTHOR
 Written by André Fachat.

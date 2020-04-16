@@ -40,7 +40,17 @@ E_NOSTR::
 	invalid stream number (not any of STDIN, STDOUT, STDERR, STDCERR)
 
 == SEE ALSO
-scheduler(7),FORK(2),TERM(2),KILL(2),YIELD(2),FORKT(2),GETINFO(2),GETPID(2),SLOCK(2),RENICE(2),SETINFO(2)
+link:../scheduler.7.adoc[scheduler(7)],
+link:FORK.2.adoc[FORK(2)],
+link:TERM.2.adoc[TERM(2)],
+link:KILL.2.adoc[KILL(2)],
+link:YIELD.2.adoc[YIELD(2)],
+link:FORKT.2.adoc[FORKT(2)],
+link:GETINFO.2.adoc[GETINFO(2)],
+link:GETPID.2.adoc[GETPID(2)],
+link:SLOCK.2.adoc[SLOCK(2)],
+link:RENICE.2.adoc[RENICE(2)],
+link:SETINFO.2.adoc[SETINFO(2)]
 
 == AUTHOR
 Written by André Fachat.

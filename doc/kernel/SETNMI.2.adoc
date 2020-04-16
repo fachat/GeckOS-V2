@@ -75,7 +75,8 @@ init	lda #<newnmi	; register newnmi
 == RETURN CODES
 
 == SEE ALSO
-devices(7),CTRLNMI(2)
+link:../devices.7.adoc[devices(7)],
+link:CTRLNMI.2.adoc[CTRLNMI(2)]
 
 == AUTHOR
 Written by André Fachat.

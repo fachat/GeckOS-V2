@@ -91,7 +91,12 @@ NOTE: Ctrl-C / break handling is experimental and not further supported by or in
 The streams are currently implemented as kernel-space buffers that hold 64 bytes each.
 
 == SEE ALSO
-GETSTR(2), FRESTR(2), PUTC(2), GETC(2), UNGETC(2), STRCMD(2)
+link:kernel/GETSTR.2.adoc[GETSTR(2)], 
+link:kernel/FRESTR.2.adoc[FRESTR(2)], 
+link:kernel/PUTC.2.adoc[PUTC(2)], 
+link:kernel/GETC.2.adoc[GETC(2)], 
+link:kernel/UNGETC.2.adoc[UNGETC(2)], 
+link:kernel/STRCMD.2.adoc[STRCMD(2)]
 
 == AUTHOR
 Written by André Fachat.

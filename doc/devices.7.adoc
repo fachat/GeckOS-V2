@@ -103,7 +103,9 @@ a certain number of streams can be handled before an error is returned
 on open.
 
 == SEE ALSO
-DEVCMD(2),SETNMI(2),CTRLNMI(2)
+link:kernel/DEVCMD.2.adoc[DEVCMD(2)],
+link:kernel/SETNMI.2.adoc[SETNMI(2)],
+link:kernel/CTRLNMI.2.adoc[CTRLNMI(2)]
 
 == AUTHOR
 Written by André Fachat.

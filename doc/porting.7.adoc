@@ -76,6 +76,10 @@ Also some macros must be defined:
 The full descriptions can be found in the C64 kenv file for example. This may look complicated, but it isn't. If you have a simple 6502 system without memory management, just copy (or set a link) to the C64 file. If you have a more complicated system, have a look at the CS/A65 file. 
 
 == SEE ALSO
+link:embedded.7.adoc[embedded(7)],
+link:mmu.7.adoc[mmu(7)],
+link:nommu.7.adoc[nommu(7)],
+link:c64.p.adoc[c64(p)]
 
 == AUTHOR
 Written by André Fachat.

@@ -60,7 +60,11 @@ Semaphores are "unlocked" and "disowned" when a task dies, i.e. its last thread 
 In this process waiting threads (of other tasks) may be woken up.
 
 == SEE ALSO
-GETSEM(2), FRESEM(2), PSEM(2), VSEM(2), LOCKSEM(2)
+link:kernel/GETSEM.2.adoc[GETSEM(2)],
+link:kernel/FRESEM.2.adoc[FRESEM(2)],
+link:kernel/PSEM.2.adoc[PSEM(2)],
+link:kernel/VSEM.2.adoc[VSEM(2)],
+link:kernel/LOCKSEM.2.adoc[LOCKSEM(2)]
 
 == AUTHOR
 Written by André Fachat.

@@ -87,7 +87,7 @@ Error return codes are given when at return, C=1.
 E_NODEV:: no valid device number
 
 == SEE ALSO
-devices(7)
+link:../devices.7.doc[devices(7)].
 
 == AUTHOR
 Written by André Fachat.

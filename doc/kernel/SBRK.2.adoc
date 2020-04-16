@@ -34,7 +34,9 @@ The call returns the number of 256 byte blocks available for the environment, co
 the start of memory.
 
 == SEE ALSO
-mmu(7),ENMEM(2),SETBLK(2)
+link:../mmu.7.adoc[mmu(7)],
+link:ENMEM.2.adoc[ENMEM(2)],
+link:SETBLK.2.adoc[SETBLK(2)]
 
 == AUTHOR
 Written by André Fachat.

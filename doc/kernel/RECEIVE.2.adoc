@@ -44,7 +44,12 @@ E_INT::
 	a blocking RECEIVE call was interrupted by a signal handler, while SIG_INT was set.
 
 == SEE ALSO
-sendreceive(7),SEND(2),XRECEIVE(2),TDUP(2),semaphores(7),signals(7)
+link:../sendreceive.7.adoc[sendreceive(7)],
+link:SEND.2.adoc[SEND(2)],
+link:XRECEIVE.2.adoc[XRECEIVE(2)],
+link:TDUP.2.adoc[TDUP(2)],
+link:../semaphores.7.adoc[semaphores(7)],
+link:../signals.7.adoc[signals(7)]
 
 == AUTHOR
 Written by André Fachat.
