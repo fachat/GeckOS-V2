@@ -1,0 +1,47 @@
+
+PIO	=$e810
+
+	.word $033c
+	*=$033c
+start
+	php
+	sei
+	ldx #0
+	stx store
+	stx kcnt
+loop	
+	lda PIO
+	and #$f0
+	ora kcnt
+	sta PIO
+
+check	lda PIO+2
+	cmp PIO+2
+	bne check
+	sta buf
+
+	ldy #0
+bitout	lda #$18	; $30/2
+	rol buf
+	rol 
+	sta $8000,y
+store	=*-2		; self-modifying
+	iny
+	cpy #8
+	bcc bitout
+
+	lda #10
+	clc
+	adc store
+	sta store
+
+	inc kcnt
+	lda kcnt
+	cmp #10
+	bcc loop
+	plp
+	jmp start
+
+kcnt	.byt 0
+buf	.byt 0
+

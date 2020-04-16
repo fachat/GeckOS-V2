@@ -31,8 +31,11 @@
 
 #define	MAX_ASCREEN	#2		/* soft limit */
 
-;#define	SWITCHKEY	23
-#define	SWITCHKEY	79
+#ifdef PET_KEYB_GRAPHICS
+#define	SWITCHKEY	79		/* graphics keyboard REV/OFF key */
+#else
+#define	SWITCHKEY	23		/* ESC key? */
+#endif
 
 #define	SET_MMU		
 

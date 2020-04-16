@@ -28,7 +28,7 @@
 
 #define	MAX_ASCREEN	#3		/* soft maximum number of screens */
 
-#define	SWITCHKEY	C64SWITCH
+#define	SWITCHKEY	61
 
 #define	SET_MMU
 
@@ -209,6 +209,17 @@ tzei      .word 0
           rts
           .)
 
+	; must return x=shiftfl, y=index in keytable, a=ascii code
+	; shiftfl:
+	; 	0 = none
+	; 	1 = Shift
+	; 	2 = Ctrl
+	;	3 = shift+Ctrl
+	; Switchkey handling:
+	;	0 = Tab
+	;	1 = switch mode
+	;	2 = switch console
+	;	3 = close Stream
 &&getkey  .(
           lda #0		; clear shift key flag
           sta shiftfl
@@ -329,7 +340,7 @@ ktab      .byt TC_BS, TC_CR, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CDWN
           .byt "9ij0mkon"
 	  .byt "+pl-.:@,"
           .byt "|*;", TC_HOME, 1 /* shift */, "=^^/"
-          .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "q", 3 /* stop */
+          .byt "1_", 2 /* control */, "2 ", TC_HT /* C= */, "q", 3 /* stop */
 #ifdef CHECK_C128
 	  .byt TC_HELP, "85", TC_HT, "2471"
 	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"

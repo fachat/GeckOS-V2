@@ -206,6 +206,8 @@ nocheck
 	bcs notact
 	cpy #SWITCHKEY
 	bne gotchar
+	dex
+	bmi gotchar	; ignore switch key without shift/ctrl
 	jsr crsroff	; must preserve xr
 	jsr do_switch
 	jmp notact
@@ -287,8 +289,13 @@ end1
 
 do_switch .(
           dex
-          bpl p1c2       ; without shift or ctrl
+          bmi sw_mode    ; with shift
+	  dex
+	  bmi sw_next	 ; with ctrl
+	  bpl sw_close
 
+	; next screen
+sw_next	.(
 p1c1b     ldx actscr	 ; needed to tell setact the old screen number
 	  inc actscr     ; then switch screen
 	  lda actscr
@@ -302,24 +309,22 @@ p1c1a
           and #DC_SW_EXIT
           bne p1c1b
           tya
-          jsr setact
-          jmp p1b
+          jmp setact
+	.)
 
-p1c2      dex
-          bmi p1b        ; shift only, then ignore
-          dex
-          bpl p1c3       ; Ctrl only, then mode switch
+	; switch mode
+sw_mode	.(
           ldy screen
           lda status,y
           eor #DC_SW_MOD
           sta status,y
-          jmp p1b
+          rts
+	.)
 
-p1c3      dex
-          bpl p1b        ; Ctrl and Shift then close stream
-          jsr rxoff
-          ;jmp p1b
-p1b	rts
+	; switch off and close stream
+sw_close .(
+          jmp rxoff
+	.)
 	.)
 
 /*************************************************************************/

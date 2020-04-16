@@ -193,9 +193,12 @@ Here is a comparison of the real machine, VICE and what GeckOS uses.
 
 [options="header",frame="top"]
 |====
-|GeckOS|C64|VICE on PC
-|Ctrl | Ctrl | Tab 
-|Console switch | C= | Left Ctrl 
+|GeckOS|C64|VICE on PC (3.4+)
+|Ctrl | Ctrl | Left Ctrl 
+|Tab  | C=   | Tab
+|Console switch | Ctrl + C= | Left Ctrl + Tab 
+|Console mode | Shift + C= | Shift + Tab 
+|Logoff  | Shift + Ctrl + C= | Shift + Left Ctrl + Tab 
 |\| | Pound | \| 
 |====
 
