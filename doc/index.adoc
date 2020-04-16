@@ -5,8 +5,7 @@ Version 2.0.1 (c) 1989-1998 Andr&eacute; Fachat
 GeckOS is a unix-alike multitasking and multithreading operating system
 for the 6502.
 
-Version 2 is an extensive rewrite compared to version 1.
-From version 2.0 on it has a lot of new features:
+Version 2 is an extensive rewrite and has a lot of new features:
 
 * multithreading
 * dynamic memory management
@@ -16,10 +15,12 @@ From version 2.0 on it has a lot of new features:
 
 == Quickstart
 
-. Download and unpack the GeckOS source distribution from http://www.6502.org/users/andre/osa/index.html[6502.org].
+. Either 
+** Download and unpack the GeckOS source distribution from http://www.6502.org/users/andre/osa/index.html[6502.org].
+** Clone the https://github.com/fachat/GeckOS-V2[Github repository]
 . Download and install the xa65 cross-assembler. On Linux, xa is usually included in the distribution. Alternatively download from https://www.floodgap.com/retrotech/xa/[xa65 site]. 
-. Download and install the VICE emulator.
-. In the GeckOS directory, change to arch/cbm8x96/boot and type "make emurun" to build the system, and run it in the VICE xpet emulator.
+. Download and install the VICE emulator. Usually VICE is included in Linux distributions, but ROMs may have to be provided separately. If you want, download, build and install it from the https://sourceforge.net/projects/vice-emu/[VICE homepage].
+. In the unpacked GeckOS directory, change to either link:../arch/cbm8x96/boot[arch/cbm8x96/boot] or link:../arch/c64/boot[arch/c64/boot] and type "make emurun" to build the system, and run it in the VICE emulator.
 
 == Description
 GeckOS/A65 is a full-featured Multitasking/Multithreading operating system
@@ -146,6 +147,7 @@ link:build.7.adoc[Build].
 
 == More Documentation
 
+* link:../RELEASE.adoc[Release Notes]
 * link:lib6502.html[lib6502] description
 * link:filesystems.7.adoc[filesystem interface]
 * link:README[README] that comes with the binary.
