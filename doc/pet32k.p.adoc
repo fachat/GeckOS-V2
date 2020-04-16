@@ -150,26 +150,18 @@ using the C64's built-in VIC-II chip.
 
 ==== KEYBOARD MAPPING
 The keyboard is mapped such that it can run on the real hardware, but also in the real machine.
-Here are the important key mappings:
 
-Left Shift + Rvs/Off::
-	switch between virtual consoles 
-Left Shift::
-	The Ctrl-key.
-Left Shift + y::
-	This combination defines the pipe character.
-
-Here is a comparison of the real machine, VICE and what GeckOS uses.
+Here is a comparison of the real machine, VICE (3.4+) and what GeckOS uses.
 
 [options="header",frame="top"]
 |====
-|GeckOS|PET|VICE on PC (3.4+)
-|Ctrl | Left Shift | Left Shift 
-|Tab  | Rvs/Off  | Tab
-|Console switch | Left Shift + Rvs/Off | Left Shift + Tab 
-|Console mode | Right Shift + Rvs/Off | Right Shift + Tab
-|Logoff  | Left Shift + Right Shift + Rvs/Off | n/a
-|\| | Left Shift + y | Left Shift + y 
+|GeckOS         | PET (Graphics kbd) | VICE (-model 4032) | PET (business kbd) | VICE (-model 8032)
+|Ctrl           | Left Shift         | Left Shift 	  | Repeat	       | Right Ctrl
+|Tab            | Rvs/Off            | Tab                | Tab                | Tab
+|Console switch | Left Shift + Rvs/Off | Left Shift + Tab | Repeat + Tab       | Right Ctrl + Tab
+|Console mode   | Right Shift + Rvs/Off | Right Shift + Tab | Shift + Tab      | Shift + Tab
+|Logoff         | Left Shift + Right Shift + Rvs/Off | n/a | Shift + Repeat + Tab | Shift + Right Ctrl + Tab
+|\|             | Left Shift + y     | Left Shift + y     | Repeat + y         | Right Ctrl + y
 |====
 
 NOTE: a VICE bug prevents the use of Left Shift for Control and both Shift keys for Shift-Control.

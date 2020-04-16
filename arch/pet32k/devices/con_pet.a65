@@ -34,7 +34,7 @@
 #ifdef PET_KEYB_GRAPHICS
 #define	SWITCHKEY	79		/* graphics keyboard REV/OFF key */
 #else
-#define	SWITCHKEY	23		/* ESC key? */
+#define	SWITCHKEY	39		/* business keyboard Tab key */
 #endif
 
 #define	SET_MMU		

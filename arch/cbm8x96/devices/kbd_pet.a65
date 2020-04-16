@@ -202,7 +202,7 @@ ix1
 noshift    ; no CTRL on graphics keyboard
 #ifdef PET_KEYB_GRAPHICS
 	  txa
-	  and #%00000001	; left shift
+	  and #%00000001  ; left shift
 #else
           inc PIO	; 7 for business
 x0        lda PIO+2
@@ -215,10 +215,12 @@ x0        lda PIO+2
           iny
 noctrl    
 #ifdef VICE		/* VICE bug that automatically sets both shift keys when only left is used */
+#ifdef PET_KEYB_GRAPHICS
 	  cpy #3
 	  bne novice
 	  dey
 novice
+#endif
 #endif
 	  sty shiftfl
           tya
@@ -293,25 +295,25 @@ ttab      .word ktab,stab
 
 ktab      .asc ".", 0, TC_CRGT, "8-", "8529",0,"^^70741"
 	  .asc "5;k]hfs",TC_ESC,"6@l",TC_CR,"jgda"
-	  .asc TC_BS,"pi\yrw",0, "4[o", TC_CDWN, "uteq"
+	  .asc TC_BS,"pi\yrw",TC_HT, "4[o", TC_CDWN, "uteq"
 	  .asc "3",0,0,"..bc",0,"2",0,0,"0,nvz"
 	  .asc "1/",0,TC_HOME,"m x",0,0,0,":",3,"963_"
 
 stab      .asc 0, 0, TC_CLFT, "8=", "(%",34,"9^^",0,"70'$!"
 	  .asc "5+K]HFS",TC_ESC,"6@L",TC_CR,"JGDA"
-	  .asc TC_INS,"PI\YRW",0, "4[O", TC_CUP, "UTEQ"
+	  .asc TC_INS,"PI\YRW",TC_HT, "4[O", TC_CUP, "UTEQ"
 	  .asc "3",0,0,".>BC",0,"2",0,0,"0<NVZ"
 	  .asc "1?",0,TC_CLR,"M X",0,0,0,"*",0,")&#_"
 
 ctab      .asc ".", 0, TC_WRU, "8",0, "8529",0,"^^70741"
 	  .asc "5;^k]^h^f^s",TC_ESC,"6@^l",TC_CR,"^j^g^d^a"
-	  .asc TC_DEL,"^p^i\^y^r^w",0, "4[^o", TC_WLO, "^u^t^e^q"
+	  .asc TC_DEL,"^p^i\|^r^w",TC_HT, "4[^o", TC_WLO, "^u^t^e^q"
 	  .asc "3",0,0,"..^b^c",0,"2",0,0,"0,^n^v^z"
 	  .asc "1/",0,TC_WCLS,"^m ^x",0,0,0,":",3,"963_"
 
 sctab     .asc 0, 0, TC_CLFT, "8",0, "(%",34,"9^^",0,"70'$!"
 	  .asc "5+^K]^H^F^S",TC_ESC,"6@^L",TC_CR,"^J^G^D^A"
-	  .asc TC_INS,"^P^I\^Y^R^W",0, "4[^O", TC_CUP, "^U^T^E^Q"
+	  .asc TC_INS,"^P^I\|^R^W",TC_HT, "4[^O", TC_CUP, "^U^T^E^Q"
 	  .asc "3",0,TC_CUP,".>^B^C",0,"2",0,0,"0<^N^V^Z"
 	  .asc "1?",0,TC_CLR,"^M ^X",0,0,0,"*",0,")&#_"
 

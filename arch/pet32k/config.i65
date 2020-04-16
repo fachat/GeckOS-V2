@@ -69,8 +69,5 @@
 #undef	  MAP_STACK
 #undef	  MAP_MEM
 
-/* graphics keyboard */
-#define PET_KEYB_GRAPHICS
-
 #endif	/* _PETCONFIG_ */
 
