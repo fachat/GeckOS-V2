@@ -24,9 +24,10 @@ From version 2.0 on it has a lot of new features:
 == Description
 GeckOS/A65 is a full-featured Multitasking/Multithreading operating system
 for the 6502. It is preemptive and implements some Unix-like features, 
-like signals, semaphores, 
+like 
+link:signals.7.adoc[signals], link:semaphores.7.adoc[semaphores], 
 link:fileformat.html[relocatable fileformat],
-link:lib6502.html[standard library], internet support via
+link:lib6502.html[standard library], link:slip.7.adoc[internet support] via
 a kind of simplified sockets and last but not least virtual consoles.
 
 It is extremly scalable. Stripped down to the scheduler and interrupt
@@ -52,7 +53,7 @@ slipd daemon. Also a remote login can be done. This way the OS can run
 programs to for example read sensors and write the stuff to files, which
 are exported by the WWW server.
 
-The relocatable o65 fileformat used by the lib6502 standard library
+The link:fileformat.html[relocatable o65 fileformat] used by the lib6502 standard library
 in version 2.0.0 allows more than one instance of a program being run 
 at the same time without interference, even without virtual memory.
 Also the very same binaries runs on all supported platforms (if they do not
@@ -143,26 +144,25 @@ kernel description.
 More information on how to build can be found in
 link:build.7.adoc[Build].
 
-== More Docs
+== More Documentation
 
-* What's link:historic/LOG-2.0[new in this version since 2.0.0]
 * link:lib6502.html[lib6502] description
-* link:filesystems.html[filesystem interface]
+* link:filesystems.7.adoc[filesystem interface]
 * link:README[README] that comes with the binary.
-<p><li> There also is a list of <a href="BUGS">Known Bugs</a>
-<p><li> An instruction to the lib6502 <a href="README.lsh">lsh</a>
-</ul>
-<p>Old stuff:</p>
-<ul>
-* The link:historic/LOG-pre-2.0[Changelog] for version 1.3.* and for 
-the development of 2.0.0.
+* The list of known bugs is maintained on https://github.com/fachat/GeckOS-V2/issues?q=is%3Aissue+is%3Aopen+label%3Abug[github bug tracker].
+* Using the shell is described in link:../apps/lsh/lsh.1.adoc[it's man page].
+
+=== Older documentation
+
+* What's link:historic/LOG-2.0[new in 2.0.9 since 2.0.0]
+* The link:historic/LOG-pre-2.0[Changelog] for version 1.3.* and for the development of 2.0.0.
 
 == History
 I didn't dream of this becoming such a nice project when I started
 building http://www.6502.org/users/andre/csa/index.html[this computer] in 1989.
 
 After someone asked me to release it to the public, I decided
-to put it under the <a href="COPYING">GNU public license</a>.
+to put it under the link:../COPYING[GNU public license].
 (Which, of course, doesn't hold true for the ported BASIC interpreter, which
 is taken from the C64.
 See link:../sysapps/basic.1.adoc[basic.1.adoc] for more.) Also the 
@@ -179,4 +179,4 @@ wants it ;-)
 Ideas, proposals and bug reports are collected and managed on github in the
 https://github.com/fachat/GeckOS-V2/issues[GeckOS Issue Tracker].
 
-Last modified 14 april 2020 by A. Fachat<br>
+Last modified 14 april 2020 by A. Fachat
