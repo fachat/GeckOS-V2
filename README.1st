@@ -5,7 +5,7 @@ This is the OS/A65 source.
 This comes of course with no warranty in any form. See
 the file COPYING for the GNU public license.
 
-The doc directory contains all necessary documentation (in html mostly).
+The doc directory contains all necessary documentation (in asciidoc mostly).
 I propose reading doc/index.html with your favourite html browser first.
 
 kernel, lib6502, oldlib, devices and include are general source directories.

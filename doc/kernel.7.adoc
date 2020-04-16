@@ -139,20 +139,6 @@ link:filesystems.7.adoc[Filesystems].
 For accessing the internet, see section
 link:slip.7.adoc[SLIP].
 
-== PORTING
-For porting GeckOS to other architectures, please look at these sections:
-
-* link:porting.7.adoc[Porting]
-* link:mmu.7.adoc[MMU]
-* link:nommu.7.adoc[No-MMU]
-* link:embedded.7.adoc[Embedded Systems]
-
-For current ports, please look at 
-
-* link:c64.p.adoc[c64]
-* pet32k
-* cbm8x96
-
 == HISTORY
 The change from kernel 1.3 to kernel 2.0 is radical in some things, but 
 conservative in others. The complete environment handling has been 
