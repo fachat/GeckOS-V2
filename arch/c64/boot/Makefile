@@ -1,4 +1,6 @@
 
+MANPAGES=../../../*/*/*.1.adoc
+
 apps = lsh lmon
 APPSDIR=../../../apps
 
@@ -44,7 +46,7 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} c64rom boot loader index.html test.bat
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html test.bat
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64

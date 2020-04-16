@@ -1,4 +1,6 @@
 
+MANPAGES=../../../*/*/*.1.adoc
+
 apps = lsh lmon
 APPSDIR=../../../apps
 
@@ -43,7 +45,7 @@ loader: loader.bas
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader
-	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} rom 
+	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom 
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
