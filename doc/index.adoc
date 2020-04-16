@@ -1,0 +1,186 @@
+= GeckOS/A65 Operating System 
+Version 2.0.1 (c) 1989-1998 Andr&eacute; Fachat 
+
+== Introduction
+GeckOS is a unix-alike multitasking and multithreading operating system
+for the 6502.
+
+Version 2 is an extensive rewrite and has a lot of new features:
+
+* multithreading
+* dynamic memory management
+* relocatable fileformat
+* lib6502 standard library
+* internet support
+
+== Quickstart
+
+. Either 
+** Download and unpack the GeckOS source distribution from http://www.6502.org/users/andre/osa/index.html[6502.org].
+** Clone the https://github.com/fachat/GeckOS-V2[Github repository]
+. Download and install the xa65 cross-assembler. On Linux, xa is usually included in the distribution. Alternatively download from https://www.floodgap.com/retrotech/xa/[xa65 site]. 
+. Download and install the VICE emulator. Usually VICE is included in Linux distributions, but ROMs may have to be provided separately. If you want, download, build and install it from the https://sourceforge.net/projects/vice-emu/[VICE homepage].
+. In the unpacked GeckOS directory, change to either link:../arch/cbm8x96/boot[arch/cbm8x96/boot] or link:../arch/c64/boot[arch/c64/boot] and type "make emurun" to build the system, and run it in the VICE emulator.
+
+== Description
+GeckOS/A65 is a full-featured Multitasking/Multithreading operating system
+for the 6502. It is preemptive and implements some Unix-like features, 
+like 
+link:signals.7.adoc[signals], link:semaphores.7.adoc[semaphores], 
+link:fileformat.html[relocatable fileformat],
+link:lib6502.html[standard library], link:slip.7.adoc[internet support] via
+a kind of simplified sockets and last but not least virtual consoles.
+
+It is extremly scalable. Stripped down to the scheduler and interrupt
+handling the kernel is only slightly above 2k. In normal 
+link:embedded.html[embedded systems]
+the kernel has around 4k, with only application programs running. 
+Full featured systems have a 4k kernel, and several support tasks
+provided system services like TCP/SLIP and (different) filesystems.
+
+The kernel is almost completely hardware independent. All the 
+architecture-specific stuff is in a separate subdirectory
+for each architecture.
+
+The link:lib6502.html[lib6502] as standard library allows easy 
+access to the system services. Parts of this library are already 
+implemented in another 6502 operating system, Lunix by Daniel Dallmann.
+This way source code compatibility is achieved.
+
+Version 2.0.0 features a "slipd" server process that brings easy internet
+access to all lib6502 programs, that can now access TCP connections
+like files. A stable WWW server running on the OS is built into the
+slipd daemon. Also a remote login can be done. This way the OS can run
+programs to for example read sensors and write the stuff to files, which
+are exported by the WWW server.
+
+The link:fileformat.html[relocatable o65 fileformat] used by the lib6502 standard library
+in version 2.0.0 allows more than one instance of a program being run 
+at the same time without interference, even without virtual memory.
+Also the very same binaries runs on all supported platforms (if they do not
+use architecture specific stuff, but lib6502 calls only).
+
+== Architectures
+GeckOS is a microkernel architecture. It uses a small kernel that mainly
+provides the inter-process communication and the scheduling between
+tasks. Anything else is done in separate tasks (or processes in other
+operating systems).
+
+The following diagram gives an overview on the architecture:
+
+----
+    ---------- --------- --------- ------- --------
+    |  fsdev | | fsiec | | fsibm | | lsh | | lmon | tasks...
+    |        | |       | |       | -------------------------------------
+    |        | |       | |       | |  lib6502
+    ---------- --------- --------- -------------------------------------
+    ---------------------------- -------------- ----- ---------- --------
+    |          |               | |    fsm     | |   | |        | |      |
+    |          |      env      | -------------- |   | |        | |      |
+    |          |               ------------------   | | stream | | mem  |
+    |          |                                    | |        | |      |
+    |          -------------------------------------- |        | |      |
+    |             devices                           | |        | |      |
+    ------------------------------------------------- ---------- --------
+    --------- ------- ----------- ----------
+    | video | | par | | spooler | | serial | devices...
+    --------- ------- ----------- ----------
+----
+The kernel is divided into multiple modules that work together and faciliate the
+communication between the devices (like console (video), serial, ...) and
+the different tasks.
+
+A Task can be a system task like a filesystem driver (like *fsiec(8)* or *fsdev(8)*),
+or user space tasks like *lsh(1)* or *lmon(1)*. File commands like *ls(1)* or *mkdir(1)*,
+and filters like *wc(1)*, *hexdump(1)* etc are implemented as separate tasks.
+Userspace programs usually use the link:lib6502.html[Lib6502] as mediator between
+application and kernel.
+
+For more information please see the (older but still useful) description in
+link:historic/oa1.html[OS/A65 V1 Architecture].
+The supported devices are described in link:devices.7.adoc[Devices].
+
+System architectures with and without MMU are described in 
+link:mmu.7.adoc[MMU] and link:nommu.7.adoc[No-MMU].
+
+== Networking
+GeckOS supports TCP/IP networking through an own TCP/IP stack.
+For details see link:slip.7.adoc[SLIP].
+
+== Ports
+For porting GeckOS to other architectures, please look at these sections:
+
+* link:porting.7.adoc[Porting]
+* link:mmu.7.adoc[MMU]
+* link:nommu.7.adoc[No-MMU]
+* link:embedded.7.adoc[Embedded Systems]
+
+For current ports, please look at
+
+* link:c64.p.adoc[c64]
+* pet32k
+* link:cbm8x96.html[cbm8x96]
+* CS/A65 (my self-built computer with MMU)
+
+== Development
+For the development of OS/A65 programs there are two possibilities:
+
+* link:lib6502.html[lib6502] with the link:fileformat.html[o65 file format]
+This allows source compatibility (to some degree) with Lunix, as
+well as that the program runs on all supported platforms.
+lib6502 programs are simply assembled with my xa65 crossassembler with the
+including the file "lib6502.i65" and the assembler option "-LLIB6502" set. 
+This tells the compiler to put "LIB6502" into the
+file as undefined reference that is resolved when loading. The lib6502
+jump table is relative to this address. 
+
+* A system application not only uses lib6502 calls (if it uses them)
+but also link:kernel.7.adoc[kernel] calls. The kernel can be at 
+different addresses for different
+architecture as well. Therefore you have to add "-LOSA2KERNEL" to the assembler
+line. This address is also resolved when loading. If the file should also 
+be used as a ROM file, then it has to have a ROM boot header, see the
+kernel description.
+
+More information on how to build can be found in
+link:build.7.adoc[Build].
+
+== More Documentation
+
+* https://github.com/fachat/GeckOS-V2[GeckOS source repository]
+* link:../RELEASE.adoc[Release Notes]
+* link:lib6502.html[lib6502] description
+* link:filesystems.7.adoc[filesystem interface]
+* link:README[README] that comes with the binary.
+* The list of known bugs is maintained on https://github.com/fachat/GeckOS-V2/issues?q=is%3Aissue+is%3Aopen+label%3Abug[github bug tracker].
+* Using the shell is described in link:../apps/lsh/lsh.1.adoc[it's man page].
+* Cenbe's https://www.lyonlabs.org/commodore/GeckOS/geckos-analysis.html[commentary on GeckOS]
+
+=== Older documentation
+
+* What's link:historic/LOG-2.0[new in 2.0.9 since 2.0.0]
+* The link:historic/LOG-pre-2.0[Changelog] for version 1.3.* and for the development of 2.0.0.
+
+== History
+I didn't dream of this becoming such a nice project when I started
+building http://www.6502.org/users/andre/csa/index.html[this computer] in 1989.
+
+After someone asked me to release it to the public, I decided
+to put it under the link:../COPYING[GNU public license].
+(Which, of course, doesn't hold true for the ported BASIC interpreter, which
+is taken from the C64.
+See link:../sysapps/basic.1.adoc[basic.1.adoc] for more.) Also the 
+character ROMs are taken from the C64. However, Commodore in its old
+form doesn't exist anymore and attempts to contact the new right holders
+have not brought any success, so I put them here.
+
+Well, when I did this project, it was just for fun. But now I find it
+quite nice. Well, if you know some magazin that would like to publish
+some of it, I will be glad writing an article or so (if anybody really
+wants it ;-)
+
+== Ideas for later versions
+Ideas, proposals and bug reports are collected and managed on github in the
+https://github.com/fachat/GeckOS-V2/issues[GeckOS Issue Tracker].
+
+Last modified 14 april 2020 by A. Fachat

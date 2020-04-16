@@ -1,0 +1,120 @@
+
+= STARTUP(7)
+:doctype: manpage
+
+== NAME
+startup - a description of the GeckOS boot process
+
+== DESCRIPTION
+When the GeckOS kernel starts up, the first thing is to initialize the memory mapping and system timer.
+After that the internal structures are initialized. 
+Then it expects to be able to access the boot "ROM" image, which is scanned for programs to execute.
+The boot ROM has a number of entries chained together, so the kernel can easily find the programs to run.
+
+The following table describes an entry in the ROM file chain. Note the
+device numbers that are used to start a program on a specific device.
+
+----
+	P_KIND		0	/* byte, type of file			*/
+	P_ADDR		1	/* word, start address of execution	*/
+	P_RAM		3	/* byte, amount of RAM needed from 
+				   lower end of memory in 256-byte 
+				   blocks				*/
+	P_SHARED	4	/* byte, size of memory shared with 
+				   parent counted from top of memory, 
+				   in 256-byte blocks			*/
+	P_PRIORITY	5	/* byte, priority of the task to be 
+				   started				*/
+	P_DEV		6	/* 2 byte, the first byte gives the 
+				   device number that is opened for the
+				   stdin stream, the second gives the
+				   device number for stdout/stderr	*/
+	P_NAME		8	/* name of the program, ended by 
+				   nullbyte. After the nullbyte is the
+				   commandline the program is started
+				   with. The parameter are separated
+                                   by nullbytes. After the last parameter
+                                   follow two nullbytes to indicate
+                                   the end of the command line. */
+----
+
+The kernel only starts device blocks (*PK_DEV*) and init processes (*PK_INIT*), because they are set up before the scheduler starts and therefore the PCBUF is (on non-MMU systems) not available. I.e. init processes do not check their command line, and do not release the PCBUF. Also PK_INIT tasks get no stdin, stdout and stderr streams and have to set them up themselves.
+
+When starting device blocks, the address given in the P_ADDR field is given to the DEVCMD command to register the devices.
+
+When using the special init process (init v1.0 from the sysapps directory), the other entries are started by the init process. *PK_PRG* tasks are started with their stdin/out/err opened to the devices given by the P_DEV field. The name and command line are copied from the P_NAME field to the FORK_NAME field for the fork.
+
+*PK_FS* are started as programs, but with the stdin/out/err streams set to STDNUL, which is ignored.
+
+If the init process is configured for it, and the *PK_RESTART* bit is set, it registers the task id of the started process and restarts it when the task dies. 
+
+The kernel starts entries of type *PK_DEV* and *PK_INIT* only. 
+However, to be started, the type must be OR'd with *PK_AUTOEXEC* (bit 7 set).
+
+PK_DEV::
+	is to register the hardware device drivers (using *DEVCMD(2)*).
+
+PK_INIT:: 
+	usually only starts the *init(8)* program using the *FORK(2)* call. 
+
+The kernel uses the device number stored in the ROM link chain entry
+to open streams for STDIO of the programs.
+
+NOTE: as the kernel can not allocate a separate PCBUF (SEND/RECEIVE buffer) for each started program,
+these programs do not get their startup information from the PCBUF after FORK. 
+
+The *init(8)* program then re-scans the boot ROM image, and starts the other entries, of types
+*PK_FS*, *PK_PRG* and *PK_LIB*, using the *FORK(2)* system call. Again they are only started
+as long as the *PK_AUTOEXEC* bit is set.
+
+PK_FS::
+	This entry is used for filesystems, where the code is stored in the boot ROM as executable code
+	(as opposed to a relocatable file image that needs to be copied and relocated).
+	STDIO for filesystems is set to STDNUL, 
+PK_PRG::
+	This entry starts code that is embedded in the ROM. Similar to the kernel, it uses the device numbers
+	stored in the ROM link chain entry to open streams for STDIO.
+PK_LIB::
+	This entry is different in that it does not execute code in the ROM itself, but loads a lib6502 
+	executable from the filesystem, using a (hidden) entry point into the lib6502 library.
+	Again a device number from the link chain is used to determine the STDIO.
+
+As these programs are started by init with the kernel already fully up and running, the normal
+rules for getting startup information in PCBUF etc apply.
+
+NOTE: the *init(8)* program also notes a specific *PK_RESTART* bit in the type byte, 
+to identify programs that need restarting
+when they finish. This way, init monitors these programs and re-starts them. 
+
+== VARIABLE ALLOCATION
+ROM tasks are started from the init task and have no way to determine which RAM locations are used by other tasks. Therefore the variable allocation must be done when the ROM is assembled. When using an MMU-based system, where each task has its own memory environment there need not be much caution. But when all tasks use the same environment (like in the C64) care has to be taken not to use a memory location twice. Especially shared libraries must use an own memory range, and they must be thread-save. This allows for different threads of one task as well as threads of different tasks to use the same library in one memory environment.
+
+For each environment, task and thread the kernel saves two bytes that are guaranteed to be unique within the environment, task or thread respectively. The bytes at addresses 2 and 3 are set to zero when a memory environment is created and are unique to this environment. The bytes at addresses 4 and 5 are unique to the task and can be used for task-specific data, like a pointer to a task structure. The bytes at addresses 6 and 7 are unique to the thread and can be used for thread data. 
+
+== ERROR CODES
+During the startup, the kernel may encounter error situations and may only
+have limited means to show them. In embedded systems this maybe just a blinking
+LED, in the C64 it may be the flashing screen border color....
+
+The following table describes the error conditions:
+
+----
+	   HE_ZP     <-1	/* zeropage mem test */
+	   HE_RAM    <-2	/* RAM test  (to few RAM) */
+	   HE_ROM    <-3	/* Couldn't start a program */
+	   HE_DEV    <-4	/* device returns error upon init */
+	   HE_TASK   <-5	/* all programs have terminated - reboot */
+----
+
+The hardware indicator (LED, screen color) is blinking as many times
+as the negative error number.
+
+== SEE ALSO
+init(8)
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

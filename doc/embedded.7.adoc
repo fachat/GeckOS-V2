@@ -1,0 +1,47 @@
+
+= EMBEDDED(7)
+:doctype: manpage
+
+== NAME
+embedded - discussion how to run a multitasking OS in an embedded appliance
+
+== DESCRIPTION
+Embedded applications normally don't have the amount of RAM and ROM
+that a "normal" (whatever this means) system has. Therefore I have tried
+to make some parts of the kernel removable, allowing for a much smaller
+kernel to fit into embedded applications.
+
+This way the more interesting features are still available, like
+multithreading, signals and the device code. Some of the more sophisticated
+kernel features can be removed however. For how to do this see
+the config section of the kernel
+description. The application can be tested on a full-featured
+system while the embedded kernel provides compatibility where necessary.
+
+Parts of the kernel that can be removed are
+
+* streams
+* memory management
+* file manager
+* send/receive
+* semaphores
+
+This shortens the kernel to almost 2k in size.
+Also the used amount of RAM is $bc = 188 byte normal RAM,
+plus $e = 14 byte zeropage (plus the 6 bytes of environment, task and
+thread-save memory from addresses 2-8), also not counting
+the possible use of PCBUF by fork and devcmd.
+1k RAM total should now be sufficient for simple applications.
+</p><p>
+Using the PCBUF without locking with a semaphore should be handled with
+care, however.
+
+== SEE ALSO
+link:nommu.7.adoc[nommu(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

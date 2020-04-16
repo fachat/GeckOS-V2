@@ -1,0 +1,45 @@
+
+= PSEM(2)
+:doctype: manpage
+
+== NAME
+PSEM - pass a semaphore.
+
+== SYNOPSIS
+Input::
+	* C - if clear, thread blocks until semaphore aquired, return immediately if set
+	* XR - semaphore number
+Call::
+	jsr PSEM
+Output::
+	* AC - error code (or E_OK)
+	* C - set if error code not E_OK
+
+NOTE: YR is preserved, XR is modified.
+
+== DESCRIPTION
+Passes a semaphore. The semaphore number can be negative (system semaphore) or positive (application semaphore).
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_SEMSET:: 
+	semaphore is already set (when not blocking)
+E_INT::
+        a blocking PSEM call was interrupted by a signal handler, while SIG_INT was set.
+	On E_INT, the X and Y registers are preserved
+
+== SEE ALSO
+link:../semaphores.7.adoc[semaphores(7)], 
+link:GETSEM.2.adoc[GETSEM(2)], 
+link:FRESEM.2.adoc[FRESEM(2)], 
+link:VSEM.2.adoc[VSEM(2)], 
+link:LOCKSEM.2.adoc[LOCKSEM(2)],
+link:../signals.7.adoc[signals(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

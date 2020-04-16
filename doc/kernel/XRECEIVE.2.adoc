@@ -1,0 +1,55 @@
+
+= XRECEIVE(2)
+:doctype: manpage
+
+== NAME
+XRECEIVE - receive a message from a specific task
+
+== SYNOPSIS
+Input::
+	* C=1 - waits for any message
+	* C=0 - returns immediately with an error if no message received
+	* XR - task the message is expected from
+Call::
+	jsr XRECEIVE
+Output::
+	* C=1 - error
+		** AC - error code
+	* C=0 - success
+		** XR - sender task ID
+		** YR - number of bytes received in PCBUF
+		** AC - message type (if given by sender)
+
+== DESCRIPTION
+XRECEIVE receives a message. It behaves exactly like the *RECEIVE(2)* call, with the exception
+that only messages from the given task ID are accepted.
+
+In an RPC client, this could be used to accept only messages from the task that received the 
+original message. For this *SEND(2)* returns the task ID of the destination call in XR.
+
+NOTE: to protect the SENDBUF resource, the *SEM_SENDBUF* semaphore must be held by the sender. 
+The ownership of the SENDBUF semaphore changes to the receiving task (that executes this *XRECEIVE*). 
+Thus the *SEM_SENDBUF* must be released after receiving a message.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOTX::
+	if non-blocking, and no message could be received.
+E_INT::
+        a blocking RECEIVE call was interrupted by a signal handler, while SIG_INT was set.
+
+== SEE ALSO
+link:../sendreceive.7.adoc[sendreceive(7)],
+link:SEND.2.adoc[SEND(2)],
+link:RECEIVE.2.adoc[RECEIVE(2)],
+link:TDUP.2.adoc[TDUP(2)],
+link:../semaphores.7.adoc[semaphores(7)],
+link:../signals.7.adoc[signals(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

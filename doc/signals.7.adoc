@@ -1,0 +1,95 @@
+
+= SIGNALS(7)
+:doctype: manpage
+
+== NAME
+sending and receiving signals
+
+== DESCRIPTION
+GeckOS allows tasks to send lightweight signals to each other. For this, a task registers
+a signal handler with the kernel, that gets called when a signal is received.
+
+The signal handler is "patched" into the execution of a normal thread when a thread is 
+scheduled the next time it runs.
+
+Signal handling works as follows: With SETSIG the signal address and the signal mask can be set. There is only one signal address, that is the address of a subroutine that is called on a signal. When the routine is called, it has the current pending signal mask in AC. The routine must return with a code sniplet
+
+----
+	pla
+	rti
+----
+which jumps directly to the code executed before the signal occured.  The current thread execution is changed to run the signal handler and to immediately return with the code like above.
+
+NOTE: the X and Y register must not be changed or must be preserved during the signal routine.
+
+*SENDSIG(2)* can be called from other tasks or from devices, not from a thread in the same task. When SENDSIG is called, first the signal mask for the receiving task is checked to see if the signal is allowed. If it is not, SENDSIG just returns. If the signal is allowed, threads in the receiving task can be in different states: Ready, Interrupted, or Waiting. If ready or interrupted, the thread is directly set up to execute the signal routine. If the thread is waiting, it depends on the INT bit in the signal mask what happens.
+
+If the INT bit is set, then any system call that lets the thread block (i.e. wait for Semaphore, wait for Receive, wait for Send) will be interrupted. They then return E_INT in ac - after the signal routine has been called. 
+
+WARNING: The other registers are bogus after an interrupted system call.
+
+If the INT bit is not set, then the signal is pending, and the signal routine is called when a thread of the task is set to running again. 
+
+== USAGE
+To enable signals, the receiving side must call *SETSIG(2)* to set a signal handler address and
+again to set a signal mask. Signal mask values are:
+
+----
+	SIG_INT		%10000000	/* allow interruptable kernel calls */
+	SIG_CHLD	%01000000	/* Child process has terminated */
+	SIG_KILL	%00100000	/* process shall terminate */
+	SIG_BRK		%00010000	/* Ctrl-C received */
+
+	SIG_USR4	%00001000	/* user signal 4 */
+	SIG_USR3	%00000100	/* user signal 3 */
+	SIG_USR2	%00000010	/* user signal 2 */
+	SIG_USR1	%00000001	/* user signal 1 */
+----
+
+So there are four user signals, three system signals and a flag:
+
+SIG_CHLD::
+	This signal is sent when a child process terminates.
+	The receiver *MUST* call *CHECKCHILD(2)* to get the status of any
+	child that has ended, to free the resources for the child.
+SIG_KILL::
+	The process that receives this signal should immediately die
+	(reserved, not implemented in the kernel)
+SIG_BRK::
+	The controlling terminal has issued a break (e.g. Ctrl-C)
+	(reserved, not implemented in the kernel)
+SIG_USR1-4::
+	Four signals that can be used by an application for
+	inter-process communication.
+
+Furthermore there is a single flag:
+
+SIG_INT::
+	This flag allows to interrupt waiting *SEND(2)*, *RECEIVE(2)*, *XRECEIVE(2)*, and
+	*PSEM(2)* system call. They will return *E_INT* as error code.
+	
+== IMPLEMENTATION NOTES
+Signals can be sent from the interrupt routine as well. 
+So, how could multiple signals be stacked, until the scheduler is able to call the receiving task?
+To reduce overhead and complexity, 
+a signal thus cannot store any kind of data besides the actual fact that the signal has happened. 
+This is implemented using a simple bitmap where a signal bit is set when it is received, and that is
+checked when the task is about to be scheduled again.
+
+This results in that multiple occurances of the same signal cannot be detected.
+
+That is also the reason that SIG_CHLD is not able to tell which child has died, or what return 
+value it has returned. A child whose parent has set SIG_CHLD will linger around without an
+active task until the parent calls *CHECKCHILD(2)* to get this information.
+ 
+== SEE ALSO
+link:kernel/SETSIG.2.adoc[SETSIG(2)]
+link:kernel/SENDSIG.2.adoc[,SENDSIG(2)],
+link:kernel/CHECKCHLD.2.adoc[CHECKCHLD(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

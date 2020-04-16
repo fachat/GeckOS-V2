@@ -85,7 +85,7 @@
 #define	C64_TEXT_COL 	13	/* console text color */
 #define	C64_BORDER_COL 	13	/* console border color */
 
-#define	C64SWITCH	4	/* terminal switch key number (61= C=,
+#define	C64SWITCH	61	/* terminal switch key number (61= C=,
 				   4= F1) */
 
 /*#define	C64NMIRESET*/	/* restore button becomes reset 
@@ -96,7 +96,7 @@
 				   lib6502 */
 #define	NEED_GETINFO
 #define	NEED_SETINFO
-#define	NEED_SLOCK
+#undef	NEED_SLOCK
 #define	NEED_RENICE
 
 #define	BOOTDRV		"c"	/* where are the boot files */

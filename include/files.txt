@@ -1,0 +1,10 @@
+/***************** defines - include/* ************************************/
+
+chips/*                 hardware (chips) definitions
+fdefs.i65               kernel file interface definitions
+kdefs.i65               kernel interface definitions
+kernel.i65              kernel jump table
+file_o65.i65            o65 fileformat definitions
+inet.i65                kernel network interface definitions
+lib6502.i65             lib6502 definitions
+

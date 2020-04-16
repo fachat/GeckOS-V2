@@ -75,7 +75,7 @@
 
 start     .word ende            ; pointer to end of file in ROM
           .byt  PK_INIT+$80     ; file type = init task + auto-execute bit
-          .word PRG             ; execution start
+          .word main            ; execution start
           .byt  3               ; RAM size needed, in 256-byte blocks
           .byt  >$ff-ROMSTART	; shared mem size in 256-byte blocks
           .byt  0               ; priority
@@ -116,7 +116,12 @@ killed	.dsb INIT_MAXRESTART	; this can still overflow - non-restartable
 	.text
 #endif
 
-PRG	  .(
+main	  .(
+	; we inherit PCBUF, but as we are started
+	; by the kernel, there is no content
+	ldx #SEM_SENDBUF
+	jsr VSEM
+
 #ifdef INIT_MMU
 #ifdef ROM
 #print *

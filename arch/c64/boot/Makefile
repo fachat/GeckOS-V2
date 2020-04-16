@@ -1,4 +1,6 @@
 
+MANPAGES=../../../*/*/*.1.adoc
+
 apps = lsh lmon
 APPSDIR=../../../apps
 
@@ -15,6 +17,8 @@ inet = tlogind telnet httpd
 INETDIR=../../../apps/inet
 
 XA=xa
+
+X64=x64sc
 
 all: osa.d64
 
@@ -42,11 +46,11 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} c64rom boot loader index.html test.bat
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html test.bat
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
-	x64 -autostart osa.d64
+	${X64} -autostart osa.d64
 
 emuslip: all
 	x64+rs232 -kernal ~/csa/tmp/kernalb -speed 200

@@ -1,0 +1,66 @@
+
+= GETINFO(2)
+:doctype: manpage
+
+== NAME
+GETINFO - get information on the currently running tasks
+
+== SYNOPSIS
+Input::
+Call::
+	jsr GETINFO
+Output::
+	* SENDBUF - table with task info
+
+NOTE: before calling *GETINFO*, the *SEM_SENDBUF* must be passed, and after the information has been read from SENDBUF, SEM_SENDBUF must be freed again.
+
+== DESCRIPTION
+Returns a table with information on tasks. 
+
+There are ANZ_ENV valid entries in the table, 0 in the TN_NTHREADS field indictaes an unused slot.
+
+----
+		ANZ_ENV		12	number of valid entries in SENDBUF
+
+		TN_PID		0	PID of process in this entry
+		TN_NTHREADS	1	Number of threads for process
+		TN_ENV		2	Environment number for process
+		TN_PARENT	3	Parent process
+		TN_MEM		4	amount of allocated RAM
+		TN_SIGNAL	5	signal handler address
+		TN_STDIN	7	STDIN stream
+		TN_STDOUT	8	STDOUT stream
+		TN_STDERR	9	STDERR stream
+		TN_SIGMASK	10	signal mask value
+		TN_EXECADDR 	11	start of execution address
+		TN_PRIO		13	priority 
+		TN_NAME		11	start of prog name (if available)
+
+		TN_SLEN		21	length of struct
+----
+
+Each field is TN_SLEN bytes long and the
+length of the name field is TNAMLEN. If the name is longer
+than TNAMLEN-1, the the last characters are cut off, and in
+the table the ending nullbyte is missing.
+
+
+== SEE ALSO
+link:../scheduler.7.adoc[scheduler(7)],
+link:FORK.2.adoc[FORK(2)],
+link:TERM.2.adoc[TERM(2)],
+link:KILL.2.adoc[KILL(2)],
+link:YIELD.2.adoc[YIELD(2)],
+link:FORKT.2.adoc[FORKT(2)],
+link:DUP.2.adoc[DUP(2)],
+link:GETPID.2.adoc[GETPID(2)],
+link:SLOCK.2.adoc[SLOCK(2)],
+link:RENICE.2.adoc[RENICE(2)],
+link:SETINFO.2.adoc[SETINFO(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

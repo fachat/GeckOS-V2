@@ -1,0 +1,46 @@
+
+= PUTC(2)
+:doctype: manpage
+
+== NAME
+PUTC - put a character to a stream
+
+== SYNOPSIS
+Input::
+	* AC - byte to put into stream
+	* XR - stream number
+Call::
+	jsr PUTC
+Output::
+	* C=0
+		** AC - byte put to stream
+	* C=1
+		** AC - error code
+
+NOTE: XR and YR are not modified (except STDIO streams return true stream number)
+
+== DESCRIPTION
+Puts a byte on the stream. parameter: stream number in x,
+data byte in a. returns errorcode in a
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSTR:: no valid stream number
+E_NUL:: no reader in stream
+E_SFULL:: stream is already full
+
+== SEE ALSO
+link:../streams.7.adoc[streams(7)], 
+link:GETSTR.2.adoc[GETSTR(2)], 
+link:FRESTR.2.adoc[FRESTR(2)], 
+link:GETC.2.adoc[GETC(2)], 
+link:UNGETC.2.adoc[UNGETC(2)], 
+link:STRCMD.2.adoc[STRCMD(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

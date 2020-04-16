@@ -21,6 +21,7 @@
 
 ****************************************************************************/
 
+#define VICE
 
 /**************************************************************************
  * Cursor handling
@@ -163,13 +164,24 @@ tzei      .word 0
           rts
           .)
 
+        ; must return x=shiftfl, y=index in keytable, a=ascii code
+        ; shiftfl:
+        ;       0 = none
+        ;       1 = Shift
+        ;       2 = Ctrl
+        ;       3 = shift+Ctrl
+        ; Switchkey handling:
+        ;       0 = Tab
+        ;       1 = switch mode
+        ;       2 = switch console
+        ;       3 = close Stream
 &&getkey   .(
           lda PIO
           and #$f0
-#ifndef PET_KEYB_GRAPHICS
-          ora #6	; 6 for business
-#else
+#ifdef PET_KEYB_GRAPHICS
           ora #8	; 8 for graphics
+#else
+          ora #6	; 6 for business
 #endif
           sta PIO
 ix1       
@@ -177,28 +189,38 @@ ix1
           cmp PIO+2
           bne ix1   
           ldy #0
-#ifndef PET_KEYB_GRAPHICS
+#ifdef PET_KEYB_GRAPHICS
+	  tax
+          and #%00100000  ; right shift only
+          bne noshift
+#else
           and #%01000001
           cmp #%01000001
-#else
-          and #%00100001
-          cmp #%00100001
+          beq noshift
 #endif
-          beq nshift
           iny
-nshift    ; no CTRL on graphics keyboard
-#ifndef PET_KEYB_GRAPHICS	
-          inc PIO	; 7 for business, 9 for graphics
+noshift    ; no CTRL on graphics keyboard
+#ifdef PET_KEYB_GRAPHICS
+	  txa
+	  and #%00000001	; left shift
+#else
+          inc PIO	; 7 for business
 x0        lda PIO+2
           cmp PIO+2
           bne x0
           and #%01000000	; REPEAT key doubles as CTRL
-          bne nctrl
-          iny
-          iny
 #endif
-nctrl     sty shiftfl
-
+          bne noctrl
+          iny
+          iny
+noctrl    
+#ifdef VICE		/* VICE bug that automatically sets both shift keys when only left is used */
+	  cpy #3
+	  bne novice
+	  dey
+novice
+#endif
+	  sty shiftfl
           tya
           asl
           tax
@@ -300,25 +322,25 @@ ktab      .asc TC_CRGT,TC_HOME,"~(&%#!",TC_BS,TC_CDWN,"^@)\'$":.byt $22
           .asc "97^^outeq/8^@piyrw"
           .asc "64^@ljgda*5^@:khfs"
           .asc "31",TC_CR,";mbcz+2^@?,nvx"
-          .asc "-0^@>^@]@^@=.^@",3,"< [",1
+          .asc "-0^@>^@]@^@=.^@",3,"< [",TC_HT
 
 stab      .asc TC_CLFT,TC_CLR,"|(&%#!",TC_INS,TC_CUP,"^@)\'$":.byt $22
           .asc "97^^OUTEQ/8^@PIYRW"
           .asc "64^@LJGDA*5^@:KHFS"
           .asc "31",TC_LF,";MBCZ+2^@?,NVX"
-          .asc "-0^@>^@}@^@=.^@",TC_ESC,"< {^@"
+          .asc "-0^@>^@}@^@=.^@",TC_ESC,"< {", TC_HT
 
 ctab      .asc TC_WRU,TC_WCLS,"~(&%#!",TC_DEL,TC_WLO,"^@)\'$",$22
-          .asc "97^^^o^u^t^e^q/8^@^p^i^y^r^w"
+          .asc "97^^^o^u^t^e^q/8^@^p^i|^r^w"
           .asc "64^@^l^j^g^d^a*5^@:^k^h^f^s"
           .asc "31",TC_EOL,";^m^b^c^z+2^@?,^n^v^x"
-          .asc "-0^@>^@]@^@=.^@",TC_CLL,"< [^@"
+          .asc "-0^@>^@]@^@=.^@",TC_CLL,"< [", TC_HT
 
 sctab     .asc "^@^@|(&%#!^H^@^@)\'$":.byt $22
           .asc "97^^O^U^T^E^Q/8^@^P^I^Y^R^W"
           .asc "64^@^L^J^G^D^A*5^@:^K^H^F^S"
           .asc "31^m;^M^B^C^Z+2^@?,^N^V^X"
-          .asc "-0^@>^@}@^@=.^@@< {^@"
+          .asc "-0^@>^@}@^@=.^@@< {", TC_HT
 
 #endif
 

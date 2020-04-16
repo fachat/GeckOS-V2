@@ -1,0 +1,60 @@
+
+= FSDEV(8)
+:doctype: manpage
+
+== NAME
+fsdev - filesystem driver for devices and boot ROM
+
+== SYNOPSIS
+*fsdev*
+    
+== DESCRIPTION
+fsdev is a simple filesystem driver that has two main tasks:
+
+. provide access to devices as files
+. provide access to boot ROM entries
+
+The filesystem driver registers one drive for each of the access to devices and boot ROM.
+
+=== DEVICE FILES
+The device files are implemented using the *DEVCMD(2)* call. When a device is being opened,
+the device is looked up using *DC_GNUM*.
+If a matching device name is found, the stream is set in the device, and the device is 
+started using *DC_RX_ON* or *DC_TX_ON*.
+
+=== ROM FILES
+The access to the ROM files is implemented by walking the boot ROM as it is mapped
+into the memory of the fsdev process. 
+
+As file content only the boot ROM file header is returned. This is done 
+as the reader may access the boot ROM content in place.
+
+== BUILD OPTIONS
+
+
+ROM::
+	if set, include boot ROM header
+NOMMU::
+	if set, architecture has no MMU 
+FSDEV_AS_INIT::
+	if in ROM, use PK_INIT instead of PK_FS (see *startup(7)*)
+FSDEV_NOROM::
+	do not provide access to boot ROM files
+
+== AUTHOR
+
+Written by André Fachat.
+
+== REPORTING BUGS
+
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+== COPYRIGHT
+
+Copyright 1997, 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+== SEE ALSO
+
+fsiec(8), fsibm(8)
+

@@ -1,0 +1,110 @@
+
+= SCHEDULER(7)
+:doctype: manpage
+
+== NAME
+scheduler - description of the GeckOS scheduler
+
+== DESCRIPTION
+The GeckOS scheduler manages 
+
+Environments::
+	a defined memory mapping
+Tasks::
+	a 'process' running in an environment
+Threads::
+	a thread within a task.
+
+Environments are specific for each port. A C64 only has a single environment, the 8296 uses two
+environments for its two memory extension banks, a CS/A can have many of them, one for each 
+task to provide proper memory isolation.
+
+A task defines the STDIO streams, semaphore ownership, parent task, signal mask and hander, 
+and for example the task name. It does not really have an own status for its own.
+
+A task is started with a single thread. Each thread can have a specific status, that
+tells the scheduler what to do with the thread when it is to be scheduled.
+
+== THREAD CREATION
+A task and associated thread are created with the *FORK(2)* system call. FORK uses the SENDBUF
+to receive the necessary information from the parent task, like the STDIO streams, task name to
+be put into the task table, or the initial priority. 
+
+Depending on the port a new environment is created at *FORK(2)* when possible (e.g. CS/A architecture).
+On *nommu(7)* architectures like the C64, no environment is created, only a task and a thread.
+
+== STREAMS
+A task has four streams, STDIN, STDOUT, STDERR and STDCIN. In the *FORK* call the first three
+must be given by the caller. Only the STDCIN task is automatically managed by the *FORK* call.
+FORK uses the parent's STDCIN stream and registers a new reader (the new task).
+
+On boot, when *FORK* is called by the kernel, STDCIN is set to the STDIN value.
+
+The STDIO streams of the current task can be replaced using the *DUP(2)* call.
+
+== PRIORITY
+Each task has a priority. This priority is a crude measure of the number of times the 
+scheduler interrupt can be called before the scheduler is invoked. It can be inherited
+from the parent on *FORK* or set to a new value.
+
+Using the *RENICE(2)* call the priority can be adjusted by the task itself.
+
+The call *YIELD(2)* is often used to give way to other threads when there is nothing
+to do in the current task. In a way this implements a simple form of cooperative
+multitasking in addition to the interrupt-driven preemptive multitasking.
+
+Using *SLOCK(2)* a thread can lock the scheduler onto itself. 
+
+NOTE: *SLOCK(2)* may be going away in a future release
+
+== TASK INFO
+A task can get its own current thread and task IDs using *GETPID(2)*.
+
+Using the *GETINFO(2)* call the system can provide information on the currently running processes.
+*GETINFO* uses the SENDBUF to retrieve the task information.
+
+When a task starts, the kernel enters the start of execution address in the task table.
+In a *nommu(7)* architecture with *lib6502(7)* this does not help a lot, as all execution addresses may
+point to the same address, the lib6502 entry point. A task may thus set its own 
+start of execution address with *SETINFO(2)*.
+
+== MULTITHREADING
+A thread can start another thread in the same task using the *FORKT(2)* call.
+When a thread is finished, it can call *TERM(2)* to terminate itself (i.e. the current thread) -
+other threads (if any) continue running.
+
+== END OF LIFECYCLE
+When a task is finished, the last running thread can call *TERM(2)* itself to terminate itself.
+If the current thread was the last thread of the task, the task is terminated.
+
+A task can kill another task using the *KILL(2)* call.
+On *KILL(2)*, all threads that still run are stopped and released.
+
+When a task terminates (i.e. the last thread dies), e.g. through *TERM(2)* or *KILL(2)*,
+
+- the STDIO streams are released by de-registering the reader resp. writer
+- all semaphores held by the task are released
+- tasks still waiting for *CHECKCHILD(2)* are released
+- the parent task for still running children is set to $ff (invalid), they become detached.
+- the parent task will get a SIG_CHLD event if enabled. In this case the own task status is 
+set to waiting for CHECKCHILD
+
+== SEE ALSO
+link:kernel/FORK.2.adoc[FORK(2)],
+link:kernel/TERM.2.adoc[TERM(2)],
+link:kernel/KILL.2.adoc[KILL(2)],
+link:kernel/YIELD.2.adoc[YIELD(2)],
+link:kernel/FORKT.2.adoc[FORKT(2)],
+link:kernel/GETINFO.2.ado¢[GETINFO(2)],
+link:kernel/DUP.2.adoc[DUP(2)],
+link:kernel/GETPID.2.adoc[GETPID(2)],
+link:kernel/SLOCK.2.adoc[SLOCK(2)],
+link:kernel/RENICE.2.adoc[RENICE(2)],
+link:kernel/SETINFO.2.adoc[SETINFO(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

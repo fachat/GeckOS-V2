@@ -1,0 +1,43 @@
+
+= GETSTR(2)
+:doctype: manpage
+
+== NAME
+GETSTR - allocate a new stream.
+
+== SYNOPSIS
+Input::
+Call::
+	jsr GETSTR
+Output::
+	* C=0
+		** AC - error code E_OK
+		** XR - new stream 
+	* C=1
+		** AC - error code
+
+NOTE: YR is not modified
+
+== DESCRIPTION
+Get a free stream. increase read and write task counter,
+returns stream number in x
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSTR:: no free stream available
+
+== SEE ALSO
+link:../streams.7.adoc[streams(7)], 
+link:FRESTR.2.adoc[FRESTR(2)], 
+link:GETC.2.adoc[GETC(2)], 
+link:UNGETC.2.adoc[UNGETC(2)], 
+link:PUTC.2.adoc[PUTC(2)], 
+link:STRCMD.2.adoc[STRCMD(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

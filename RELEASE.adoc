@@ -1,0 +1,33 @@
+
+= GECKOS RELEASE NOTES
+
+== GeckOS 2.1
+
+=== Documentation
+* rewrote all documentation in asciidoc
+
+=== Applications
+* improvements to *ps(1)*, add *setinfo(2)* to provide useful execution address
+* improvements to *ls(1)*, added long options
+* added *kill(1)*
+* added *hexdump(1)*, *wc(1)*, *more(1)*
+* Grand shell unification: *lsh(1)* graduated, *sh* is now officially deprecated and *mon* becomes *lmon(1)*
+
+=== Devices
+* Fix handshake handling of C64 userport 9600 baud interface
+
+=== Kernel
+* Use of STDCIN to enable *more(1)* to read key presses from console, add *ontty(1)* for that
+
+=== Ports
+* improve keyboard mapping on c64
+* On C64, use raster interrupt as main system interrupt to free a timer
+* improve keyboard mapping on pet32k
+
+=== Contributors
+* André Fachat
+* Glenn Holmer
+
+== GeckOS 2.0.9 and before
+For documentation on V2.0 and before please see link:doc/historic[the historic section].
+

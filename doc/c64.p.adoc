@@ -1,0 +1,245 @@
+= C64(P)
+:doctype: manpage
+
+== NAME
+c64 - describes the GeckOS port to the C64
+
+== DESCRIPTION
+The C64 is a machine that has a single environment with almost 60k usable RAM, and no memory management unit.
+
+
+== BUILDING
+To build the program, you have to have my 6502 cross assembler 'xa-2.1.4e'
+Current testing takes place on 'VICE' (x64), the versatile Commodore emulator.
+
+In the file c64rom/c64rom.a65, a few options can be set by setting
+the defines appropriately. See doc/build.html.
+
+Go to the arch/c64/boot directory and type "make" this will build
+all necessary files in this directory, including links to all
+important applications. Typing "make osa.d64" will produce a
+d64 disk image with all necessary files. This disk image can be
+transfered to a C64 and used.
+
+If you change something in the code and reassemble, check from the file65
+output that the data and bss segments don't overlap. Also the
+memory that is dynamically allocated starts at $1600 (see
+arch/c64/c64rom.a65). Only if nothing overlaps there is no danger.
+
+See also *build(7)*.
+
+=== BUILD OPTIONS
+
+==== Parallel IEEE488
+I have an original C64 parallel IEEE488 expansion board, so that
+I use this for better performance. I also implemented the hardware
+emulation for the CBM IEEE488 interface for the C64 in the VICE
+Commodore emulator (from version 0.11 on). So if you have this interface,
+use it for better file transfer performance on the real C64 or
+for file access in VICE. Change the line in c64rom/c64rom.a65 from
+'#undef PARALLEL' to '#define PARALLEL'. For the C64, the
+devices 9 to 11 are mapped to the drives c: to f:
+
+== BOOTING
+In VICE (i.e. x64) or on the C64 load the (BASIC) program 'loader', which
+is in the boot directory and the osa.d64 disk image. When run, this
+program loads the charom, the program ROM and
+a small machine language program (boot.obj, which is made from
+boot.a65). It then starts the boot routine that copies the ROMs to
+their places and jumps to the kernel RESET routine.
+
+When using osa.d64 in VICE, you have to enable the true1541 emulation.
+
+== USAGE
+The video device is able to handle up to three screen output windows.
+The C= key switches between the different windows (You can change the
+switch key in arch/c64/devices/con_c64.a65, but when you're using
+the "C=" key, don't try to use the Ctrl-Alt-Fx keys in XFree when the
+mouse cursor is in the vice window. GeckOS will detect a Ctrl-Switchkey
+and therefore send an EOF to the program....)
+
+On the first window, a lib6502  "lsh" is started. On the second one, the
+old shell is started. As the C64 has no MMU, these two programs
+have to use different memory locations. The shell is assembled into the
+ROM and can be started only once from the ROM. The lsh is a lib6502
+program and is loaded by the init process. The ROM only contains a
+command to the init process to start the lib6502 program. It uses
+a relocatable fileformat and can thus started more than once.
+
+In the shell you can use "c:ls" on drives a: (registered devides) and
+b: (rom inventory). If the iec bus works, then drive c: is disk unit 8
+and drive d: is disk unit 9, till drive f: is device 11.
+
+For the shell commands see the docs.
+The memory map is described below. When writing and using lib6502
+programs they are relocated automagically.
+
+== ROM CONFIGURATION
+The "ROM" is a boot image that is loaded into memory from ROMSTART to end of memory, where the C64 ROMs are 
+completely mapped out and only RAM is used. In $dxxx of course the I/O area is used.
+
+The configuration can be seen in arch/c64/c64rom.a65.
+
+=== INCLUDED PROGRAMS
+The ROM contains these blocks
+
+devices/c64dev.a65::
+	This contains the device handlers supported by the C64 architecture (see below)
+sysapps/init/init.a65::
+	The init program that starts all other progams, and is also able to restart them when they finish.
+	See *startup(7)*
+sysapps/fs/fsdev.a65::
+	A filesystem driver that allows accessing devices as files (see *fsdev(8)*).
+	Depending on configuration it also allows to access ROM content.
+sysapps/fs/fsiec.a65::
+	The filesystem driver for the IEC or IEEE488 interface of the C64.
+	Note that usually the serial IEC is used. Using the *PARALLEL* define, instead the 
+	Commodore IEEE488 interface module is supported.
+	*fsiec(8)* uses CIA2 Timer B as serial bus timeout timer.
+sysapps/mon/mon.a65::
+	Old style shell program. Will be gone at some point.
+slipd::
+	This program is (optionally, depending on *INETSTART*) loaded from disk into memory during boot and started.
+lsh::
+	This program is loaded from disk into memory and started.
+
+=== MEMORY MAP
+
+----
+	$0000		CPU I/O port
+
+	$0002		ENVSAVE pointer (per environment)
+	$0004		TASKSAVE pointer (per tasks)
+	$0006		THREADSAVE pointer (per thread)
+
+	$0008		start of zeropage for ROM-based code
+	$0070		start of zalloc'able zeropage
+	$00ff		end of zeropage
+
+	$0100		start of userspace stack
+	$013f		end of userspace stack
+	$0140		start of system stack
+	$01ff		end of system stack
+
+	$0200		PCBUF communication buffer
+
+	$0300 		data/bss for ROM-based code
+	$1680		start of malloc'able free memory
+	$83ff 		end of free memory
+
+	$8400		start of boot ROM
+			devices
+			init
+			fsiec
+			mon
+			(slipd)
+			lsh
+	$d000		I/O area
+	$e000		screen buffer 1
+	$e400		screen buffer 2
+	$e800		screen buffer 3
+	$ec00		kernel
+	$ffff		end of ROM
+----
+
+=== SYSTEM SEMAPHORES
+These are the system semaphores defined in the C64 port
+Any program to access the named resource should aqcuire the relevant semaphore before doing so
+
+SEM_SERIEC::
+	Serial IEC interface. 
+SEM_PARIEC::
+	Parallel IEEE488 interface (when available)
+
+SEM_CIA2TB::
+	Will be defined as SEM_SERIEC, as fsiec uses this timer for its timeout handling
+
+== KERNEL CONFIGURATION
+The kernel is configured with these major configuration options:
+
+STACKCOPY:: 
+	The stack is divided into two parts - one for the system and one for userspace programs. 
+	During context switch the userspace stack is copied over into a save area and the stack area
+	from another task is copied in. This allows for an arbitrary number of tasks (in theory).
+
+NMIDEV::
+	Supports devices that run in the NMI (needed for the RS232 interfaces).
+
+=== SYSTEM INTERRUPT
+The C64 kernel uses the VIC-II raster timing interrupt as a 50Hz interrupt source.
+
+== SUPPORTED DEVICES
+This section describes the devices supported by GeckOS.
+
+=== VIDEO
+The video device provides three virtual consoles.
+
+==== VIDEO OUTPUT
+Video output is taken from the video buffers at $exxx (see memory map above), with a 40 column, 25 rows display,
+using the C64's built-in VIC-II chip.
+
+==== KEYBOARD MAPPING
+The keyboard is mapped such that it can run on the real hardware, but also in the real machine.
+Here are the important key mappings:
+
+C=::
+	switch between virtual consoles 
+Ctrl::
+	The Ctrl-key.
+Pound::
+	The pound symbol on the C64 enters the pipe symbol in GeckOS. 
+
+Here is a comparison of the real machine, VICE and what GeckOS uses.
+
+[options="header",frame="top"]
+|====
+|GeckOS|C64|VICE on PC (3.4+)
+|Ctrl | Ctrl | Left Ctrl 
+|Tab  | C=   | Tab
+|Console switch | Ctrl + C= | Left Ctrl + Tab 
+|Console mode | Shift + C= | Shift + Tab 
+|Logoff  | Shift + Ctrl + C= | Shift + Left Ctrl + Tab 
+|\| | Pound | \| 
+|====
+
+=== SER
+The serial devices supported are based on the 9600 baud userport interface, the 6551 ACIA chip, and the 16550 UART.
+
+==== 9600 baud userport
+This device, usually "ser1", utilizes the 9600 baud interface by Daniel Dallmann. The two shift registers of the
+two CIAs are used to shift out and shift in the data. A clever NMI routine that trigger on the incoming start bit 
+and starts the shift-in of the data on the CIA's SDR makes this possible. This device needs the NMIDEV kernel 
+configuration.
+
+==== ACIA-based (classic)
+The so-called classic ACIA describes my use of the ACIA in the C64. It uses the DSR input of the ACIA
+as CTS input, to avoid the ACIA disabling receiver and transmitter when CTS is set. 
+
+The definition of *ACIABASE* defines the base address of the ACIA and enables it. 
+I originally had it in a circuit that I
+put between the SID and the motherboard, so it was at $d600. 
+
+NOTE: only low speeds (about 2400 baud) can be achieved due to the use of the IRQ interrupt instead of NMI.
+
+==== ACIA-based (swiftlink)
+This interface uses a swiftlink compatible module with ACIA, using the NMI routine to achieve the necessary speed.
+
+Swift link must be configured to $de00, and using the NMI interrupt.
+
+NOTE: this is not yet implemented and subject to change.
+
+==== UART-based 
+After the disappointing results with the ACIA, replaced it with a 16550 UART, that has a 16 byte input buffer.
+
+Defining *UARTBASE* includes this device driver.
+
+== SEE ALSO
+link:kernel/DEVCMD.2.adoc[DEVCMD(2)], 
+link:devices.7.adoc[devices(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

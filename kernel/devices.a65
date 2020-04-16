@@ -208,8 +208,6 @@ loop
           pla
           jmp loop
 
-sE_CONFIG lda #E_CONFIG
-          .byt $2c
 enddev    lda #E_OK
           plp
           cmp #1

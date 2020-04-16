@@ -1,0 +1,92 @@
+
+= ERROR CODES
+
+== DESCRIPTION
+Error codes are defined in link:../include/kdefs.i65[kdefs.i65].
+
+----
+**************************************************************************/
+/*        Hardware-Errors          */
+
+
+#define   HE_ZP     <-1         /* Zeropage RAM defective */
+#define   HE_RAM    <-2         /* not enough RAM (may be defective) */
+#define   HE_ROM    <-3         /* not enough Streams/Envs to handle all
+                                   ROM autostart requests */
+#define   HE_DEV    <-4         /* error registering ROM device */
+#define   HE_TASK   <-5         /* no more active task! */
+
+
+/*        Software-Errors          */
+
+/* general OS/kernel errors */
+
+#define   E_OK          0       /* no error                             */
+#define   E_NOTIMP      <-1     /* feature/function not implemented     */
+#define   E_CONFIG      <-2     /* in this configuration not available  */
+#define   E_ILLPAR      <-3     /* illegal parameter                    */
+#define   E_NOMEM       <-4     /* no more memory                       */
+
+/* stream handling errors */
+#define   E_NOSTR       <-5     /* no more streams available            */
+#define   E_SFULL       <-6     /* stream is full                       */
+#define   E_SEMPTY      <-7     /* stream is empty                      */
+#define   E_SLWM        <-8     /* stream below low-water-mark (1/4)    */
+#define   E_SHWM        <-9     /* stream above high-water-mark (3/4)   */
+#define   E_EOF         <-10    /* last byte read, other side has closed */
+#define   E_NUL         <-11    /* noone listening on stream            */
+
+/* device handling errors */
+#define   E_NODEV       <-12    /* illegal device number                */
+#define   E_DON         <-13    /* device already in use                */
+#define   E_DOFF        <-14    /* device not in use                    */
+#define   E_NOTX        <-15    /* device doesn't send                  */
+
+/* misc errors */
+
+#define   E_NOENV       <-16    /* no more free environment/task ID     */
+#define   E_NOSEM       <-17    /* no more free semaphore               */
+#define   E_SEMSET      <-18    /* semaphore is already set (with PSEM) */
+
+#define   E_NOIRQ       <-19    /* irq routine has not removed irq source */
+#define   E_VERSION     <-20    /* wrong (executable file) version      */
+
+#define   E_NOTASK      <-21    /* no more free task */
+#define   E_INT         <-22    /* interrupted (by signal) system call */
+
+#define   E_ILLSIG      <-23    /* illegal signal number                */
+
+#define   E_TRYAGAIN    <-24    /* try again                            */
+
+#define   E_NOPAR       <-25    /* missing parameter                    */
+
+#define   E_NOTHREAD    <-26    /* no more free thread */
+
+/* file handling errors */
+
+#define   E_FNODRV      <-32    /* illegal drive number                 */
+#define   E_FNOPATH     <-33    /* wrong path                           */
+#define   E_FILLNAM     <-34    /* illegal name (joker "*","?","\"")    */
+#define   E_FNAMLEN     <-35    /* name too long                        */
+#define   E_FNOFIL      <-36    /* file not found                       */
+#define   E_FWPROT      <-37    /* file write protected                 */
+#define   E_FILEXIST    <-38    /* file exists                          */
+#define   E_FDISKFULL   <-39    /* disk full                            */
+#define   E_FDNEMPTY    <-40    /* subdirectory not empty when rmdir    */
+#define   E_FLOCKED     <-41    /* file locked                          */
+#define   E_FMEDIA      <-42    /* media error                          */
+#define   E_FLOGICAL    <-43    /* bad logical structure on media       */
+#define   E_FINTERNAL   <-44    /* internal error - should not happen!  */
+
+#define   E_LASTERR     <-96    /* for customized error numbers         */
+
+#define   E_ILLADDR     <-64    /* illegal address for lib6502 mfree    */
+#define   E_NOFILE      <-65    /* illegal file number for lib6502      */
+#define   E_NOSEEK      <-66    /* file not seekable                    */
+#define   E_NOREAD      <-67    /* read on file would block             */
+#define   E_NOWRITE     <-68    /* write on file would block            */
+#define   E_FVERSION    <-69    /* file version number not supported    */
+
+----
+
+

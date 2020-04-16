@@ -1,0 +1,42 @@
+
+= GETSEM(2)
+:doctype: manpage
+
+== NAME
+GETSEM - allocate a new semaphore.
+
+== SYNOPSIS
+Input::
+Call::
+	jsr GETSEM
+Output::
+	* C=0
+		** AC - error code E_OK
+		** XR - new semaphore 
+	* C=1
+		** AC - error code
+
+NOTE: YR is modified
+
+== DESCRIPTION
+Get a free application semaphore.
+returns semaphore number in x
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSEM:: no free semaphore available
+
+== SEE ALSO
+link:../semaphores.7.adoc[semaphores(7)], 
+link:FRESEM.2.adoc[FRESEM(2)], 
+link:PSEM.2.adoc[PSEM(2)], 
+link:VSEM.2.adoc[VSEM(2)], 
+link:LOCKSEM.2.adoc[LOCKSEM(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

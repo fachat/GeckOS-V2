@@ -1,0 +1,40 @@
+
+= SETSIG(2)
+:doctype: manpage
+
+== NAME
+SETSIG - set a task's signal mask and handler address
+
+== SYNOPSIS
+Input::
+	* C=0 - set the task's signal mask
+		** AC - signal mask to set
+	* C=1 - set the task's signal handler address
+		** AC/YR - signal handler address (lo/hi)
+Call::
+	jsr SETSIG
+Output::
+	* on setting the signal mask
+		** AC - original signal mask
+	* on setting the signal handler address
+		** AC/YR - the original signal handler address
+
+NOTE: the signal mask to set can be an OR'd combination of multiple signal mask bits
+
+== DESCRIPTION
+Sets the new signal mask or signal handler address, and returns the original value.
+
+== RETURN CODES
+The call returns the original signal mask resp. the original signal handler address.
+
+== SEE ALSO
+link:../signals.7.adoc[signals(7)],
+link:SENDSIG.2.adoc[SENDSIG(2)],
+link:CHECKCHLD.2.adoc[CHECKCHLD(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

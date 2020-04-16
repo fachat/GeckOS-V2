@@ -1,0 +1,42 @@
+
+= FRESTR(2)
+:doctype: manpage
+
+== NAME
+FRESTR - free a stream.
+
+== SYNOPSIS
+Input::
+	* XR - stream number
+Call::
+	jsr FRESTR
+Output::
+	* AC - error code (or E_OK)
+	* C - set of error code not E_OK
+
+NOTE: XR and YR are not modified (except STDIO streams return true stream number)
+
+== DESCRIPTION
+Decreases read and write task counter, thus freeing the
+stream, if both result in zero. parameter: stream number in x
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSTR:: no valid stream number
+E_NOTIMP:: stream read counter was already zero
+
+== SEE ALSO
+link:../streams.7.adoc[streams(7)], 
+link:GETSTR.2.adoc[GETSTR(2)], 
+link:GETC.2.adoc[GETC(2)], 
+link:UNGETC.2.adoc[UNGETC(2)], 
+link:PUTC.2.adoc[PUTC(2)], 
+link:STRCMD.2.adoc[STRCMD(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

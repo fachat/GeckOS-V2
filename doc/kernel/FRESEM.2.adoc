@@ -1,0 +1,43 @@
+
+= FRESEM(2)
+:doctype: manpage
+
+== NAME
+FRESEM - free a semaphore.
+
+== SYNOPSIS
+Input::
+	* XR - semaphore number
+Call::
+	jsr FRESEM
+Output::
+	* AC - error code (or E_OK)
+	* C - set if error code not E_OK
+
+NOTE: XR and YR are modified.
+
+== DESCRIPTION
+Frees a semaphore.
+
+NOTE: semaphore MUST NOT be locked or held when being freed.
+
+NOTE: negative semaphore numbers (i.e. system semaphores) cannot be freed.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOSEM:: no valid semaphore number
+
+== SEE ALSO
+link:../semaphores.7.adoc[semaphores(7)], 
+link:GETSEM.2.adoc[GETSEM(2)], 
+link:PSEM.2.adoc[PSEM(2)], 
+link:VSEM.2.adoc[VSEM(2)], 
+link:LOCKSEM.2.adoc[LOCKSEM(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

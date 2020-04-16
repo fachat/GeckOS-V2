@@ -1,0 +1,16 @@
+/***************** kernel - kernel/* **************************************/
+
+kernel.a65              kernel: wraparound/includes
+jmptbl.a65              jumptable / address defines (for include)
+init.a65                bootup: memory test, start rom processes, frequency
+                        detect; irq/nmi wraparounds (vectors)
+tasks.a65               kernel entry/exit gates (memsys/memtask), scheduler,
+                        environment stuff, kill, term, send/receive, fork,
+                        read, write, setblk, dup,...
+devices.a65             kernel device routines, registering, device irq
+files.a65               fs manager - dispatch fs messages to registered fs
+streams.a65             stream manager
+
+ramtest.a65             RAM test routines for inclusion in arch specific stuff
+zerotest.a65            zeropage test routines for inclusion in arch stuff
+

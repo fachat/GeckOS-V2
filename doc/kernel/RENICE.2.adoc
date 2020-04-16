@@ -1,0 +1,41 @@
+
+= RENICE(2)
+:doctype: manpage
+
+== NAME
+RENICE - change the priority of the current task
+
+== SYNOPSIS
+Input::
+	* AC - value to add to the priority
+Call::
+	jsr RENICE
+Output::
+	* AC - old priority
+
+== DESCRIPTION
+Modifies the priority value of a task by adding the given value to the priority of the task.
+
+NOTE: no overflow check is done (yet).
+
+== ERROR CODES
+
+== SEE ALSO
+link:../scheduler.7.adoc[scheduler(7)],
+link:FORK.2.adoc[FORK(2)],
+link:TERM.2.adoc[TERM(2)],
+link:KILL.2.adoc[KILL(2)],
+link:YIELD.2.adoc[YIELD(2)],
+link:FORKT.2.adoc[FORKT(2)],
+link:GETINFO.2.adoc[GETINFO(2)],
+link:DUP.2.adoc[DUP(2)],
+link:GETPID.2.adoc[GETPID(2)],
+link:SLOCK.2.adoc[SLOCK(2)],
+link:SETINFO.2.adoc[SETINFO(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

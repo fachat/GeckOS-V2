@@ -1,0 +1,82 @@
+
+= SENDRECEIVE(7)
+:doctype: manpage
+
+== NAME
+sending and receiving messages
+
+== DESCRIPTION
+For certain commands, GeckOS needs more than just the CPU registers to transfer data to or from the kernel, 
+or to other processes. For these purposes the SEND/RECEIVE interface is provided.
+
+Using *SEND(2)*, a task can send a message of up to 256 bytes to another process. The other process
+needs to call *RECEIVE(2)* to get the message.
+
+As a remainder of GeckOS V1, this interface uses a fixed address for its buffer, the *SENDBUF*, sometimes
+also called *PCBUF* (in userspace) or *SYSBUF* (in kernal space). 
+To be able to use this in a system without MMU that would protect such a buffer by giving each task
+an own memory area for it, a semaphore is used. Please see *semaphores(7)* for details on how to use
+the semaphore.
+
+The SENDBUF is located at $0200.
+
+== USAGE
+To send a message to another task, first allocate the SENDBUF semaphore. Then fill in the message to be sent
+into the SENDBUF buffer. You can give a target task as destination, how many bytes to send and an optional
+message type.
+
+When sending with *SEND(2)*, if the destination task is already waiting for a message, the message is copied over to the 
+destination task. In Non-MMU systems the copying of course is a no-op. The destination task is woken
+up. 
+
+If no destination task is waiting, then the sender will sleep until the destination task tries to receive 
+the message, in which case the sender is woken up.
+
+The destination task calls *RECEIVE(2)* to receive any incoming message. It can decide whether to block waiting
+for a message or whether to return immediately.
+
+*XRECEIVE(2)* can be used to receive a message only from a given task. This can be used for example after *SEND(2)*
+to receive a message from exactly the task the first message was sent to.
+
+=== SYSTEM DESTINATIONS
+There are a number of system destinations.
+
+SEND_SYS::
+	The system task. Was used in GeckOS V1 for calls to the kernel itself (deprecated)
+SEND_FM::
+	filesystem task. This actually a multiplexer into all the registered filesystems
+	(see *filesystems(7)* for more details)
+SEND_ERROR::
+	critical error handler (reserved and not yet used/implemented)
+SEND_TIME::
+	set/get actual time (reserved and not yet used/implemented)
+SEND_NET::
+	Communicate with the (TCP/IP) network handler
+
+The task numbers are just numbers - if there is no real task behind it, the message cannot be delivered.
+A task can thus register itself as destination task behind this system destination using *TDUP(2)*.
+
+=== SYSTEM SEMAPHORES
+The *SENDBUF* is protected by a system semaphore:
+
+SEM_SENDBUF::
+	Protects the use of the *SENDBUF* structure at $0200 that is used for various 
+	kernel calls like *FORK(2)* or *GETINFO(2)*
+
+Note that the "ownership" of the semaphore is transferred from the sending task to the receiving task for proper
+resource management.
+
+== SEE ALSO
+link:kernel/SEND.2.adoc[SEND(2)], 
+link:kernel/RECEIVE.2.adoc[RECEIVE(2)],
+link:kernel/XRECEIVE.2.adoc[XRECEIVE(2)],
+link:kernel/TDUP.2.adoc[TDUP(2)],
+link:filesystems.7.adoc[filesystems(7)],
+link:semaphores.7.adoc[semaphores(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

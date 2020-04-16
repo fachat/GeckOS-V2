@@ -1,0 +1,59 @@
+
+= RECEIVE(2)
+:doctype: manpage
+
+== NAME
+RECEIVE - receive a message from another task
+
+== SYNOPSIS
+Input::
+	* C=1 - waits for any message
+	* C=0 - returns immediately with an error if no message received
+Call::
+	jsr RECEIVE
+Output::
+	* C=1 - error
+		** AC - error code
+	* C=0 - success
+		** XR - sender task ID
+		** YR - number of bytes received in PCBUF
+		** AC - message type (if given by sender)
+
+== DESCRIPTION
+RECEIVE	receives a message. It either waits for any message (if C=1) or returns immediately (if C=0), with
+an error if no message has been received.
+Otherwise if a message is received, 
+return sender task id in x, length of
+data in PCBUF in y (0 means 256) and the optional message
+type as given with SEND in a.
+
+NOTE: to protect the SENDBUF resource, the *SEM_SENDBUF* semaphore must be held by the sender. 
+The ownership of the SENDBUF semaphore changes to the receiving task (that executes this *RECEIVE*). 
+Thus the *SEM_SENDBUF* must be released after receiving a message.
+
+Alternatively, on an RPC server, the task may keep the SENDBUF semaphore until it is able to 
+reply with an own *SEND(2)* message to the sender of the original message, as returned by the 
+RECEIVE call.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOTX::
+	if non-blocking, and no message could be received.
+E_INT::
+	a blocking RECEIVE call was interrupted by a signal handler, while SIG_INT was set.
+
+== SEE ALSO
+link:../sendreceive.7.adoc[sendreceive(7)],
+link:SEND.2.adoc[SEND(2)],
+link:XRECEIVE.2.adoc[XRECEIVE(2)],
+link:TDUP.2.adoc[TDUP(2)],
+link:../semaphores.7.adoc[semaphores(7)],
+link:../signals.7.adoc[signals(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -48,7 +48,7 @@
 
 /* These are changeable ****************************************************/
 
-#define ROMSTART        $1343   /* where the ROM starts */
+#define ROMSTART        4940+5   /* where the ROM starts */
 
 #define	STACKCOPY		/* if defined, save stack area in memory
 				   when context switching, otherwise divide
@@ -60,7 +60,7 @@
 				   lib6502 */
 #define	NEED_GETINFO
 #define	NEED_SETINFO
-#define	NEED_SLOCK
+#undef	NEED_SLOCK
 #define	NEED_RENICE
 
 #define	BOOTDRV		"b"	/* where are the boot files */

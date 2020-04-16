@@ -1,0 +1,52 @@
+
+= SEND(2)
+:doctype: manpage
+
+== NAME
+SEND - send a message to another task
+
+== SYNOPSIS
+Input::
+	* SENDBUF - the actual message to send
+	* XR - destination task number, maybe a system task (see *sendreceive(7)*)
+	* YR - number of bytes to send (0 means 256 bytes)
+	* AC - (optional) message type
+Call::
+	jsr SEND
+Output::
+	* C=1 - error
+		** AC - error code
+	* C=0 - success
+		** XR - the real destination task number (unmodified if real number given as input, redirected number if system task
+
+NOTE: AC and YR are preserved, XR may be modified.
+
+== DESCRIPTION
+Sends a message to another task. If the other task is already waiting for a message with *RECEIVE(2)* or *XRECEIVE(2)* 
+then the message is copied over, and the sending task returns.
+
+NOTE: to protect the SENDBUF resource, the *SEM_SENDBUF* semaphore must be held. The ownership of the SENDBUF
+semaphore changes to the receiving task.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOENV::
+	illegal task number has been given as destination
+E_INT::
+        a blocking SEND call was interrupted by a signal handler, while SIG_INT was set.
+	On this error, X and Y are preserved, so that the call can easily be restarted
+
+== SEE ALSO
+link:../sendreceive.7.adoc[sendreceive(7)],
+link:RECEIVE.2.adoc[RECEIVE(2)],
+link:XRECEIVE.2.adoc[XRECEIVE(2)],
+link:../signals.7.adoc[signals(7)],
+link:TDUP.2.adoc[TDUP(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -1,0 +1,51 @@
+
+= SENDSIG(2)
+:doctype: manpage
+
+== NAME
+SENDSIG - send a signal to another task
+
+== SYNOPSIS
+Input::
+	* C=0 - set thread to sleep until it receives a signal
+	* C=1 - send a signal to another task
+		** AC - signal mask to send
+		** XR - destination task
+Call::
+	jsr SENDSIG
+Output::
+	* C=1 - error
+		** AC - error code
+	* C=0 - success
+		** AC - E_OK
+
+NOTE: XR and YR are preserved.
+
+== DESCRIPTION
+Sends a signal to another task. In this process the bit corresponding to the signal is set in the
+pending signal bitmap of the receiving task.
+
+NOTE: to protect the SENDBUF resource, the *SEM_SENDBUF* semaphore must be held. The ownership of the SENDBUF
+semaphore changes to the receiving task.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_OK::
+	signal was delivered successfully
+E_NOTASK::
+	the receiving task is not active
+E_INT::
+	the task was waiting (blocking) for a signal, and a signal was received.
+
+== SEE ALSO
+link:../signals.7.adoc[signals(7)],
+link:SETSIG.2.adoc[SETSIG(2)],
+link:CHECKCHLD.2.adoc[CHECKCHLD(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -1,0 +1,29 @@
+/***************** basic interpreter - sysapps/basic/* ********************/
+
+basic4.a65              extended basic interpreter, running in multitasking
+                        ported from C64, (c) commodore.
+                        Not (yet?) running on the C64 under this OS.
+
+/***************** filesystems sysapps/fs/* *******************************/
+
+fsdev.a65               filesystem for accessing devices
+fsibm.a65               IBM PC fs for drives on csa shugart bus
+fsiec.a65               fs for CBM drives on IEEE 488 interface
+
+/***************** ibm disk monitor - sysapps/ibmon/* *********************/
+
+ibmon.a65               disk monitor for IBM PC disks. doesn't work with
+ibmon.doc               fsibm due to lack of mutex/semaphore
+
+/***************** send infrared commands to the stereo - sysapps/irtx ****/
+
+irtx.a65                program to send infrared commands
+
+/***************** multicopy - sysapps/mcopy/* ****************************/
+
+mcopy.a65               multicopy programm - serialize copy commands
+                        (that are executed by setting up a stream and
+                        leaving it alone in the shell, thus causing
+                        performance/resource problems when copying many
+                        files)
+

@@ -1,0 +1,186 @@
+= PET32K(P)
+:doctype: manpage
+
+== NAME
+pet32k - describes the GeckOS port to the Commodore PET with 32k (40 column graphics keyboard)
+
+== DESCRIPTION
+The PET is a machine that has a single environment with only 32k usable RAM, and no memory management unit.
+
+WARNING: the following needs to be updated!
+
+== BUILDING
+To build the program, you have to have my 6502 cross assembler 'xa-2.1.4e'
+Current testing takes place on 'VICE', the versatile Commodore emulator.
+
+In the file rom.a65, a few options can be set by setting
+the defines appropriately. See the link:build.7.adoc[build] section.
+
+Go to the arch/c64/boot directory and type "make" this will build
+all necessary files in this directory, including links to all
+important applications. Typing "make osa.d64" will produce a
+d64 disk image with all necessary files. This disk image can be
+transfered to a C64 and used.
+
+If you change something in the code and reassemble, check from the file65
+output that the data and bss segments don't overlap. Also the
+memory that is dynamically allocated starts at $1600 (see
+arch/c64/c64rom.a65). Only if nothing overlaps there is no danger.
+
+See also *build(7)*.
+
+=== BUILD OPTIONS
+
+== BOOTING
+In VICE (i.e. xpet) or on the PET load the (BASIC) program 'loader', which
+is in the boot directory and the osa.d64 disk image. When run, this
+program loads the charom, the program ROM and
+a small machine language program (boot.obj, which is made from
+boot.a65). It then starts the boot routine that copies the ROMs to
+their places and jumps to the kernel RESET routine.
+
+== USAGE
+The video device is able to handle up to two screen output consoles.
+The Left-Shift+Rvs/Off key switches between the different virtual consoles.
+
+On the first window, a lib6502  "lsh" is started. The lsh is a lib6502
+program and is loaded by the init process. The ROM only contains a
+command to the init process to start the lib6502 program. It uses
+a relocatable fileformat and can thus started more than once.
+
+In the shell you can use "c:ls" on drives a: (registered devides)
+If the iec bus works, then drive b: is disk unit 8
+and drive c: is disk unit 9.
+
+For the shell commands see the docs.
+The memory map is described below. When writing and using lib6502
+programs they are relocated automagically.
+
+== ROM CONFIGURATION
+The "ROM" is a boot image that is loaded into memory from start of available memory.
+The PET ROMs can of course not be replaced, so they still use the memory from $9000 and up.
+Even the interrupt routine is started in the PET ROM, but the interrupt vectors are modified
+to point to GeckOS.
+
+In $e8xx of course the I/O area is used.
+
+The configuration can be seen in arch/pet32k/rom.a65.
+
+=== INCLUDED PROGRAMS
+The ROM contains these blocks
+
+devices/devices.a65::
+	This contains the device handlers supported by the architecture (see below)
+sysapps/init/init.a65::
+	The init program that starts all other progams, and is also able to restart them when they finish.
+	See *startup(7)*
+sysapps/fs/fsdev.a65::
+	A filesystem driver that allows accessing devices as files (see *fsdev(8)*).
+	In this configuration, to save memory, ROM access is not built in.
+sysapps/fs/fsiec.a65::
+	The filesystem driver for the IEC or IEEE488 interface of the C64.
+	Note that usually the serial IEC is used. Using the *PARALLEL* define, instead the 
+	Commodore IEEE488 interface module is supported.
+lsh::
+	This program is loaded from disk into memory and started.
+
+=== MEMORY MAP
+
+----
+	$0002		ENVSAVE pointer (per environment)
+	$0004		TASKSAVE pointer (per tasks)
+	$0006		THREADSAVE pointer (per thread)
+
+	$0008		start of zeropage for ROM-based code
+	$0090		PET ROM interrupt vectors at $90
+	$0094		start of zalloc'able zeropage
+	$00ff		end of zeropage
+
+	$0100		start of userspace stack
+	$013f		end of userspace stack
+	$0140		start of system stack
+	$01ff		end of system stack
+
+	$0200		PCBUF communication buffer
+
+	$0300 		data/bss for ROM-based code
+	$134c		start of boot ROM
+			devices
+			init
+			fsiec
+			lsh
+	$5500		Start of malloc'able free memory
+
+	$7800		screen buffer 1
+	$7c00		screen buffer 2
+	$8000		screen buffer 
+	$8400 		PET ROM area
+	$e800		PET I/O
+	$f000 		PET ROM area
+	$ffff		end of ROM
+----
+
+=== SYSTEM SEMAPHORES
+These are the system semaphores defined in the C64 port
+Any program to access the named resource should aqcuire the relevant semaphore before doing so
+
+SEM_PARIEC::
+	Parallel IEEE488 interface (when available)
+
+== KERNEL CONFIGURATION
+The kernel is configured with these major configuration options:
+
+STACKCOPY:: 
+	The stack is divided into two parts - one for the system and one for userspace programs. 
+	During context switch the userspace stack is copied over into a save area and the stack area
+	from another task is copied in. This allows for an arbitrary number of tasks (in theory).
+
+=== SYSTEM INTERRUPT
+The PET kernel uses a timer interrupt as a 50Hz interrupt source.
+
+== SUPPORTED DEVICES
+This section describes the devices supported by GeckOS.
+
+=== VIDEO
+The video device provides three virtual consoles.
+
+==== VIDEO OUTPUT
+Video output is taken from the video buffers at $exxx (see memory map above), with a 40 column, 25 rows display,
+using the C64's built-in VIC-II chip.
+
+==== KEYBOARD MAPPING
+The keyboard is mapped such that it can run on the real hardware, but also in the real machine.
+Here are the important key mappings:
+
+Left Shift + Rvs/Off::
+	switch between virtual consoles 
+Left Shift::
+	The Ctrl-key.
+Left Shift + y::
+	This combination defines the pipe character.
+
+Here is a comparison of the real machine, VICE and what GeckOS uses.
+
+[options="header",frame="top"]
+|====
+|GeckOS|PET|VICE on PC (3.4+)
+|Ctrl | Left Shift | Left Shift 
+|Tab  | Rvs/Off  | Tab
+|Console switch | Left Shift + Rvs/Off | Left Shift + Tab 
+|Console mode | Right Shift + Rvs/Off | Right Shift + Tab
+|Logoff  | Left Shift + Right Shift + Rvs/Off | n/a
+|\| | Left Shift + y | Left Shift + y 
+|====
+
+NOTE: a VICE bug prevents the use of Left Shift for Control and both Shift keys for Shift-Control.
+
+== SEE ALSO
+link:kernel/DEVCMD.2.adoc[DEVCMD(2)], 
+link:devices.7.adoc[devices(7)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -383,9 +383,14 @@ l0 jmp l0
 #ifdef  NMIDEV
 	jmp (nmiadr)
          
+	.zero
+tmp	.word 0
+tmp2	.word 0
+
 	.data 
 nmiadr  .word 0
 nmicnt 	.byt 0
+
 	.text
 
 &ininmi   ;lda #<zend
@@ -418,39 +423,39 @@ yendnmi   rti
 	jsr CTRLNMI	; before we mess with the NMI pointer, switch it off
 
 	txa
-        jsr n1
+        jsr n1		; store a/y in nmiadr as new NMI address
 
-	lda nmiadr
+	lda nmiadr	; calculate address of control calls
 	sec
 	sbc #4
-	sta tmp
+	sta tmp		; and store in tmp
 	lda nmiadr+1
 	sbc #0
 	sta tmp+1
 
-	ldy #0
+	ldy #0		; get address of oldvec
 	lda (tmp),y
-	sta tmp2
+	sta tmp2	; and store in tmp2
 	iny
 	lda (tmp),y
 	sta tmp2+1
 
-	tsx
-	lda $0102,x	
-	sta (tmp2),y
+	tsx		; now copy the address of the original
+	lda $0102,x	; NMI routine (taken from stack as PHA's above)
+	sta (tmp2),y	; and store in oldvec of new device
 	dey
 	lda $0103,x
 	sta (tmp2),y
 
-	ldy #2
+	ldy #2		; get address of NMI control call in device
 	lda (tmp),y
-	sta tmp2
+	sta tmp2	; store in tmp2 
 	iny
 	lda (tmp),y
 	sta tmp2+1	
 
 	lda #NMI_OFF
- 	jsr c2		; init new device with NMI off
+ 	jsr c2		; ... to init new device with NMI off (jmp (tmp2))
 
 	lda #NMI_ON	; now switch on again, if allowed
 	jsr CTRLNMI
@@ -462,12 +467,7 @@ yendnmi   rti
           jmp ne
 n2        jsr ininmi2
 ne        jmp memtask
-	  ;jsr memtask
-          ;rts        
 
-	.zero
-tmp	.word 0
-tmp2	.word 0
 	.data
 cmd	.byt 0
 	.text
@@ -530,7 +530,7 @@ ctrl0	sec
 	sta tmp2+1
 
 	lda cmd
-	jsr c2
+	jsr c2			; jmp (tmp2)
 
 	ldy #0
 	lda (tmp),y	

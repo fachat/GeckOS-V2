@@ -1,4 +1,6 @@
 
+MANPAGES=../../../*/*/*.1.adoc
+
 apps = lsh lmon
 APPSDIR=../../../apps
 
@@ -39,7 +41,7 @@ tar ../boot.tgz: rom loader howto.boot
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${apps} rom loader 
-	./mkdisk loader  ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} rom 
+	./mkdisk loader  ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${MANPAGES} rom 
 	dd if=osa.x64 of=osa.d64 bs=64 skip=1
 	rm osa.x64 ${apps} ${sysapps}
 

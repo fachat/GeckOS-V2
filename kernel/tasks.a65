@@ -229,36 +229,40 @@ l0	tay
 env 	  stx div3
 
 	  jsr gettask
-	  bcs nothread2
+	  bcs notask2
 	  stx div2
 	  ; x is new task
 
-	  lda SYSBUF+FORK_PRIORITY
-	  bne prio_ok
-	  ldy actTask
+	  ldy actTask	; parent task ID
 	  cpy #<-1
-	  beq prio_def			
-	  ; inherit from parent
-	  lda taskTab2 + TT_PRIORITY,y
-	  sta taskTab2 + TT_PRIORITY,x
-	  lda taskTab + TT_STDCIN,y
-	  cmp #STDNUL
-	  bne cin_ok
-	  beq cin_def
-	  ; current task is -1 means initial boot
-prio_def
+	  bne setprio
+
+	  ; initial boot (from kernel startup)
 	  lda #IRQCNT
 	  sta taskTab2 + TT_PRIORITY,x
-cin_def   lda SYSBUF+FORK_STDIN
+	  bne cin_boot
+
+setprio	  ; normal fork, inherit priority and STDCIN (if possible)
+	  lda SYSBUF+FORK_PRIORITY
+	  bne prio_ok
+	  ; inherit from parent
+	  lda taskTab2 + TT_PRIORITY,y
+prio_ok	  sta taskTab2 + TT_PRIORITY,x
+	  ; check STDCIN from parent
+	  lda taskTab + TT_STDCIN,y
+	  cmp #STDNUL	; replace STDNUL with STDIN from FORK param
+	  bne cin_ok
+cin_boot  lda SYSBUF+FORK_STDIN
 cin_ok	  sta taskTab + TT_STDCIN,x
-prio_ok	  
+
 	  tya
 	  sta taskTab + TT_PARENT,x
-	  
+
 	  jsr getthread
 	  bcc gotthread
 
-nothread2 jmp nothread
+nothread2 jmp enothread
+notask2	  jmp enotask
 
 gotthread ; y has thread no
 	  sty div
@@ -299,6 +303,9 @@ gotthread ; y has thread no
 	  lda SYSBUF+FORK_ADDR+1
 	  sta taskTab2 + TT_EXECADDR+1,x
 
+	  txa
+	  jsr sendbufowner	; switch ownership of SEM_SENDBUF to new task
+
 	  ldy #TT_SLEN-TT_NAME-1
 loopname
 	  lda SYSBUF+FORK_NAME,y
@@ -306,7 +313,7 @@ loopname
 	  inx
 	  dey
 	  bpl loopname
-	  
+ 
 	  ldx div		; init new threads stack
 	  jsr initsp
 
@@ -333,11 +340,15 @@ loopname
 
 	  ldx div2		; return task ID 
 	  lda #E_OK
-	  beq fend
-nothread
+	  beq fend		; always
+
+enothread lda #E_NOTHREAD
+	  .byt $2c
+enotask	  lda #E_NOTASK
+	  pha
 	  ldx div3
 	  jsr freenv
-	  lda #E_NOTASK
+	  pla
 	  .byt $2c
 noenv	  lda #E_NOENV
 fend	  cmp #1
@@ -401,7 +412,7 @@ fend	  cmp #1
 
 nothread  pla
 	  pla
-	  lda #E_NOENV
+	  lda #E_NOTHREAD
 	  sec
 	  jmp memtask
 	  .)
@@ -431,8 +442,9 @@ suicide	  ldx actTask
 &&kkill	  jsr memsys
 k1 	  .(
 	  sta taskTab2 + TT_RETCODE,x
-	  stx div2
+	  stx div2		; XR / div2 is taskID of task to be killed
 
+	  ; free all threads with the task
 	  .(
 	  ldy #0
 k2	  txa
@@ -445,6 +457,10 @@ k2	  txa
 kn	  jsr ynextthread
 	  bcc k2
 ke	  .)
+	  ; check if killed task is a parent to another running task
+	  ; and set its parent to $ff instead.
+	  ; If the child is dead and just waiting for the parent to call
+	  ; CHECKCHILD (indicated by NTHREADS=$ff), then release it
 	  .(
 	  lda #0
 k3	  tax
@@ -462,7 +478,7 @@ k4	  txa
 	  cmp #TT_SLEN*MAXNTASKS
 	  bcc k3
 	  .)
-
+	  ; clear STDIO streams
 	  .(
 	  ldy div2
           ldx taskTab+TT_STDIN,y
@@ -478,7 +494,8 @@ k4	  txa
           lda #SC_NUL
           jsr STRCMD
 	  .)
-
+	  ; if the parent has SIG_CHLD enabled, set the pending signal,
+	  ; also mark the killed thread as waiting for CHECKCHILD
 	  .(
 	  ldy div2
 	  ldx taskTab + TT_PARENT,y
@@ -496,6 +513,8 @@ k4	  txa
 	  lda #<-1
 	  sta taskTab + TT_NTHREADS,y
 nosig	  .)
+	  ; clear the semaphores held by the task
+	  jsr clrsem	; y is task number to clear
 
 	  ldy div2
 	  ldx taskTab + TT_ENV,y
@@ -643,13 +662,13 @@ s2a	  ;jmp endirq
           sty div
           ldy actThread
           sta threadTab+TH_PAR+2,y
+          lda #TS_RDY
+&wsigentry
+          sta threadTab+TH_ST,y
           txa
           sta threadTab+TH_PAR,y
           lda div
           sta threadTab+TH_PAR+1,y
-          lda #TS_RDY
-&wsigentry
-          sta threadTab+TH_ST,y
           jmp nexttask
           .)
 
@@ -712,7 +731,7 @@ loop	tax
 	cmp taskTab + TT_NTHREADS,x
 	bne next
 	lda taskTab2 + TT_RETCODE,x	; error code
-	inc taskTab + TT_NTHREADS,x	
+	inc taskTab + TT_NTHREADS,x	; release task resources for new use
 	clc
 	bcc end				; always
 next	txa
@@ -826,9 +845,9 @@ name
 	sta taskTab2 + TT_EXECADDR,x
 	tya
 	sta taskTab2 + TT_EXECADDR+1,x
-	clc
-	.byt $24
-err	sec
+	lda #E_OK
+	.byt $2c
+err	lda #E_ILLPAR
 	jmp memtask
 	.)
 
@@ -869,28 +888,29 @@ err	sec
 	jsr fm		; needs ac for FM_REG check
 	bcs serr2
 #endif
-send1	jsr testenv
+send1	jsr testsystask
 	bcs serr
 	cpx actTask
 	beq serr
 	ldy actThread
-	txa
-	sta threadTab + TH_PAR,y
-	lda div
+	txa		; save destination task in X
+	sta threadTab + TH_PAR,y	
+	lda div		; save message length in y
 	sta threadTab + TH_PAR+1,y
 
+	; loop through threads if one is waiting for a message
 	ldy #0
-l0	txa
+l0	txa		; thread in target task?
 	cmp threadTab + TH_TASK,y
-	bne next
+	bne next	; no
 	lda threadTab + TH_ST,y
-	cmp #TS_WFTX
-	beq copy
-	cmp #TS_WXTX
+	cmp #TS_WFTX	; waiting for a message?
+	beq copyto	; yes, y is target thread
+	cmp #TS_WXTX	; waiting for our message?
 	bne next
 	lda threadTab + TH_PAR,y
 	cmp actTask
-	beq copy
+	beq copyto	; y is target thread
 next
 	jsr ynextthread
 	bcc l0
@@ -902,12 +922,17 @@ next
 serr	lda #E_NOENV
 serr2	cmp #1
 	jmp memtask
-copy
+	
+	; y is target thread
+copyto
 #ifdef CPPCBUFTX
 	sty div
 	CPPCBUFTX()
 	ldy div
 #endif	
+	lda threadTab + TH_TASK,y
+	jsr sendbufowner
+
 	lda actTask
 	sta threadTab + TH_PAR,y
 	ldx actThread
@@ -940,18 +965,19 @@ copy
 	lda div
 	sta threadTab + TH_PAR+1,y
 
+	; scan all threads if one is waiting for send
 	ldy #0
 l0	lda threadTab + TH_ST,y
-	cmp #TS_WFRX
-	bne next
-	lda actTask
+	cmp #TS_WFRX	; waiting to deliver a message?
+	bne next	; no
+	lda actTask	; waiting for us to receive it?
 	cmp threadTab + TH_PAR,y
-	bne next
+	bne next	; no
 	bit div2
-	bpl copy
-	txa
+	bpl copyfrom	; kreceive - copy, y is source thread
+	txa		; xreceive - check if we want to rx from this task?
 	cmp threadTab + TH_TASK,y
-	beq copy
+	beq copyfrom	; yes, copy. y is source thread
 next
 	jsr ynextthread
 	bcc l0
@@ -969,12 +995,18 @@ nowait	lda #E_NOTX
 	sec
 	jmp memtask
 
-copy	plp
+	; y is source thread
+copyfrom
+	plp
 #ifdef CPPCBUFRX
 	sty div
 	CPPCBUFRX()
 	ldy div
 #endif
+	lda actTask
+	jsr sendbufowner
+
+	; wake up waiting thread
 	lda #TS_RDY
 	sta threadTab + TH_ST,y
 	lda actTask
@@ -1031,6 +1063,7 @@ setadr	php		; this address might be used in IRQ and exchange is
 
 &sendsig .(		; ac = signal mask, xr = target task
 	jsr memsys
+	sty div
 	bcs sends
 	lda #TS_WSIG
 	jmp wsigentry
@@ -1049,7 +1082,8 @@ sends
 ok	lda #E_OK
 	.byt $2c
 not	lda #E_NOTASK
-	clc
+	ldy div
+	cmp #1
 	jmp memtask
 	.)
 
@@ -1083,7 +1117,7 @@ checksig .(
 	cmp #TS_WFTX
 	beq sigint
 	cmp #TS_WFSEM
-	beq sigint
+	beq sigintsem
 none	rts		/* TODO: check interruptable flag, interrupt */
 	
 sigrdy	.(
@@ -1128,7 +1162,9 @@ sigirq	.(
 	bne sig1			; always
 	.)
 
-sigint	.(				; interrupted system call 
+sigintsem .(
+	jsr semunmap			; restore semaphore number in X
+&sigint					; interrupted system call 
 	tya
 	jsr setthread
 	jsr incretadr
@@ -1176,18 +1212,31 @@ l1	jmp push
 #else
 	.data
 #endif
-SEMFRE    .dsb (ANZSEM+7)/8
-SEMVAL    .dsb (ANZSEM+SYSSEM+7)/8
-SEMLOCK   .dsb ANZSEM+SYSSEM
+SEMFRE    .dsb (ANZSEM+7)/8	; bit map of un-allocated application semaphores
+SEMOWN	  .dsb ANZSEM+SYSSEM	; field with taskId+1 of task that owns the semaphore
+SEMLOCK   .dsb ANZSEM+SYSSEM	; field with taskId+1 of task that has locked sem
 
 	.text
 
+	; map semaphores from negative system to positive application sem's
+	; to all-positiv numbers
 remap	.(
 	txa
 	clc
 	adc #SYSSEM
 	tax
 	cpx #ANZSEM+SYSSEM
+	rts
+	.)
+
+	; remap the internal (all-positive) numbers back to user space numbers
+	; with negative system semaphores to recover the semaphore number
+	; on an interrupted PSEM
+&semunmap .(
+	lda threadTab+TH_PAR,y
+	sec
+	sbc #SYSSEM
+	sta threadTab+TH_PAR,y
 	rts
 	.)
 
@@ -1201,19 +1250,16 @@ remap	.(
 	lda SEMLOCK,x
 	bne locked
 	lda actTask
-	adc #0		; c=1 from above
+	;sec		; c=1 from above
+	adc #0		
 	sta SEMLOCK,x
 	bne rtask
 unlock	lda #0
 	sta SEMLOCK,x
-	txa
-	pha
-	jsr gsetxy
-	and SEMVAL,x
-	bne ok		; still locked, so unlock will release other tasks
-	pla
-	jmp noillp	; search for tasks to release
-ok	pla
+	lda SEMOWN,x
+	bne ok
+	jsr vsemint	; search for tasks to release
+ok	lda #E_OK
 	clc
 	jmp memtask
 	.)
@@ -1236,25 +1282,24 @@ rtask	jmp memtask
 	jmp memtask
 
 ps1
-          ldy actThread
-          txa
-          sta threadTab+TH_PAR,y      ; Semaphor-Number, translated
 	  jsr tstnset
 	  bcc rtask
+
+	sty div
+          ldy actThread
+          txa
+          sta threadTab+TH_PAR,y      ; Semaphor-Number, translated, to check for wakeup
+	lda div
+	sta threadTab+TH_PAR+1,y	; YR after wakeup
           ldy actThread
           lda #TS_WFSEM
           sta threadTab+TH_ST,y
           jmp nexttask
           .)
 
-&&kvsem    .(
-	  jsr memsys
-	  ; x has semaphore number
-	jsr remap
-	bcc noillp
-	jmp illpar
-&noillp	  tax
-
+	; release semaphore in X and wake one thread waiting for it
+	; note destroys all registers
+vsemint	.(
 	  ldy actThread
 l0	  lda threadTab + TH_ST,y
 	  cmp #TS_WFSEM	; wait for semaphore?
@@ -1263,26 +1308,49 @@ l0	  lda threadTab + TH_ST,y
 	  cmp threadTab + TH_PAR,y
 	  bne next	; wait for _this_ semaphore?
 
-	; check lock
+	; check lock (if lock is set, only the lock owner may pass the semaphore)
 	lda SEMLOCK,x
 	beq gotone	; not locked
 	sec
 	sbc #1
 	cmp threadTab + TH_TASK,y
-	beq gotone	; locked by task of thread
+	beq gotone	; locked by thread of same task
 
 next	  jsr ynextthread
 	  cpy actThread
 	  bne l0
 
-          jsr gsetxy
-          eor #$ff
-          and SEMVAL,x
-          sta SEMVAL,x
-          jmp ok
+	lda #0		; free the actual semaphore
+	sta SEMOWN,x
+	rts
 
-gotone	  lda #TS_RDY
-	  sta threadTab + TH_ST,y
+	; found a thread waiting for it
+	; semaphore stays locked
+gotone	lda threadTab + TH_TASK,y
+	clc
+	adc #1
+	sta SEMOWN,x  	; change owner of semaphore
+	lda #0
+	sta threadTab + TH_PAR+2	; AC return value
+	lda #TS_RDY
+	sta threadTab + TH_ST,y
+	rts
+	.)
+
+&&kvsem    .(
+	  jsr memsys
+	  ; x has semaphore number
+	jsr remap
+	bcc noillp
+illp	jmp illpar
+&noillp	  tax
+	lda SEMOWN,x
+	beq ok		; ignore if it was not set
+	sec
+	sbc #1
+	cmp actTask	; only owning task may free it
+	bne illp
+	jsr vsemint
 ok
 	  lda #E_OK
 	  clc
@@ -1327,25 +1395,23 @@ gnext     inx
           bcs gne
 	  .)
 
-&gsetxy    txa
-asetxy    tax
+gsetxy	  txa
 	  and #7
-          tay
-          txa
-          lsr
-          lsr
-          lsr
-          tax
-          lda POT2,y
-          rts
-          
+	  tay
+	  lsr
+	  lsr
+	  lsr
+	  tax
+	  lda POT2,y
+	  rts
+
 &&fresem  .(
 	  jsr memsys
           cpx #ANZSEM
           bcs illpar
-          jsr gsetxy
-          ora SEMFRE,x
-          sta SEMFRE,x
+	  jsr gsetxy
+	  ora SEMFRE,x
+	  sta SEMFRE,x
           lda #E_OK
           .byt $2c
 &illpar   lda #E_NOSEM
@@ -1354,16 +1420,12 @@ asetxy    tax
 	  .)
 
 &&inisem  .(
-	  ldy #(ANZSEM+SYSSEM+7)/8-1
+	  ldy #ANZSEM+SYSSEM-1
           lda #0
-i1        sta SEMVAL,y
+i1        sta SEMOWN,y
+	  sta SEMLOCK,y
           dey
           bpl i1
-
-	ldy #ANZSEM+SYSSEM-1
-l2	sta SEMLOCK,y
-	dey
-	bpl l2
 
 	  lda #$ff
           ldy #(ANZSEM+7)/8-1
@@ -1382,12 +1444,12 @@ tstnset   .(
 	cmp actTask
 	bne set		; not locked by own task
 notlocked 	
-          jsr gsetxy
-          and SEMVAL,x
+	lda SEMOWN,x
           bne set
-          lda POT2,y
-          ora SEMVAL,x
-          sta SEMVAL,x
+	lda actTask
+	sta SEMOWN,x
+	inc SEMOWN,x
+
           lda #E_OK
           .byt $2c
 illpar1	  lda #E_NOSEM
@@ -1396,6 +1458,40 @@ set       lda #E_SEMSET
           cmp #1
           rts
 	  .)
+
+	; clear semaphores when a task is killed
+	; task ID in yr
+&clrsem	.(
+	ldx #ANZSEM+SYSSEM-1
+	iny
+	tya
+	pha
+cls1	cmp SEMLOCK,x	
+	bne nolock
+	lda #0
+	sta SEMLOCK,x
+nolock	pla
+	pha
+	cmp SEMOWN,x
+	bne noown
+	jsr vsemint
+noown	pla
+	pha
+	dex
+	bpl cls1
+	pla
+	rts
+	.)
+
+	; sets a new SEM_SENDBUF owner after a successful copying
+	; of the message
+	; needs to preserve XR, YR
+&sendbufowner .(
+	clc
+	adc #1
+	sta SEMOWN+SYSSEM-1	; assume SEM_SENDBUF is -1
+	rts
+	.)
 
 	  .)
 
@@ -1432,7 +1528,8 @@ stdok     plp
 	  .)
 
           .(
-&testenv  cpx #OWNTASK
+&testsystask
+	  cpx #OWNTASK
           bne te1
           ldx actTask
           clc

@@ -1,0 +1,70 @@
+= OS/A65 BASIC interpreter
+:doctype: manpage
+
+== NAME
+basic - run a BASIC interpreter
+
+== SYNOPSIS
+*basic*
+
+== DESCRIPTION
+WARNING: The BASIC interpreter is derived from copyrighted code! 
+So the basic interpreter is only an 
+educational example of how to port other programs from the C64 
+or other PET computers to the OS/A65 operating system.<p>
+Do not try to assemble it or run it!
+
+The basic interpreter is taken from the C64. I de-assembled it into 
+normal source code and patched it to work with OS/A65 and multitasking.
+Several commands are changed and others, most notably the BASIC V4 
+commands, are added. 
+
+=== changed commands
+
+OPEN fnr, drv, mode, name::
+'drv' has changed from the commodore specific device id to the OS/A 
+drive number. 'mode' then is the command to open a file, i.e.
+FS_xxx.
+
+LOAD name, drv:: 
+SAVE name, drv::
+'drv' has changed to the OS/A drive number
+
+LIST name, drv [,a-b]::
+You can now list a program directly to a file. a and b are filenumbers
+and optional (as usual with list)
+
+SYS adr:: 'adr' is checked for some C64 specific addresses and changes them
+to the routines where they are now. Detected addresses are
+$ff90, $ff99, $ff9c, $ffb7-$ffe7, $fff0, $fff3.
+
+=== new commands
+Some parameter can be left off, I was just to lazy to write all the brackets...
+
+DIR [mask,] drv:: print directory of a drive
+MKDIR name, drv:: creates new subdirectory
+RMDIR name, drv:: remove (empty) subdirectory
+SCRATCH name, drv:: remove file
+RENAME name1 TO name2, drv:: rename a file 'name1' to 'name2'.
+DELETE a-b:: remove BASIC lines a-b; syntax is the same as with list
+RENUMBER start, step, a-b:: change basic line numbers of the lines a-b (syntax as with list) to start, start+step, start+2*step,... All GOSUB and GOTO statements are
+changed appropriately in the whole program.
+RENEW:: Gets a BASIC program back that has been deleted with NEW. It only works if
+the program has not been overwritten by e.g. setting a new variable in 
+memory.
+DUMP:: prints all variables
+FIND text:: list the lines where 'text' occurs.
+HIMEM adr:: sets a new end of basic ram address and executes a CLR.
+LOMEM adr:: sets a new basic program start address and executes a NEW.
+QUIT:: In contrast to the original C64 Basic interpreter this one can be left...
+ENTER name, drv:: redirects STDIN to the given file, so that e.g. a complete basic program can be read in from an ASCII (not tokenized) file.
+CALL adr, a, x, y, c, ra, rx, ry, rc:: Calls a machine language routine at adr, with a,x,y,c in accumulator, x- and y-register and in the status register. Return values are put into ra, rx, ry, rc.
+SPUT adr, string:: Write a string directly into memory at adr, end with nullbyte.
+SGET adr, len, stringvar:: reads len bytes from memory at adr and saves it in string variable.
+
+== AUTHOR
+Microsoft, Commodore, André Fachat
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

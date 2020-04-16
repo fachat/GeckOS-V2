@@ -69,7 +69,7 @@
 				   lib6502 */
 #define	NEED_GETINFO
 #define	NEED_SETINFO
-#define	NEED_SLOCK
+#undef	NEED_SLOCK
 #define	NEED_RENICE
 
 #define	BOOTDRV		"c"	/* where are the boot files (IEC device 8) */
@@ -182,7 +182,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$6800
+Memstart  =$6100
 Memend	  =$f000
 Zerostart =$70
 

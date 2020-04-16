@@ -1,0 +1,84 @@
+
+= MMU(7)
+:doctype: manpage
+
+== NAME
+MMU - discussion how to run a multitasking OS on systems with an MMU
+
+== DESCRIPTION
+A memory management unit can take various different forms, from such simple forms as
+bank switching in the CBM 8296, to the page-base MMU in the CS/A computer.
+
+What should be common to those is that they enable the re-mapping of the CPU
+zeropage, stack, and at least some memory areas.
+
+The operating system supports these MMU functionality by
+- generating new environments based on MMU mappings
+- supporting the creation of tasks in the environments
+- manipulating the environments with system calls where supported
+
+So, for example in the 8296, the memory management can only re-map the
+upper 32k into two banks of RAM, so the zeropage and stack cannot be changed.
+Therefore the 8296 port has two environments, each located in one of the banks,
+and uses the shared stack and zeropage.
+
+The CS/A on the other hand can re-map any of the 16 4k address blocks to any
+of the 256 real memory blocks. So it creates a new environment per task, 
+with an own zeropage and stack, and provides only as much memory as needed per task.
+
+=== ZEROPAGE AND STACK MANAGEMENT
+In systems where the zeropage and stack can not be re-mapped per thread, 
+the system uses the same approach as the *nommu(7)* as well. 
+
+In systems where remapping the zeropage and stack is possible, they will be 
+re-mapped for every thread separately.
+
+In systems like the CS/A where zeropage, stack and SENDBUF cannot be mapped
+separately, they are mapped per task. Within the environment the stack 
+is then either split per thread, or managed using stackcopy.
+
+=== SEND/RECEIVE BUFFER
+The send/receive buffer is not in the stack or zeropage area, so some architectures
+may not support the re-mapping of that memory area. In this case, the 
+SEM_SENDBUF approach is used here as well.
+
+=== MEMORY MANAGEMENT
+For memory management, there are two levels - first the system needs
+to know the available memory. In MMU systems the available memory
+pages can be registered with *ENMEM(2)*.
+
+Second, the kernel needs to know how to remap memory pages in an environment
+to new addresses. This can be done using the *SETBLK(2)* call.
+
+The kernel does no detailed memory management within an environment,
+but it does know its boundaries. To modify the memory size of an environment
+this can be done using *SBRK(2)*
+
+Memory management within the enviroment needs to be done for example with 
+the *lib6502(7)* memory management. 
+
+=== PORTS OVERVIEW
+These ports to MMU systems are currently available:
+
+[options="header",frame="top"]
+|====
+|Port|CBM 8296|CS/A65
+|Zeropage|lib6502 zalloc|mapped per task
+|Stack|shared / stack copy|mapped per task / split
+|SENDBUF|SEM_SENDBUF|mapped per task
+|memory|one env system tasks, one for apps|mapped per task
+|====
+
+== SEE ALSO
+link:sendreceive.7.adoc[sendreceive(7)],
+link:semaphores.7.adoc[semaphores(7)],
+link:nommu.7.adoc[nommu(7)]
+
+Suggested reading: "Operating Systems, design and implementation", Andrew S. Tanenbaum, Prentice-Hall
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
