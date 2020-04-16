@@ -8,7 +8,7 @@ slip - description of the Serial Line TCP/IP implementation for GeckOS
 
 ----
                    TCP/SLIP implementation for the OS/A65
-                           (c) 1997-1998 A. Fachat
+                           (c) 1997-2020 A. Fachat
 ----
 
 
@@ -30,49 +30,49 @@ WARNING: Never, never ever run the WWW server on the OS/A computer (C64), if
 == PURPOSE
 Now that you're warned: What's it for?
 
-   The TCP/SLIP implementation can be used for telneting to and
+The TCP/SLIP implementation can be used for telneting to and
    from an OS/A65 computer. Now it's used to transfer files between an 
    OS/A65 computer and a (Unix) computer. It can also be used as a simple
    WWW server now.
 
-   I use it on a C64, to transfer files between a PC and a VC1541 disk.
+I use it on a C64, to transfer files between a PC and a VC1541 disk.
    
-   The lowest level you can see is the icmp (internet control message
+The lowest level you can see is the icmp (internet control message
    protocol) level. If you "ping" the OS/A65 computer, it replies.
    See "man ping" on a Unix machine. It also replies to "traceroute" 
    packets appropriately.
 
-   Then there are the simple test TCP ports "echo" (7), "discard" (9) and
+Then there are the simple test TCP ports "echo" (7), "discard" (9) and
    "chargen" (19). You can telnet to these ports on the OS/A65 computer.
    See "man telnet" on how to telnet to a different port.
 
-   Another special port is the http port (80). This port is used to 
+Another special port is the http port (80). This port is used to 
    transfer html pages for the World Wide Web (WWW). A special server
    is listening on this port and serves requests from a given directory.
 
-   The next level is a client-server-application. The server "fstcp"
+The next level is a client-server-application. The server "fstcp"
    runs on a connected (unix) system. The client "slipd" runs on the
    GeckOS machine. It tries to connect to a remote server (the fstcp
    program on the unix machine) and establishes a TCP connection to the
    server. This connection is then used to transfer file data.
 
-   The "slipd" internet daemon exports internet capabilities to the 
+The "slipd" internet daemon exports internet capabilities to the 
    lib6502 library. This is actually the only part that still seems
    to be buggy. The www server built into slipd is quite stable, as
    is the rest of the OS (has been running for several days without
    problems)
 
-   The default configuration for slipd (see sysapps/slipd/main.a65)
+The default configuration for slipd (see sysapps/slipd/main.a65)
    is to run the builtin WWW server, the telnet server (starts
    the apps/inet/tlogin program for login) and the lib6502 stuff.
    You have to change login/password/shell in tlogin.a65 to your 
    preferences.
 
-   With the lib6502 inet stuff the apps/inet/telnet program opens
+With the lib6502 inet stuff the apps/inet/telnet program opens
    a telnet connection to the host given at the command line
    (in doted quad notation).
 
-   The procedures described here are for a Linux machine and a C64
+The procedures described here are for a Linux machine and a C64
    with GeckOS running. For the serial line setup you need root 
    (superuser) access to the unix machine. It should run without
    any changes on any OS/A65 machine with a serial line.
@@ -81,23 +81,23 @@ Now that you're warned: What's it for?
 
 === addresses
 
-   In an IP (internet protocol) network, each computer has an IP number.
+In an IP (internet protocol) network, each computer has an IP number.
    Normally you have to formally apply at the network information center
    for an IP number or net. But there are numbers assigned to be used
    in private, non-connected networks.
 
-   IP addresses are usually noted in the "doted quad" notation, i.e.
+IP addresses are usually noted in the "doted quad" notation, i.e.
    four decimal values from 0-255 each, separated by dots.
 
-   The private network I use is are the numbers
+The private network I use is are the numbers
 
       192.168.0.*
 
-   i.e. the numbers 192.168.0.1 - 192.168.0.254. There are two numbers
+i.e. the numbers 192.168.0.1 - 192.168.0.254. There are two numbers
    missing, they are used as network address (0) and normally as broadcast
    address (255).
 
-   My unix (i.e. Linux) computer at home has the IP 192.168.0.10. This is
+My unix (i.e. Linux) computer at home has the IP 192.168.0.10. This is
    the IP the fstcp server is running on. 
    My C64 (with the OS/A65 operating system) has the IP 192.168.0.64.
    So if the C64 has the slipd program running, I can do a 
@@ -105,7 +105,7 @@ Now that you're warned: What's it for?
 
 === routing
 
-   The internet protocol is a packet oriented network. A packet is
+The internet protocol is a packet oriented network. A packet is
    sent from one host to another, which is normally not the final
    destination. Each host decides where to send a packet next, to get
    the packet to its destination. This process is called routing.
@@ -114,11 +114,11 @@ Now that you're warned: What's it for?
 
 === preparing a serial port
 
- If you connect a serial line from the C64 to the unix machine, the
+If you connect a serial line from the C64 to the unix machine, the
  unix machine has to know that it has to send and which IP packets to 
  send there. There are some ways to achieve this. 
 
- The first way is with the command "slattach", which puts the
+The first way is with the command "slattach", which puts the
  serial line from "terminal mode" to "SLIP" mode. Then "ifconfig"
  configures the "sl0" interface with the IP address.  The last command
  is "route", which tells the unix OS that is has to send packets to the
@@ -129,10 +129,10 @@ Now that you're warned: What's it for?
  GeckOS link. If you have a SLIP connection somewhere else already.
  this might not be true! The script then mangles your routing tables!
 
- Another way is the program "diplogin" or "sliplogin" which does everything,
+Another way is the program "diplogin" or "sliplogin" which does everything,
  see the appropriate man pages.
  
- I have added a program "term9600" which is a little C64 BASIC terminal 
+I have added a program "term9600" which is a little C64 BASIC terminal 
  program to run the serial line at 9600 - if the kernel ROM allows that.
  It can be used to login to the remote host if necessary.
 
@@ -141,7 +141,7 @@ Now that you're warned: What's it for?
 
 === addresses
 
-   TCP addresses not only contain the IP address of the host, but also
+TCP addresses not only contain the IP address of the host, but also
    the "port". The Port is like the number of the flat in a house, when the
    IP number is the address of this house. Certain port numbers are
    registered for a special use. Port 7 (echo) for example will send
@@ -152,7 +152,7 @@ Now that you're warned: What's it for?
 
 === connections
 
-   In contrary to the IP protocol, the TCP is a connection based protocol.
+In contrary to the IP protocol, the TCP is a connection based protocol.
    A connection always takes place between two TCP "ports" or
    two "pairs of IP and TCP port numbers". This connection is defined
    with the properties:
@@ -165,18 +165,18 @@ Now that you're warned: What's it for?
 
 === establishing a connection
 
-   Normally one side creates a "socket" and "binds" it to a specific
+Normally one side creates a "socket" and "binds" it to a specific
    local TCP/IP address. It can then either "connect" to a remote
    socket, or "listen" for remote connect requests. If the socket
    listens on a port, the "accept" call will bind the local and remote
    socket to a valid connection.
 
-   Normally a server program listens on a socket while the client tries
+Normally a server program listens on a socket while the client tries
    to connect to it.
 
 === used ports
 
-   I chose to use port "8090" as the port where the fstcp server is 
+I chose to use port "8090" as the port where the fstcp server is 
    listening at.
    The WWW server built into slipd listens at the standard port 80,
    and the telnet connection is listening at the standard telnet port (23).
@@ -186,14 +186,14 @@ Now that you're warned: What's it for?
 
 === the "fstcp" server
 
-   The fstcp server is a C program, in sysapps/slipd/fstcp.c. Going to the 
+The fstcp server is a C program, in sysapps/slipd/fstcp.c. Going to the 
    slipd directory and typing "make fstcp" should work on unix (linux) 
    machines. In the first lines the port is defined where the server is 
    listening at. 
 
 === the "slipd" client.
 
-   Most other files in the sysapps/slipd directory are to build the slip client.
+Most other files in the sysapps/slipd directory are to build the slip client.
    In the first lines of "main.a65" the OS/A65 IP address (MY_IP) is defined.
    (note the comma instead of the dots!). But the slipd server listens
    for incoming packets and sets its own IP address if necessary.  
@@ -202,16 +202,16 @@ Now that you're warned: What's it for?
    from. Do _never_ specify a drive on the fstcp filesystem. The slipd prg
    will hang on the first access!
    
-   To assemble the files, you have to have my 6502 crossassembler "xa" 
+To assemble the files, you have to have my 6502 crossassembler "xa" 
    in you path, with version above 2.1.4d.
 
-   The slipd program is built when running "make" in the sysapps/slipd 
+The slipd program is built when running "make" in the sysapps/slipd 
    subdirectory.
 
 
 == running the program
 
-   To run the program, do the following steps:
+To run the program, do the following steps:
 
     - connect the C64 (either with Daniel Dallmans 9600 baud interface,
       or any other RS232 interface supported by OS/A65) and a serial
@@ -241,7 +241,8 @@ Now that you're warned: What's it for?
 ----
           c:slipd a:video3 c: c:tlogin <a:ser1 >a:ser1 &
 ----
-      This starts the slip client from drive c: (usually Commodore serial 
+
+This starts the slip client from drive c: (usually Commodore serial 
       IEC device #8, the floppy disk), piping the STDIO
       to the C64 serial line ser1 (in standard C64 OS/A65 it's Daniel 
       Dallmanns 9600 baud interface). STDERR is sent to the 3rd virtual
@@ -252,7 +253,7 @@ Now that you're warned: What's it for?
       The slip program receives and sends its SLIP data via STDIO.
       STDERR prints (currently a horrible lot of) debugging output.
 
-      You can also start the slipd program directly from the C64
+You can also start the slipd program directly from the C64
       ROM, see c64rom.a65
 
     - If enabled, the slip client registers a filesystem with one drive. 
