@@ -41,7 +41,7 @@
 #undef    NMIDEV		/* there is no NMI in the PET machine */
 #define   EOK_NOFILL		/* do not fill kernel to end of mem */
 
-#undef	  PET_KEYB_GRAPHICS	/* en business keyboard is default */
+#define	  PET_KEYB_GRAPHICS	/* en business keyboard is default */
 
 #define	  OSA_CPU	"6502"
 #define   OSA_ARCH	"PET32K"
