@@ -312,13 +312,13 @@ inext
  */
 
 #ifdef LEDPORT
-+LEDOFF   lda LEDPORT
+&LEDOFF   lda LEDPORT
           ora #LED_LED
           sta LEDPORT
           rts
 #endif
 
-+HERROR   .(        ; xr=Fehlernummer -1=1mal aus, -2=2mal aus etc
+&HERROR   .(        ; xr=Fehlernummer -1=1mal aus, -2=2mal aus etc
 #ifdef EMUTEST
 .byt 2
 #endif
@@ -662,7 +662,7 @@ endirq
           .)
 
 #ifndef NOSYSPORT
-+testirq  .(
+&testirq  .(
           lda SYSPORT
           and #SYS_IRQ
           rts

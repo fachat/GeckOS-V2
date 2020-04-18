@@ -110,12 +110,50 @@
 
 +OSA2KERNEL =*
 
+JMPTBL=*
+#print JMPTBL
 #include  "kernel/jmptbl.a65"
+;JMPTBL_LEN=*-JMPTBL
+;#print JMPTBL_LEN
+
+INIT=*
+#print INIT
 #include  "kernel/init.a65"
-#include  "kernel/tasks.a65"
+;INIT_LEN=*-INIT
+;#print INIT_LEN
+
+STREAMS=*
+#print STREAMS
 #include  "kernel/streams.a65"
+;STREAMS_LEN=*-STREAMS
+;#print STREAMS_LEN
+
+#ifdef SPLIT2K
+#print *
+#print SPLIT2K
+	.dsb SPLIT2K-*, $ff
+#endif
+
+TASKS=*
+#print TASKS
+#include  "kernel/tasks.a65"
+;TASKS_LEN=*-TASKS
+;#print TASKS_LEN
+
+DEVICES=*
+#print DEVICES
 #include  "kernel/devices.a65"
+;DEVICES_LEN=*-DEVICES
+M
+;#print DEVICES_LEN
+FILES=*
+#print FILES
 #include  "kernel/files.a65"
+;FILES_LEN=*-FILES
+;#print FILES_LEN
+
+END=*
+#print END
 
 POT2      .byt 1,2,4,8,$10,$20,$40,$80
 

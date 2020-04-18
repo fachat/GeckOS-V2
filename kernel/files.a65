@@ -45,7 +45,7 @@ fstask    .dsb MAXFS+1
           clc
           rts
 
-+fm       
+&fm       
 #ifdef MAPSYSBUF
 	  pha
 	  MAPSYSBUF
