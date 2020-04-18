@@ -44,7 +44,7 @@ zmem	.dsb 64		; each four byte have an owner
  * yr = first available zeropage address 
  */
 
-+zinit	.(
+&zinit	.(
 	ldy #Zerostart
 	php
 	sei
