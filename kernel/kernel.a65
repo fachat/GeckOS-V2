@@ -122,6 +122,12 @@ INIT=*
 ;INIT_LEN=*-INIT
 ;#print INIT_LEN
 
+#ifdef SPLIT1K
+#print *
+#print SPLIT1K
+	.dsb SPLIT1K-*, $ff
+#endif
+
 STREAMS=*
 #print STREAMS
 #include  "kernel/streams.a65"
