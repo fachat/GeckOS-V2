@@ -49,7 +49,6 @@
           .(
 	.zero
 pz        .word 0
-; cnt       .byt 0
 	.text
 
 #ifdef MAP_ZERO
@@ -76,24 +75,6 @@ s2        .byt 0
  */
 #include "kernel/kinit.a65"
 
-;          cmp #MIN_MEM	; memory size at least needed
-;          bcc he_ram
-;	  sta cnt
-
-/* still a lot TODO! */
-#if 0 /* def NOMMU */
-	  ;sta cnt
-	  sec
-	  sbc #>startmem+255
-	  tay
-	  ldx #>startmem+255
-	  jsr binit
-
-	  lda #startzero
-	  jsr zinit
-
-	  lda cnt
-#endif
           jmp prgstart
 
 he_zero   ldx #HE_ZP
@@ -151,7 +132,6 @@ prgstart  /* get system speed */
 #endif
 
 #ifdef STARTMEM
-	  ; lda cnt
 	  STARTMEM()
 #endif
 ;.byt 2

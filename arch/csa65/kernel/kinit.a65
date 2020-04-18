@@ -109,6 +109,7 @@ res1    txa		;lda mmu,x
  * TODO: currently maximum 32k!!!!
  */
 startmem .(
+	lda cnt
 	lsr
 	lsr
 	lsr
