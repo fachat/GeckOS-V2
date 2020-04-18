@@ -632,7 +632,7 @@ read	ldx actEnv
  * Handle with care!
  */
 
-&&setblk .(
+&setblk .(
 	jsr memsys
 	cpy #TE_MMU_LEN
 	bcs indexerr
