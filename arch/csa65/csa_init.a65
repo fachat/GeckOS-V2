@@ -28,31 +28,36 @@
 #define   ROM
 
 /* These are necessary for CS/A65 kernel ***********************************/
-
+#if 0
 #define	OSA_ARCH	"CS/A65"
-
+#endif
 /* These are changeable ****************************************************/
+
+#define	DEBUGFS 	/* FSIBM debug */
+#define	FSIBM_SECTOR24BIT
 
 #define	CSA_CONSOLE	0	/* device to output debug/log messages */
 
+#undef	FSIEC_PARALLEL
+#undef	FSIEC_SERIAL
+#define	FSIBM
+#undef	MONSH
+#define	USE_LIB6502
 
 #define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
 				   lib6502 */
 #define	NEED_GETINFO
-#define	NEED_SETINFO
 
-
-#define	NOMIRRORMEM		/* ramtest kernel options */
-#define	SHORTRAMTEST
-
-#define	NMIRESET
+#undef   ROMTEST		/* debug option */
+/* #define   EMUTEST */		/* debug option */
+/* #define   SYSPAGE	$12 */	/* debug option */
 
 #undef	CMOSCPU
-#undef	NOSYSPORT
+#undef	NOSYSPORT		/* not just in kernel, also devices (console) */
 
-#define	RAMEND		$80	/* 32k in bank 0 */
+#define	RAMEND		$80	/* 32k in bank 0; not just kernel, also basic */
 
-#define	CLK2MHZ
+#undef	BOOTDRV	"c"
 
 
 /***************************************************************************
@@ -60,31 +65,29 @@
  * Better not change anything below 
  */
 
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
 
 /***************************************************************************
  *
  * Here comes the ROM content
  */
 
-#include  "config.i65"
-#include  "kdefs.i65"
-#include  "fdefs.i65"
-#include  "kernel.i65"
-
-#define	ROMSTART	$8000
-#define	MIN_MEM		$20		/* 8 kbyte */
 	.(
 
-/************* Kernel                                   */
-          
-#echo ############ kernel:
+/************* init process                             */
 
-#include  "kernel/kernel.a65"
+#define	INIT_VERBOSE
+#define	INIT_OUTDEV 	CSA_CONSOLE
+#define	INIT_MERGE
+#define	INIT_RESTART
+#define INIT_LIB6502
+#undef	INIT_MMU		/* we currently don't support scanning other banks in init */
+;#define	INIT_MMU_BANK 	3
+#ifdef ROMTEST
+#define	INIT_ROM2TEST		/* $0-$7 instead of $8-$f in INIT_MMU_BANK */
+#endif
+
+#echo ############ init:
+#include  "sysapps/init/init.a65"
 
 	.)
 

@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-2020 Andre Fachat 
+    Copyright (C) 1989-1998 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,13 +25,7 @@
 /*                      These defines control the ROM build                */
 /*                                                                         */
 
-#define	OSA_ARCH	"CS/A65"
-
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
+#define   ROM
 
 
 /***************************************************************************
@@ -39,27 +33,20 @@
  * Here comes the ROM content
  */
 
-/*
-#include  "config.i65"
-*/
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"
+
+
 	.(
 
-Zerostart	=$40
-Memstart	=$0400
-Memend		=$2000
+/************* ROM entries                              */
 
+/************* fsdev - converts devices into files      */
 
-#echo ############ Lib6502:
+#echo ############ fsdev:
+#include  "sysapps/fs/fsdev.a65"
 
-#include  "lib6502/lib6502.a65"
-
-END=*
-#print END
-
-	.dsb OSA2KERNEL-*,$ff
 
 	.)
 

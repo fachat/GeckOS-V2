@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-2020 Andre Fachat 
+    Copyright (C) 1989-1998 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,41 +25,58 @@
 /*                      These defines control the ROM build                */
 /*                                                                         */
 
-#define	OSA_ARCH	"CS/A65"
+#define   ROM
 
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
+/* These are changeable ****************************************************/
 
+#define	FSIEC_PARALLEL
+#undef	FSIEC_SERIAL
 
 /***************************************************************************
  *
  * Here comes the ROM content
  */
 
-/*
-#include  "config.i65"
-*/
+;#include  "config.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"
+
+#define	SEM_VIAE840_T1	SEM_SERIEC
+#undef	SEM_SERIEC
+#undef	SEM_PARIEC
+
 	.(
 
-Zerostart	=$40
-Memstart	=$0400
-Memend		=$2000
+/************* ROM entries                              */
+/*
+
+  The lib6502 needs to use addresses in each of the environments. 
+  Devices (normally) use the kernel address space.
+  All other tasks, including the kernel have their own environment.
+  Therefore they all get their own zero, data and bss addresses.
+
+*/
+
+/************* fsiec - as IEEE488 bus filesystem        */
 
 
-#echo ############ Lib6502:
+#define	NOLOOP		/* currently there is a bug in xa 2.3.10 that prevents this */
+#undef	NOFS
+#undef	NOCMD
 
-#include  "lib6502/lib6502.a65"
+#echo ############ fsiec (parallel):
 
-END=*
-#print END
+#undef FSIEC_AS_INIT
 
-	.dsb OSA2KERNEL-*,$ff
+#ifdef FSIEC_PARALLEL
+#define	FSIEC_DEVICE	"devices/piec_csa.a65"
+#else
+#define	FSIEC_DEVICE	"devices/siec_csa.a65"
+#endif
+
+#include  "sysapps/fs/fsiec.a65"
+
 
 	.)
 

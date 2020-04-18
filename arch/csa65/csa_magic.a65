@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-2020 Andre Fachat 
+    Copyright (C) 1989-1998 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,46 +21,25 @@
 
 ****************************************************************************/
 
-/***************************************************************************/
-/*                      These defines control the ROM build                */
-/*                                                                         */
 
-#define	OSA_ARCH	"CS/A65"
-
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
-
-
-/***************************************************************************
- *
- * Here comes the ROM content
- */
-
-/*
-#include  "config.i65"
-*/
-#include  "kdefs.i65"
-#include  "fdefs.i65"
-#include  "kernel.i65"
 	.(
+          *=ROMSTART
 
-Zerostart	=$40
-Memstart	=$0400
-Memend		=$2000
+/************* ROM entries                              */
+/*
+
+  The lib6502 needs to use addresses in each of the environments. 
+  Devices (normally) use the kernel address space.
+  All other tasks, including the kernel have their own environment.
+  Therefore they all get their own zero, data and bss addresses.
+
+*/
 
 
-#echo ############ Lib6502:
+#echo ############ magic
 
-#include  "lib6502/lib6502.a65"
-
-END=*
-#print END
-
-	.dsb OSA2KERNEL-*,$ff
+/* so that init recognizes a ROM */
+#include "sysapps/magic/magic.a65"
 
 	.)
-
 

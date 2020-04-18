@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-2020 Andre Fachat 
+    Copyright (C) 1989-1998 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,45 +21,32 @@
 
 ****************************************************************************/
 
-/***************************************************************************/
-/*                      These defines control the ROM build                */
-/*                                                                         */
-
-#define	OSA_ARCH	"CS/A65"
-
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
+#define	BOOTDRV	"c"
 
 
-/***************************************************************************
- *
- * Here comes the ROM content
- */
-
-/*
-#include  "config.i65"
-*/
-#include  "kdefs.i65"
-#include  "fdefs.i65"
-#include  "kernel.i65"
 	.(
 
-Zerostart	=$40
-Memstart	=$0400
-Memend		=$2000
 
+/************* boot lsh from BOOTDRV                    */
 
-#echo ############ Lib6502:
+#include "kdefs.i65"
 
-#include  "lib6502/lib6502.a65"
+#echo ************ lsh
 
-END=*
-#print END
+        /* add autostart of lib6502 program 'lsh' */
 
-	.dsb OSA2KERNEL-*,$ff
+        .(
+        .word end_auto
+        .byt PK_LIB+PK_AUTOEXEC+PK_RESTART      ; is lib6502 program
+        .word 0         ; P_ADDR ignored
+        .byt 16         ; P_RAM
+        .byt 128        ; P_SHARED
+        .byt 0          ; P_PRIORITY
+        .byt 1,1        ; P_DEV
+        .byt BOOTDRV,":lsh",0,"-d",0, BOOTDRV, 0
+	.byt 0		; end of cmdline
+end_auto
+	.)
 
 	.)
 
