@@ -123,6 +123,8 @@ main	  .(
 	jsr VSEM
 
 #ifdef INIT_MMU
+	; if we're running under MMU, we map ourself into the $1xxx address
+	; page, so we can scan other banks as well.
 #ifdef ROM
 #print *
 	lda #>*
