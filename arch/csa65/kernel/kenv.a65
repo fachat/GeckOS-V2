@@ -50,9 +50,9 @@
 
 #define	TE_NTASKS	0
 #define	TE_MMU		1	/* must be at least 1 - see getenv */
-#define	TE_MMU_LEN	15	/* allow up to 15 pages being mapped */
-#define	TE_RAMLEN	16	/* the number of RAM blocks allocated */
-#define	TE_SLEN		17	
+#define	TE_MMU_LEN	12	/* allow up to 12 pages being mapped ($0000-$BFFF), rest is lib,I/O,kernel */
+#define	TE_RAMLEN	13	/* the number of RAM blocks allocated */
+#define	TE_SLEN		14	
 
 	.data
 &actEnv	.byt 0
@@ -436,6 +436,8 @@ gdiv3	.byt 0
 &&kgetenv .(
 	sta gdiv	; number of 256-byte blocks as RAM from lo of mem
 	sty gdiv2	; number of shared 256-byte blocks from top of mem
+	; ---------------------------
+	; find entry in envTab
 	ldx #0
 l0	lda envTab + TE_NTASKS,x
 	beq found
@@ -447,14 +449,22 @@ l0	lda envTab + TE_NTASKS,x
 	bcc l0	
 	rts
 found	stx gdiv3
+
+	; ---------------------------
 	; first clean table
+	; x has index in envTab (from above)
+	;
 	lda #$0f		; kernel ROM page, read-only
 	ldy #TE_MMU_LEN
 l0a	sta envTab + TE_MMU,x
 	inx
 	dey
 	bne l0a
+
+	; ---------------------------
 	; then copy shared
+	; x is index in envTab + TE_MMU_LEN
+	;
 	lda gdiv2
 	beq noshared
 	; a memory page has 16 blocks - be sure to map all
@@ -469,10 +479,12 @@ l0a	sta envTab + TE_MMU,x
 	lsr
 	sta gdiv2	; number of 4k blocks
 
+	; check if parent has a valid entry
 	lda actEnv
-
 	cmp #<-1
 	bne valid
+
+	; if parent is not valid (i.e. during boot), copy from MMU
 	ldy #TE_MMU_LEN - 1
 l11	lda MMU,y
 	sta envTab + TE_MMU - 1, x
@@ -482,6 +494,7 @@ l11	lda MMU,y
 	bne l11
 	beq l12
 
+	; parent has valid entry, copy from there
 valid	clc
 	adc #TE_MMU_LEN
 	tay
@@ -494,7 +507,7 @@ l1
 	bne l1
 noshared
 l12
-	
+	; ---------------------------
 	; now alloc the requested memory blocks
 	lda gdiv
 	beq end
