@@ -27,6 +27,8 @@
 
 #define   ROM
 
+#define	ROMTEST
+
 /* These are necessary for CS/A65 kernel ***********************************/
 
 #define	OSA_ARCH	"CS/A65"

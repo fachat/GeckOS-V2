@@ -23,4 +23,4 @@ for i in ${FILES}; do
 	reloc65 -xt -o $i $i-reloc.o65
 done
 
-cat ${FILES} > csarom
+cat ${FILES} > csarom.bin
