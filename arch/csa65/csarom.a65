@@ -28,9 +28,9 @@
 #define   ROM
 
 /* These are necessary for CS/A65 kernel ***********************************/
-
+#if 0
 #define	OSA_ARCH	"CS/A65"
-
+#endif
 /* These are changeable ****************************************************/
 
 #define	DEBUGFS 	/* FSIBM debug */
@@ -52,17 +52,10 @@
 /* #define   EMUTEST */		/* debug option */
 /* #define   SYSPAGE	$12 */	/* debug option */
 
-#define	NOMIRRORMEM		/* ramtest kernel options */
-#define	SHORTRAMTEST
-
-#define	NMIRESET
-
 #undef	CMOSCPU
-#undef	NOSYSPORT
+#undef	NOSYSPORT		/* not just in kernel, also devices (console) */
 
-#define	RAMEND		$80	/* 32k in bank 0 */
-
-#define	CLK2MHZ
+#define	RAMEND		$80	/* 32k in bank 0; not just kernel, also basic */
 
 #undef	BOOTDRV	"c"
 
@@ -72,6 +65,7 @@
  * Better not change anything below 
  */
 
+; lib6502
 #ifdef CMOSCPU
 #define	OSA_CPU		"6502"
 #else
@@ -119,7 +113,14 @@
 /************* devices                                  */
 
 #echo ############ devices
-.data:*=$f00:.zero:*=$d0:.bss:*=$400:.text
+.data:
+	*=$f00:
+.zero:
+	*=$d0:
+.bss:
+	*=$400:
+.text
+
 .zero
 #echo zero:
 #print *
