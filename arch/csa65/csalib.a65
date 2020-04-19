@@ -54,6 +54,10 @@ Memend		=$2000
 
 #echo ############ Lib6502:
 
+; put lib6502 directly in front of kernel
+; when STDIOADDR is defined, lib6502 ends with lib jump table
+#define	STDIOADDR	OSA2KERNEL
+
 #include  "lib6502/lib6502.a65"
 
 END=*

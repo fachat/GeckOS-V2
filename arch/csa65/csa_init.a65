@@ -27,26 +27,10 @@
 
 #define   ROM
 
-/* These are necessary for CS/A65 kernel ***********************************/
-#if 0
-#define	OSA_ARCH	"CS/A65"
-#endif
 /* These are changeable ****************************************************/
 
-#define	DEBUGFS 	/* FSIBM debug */
-#define	FSIBM_SECTOR24BIT
-
-#define	CSA_CONSOLE	0	/* device to output debug/log messages */
-
-#undef	FSIEC_PARALLEL
-#undef	FSIEC_SERIAL
-#define	FSIBM
-#undef	MONSH
 #define	USE_LIB6502
-
-#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
-				   lib6502 */
-#define	NEED_GETINFO
+#define	CSA_CONSOLE	0
 
 #undef   ROMTEST		/* debug option */
 /* #define   EMUTEST */		/* debug option */
@@ -55,16 +39,7 @@
 #undef	CMOSCPU
 #undef	NOSYSPORT		/* not just in kernel, also devices (console) */
 
-#define	RAMEND		$80	/* 32k in bank 0; not just kernel, also basic */
-
-#undef	BOOTDRV	"c"
-
-
-/***************************************************************************
- * 
- * Better not change anything below 
- */
-
+;#define	RAMEND		$80	/* 32k in bank 0; not just kernel, also basic */
 
 /***************************************************************************
  *

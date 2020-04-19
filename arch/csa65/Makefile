@@ -87,11 +87,13 @@ csa_magic.o65: ../../sysapps/magic/* csa_magic.a65
 		csa_magic.a65
 	${FILE} $@
 
-csa_init.o65: ../../sysapps/init/* csa_init.a65
+csa_init.o65: ../../sysapps/init/* csa_init.a65 csalib
 	@echo "Building init at 0x8000"
+	LIB6502=`hexdump -C csalib.o65 | grep LIB6502 | cut -d " " -f 18-20 | sed -e s/\ /" + 100*"/ | awk '{print toupper($$0)}' | sed -e "s/^/ibase=16; /" | bc`; \
+	echo "LIB6502=$${LIB6502}"; \
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
 		-DOSA2KERNEL=58368 \
-		-DLIB6502=51200 \
+		-DLIB6502=$${LIB6502} \
 		-DROMSTART=32768 \
 		-o csa_init.o65 \
 		csa_init.a65

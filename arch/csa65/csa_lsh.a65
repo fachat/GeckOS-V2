@@ -21,8 +21,8 @@
 
 ****************************************************************************/
 
-#define	BOOTDRV	"c"
-
+#define	BOOTDRV		"c"
+#define	ROOTPATH	"c:"
 
 	.(
 
@@ -42,8 +42,8 @@
         .byt 16         ; P_RAM
         .byt 128        ; P_SHARED
         .byt 0          ; P_PRIORITY
-        .byt 1,1        ; P_DEV
-        .byt BOOTDRV,":lsh",0,"-d",0, BOOTDRV, 0
+        .byt 0,0        ; P_DEV
+        .byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0
 	.byt 0		; end of cmdline
 end_auto
 	.)
