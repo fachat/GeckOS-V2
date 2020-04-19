@@ -34,23 +34,6 @@ csarom: ${PARTS} mkcsarom.sh
 	echo "00 00 10" | xxd -r > csarom
 	cat csarom.bin >> csarom
 
-clean:
-	rm -f csarom.lab csarom2.lab csaold.lab 
-	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin
-	rm -f csalib csalib.o65 csalib.lab csalib.bin
-	rm -f csarom csarom.o65 csarom.lab csarom.bin
-	rm -f csa_devices csa_devices.o65 
-	rm -f csa_init csa_init.o65 
-	rm -f csa_magic csa_magic.o65 
-	rm -f csa_fsdev csa_fsdev.o65 
-	rm -f csa_fsiec csa_fsiec.o65 
-	rm -f csa_lsh csa_lsh.o65 
-	rm -f csa_end csa_end.o65 
-	rm -f csa*-reloc.o65
-	(cd boot; ${MAKE} clean ;)
-	(cd apps; ${MAKE} clean ;)
-	(cd sysapps; ${MAKE} clean ;)
-
 csakernel: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
 	${XA} -I../.. -I../../include -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
@@ -87,13 +70,13 @@ csa_magic.o65: ../../sysapps/magic/* csa_magic.a65
 		csa_magic.a65
 	${FILE} $@
 
+# TODO: LIB6502 address is hardcoded here, will change once we add
+# more jumps, as this is start of jmp table, not end
 csa_init.o65: ../../sysapps/init/* csa_init.a65 csalib
 	@echo "Building init at 0x8000"
-	LIB6502=`hexdump -C csalib.o65 | grep LIB6502 | cut -d " " -f 18-20 | sed -e s/\ /" + 100*"/ | awk '{print toupper($$0)}' | sed -e "s/^/ibase=16; /" | bc`; \
-	echo "LIB6502=$${LIB6502}"; \
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
 		-DOSA2KERNEL=58368 \
-		-DLIB6502=$${LIB6502} \
+		-DLIB6502=58233 \
 		-DROMSTART=32768 \
 		-o csa_init.o65 \
 		csa_init.a65
@@ -140,6 +123,23 @@ csa_end.o65: csa_end.a65
 		csa_end.a65
 	${FILE} $@
 
+
+clean:
+	rm -f csarom.lab csarom2.lab csaold.lab 
+	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin
+	rm -f csalib csalib.o65 csalib.lab csalib.bin
+	rm -f csarom csarom.o65 csarom.lab csarom.bin
+	rm -f csa_devices csa_devices.o65 
+	rm -f csa_init csa_init.o65 
+	rm -f csa_magic csa_magic.o65 
+	rm -f csa_fsdev csa_fsdev.o65 
+	rm -f csa_fsiec csa_fsiec.o65 
+	rm -f csa_lsh csa_lsh.o65 
+	rm -f csa_end csa_end.o65 
+	rm -f csa*-reloc.o65
+	(cd boot; ${MAKE} clean ;)
+	(cd apps; ${MAKE} clean ;)
+	(cd sysapps; ${MAKE} clean ;)
 
 
 #.PHONY: kernel
