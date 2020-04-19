@@ -123,8 +123,13 @@ next      pla
           lda screen
           bne ix
 
-	  lda #$0c		; set charrom and video base
+	  lda #$2c		; set charrom and video base
 	  sta vdcctrl
+
+	  lda VIA1+VIA_PCR	; set VIA CA2 GRAPHICS pin (PET compatible - switch to hires charrom)
+	  and #%11110001
+	  ora #%00001100	; low output
+	  sta VIA1+VIA_PCR
 
           ldx #0
 i1        bit freq
