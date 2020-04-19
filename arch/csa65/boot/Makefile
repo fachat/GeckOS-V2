@@ -22,24 +22,24 @@ inet = tlogind telnet httpd
 INETDIR=../../../apps/inet
 
 
-osa.d64: csarom csakernel csalib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
+osa.d64: rom kernel lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
 	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csakernel csalib boot index.html 
-	rm -f ${sysapps} ${apps}
+	rm -f ${sysapps} ${apps} # csarom csakernel csalib
 
 loader: loader.bas
 	petcat -w40 -o loader loader.bas
 
-csarom:
+rom:
 	(cd ..; ${MAKE} csarom;)
-	ln -s ../csarom
+	ln -sf ../csarom
 
-csakernel:
+kernel:
 	(cd ..; ${MAKE} csakernel;)
-	ln -s ../csakernel
+	ln -sf ../csakernel
 
-csalib:
+lib:
 	(cd ..; ${MAKE} csalib;)
-	ln -s ../csalib
+	ln -sf ../csalib
 
 boot: boot.a65
 	${XA} -o boot boot.a65

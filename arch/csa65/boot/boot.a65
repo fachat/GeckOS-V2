@@ -7,6 +7,26 @@ trgp	=4
 
 	sei
 
+	; disable interrupt sources
+	lda #$7f
+	sta $e84e	; interrupt enable
+
+	lda $e811
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e811
+
+	lda $e813
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e813
+
+	lda $e821
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e821
+
+	lda $e823
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e823
+
 	; map the uppermost 32k of the 512k bus memory
 	; that is currently mapped to a 512k RAM on
 	; the BIOS board
