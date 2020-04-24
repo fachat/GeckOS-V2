@@ -61,10 +61,6 @@ s2        .byt 0
 
 	.text
 
-&notimp	  lda #E_NOTIMP
-	  sec
-	  rts
-
 &preset   sei 
           cld
 /*
@@ -141,7 +137,6 @@ prgstart  /* get system speed */
           sta pz+1
 
 startloop 
-;.byt 2
 	  ldy #0
           lda (pz),y
           iny
@@ -177,56 +172,9 @@ idev
           jsr DEVCMD
           bcs xerr
           jmp inext
-
+	
+	  ; filesystem task
 ifs       
-
-#if 0
-	  ldx #STDNUL
-          stx s1
-          stx s2
-          bne ifs1
-
-iprg      jsr GETSTR
-          bcs endloop
-          stx s1
-          jsr GETSTR
-endloopx  bcs endloop
-          stx s2
-          ldy #P_DEV+2
-          lda (pz),y
-          tax
-          ldy s2
-          lda #DC_GS
-          jsr DEVCMD
-          ldy #P_DEV+2
-          lda (pz),y
-          tax
-          ldy s1
-          lda #DC_PS
-          jsr DEVCMD
-          ldy #P_DEV+2
-          lda (pz),y
-          pha
-          tax
-          lda #DC_RX_ON
-          jsr DEVCMD
-#ifdef CMOSCPU
-	  plx
-#else
-          pla
-          tax
-#endif
-          lda #DC_TX_ON
-          jsr DEVCMD
-
-
-ifs1      lda s2
-          sta PCBUF+FORK_STDOUT
-          sta PCBUF+FORK_STDERR
-          lda s1
-          sta PCBUF+FORK_STDIN
-#endif
-
 	  lda #STDNUL
           sta PCBUF+FORK_STDERR
           sta PCBUF+FORK_STDOUT
@@ -252,9 +200,6 @@ ifs1      lda s2
 
 	  lda #0
 	  sta PCBUF+FORK_PAR
-#if 0
-	  sta PCBUF+FORK_NAME
-#else
 	  ldy #P_NAME+1
 	  ldx #2
 cmdn	  iny
@@ -264,16 +209,7 @@ cmdn	  iny
 	  dex
 	  bne cmdn
 	  iny
-#endif
           jsr FORK
-#if 0
-          ldx s1
-          lda #SC_NUL
-          jsr STRCMD
-          ldx s2
-          lda #SC_EOF
-          jsr STRCMD
-#endif
 
 inext     
 	  ldy #0
@@ -624,7 +560,6 @@ il
           bit adev       
           bpl endirq     ; Device Interrupted -> no Task-switch
 #endif
-;jmp endirq
           jmp irqloop
 
 #ifndef NOSYSPORT

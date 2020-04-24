@@ -210,7 +210,6 @@ l0	tay
 	  jsr memsys
 	  sty div
 	  MAPSYSBUF
-
 	  ldx SYSBUF+FORK_STDIN
           jsr teststd
           stx SYSBUF+FORK_STDIN
@@ -563,8 +562,6 @@ ok	  tay
 	  sta schedThread
 	  cld
           cli
-          
-          ; sty schedThread
 psl
           lda threadTab + TH_ST,y
 	  beq next
