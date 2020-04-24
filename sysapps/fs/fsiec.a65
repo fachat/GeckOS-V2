@@ -1433,6 +1433,10 @@ seterror .(
 #include FSIEC_DEVICE
 #endif
 
+#ifdef FSIEC_SERVER
+#include FSIEC_SERVER
+#endif
+
 #undef FSIEC_DEVICE
 #undef FSIEC_ANZDRV
 #undef MAXLEN 

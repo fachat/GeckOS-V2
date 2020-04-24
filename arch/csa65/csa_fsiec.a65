@@ -70,9 +70,17 @@
 #undef FSIEC_AS_INIT
 
 #ifdef FSIEC_PARALLEL
-#define	FSIEC_DEVICE	"devices/piec_csa.a65"
+#define	FSIEC_DEVICE	"devices/piec_pet.a65"
 #else
 #define	FSIEC_DEVICE	"devices/siec_csa.a65"
+#endif
+
+#ifndef NOLOOP
+#ifdef FSIEC_PARALLEL
+#define	FSIEC_SERVER	"devices/piec_csasrv.a65"
+#else
+#define	FSIEC_SERVER	"devices/siec_csasrv.a65"
+#endif
 #endif
 
 #include  "sysapps/fs/fsiec.a65"
