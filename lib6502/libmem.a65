@@ -98,11 +98,20 @@ p5	.word 0
 	iny
 	lda #>LM_MAGIC_VAL
 	sta (p1),y
-	iny
-	lda #<Memend-Memstart-LM_SLEN
+
+	clc
+	jsr SBRK
+	; read always works
+	; AC holds high byte of Memend, low byte is zero
+	pha
+	lda #0
+	sec
+	sbc #<Memstart+LM_SLEN
+	ldy #LM_LEN
 	sta (p1),y
+	pla
+	sbc #>Memstart+LM_SLEN
 	iny
-	lda #>Memend-Memstart-LM_SLEN
 	sta (p1),y
 	iny
 	lda #<-1
@@ -135,13 +144,19 @@ l0	ldy #LM_FL
 	lda (p1),y
 	cmp p2+1
 	bcc next
-	bne found
+	bne foundx
 	dey
 	lda (p1),y
 	cmp p2
-	bcs found
+	bcs foundx
 next	
-	ldy #LM_P
+	ldy #LM_P+1
+	lda (p1),y
+	dey
+	and (p1),y
+	cmp #$ff
+	beq end
+
 	lda (p1),y
 	pha
 	iny
@@ -149,10 +164,161 @@ next
 	sta p1+1
 	pla
 	sta p1
-	and p1+1
-	cmp #$ff
-	bne l0
+	jmp l0
 
+foundx	jmp found
+
+end	; no block found. p1 points to last valid one, used or not
+	ldy LM_FL
+	lda (p1),y
+	bne endisused
+	; here the final block is not used, we just need to compute
+	; what is still missing in blocks
+	lda p2		; search for length (p2)
+	clc
+	adc p1		; plus base for buffer (p1)
+	sta p3		; store in p3
+	lda p2+1
+	clc
+	adc p1+1
+	sta p3+1
+	bcs failx	; overflow
+	lda p3		; p3 += struct size
+	adc #LM_SLEN
+	sta p3
+	bcc noinc
+	inc p3+1
+	beq failx	; overflow
+noinc	tay		; round to next page
+	beq noinc2
+	inc p3+1
+	beq failx	; overflow
+noinc2
+	lda p3+1
+	sec
+	jsr SBRK
+	bcs failx	; malloc failed -> fail
+	
+	; AC has new high byte of available memory (could be way more than req'd)
+	tay
+	;lda #0
+	;sec
+	;sbc #LM_SLEN
+	;bcs nodec
+	lda #<-LM_SLEN
+	dey
+nodec	sec 
+	sbc p1
+	pha
+	tya
+	sbc p1+1
+	ldy #LM_LEN+1
+	sta (p1),y
+	dey
+	pla
+	sta (p1),y
+	jmp l0
+
+failx	jmp fail
+
+endisused		; last memory block is used
+	; compute new top of memory
+	ldy p1+1	; current (used block addr)
+	lda p1	
+	clc
+	adc #2*LM_SLEN	; add struct size (1 existing, plus new free)
+	bcc noinc1
+	iny
+	beq failx	; overflow
+noinc1			; add size of used memory
+	sty p3+1
+	ldy #LM_LEN
+	clc
+	adc (p1),y
+	sta p3
+	iny
+	lda p3+1
+	adc (p1),y
+	sta p3+1	
+	bcs fail	; overflow
+			; add size of searched amount
+	clc
+	lda p3
+	adc p2
+	sta p3
+	lda p3+1
+	adc p2+1
+	bcs fail	; overflow
+	tay
+	lda p3
+	beq noinc3	; round to next block
+	iny
+	beq fail	; overflow
+noinc3	tya
+	sec
+	jsr SBRK
+	bcs fail
+	; AC has new top of memory
+	sta p3+1
+	; subtract SLEN
+	lda #<-LM_SLEN
+	sta p3
+	dec p3+1
+	; now create new block
+	lda p1
+	clc
+	adc #LM_SLEN
+	sta p4
+	lda p1+1
+	adc #0
+	sta p4+1
+	ldy #LM_LEN
+	lda (p1),y	
+	clc
+	adc p4
+	sta p4
+	iny
+	lda (p1),y
+	adc p4+1
+	bcs fail
+	sta p4+1
+	; p4 has address of new block
+	ldy #LM_P
+	lda #<-1
+	sta (p4),y
+	iny
+	sta (p4),y
+	iny
+	lda #<LM_MAGIC_VAL
+	sta (p4),y
+	iny
+	lda #>LM_MAGIC_VAL
+	sta (p4),y
+	iny
+	lda p3
+	sec
+	sbc p4
+	sta (p4),y
+	iny
+	lda p3+1
+	sbc p4+1
+	sta (p4),y
+	iny
+	lda #<-1	; task
+	sta (p4),y
+	iny
+	lda #0		; free
+	sta (p4),y
+	; now link p1 to p4
+	ldy #LM_P
+	lda p4
+	sta (p1),y
+	iny
+	lda p4+1
+	sta (p1),y
+	jmp l0
+
+fail	; malloc failed
 	plp			; alloc/realloc switch discarded
 	DB("Didn't find appropriate memory block!^m^j")
 	lda #LSEM_MEM
@@ -436,10 +602,11 @@ ok
 	and p3
 	cmp #$ff
 	bne noend
-	lda #<Memend
-	sta p3
-	lda #>Memend
+	clc
+	jsr SBRK
 	sta p3+1
+	lda #0
+	sta p3
 noend 			; find the address of the possible new block -> p2
 	clc
 	lda p1
@@ -544,10 +711,11 @@ isfre
 	and p3+1
 	cmp #$ff
 	bne notend
-	lda #<Memend
-	sta p3
-	lda #>Memend
+	clc
+	jsr SBRK
 	sta p3+1
+	lda #0
+	sta p3
 notend				; get length of block
 	sec
 	lda p3

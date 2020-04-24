@@ -87,7 +87,9 @@ strerr	rts
 	lda (zth),y
 	tax
 	jsr checkfd_w
-ferr2	bcs ferr
+	bcc noferr
+ferr2	jmp ferr
+noferr
 	stx PCBUF+FORK_STDERR
 
 	ldx PCBUF+FORK_STDIN
@@ -143,9 +145,7 @@ l1	sta PCBUF,x
 
 	txa
 	tay
-;.byt 2
 	jsr FORK
-;.byt 2
 	bcc ok
 	pha
 
