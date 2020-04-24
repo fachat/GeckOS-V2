@@ -47,6 +47,8 @@
 #include  "kernel.i65"
 	.(
 
+#define	LIBMEM_ALLOC_SBRK
+
 Zerostart	=$40
 Memstart	=$0400
 Memend		=$1000		; only used in libexec for initial fork memory size
