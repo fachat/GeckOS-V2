@@ -32,6 +32,9 @@
  * Here comes the ROM content
  */
 
+#define PET_KEYB_GRAPHICS
+
+
 #include  "config.i65"
 #include  "kernel.i65"
 #include  "kdefs.i65"

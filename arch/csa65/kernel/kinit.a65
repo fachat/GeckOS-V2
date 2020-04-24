@@ -195,13 +195,13 @@ gf3	  lda #0	; 1 MHz
  * has to preserve this mapping when called from kernel space,
  * and so must memtask.
  */
-/*
+#if 1
 #define SAVEMEM		lda MMU+1:pha:lda MMU+2:pha
 #define RESTOREMEM()	pla:sta MMU+2:pla:sta MMU+1
-*/
+#else
 #undef SAVEMEM
 #undef RESTOREMEM
-
+#endif
 /*
  * Check if we have an interrupt in the kernel
  */

@@ -2,7 +2,7 @@
 XAINPUT=../../../include
 XA=xa
 
-all: osa.d64
+all: osa.d64 prom prom_romtest
 
 MANPAGES=../../../*/*/*.1.adoc
 
@@ -21,25 +21,49 @@ FILTERDIR=../../../apps/filter
 inet = tlogind telnet httpd
 INETDIR=../../../apps/inet
 
+prom: rom kernel lib
+	((cat csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel.bin) > prom
 
-osa.d64: rom kernel lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csakernel csalib boot index.html 
+prom_romtest: rom kernel_romtest lib
+	((cat csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel_romtest.bin) > prom_romtest
+
+osa.d64: rom kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csakernel csakernel_romtest csalib boot index.html 
 	rm -f ${sysapps} ${apps} # csarom csakernel csalib
+
+osa_romtest.d64: osa.d64
+	cp osa.d64 osa_romtest.d64
+	c1541 -attach osa_romtest.d64 -delete csakernel -rename csakernel_romtest csakernel
 
 loader: loader.bas
 	petcat -w40 -o loader loader.bas
 
 rom:
-	(cd ..; ${MAKE} csarom;)
-	ln -sf ../csarom
+	(cd ..; ${MAKE} csarom.bin;)
+	ln -sf ../csarom.bin
+	echo "00 00 10" | xxd -r > csarom
+	cat csarom.bin >> csarom
 
 kernel:
-	(cd ..; ${MAKE} csakernel;)
-	ln -sf ../csakernel
+	(cd ..; ${MAKE} csakernel.bin;)
+	ln -sf ../csakernel.bin
+	# prime target with load address 0x6000
+	echo "00 00 60" | xxd -r > csakernel
+	cat csakernel.bin >> csakernel
+
+kernel_romtest:
+	(cd ..; ${MAKE} csakernel_romtest.bin;)
+	ln -sf ../csakernel_romtest.bin
+	# prime target with load address 0x6000
+	echo "00 00 60" | xxd -r > csakernel_romtest
+	cat csakernel_romtest.bin >> csakernel_romtest
 
 lib:
-	(cd ..; ${MAKE} csalib;)
-	ln -sf ../csalib
+	(cd ..; ${MAKE} csalib.bin;)
+	ln -sf ../csalib.bin
+	# prime target with load address 0x4000
+	echo "00 00 40" | xxd -r > csalib
+	cat csalib.bin >> csalib
 
 boot: boot.a65
 	${XA} -o boot boot.a65
@@ -51,6 +75,8 @@ inirom: inirom.a65
 
 clean:
 	rm -f csarom csakernel csalib boot inirom osa.d64 loader
+	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa.d64 osa_romtest.d64
+	rm -f csakernel_romtest prom prom_romtest
 
 
 ##############################################################################

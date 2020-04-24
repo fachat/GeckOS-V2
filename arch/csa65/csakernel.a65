@@ -27,7 +27,7 @@
 
 #define   ROM
 
-#define	ROMTEST
+;#define	ROMTEST
 
 /* These are necessary for CS/A65 kernel ***********************************/
 
@@ -42,6 +42,7 @@
 				   lib6502 */
 #define	NEED_GETINFO
 #define	NEED_SETINFO
+#define	NEED_UNGETC
 
 
 #define	NOMIRRORMEM		/* ramtest kernel options */

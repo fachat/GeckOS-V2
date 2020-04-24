@@ -5,11 +5,9 @@ XA=xa #-2.1.4h
 FILE=file65
 RELOC=reloc65
 
-PARTS=csakernel csalib csa_init.o65 csa_magic.o65 csa_devices.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lsh.o65 csa_end.o65
+PARTS=csa_init.o65 csa_magic.o65 csa_devices.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lsh.o65 csa_end.o65
 
-all: csarom
-
-#all: boot/csarom #boot/csarom2
+all: csarom.bin csakernel.bin csalib.bin csakernel_romtest.bin
 
 redo:
 	rm -f boot/csarom
@@ -17,24 +15,10 @@ redo:
 	cp boot/csarom /site/mystuff/var/lptiec
 	cat foo
 
-boot/csaold: csarom.old
-	${XA} -I../.. -I../../include -bt 32768 \
-		csarom.old -o boot/csaold -l csaold.lab
-
-#csa csarom: csarom.a65
-#	${XA} -I../.. -I../../include -bt 32768 \
-#		csarom.a65 -o csarom -l csarom.lab
-
-boot/csarom2: csarom2.a65
-	${XA} -I../.. -I../../include -bt 32768 \
-		csarom2.a65 -o boot/csarom2 -l csarom2.lab
-
-csarom: ${PARTS} mkcsarom.sh
+csarom.bin: ${PARTS} mkcsarom.sh
 	./mkcsarom.sh
-	echo "00 00 10" | xxd -r > csarom
-	cat csarom.bin >> csarom
 
-csakernel: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
+csakernel.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
 	${XA} -I../.. -I../../include -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
 		-DSPLIT1K=61440 \
@@ -43,11 +27,22 @@ csakernel: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 		csakernel.a65
 	${FILE} csakernel.o65
 	${RELOC} -xt -o csakernel.bin csakernel.o65
-	# prime target with load address 0x6000
-	echo "00 00 60" | xxd -r > csakernel
-	cat csakernel.bin >> csakernel
 
-csalib: ../../lib6502/*.a65 csalib.a65
+csakernel_romtest.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
+	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
+	${XA} -I../.. -I../../include -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
+		-DROMTEST \
+		-DSPLIT1K=61440 \
+		-l csakernel_romtest.lab \
+		-o csakernel_romtest.o65 \
+		csakernel.a65
+	${FILE} csakernel_romtest.o65
+	${RELOC} -xt -o csakernel_romtest.bin csakernel_romtest.o65
+
+# Currently needs 0x85 bytes .data and 0x18 bytes .zero that must not
+# overlap with a) space needed by lib6502 progs here (init),
+# and the zalloc/malloc-able memory
+csalib.bin: ../../lib6502/*.a65 csalib.a65
 	@echo "Building lib at 0xCC00"
 	# note: ROMSTART here is shared ROM, so start of lib6502
 	${XA} -I../.. -I../../include -R -bt 51200 -bz 8 -bd 768 -bb 1536 \
@@ -58,9 +53,6 @@ csalib: ../../lib6502/*.a65 csalib.a65
 		csalib.a65
 	${FILE} csalib.o65
 	${RELOC} -xt -o csalib.bin csalib.o65
-	# prime target with load address 0x4000
-	echo "00 00 40" | xxd -r > csalib
-	cat csalib.bin >> csalib
 
 csa_magic.o65: ../../sysapps/magic/* csa_magic.a65
 	@echo "Building magic at 0x8000"
@@ -72,9 +64,9 @@ csa_magic.o65: ../../sysapps/magic/* csa_magic.a65
 
 # TODO: LIB6502 address is hardcoded here, will change once we add
 # more jumps, as this is start of jmp table, not end
-csa_init.o65: ../../sysapps/init/* csa_init.a65 csalib
+csa_init.o65: ../../sysapps/init/* csa_init.a65 
 	@echo "Building init at 0x8000"
-	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
+	${XA} -I../.. -I../../include -R -bt 32768 -bz 48 -bd 912 -bb 960 \
 		-DOSA2KERNEL=58368 \
 		-DLIB6502=58233 \
 		-DROMSTART=32768 \
@@ -127,6 +119,7 @@ csa_end.o65: csa_end.a65
 clean:
 	rm -f csarom.lab csarom2.lab csaold.lab 
 	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin
+	rm -f csakernel_romtest csakernel_romtest.o65 csakernel_romtest.lab csakernel_romtest.bin
 	rm -f csalib csalib.o65 csalib.lab csalib.bin
 	rm -f csarom csarom.o65 csarom.lab csarom.bin
 	rm -f csa_devices csa_devices.o65 

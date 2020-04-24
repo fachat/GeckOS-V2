@@ -448,7 +448,7 @@ l0	lda envTab + TE_NTASKS,x
 	cmp #TE_SLEN * MAXENVS
 	bcc l0	
 	rts
-found	stx gdiv3
+found	stx gdiv3	; new env number
 
 	; ---------------------------
 	; first clean table
@@ -463,20 +463,25 @@ l0a	sta envTab + TE_MMU,x
 
 	; ---------------------------
 	; then copy shared
-	; x is index in envTab + TE_MMU_LEN
+	; x is index in envTab + TE_MMU + TE_MMU_LEN
+	; (points to byte after the last MMU entry)
 	;
 	lda gdiv2
 	beq noshared
 	; a memory page has 16 blocks - be sure to map all
 	; also already shorten to length of MMU table 
-#if 15-(16-TE_MMU_LEN)*16
 	clc
-	adc #< 15-(16-TE_MMU_LEN)*16
-#endif
+	adc #15		; make sure to copy shared 4k page
 	lsr
 	lsr
 	lsr
 	lsr
+
+	sec		; only need to copy those that are not auto-shared 
+	sbc #16-TE_MMU_LEN
+	bcc noshared 	; no extra memory shared
+	beq noshared
+
 	sta gdiv2	; number of 4k blocks
 
 	; check if parent has a valid entry
@@ -485,8 +490,8 @@ l0a	sta envTab + TE_MMU,x
 	bne valid
 
 	; if parent is not valid (i.e. during boot), copy from MMU
-	ldy #TE_MMU_LEN - 1
-l11	lda MMU,y
+	ldy #TE_MMU_LEN
+l11	lda MMU - 1,y
 	sta envTab + TE_MMU - 1, x
 	dex
 	dey
@@ -495,9 +500,10 @@ l11	lda MMU,y
 	beq l12
 
 	; parent has valid entry, copy from there
-valid	clc
+valid	; lda actEnv
+	clc
 	adc #TE_MMU_LEN
-	tay
+	tay		; y points to after MMU mapping in current env
 l1
 	lda envTab + TE_MMU - 1, y	; TE_MMU is at least 1, so no
 	sta envTab + TE_MMU - 1, x	; wraparound
