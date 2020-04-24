@@ -49,7 +49,7 @@
 
 Zerostart	=$40
 Memstart	=$0400
-Memend		=$2000
+Memend		=$1000		; only used in libexec for initial fork memory size
 
 
 #echo ############ Lib6502:
