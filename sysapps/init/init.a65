@@ -444,6 +444,10 @@ ifs1
           lda (pz),y
           sta PCBUF+FORK_ADDR+1
 
+#ifdef INIT_VERBOSE
+	  jsr printfork
+#endif
+
           ldy #P_NAME+2-1
 cmdn      iny
           lda (pz),y
@@ -453,31 +457,6 @@ cmdn      iny
 	  bne cmdn
           iny
 
-#ifdef INIT_VERBOSE
-	tya
-	pha
-	ldx #1
-	jsr itout
-	ldy #0
-ll	lda PCBUF+FORK_NAME,y
-	beq lx
-	jsr putc
-	iny
-	bne ll
-	beq end
-lx	lda PCBUF+FORK_NAME-1,y
-	beq end
-	lda #" "
-	jsr putc
-	iny
-	bne ll
-end
-	ldx #3
-	jsr itout
-	pla
-	tay
-#endif	
-	
           jsr FORK
 	  bcc inext1
 	 		; on error release streams -> auto-release devices
@@ -513,6 +492,30 @@ inext	rts
 	.)
 
 #ifdef INIT_VERBOSE
+printfork .(
+	ldx #1
+	jsr itout
+	ldy #P_NAME+2
+ll	lda (pz),y
+	beq lx
+	jsr stdout
+	iny
+	bne ll
+	beq end
+lx	iny
+	lda (pz),y
+	beq end
+	lda #" "
+	jsr stdout
+	jmp ll
+end
+	ldx #3
+	jsr itout
+	rts
+	.)
+#endif	
+
+#ifdef INIT_VERBOSE
 
 	.(
 
@@ -525,7 +528,7 @@ m5	.asc " ok!^M^J",0
 m6	.asc "Couldn't alloc streams!^M^J",0
 #ifdef INIT_RESTART
 m7	.asc "^M^JReceived sigchld from ",0
-m8 	=m7-3
+m8 	=m7-3	; CRLF
 m9	.asc "Prepared restart!^M^J",0
 m10	.asc "Could not set device stream!^M^J",0
 #endif
@@ -543,62 +546,10 @@ laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
 	lda haddr,x
 	tay
 	lda laddr,x
-
-&itxtout 
-#ifdef INIT_USE_STDLIB
-	jmp Txtout
-
-hexout	=Hexout
-putc	=Putc
-
-#else
-	.zero
-tp	.word
-	.text
-
-	sta tp
-	sty tp+1
-	ldy #0
-tol	lda (tp),y
-	beq tole
-	jsr putc
-	iny
-	bne tol
-	inc tp+1
-	bne tol
-tole	rts
+	jmp strout
 	.)
 
-&hexout	pha
-	lsr
-	lsr
-	lsr
-	lsr
-	jsr nibout
-	pla
-	and #$0f
-nibout	clc
-	adc #"0"
-	cmp #"9"+1
-	bcc putc
-	adc #6
-
-&putc	pha
-	ldx #STDOUT
-	jsr PUTC
-	bcc ok
-	cmp #E_NUL
-	beq ok
-	cmp #E_NOSTR
-	beq ok
-	jsr YIELD
-	pla
-	jmp putc
-ok	pla
-	rts
-#endif
 	.)
-#endif
 
 #ifdef INIT_RESTART
 
@@ -666,13 +617,23 @@ sigadr	.(
 #endif
 loop	jsr CHECKCHLD
 	bcs end
-	txa 
 #ifdef INIT_VERBOSE
-	pha
+	pha	; error code
+	txa 
+	pha	; task id
 	jsr hexout
-	lda #" "
-	jsr putc
+	jsr crlfout
+	tsx
+	lda $0102,x
+	jsr hexout
+	jsr spout
+	lda $0102,x
+	jsr strerror
+	jsr strout
 	pla
+	tax
+	pla
+	txa
 #endif
 	php
 	sei
@@ -704,12 +665,14 @@ execlib	.(
 	.bss
 libbuf	.dsb 64
 	.text
-
 	jsr getstrs
-	bcs end
+	bcc noend
+	rts	;jmp inext
 
-	jsr GETSTR
-	bcs end2
+noend	jsr GETSTR
+	bcc noend2
+	jmp getserr3
+noend2	
 	txa
 	pha
 
@@ -727,6 +690,9 @@ libbuf	.dsb 64
 	sta PCBUF+FORK_STDOUT
 	sta PCBUF+FORK_STDERR
 
+	jsr printfork
+
+	; note stdout, strout, hexout etc use lib6502, that clutters THREADSAVE
 	lda pz
 	clc
 	adc #P_NAME+2-3		; emulate lib6502 forkto struct
@@ -735,33 +701,9 @@ libbuf	.dsb 64
 	adc #0
 	sta THREADSAVE+1
 
-#ifdef INIT_VERBOSE
-	ldx #1
-	jsr itout
-	ldy #3
-ll	lda (THREADSAVE),y
-	beq lx
-	jsr putc
-	iny
-	bne ll
-	beq end1
-lx	cpy #3
-	beq next
-	dey
-	lda (THREADSAVE),y
-	iny
-	cmp #0
-	beq end1
-next	lda #" "
-	jsr putc
-	iny
-	bne ll
-end1
-	ldx #3
-	jsr itout	
-#endif
 	pla
 	jsr init_forkto		; extra jmp-point in lib6502 implementation
+
 #ifdef INIT_VERBOSE
 	php
 	txa
@@ -777,10 +719,10 @@ ifork_ok ldx #5
 #endif
 	rts
 
-end2	jsr getserr3
-end	rts	;jmp inext
 	.)
 #endif
+
+#include "../../apps/common.a65"
 
 #ifdef INIT_MMU
 
@@ -819,6 +761,7 @@ sbloop
 	sta actbank
 	rts
 	.)
+
 
 #ifdef ROM
 #print *
