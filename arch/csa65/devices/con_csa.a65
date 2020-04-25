@@ -21,7 +21,8 @@
 
 ****************************************************************************/
 
-#define   PIO       $e810
+#define   PIO       $e810		/* for included keyboard */
+
 #define   VIA1      $e840
 #define   vdcctrl   $e888
 #define   vdc       $e880
@@ -31,7 +32,7 @@
 
 #define	MAX_ASCREEN	maxscr		/* soft limit */
 
-#define	SWITCHKEY	$46
+#define	SWITCHKEY	79		/* Rev/off on graphics keyboard */
 
 #define	SET_MMU		ldy #$10:sty MMU+VIDPAGE
 

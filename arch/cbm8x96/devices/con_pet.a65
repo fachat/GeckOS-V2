@@ -21,6 +21,8 @@
 
 ****************************************************************************/
 
+#define	VICE
+
 #define   PIO       $e810
 #define   VIA1      $e840
 #define   vdc       $e880
@@ -30,7 +32,7 @@
 
 #define	MAX_ASCREEN	#4		/* soft limit */
 
-#define	SWITCHKEY	23
+#define	SWITCHKEY	39		/* Tab on business keyboard */
 
 #define	SET_MMU		
 
