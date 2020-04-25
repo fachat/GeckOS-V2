@@ -25,15 +25,16 @@ prom: rom kernel lib
 	((cat csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel.bin) > prom
 
 prom_romtest: rom kernel_romtest lib
-	((cat csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel_romtest.bin) > prom_romtest
+	((cat csarom_romtest.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel_romtest.bin) > prom_romtest
 
-osa.d64: rom kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csakernel csakernel_romtest csalib boot index.html 
+osa.d64: rom rom_romtest kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csarom_romtest csakernel csakernel_romtest csalib boot index.html 
 	rm -f ${sysapps} ${apps} # csarom csakernel csalib
 
 osa_romtest.d64: osa.d64
 	cp osa.d64 osa_romtest.d64
 	c1541 -attach osa_romtest.d64 -delete csakernel -rename csakernel_romtest csakernel
+	#c1541 -attach osa_romtest.d64 -delete csarom -rename csarom_romtest csarom
 
 loader: loader.bas
 	petcat -w40 -o loader loader.bas
@@ -43,6 +44,12 @@ rom:
 	ln -sf ../csarom.bin
 	echo "00 00 10" | xxd -r > csarom
 	cat csarom.bin >> csarom
+
+rom_romtest:
+	(cd ..; ${MAKE} csarom_romtest.bin;)
+	ln -sf ../csarom_romtest.bin
+	echo "00 00 10" | xxd -r > csarom_romtest
+	cat csarom_romtest.bin >> csarom_romtest
 
 kernel:
 	(cd ..; ${MAKE} csakernel.bin;)
@@ -77,6 +84,7 @@ clean:
 	rm -f csarom csakernel csalib boot inirom osa.d64 loader
 	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa.d64 osa_romtest.d64
 	rm -f csakernel_romtest prom prom_romtest
+	rm -f csarom_romtest csarom_romtest.bin
 
 
 ##############################################################################

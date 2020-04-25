@@ -2,18 +2,20 @@
 #
 # build the GeckOS ROM image for CS/A
 
-# note. csa_magic is only used it init uses INIT_MMU
-#FILES="csa_magic csa_devices csa_init csa_fsdev csa_fsiec"
-FILES="csa_devices csa_init csa_fsdev csa_fsiec csa_lsh csa_end"
+OUT="$1"
+shift 1;
 
-########################################
-# first part: csa_magic
+FILES="$@"
 
 # ROMSTART
 next_bt="-bt 32768"	
 
+rm -f ${OUT}
+
 for i in ${FILES}; do
 
+	i=${i%.o65}
+	echo "i="$i
 	# reloc to ROM location
 	reloc65 $next_bt -o $i-reloc.o65 $i.o65
 	# get start of next binary
@@ -21,6 +23,6 @@ for i in ${FILES}; do
 	next_bt=`file65 -P $i-reloc.o65 | sed -e 's/-bd.*//g'`
 	# extract binary
 	reloc65 -xt -o $i $i-reloc.o65
+	cat $i >> ${OUT}
 done
 
-cat ${FILES} > csarom.bin

@@ -5,18 +5,15 @@ XA=xa #-2.1.4h
 FILE=file65
 RELOC=reloc65
 
-PARTS=csa_init.o65 csa_magic.o65 csa_devices.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lsh.o65 csa_end.o65
+PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lmon.o65 csa_lsh.o65 csa_end.o65
 
 all: csarom.bin csakernel.bin csalib.bin csakernel_romtest.bin
 
-redo:
-	rm -f boot/csarom
-	make
-	cp boot/csarom /site/mystuff/var/lptiec
-	cat foo
+csarom.bin: ${PARTS} csa_devices.o65 mkcsarom.sh
+	./mkcsarom.sh $@ csa_devices.o65 ${PARTS}
 
-csarom.bin: ${PARTS} mkcsarom.sh
-	./mkcsarom.sh
+csarom_romtest.bin: ${PARTS} csa_devices_romtest.o65 mkcsarom.sh
+	./mkcsarom.sh $@ csa_devices_romtest.o65 ${PARTS}
 
 csakernel.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
@@ -83,6 +80,16 @@ csa_devices.o65: ../../devices/* devices/* csa_devices.a65
 		csa_devices.a65
 	${FILE} $@
 
+csa_devices_romtest.o65: ../../devices/* devices/* csa_devices.a65
+	@echo "Building devices at 0x8000"
+	${XA} -I../.. -I../../include -R -bt 32768 -bz 200 -bd 1800 -bb 3300 \
+		-DOSA2KERNEL=58368 \
+		-DROMSTART=32768 \
+		-DROMTEST \
+		-o csa_devices_romtest.o65 \
+		csa_devices.a65
+	${FILE} $@
+
 csa_fsdev.o65: csa_fsdev.a65
 	@echo "Building fsdev at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
@@ -108,6 +115,13 @@ csa_lsh.o65: csa_lsh.a65
 		csa_lsh.a65
 	${FILE} $@
 
+csa_lmon.o65: csa_lmon.a65
+	@echo "Building lmon at 0x8000"
+	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
+		-o csa_lmon.o65 \
+		csa_lmon.a65
+	${FILE} $@
+
 csa_end.o65: csa_end.a65
 	@echo "Building lsh at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
@@ -117,17 +131,19 @@ csa_end.o65: csa_end.a65
 
 
 clean:
-	rm -f csarom.lab csarom2.lab csaold.lab 
 	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin
 	rm -f csakernel_romtest csakernel_romtest.o65 csakernel_romtest.lab csakernel_romtest.bin
 	rm -f csalib csalib.o65 csalib.lab csalib.bin
-	rm -f csarom csarom.o65 csarom.lab csarom.bin
+	rm -f csarom csarom_romtest
+	rm -f csarom.bin csarom_romtest.bin
 	rm -f csa_devices csa_devices.o65 
+	rm -f csa_devices_romtest csa_devices_romtest.o65 
 	rm -f csa_init csa_init.o65 
 	rm -f csa_magic csa_magic.o65 
 	rm -f csa_fsdev csa_fsdev.o65 
 	rm -f csa_fsiec csa_fsiec.o65 
 	rm -f csa_lsh csa_lsh.o65 
+	rm -f csa_lmon csa_lmon.o65 
 	rm -f csa_end csa_end.o65 
 	rm -f csa*-reloc.o65
 	(cd boot; ${MAKE} clean ;)
