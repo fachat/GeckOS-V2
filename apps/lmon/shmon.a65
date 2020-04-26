@@ -49,7 +49,7 @@ Z3        .word 0
 ABPZ      .byt 0
 	.text
 
-#ifndef NOSYSFKT
+#if 1 /* ndef NOSYSFKT */
 	.zero
 Z0        .word 0
 	.text
@@ -647,7 +647,7 @@ ils
 
 ;****
 
-#ifdef NOSYSFKT
+#if 0 /*def NOSYSFKT */
 MOE MOS   jmp ERR
 #else
 MOE       .(
@@ -732,7 +732,7 @@ msx       rts
           JSR CHRGOT
           CMP #34
           BNE mol
-#ifdef NOSYSFKT
+#if 0 /* def NOSYSFKT */
           jmp ERR
 #else
           jsr ropenfile
