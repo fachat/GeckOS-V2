@@ -187,6 +187,12 @@ next	iny
 	bcs ende
 	.)
 
+&get_zmeminfo 
+	lda #<zmem
+	ldy #>zmem
+	ldx #Zerostart
+	rts
+
 	.)
 
 

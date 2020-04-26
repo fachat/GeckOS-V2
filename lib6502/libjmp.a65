@@ -101,11 +101,12 @@
 /**************************************************************************/
 
 #define LIBCALLNUM      45
-#define LIBOSACALLS     4
+#define LIBOSACALLS     5
 
 
 /* These are actually OS/A specific calls to the internals of lib6502 */
 
+#define	get_meminfo	LIB6502-15	/* get information on memory map for lsenv */
 #define	mon_forkto	LIB6502-12	/* mon can start lib6502 prgs here */
 #define	init_forkto	LIB6502-9	/* init can start lib6502 prgs here */
 #define	flib2osa_r	LIB6502-6	/* maps lib fileno to OS/A65 stream */
@@ -179,6 +180,7 @@
 
 /* OS/A specific calls */
 
+jmp get_meminfo_i
 jmp mon_forkto_i
 jmp init_forkto_i
 jmp Flib2osa_r
