@@ -95,10 +95,12 @@
 
 #include  "devices/devices.a65"
 
+#echo after DEVICES
+#print *
+
 /************* init process 				*/
 
-
-#define	INIT_VERBOSE
+#undef	INIT_VERBOSE
 #define	INIT_RESTART
 #define	INIT_MERGE
 #define	INIT_LIB6502
@@ -106,12 +108,18 @@
 /* #define	INIT_OUTDEV	2*/
 #include  "sysapps/init/init.a65"
 
+#echo after INIT
+#print *
+
 
 /************* fsdev - converts devices into files 	*/
 
 
 #define	FSDEV_NOROM		/* do not implement ROM disk drive (to save space) */
 #include  "sysapps/fs/fsdev.a65"
+
+#echo after FSDEV
+#print *
 
 
 /************* fsiec - IEEE488/IEC bus filesystem 	*/
@@ -125,6 +133,8 @@
 #define	FSIEC_DEVICE	"devices/piec_pet.a65"
 #include  "sysapps/fs/fsiec.a65"
 #undef	FSIEC_DEVICE
+
+#echo after FSIEC
 #print *
 
 
@@ -177,7 +187,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$5900
+Memstart  =$5300
 Memend	  =$7800
 Zerostart =$94		/* PET ROM irq vectors at $90-$93 */
 

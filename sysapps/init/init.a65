@@ -551,6 +551,8 @@ laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
 
 	.)
 
+#endif
+
 #ifdef INIT_RESTART
 
 restarts .(
@@ -690,7 +692,9 @@ noend2
 	sta PCBUF+FORK_STDOUT
 	sta PCBUF+FORK_STDERR
 
+#ifdef INIT_VERBOSE
 	jsr printfork
+#endif
 
 	; note stdout, strout, hexout etc use lib6502, that clutters THREADSAVE
 	lda pz
