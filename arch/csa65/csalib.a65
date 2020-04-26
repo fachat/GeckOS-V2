@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-2020 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,45 +21,52 @@
 
 ****************************************************************************/
 
+/***************************************************************************/
+/*                      These defines control the ROM build                */
+/*                                                                         */
 
-#ifndef ROM
+#define	OSA_ARCH	"CS/A65"
 
-#include  "kdefs.def"
-#include  "kernel.i65"
-
-          ;.word $700
-          *=$700
-          
-/*#define   NOPRG*/
-
+#ifdef CMOSCPU
+#define	OSA_CPU		"6502"
+#else
+#define	OSA_CPU		"65C02"
 #endif
 
-          
-/*        Device-Block        */
 
-          .(
+/***************************************************************************
+ *
+ * Here comes the ROM content
+ */
 
-          .word endd
-          .byt PK_DEV+$80
-          .word devstart
-	  .dsb P_NAME - P_RAM, $ff
-          .asc "devices",0,0
+/*
+#include  "config.i65"
+*/
+#include  "kdefs.i65"
+#include  "fdefs.i65"
+#include  "kernel.i65"
+	.(
 
-devstart
+#define	LIBMEM_ALLOC_SBRK
 
-#define	CONSOLE_DEVICE	"devices/con_csa.a65"
-#include  "devices/console.a65"
+Zerostart	=$40
+Memstart	=$0400
+Memend		=$1000		; only used in libexec for initial fork memory size
 
-#include  "devices/par.a65"
-#include  "devices/nulldev.a65"
-#include  "devices/spooler.a65"
 
--sernr = "1"
+#echo ############ Lib6502:
 
-#define UARTBASE $e830
-/*#include  "devices/ser_uart.a65"*/
+; put lib6502 directly in front of kernel
+; when STDIOADDR is defined, lib6502 ends with lib jump table
+#define	STDIOADDR	OSA2KERNEL
 
-          .word $ffff
+#include  "lib6502/lib6502.a65"
 
-endd      .)
+END=*
+#print END
+
+	.dsb OSA2KERNEL-*,$ff
+
+	.)
+
 

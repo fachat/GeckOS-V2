@@ -1,0 +1,83 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/**************************************************************************
+ * Cursor handling
+ */
+
+          .(
+        .data
+crsrfl  .byt 0
+crsrcnt .byt 0
+        .text
+
+&inicrsr
+        lda #0
+        sta crsrfl
+        sta crsrcnt
+        rts
+
+&&crsroff .(                    ; disable cursor
+          bit crsrfl
+          bpl ret               ; not enabled
+
+          bit crsrfl
+          bvc clr               ; not inversed
+          ldy spalte
+          lda (vzei),y
+          eor #$80
+          sta (vzei),y
+clr       lda #0
+          sta crsrfl
+&ret      rts
+        .)
+
+&&crsron .(                     ; enable cursor
+          bit crsrfl
+          bmi irq               ; already enabled
+          lda #0                ; inverse cursor next crsrirq
+          sta crsrcnt
+          lda #128              ; enabled, but not invers
+          sta crsrfl
+
+&irq
+          dec crsrcnt
+          bpl ret               ; not this time
+          lda #10
+          sta crsrcnt
+
+          ldy spalte
+          lda (vzei),y
+          eor #$80
+          sta (vzei),y
+          lda crsrfl
+          eor #$40
+          sta crsrfl
+
+          rts
+          .)
+
+	.)
+
+

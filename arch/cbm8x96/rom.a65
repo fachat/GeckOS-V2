@@ -182,7 +182,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$6100
+Memstart  =$6500
 Memend	  =$f000
 Zerostart =$70
 

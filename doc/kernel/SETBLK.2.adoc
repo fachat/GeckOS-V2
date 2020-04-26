@@ -8,7 +8,7 @@ SETBLK - set a memory block in the current task's memory mapping
 == SYNOPSIS
 Input::
 	* YR - index in task's memory mapping table
-	* new value
+	* AC - new value for entry in mapping table
 Call::
 	jsr ENMEM
 Output::

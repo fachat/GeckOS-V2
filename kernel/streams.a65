@@ -71,6 +71,7 @@ BZEI	.word 0
 #endif
 SYR     .byt 0
 SAC     .byt 0
+	.data
 STRM    .dsb S_SLEN
 	
 	.bss

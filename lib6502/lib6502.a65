@@ -34,6 +34,9 @@
 #include "kernel.i65"
 #include "lib6502.i65"
 
+; make sure the actual jump table is assembled
+#define	LIB6502BIN
+
 #include "lib6502/libdef.a65"
 #include "lib6502/libglob.a65"
 #include "lib6502/libzmem.a65"
@@ -50,8 +53,11 @@ notimp  lda #E_NOTIMP
         sec
         rts
 
-#define	LIB6502BIN
 
+/****************************************
+ * if STDIOADDR is defined, put jump table
+ * at the just before STDIOADDR
+ */
 #ifdef STDIOADDR
 
 #define LIB6502BINADDR  STDIOADDR-3*(LIBCALLNUM+LIBOSACALLS)
@@ -66,6 +72,7 @@ notimp  lda #E_NOTIMP
 #endif
 
 #endif /* STDIOADDR */
+/****************************************/
 
 #include "lib6502/libjmp.a65"
 

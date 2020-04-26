@@ -476,7 +476,6 @@ crlfout .(
 #iflused spout
 	.(
 &spout	lda #" "
-	beq stdout
 	.)
 #endif	/* spout */
 #iflused stdout

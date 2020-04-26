@@ -102,20 +102,71 @@
 #define   VB        4
 #define   VC        0
 
-#define   D_Y       97
-#define   D_M       03
+#define   D_Y       21
+#define   D_M       04
 #define   D_D       20
 
 #define   SYSTEM
 
 +OSA2KERNEL =*
 
+JMPTBL=*
+#print JMPTBL
 #include  "kernel/jmptbl.a65"
-#include  "kernel/init.a65"
-#include  "kernel/tasks.a65"
+;JMPTBL_LEN=*-JMPTBL
+;#print JMPTBL_LEN
+
+notimp   lda #E_NOTIMP
+	sec
+	rts
+
+STREAMS=*
+#print STREAMS
 #include  "kernel/streams.a65"
+;STREAMS_LEN=*-STREAMS
+;#print STREAMS_LEN
+
+#ifdef SPLIT1K
+#print *
+#print SPLIT1K
+	.dsb SPLIT1K-*, $ff
+#endif
+
+;#ifdef SPLIT2K
+;#print *
+;#print SPLIT2K
+;	.dsb SPLIT2K-*, $ff
+;#endif
+
+TASKS=*
+#print TASKS
+#include  "kernel/tasks.a65"
+;TASKS_LEN=*-TASKS
+;#print TASKS_LEN
+
+/* needs to be behind tasks.a65 as it uses SYSBUF */
+DEVICES=*
+#print DEVICES
 #include  "kernel/devices.a65"
+;DEVICES_LEN=*-DEVICES
+;#print DEVICES_LEN
+
+/* needs to be behind tasks.a65 as it uses SYSBUF */
+FILES=*
+#print FILES
 #include  "kernel/files.a65"
+;FILES_LEN=*-FILES
+;#print FILES_LEN
+
+/* WARNING: init.a65 must be in the last 4k, to enable correct MMU mapping */
+INIT=*
+#print INIT
+#include  "kernel/init.a65"
+;INIT_LEN=*-INIT
+;#print INIT_LEN
+
+END=*
+#print END
 
 POT2      .byt 1,2,4,8,$10,$20,$40,$80
 

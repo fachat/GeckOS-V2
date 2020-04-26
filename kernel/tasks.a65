@@ -206,11 +206,10 @@ l0	tay
 
 /* fork a new task */
 
-&&fork   .(
+&fork    .(
 	  jsr memsys
 	  sty div
 	  MAPSYSBUF
-
 	  ldx SYSBUF+FORK_STDIN
           jsr teststd
           stx SYSBUF+FORK_STDIN
@@ -355,7 +354,7 @@ fend	  cmp #1
 	  jmp memtask
           .)
 
-&&forkt	  .(
+&forkt	  .(
 	  jsr memsys
 	  clc
 	  adc #$ff		; prepare for RTS
@@ -416,7 +415,7 @@ nothread  pla
 	  sec
 	  jmp memtask
 	  .)
-&&kterm    		; active thread terminates
+&kterm    		; active thread terminates
 	  .(
 	  jsr memsys
 ;.byt 2
@@ -439,7 +438,7 @@ nothread  pla
 suicide	  ldx actTask
 	  tya			; ac = return code
 	  jmp k1
-&&kkill	  jsr memsys
+&kkill	  jsr memsys
 k1 	  .(
 	  sta taskTab2 + TT_RETCODE,x
 	  stx div2		; XR / div2 is taskID of task to be killed
@@ -563,8 +562,6 @@ ok	  tay
 	  sta schedThread
 	  cld
           cli
-          
-          ; sty schedThread
 psl
           lda threadTab + TH_ST,y
 	  beq next
@@ -657,7 +654,7 @@ s2a	  ;jmp endirq
 
 /*********************************************************************/
 
-&&suspend  .(
+&suspend  .(
 	  jsr memsys
           sty div
           ldy actThread
@@ -868,13 +865,13 @@ err	lda #E_ILLPAR
 
 #ifdef NO_SEND	/* no SEND/RECEIVE/XRECEIVE calls */
 
-&&ksend		=notimp
-&&xreceive	=notimp
-&&kreceive	=notimp
+&ksend		=notimp
+&xreceive	=notimp
+&kreceive	=notimp
 
 #else	/* NO_SEND */
 
-&&ksend	.(
+&ksend	.(
 	jsr memsys
 	cpx #SEND_SYS
 	beq serr
@@ -949,10 +946,10 @@ copyto
 	beq serr2
 	.)
 
-&&xreceive 
+&xreceive 
 	lda #<-1
 	.byt $2c
-&&kreceive .(
+&kreceive .(
 	lda #0		; TS_WFTX
 	jsr memsys
 	php
@@ -1198,11 +1195,11 @@ l1	jmp push
 
 #ifdef NO_SEM	/* no semaphore code */
 
-&&getsem	=notimp
-&&fresem	=notimp
-&&kpsem		=notimp
-&&kvsem		=notimp
-&&locksem	=notimp
+&getsem	=notimp
+&fresem	=notimp
+&kpsem		=notimp
+&kvsem		=notimp
+&locksem	=notimp
 
 #else	/* NO_SEM */
 
@@ -1271,7 +1268,7 @@ locked	lda #E_SEMSET
 	sec
 rtask	jmp memtask
 
-&&&kpsem .(  
+&&kpsem .(  
         jsr memsys
 	php
 	jsr remap
@@ -1395,7 +1392,7 @@ gnext     inx
           bcs gne
 	  .)
 
-gsetxy	  txa
+&gsetxy	  txa
 	  and #7
 	  tay
 	  lsr

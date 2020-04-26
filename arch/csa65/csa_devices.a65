@@ -21,45 +21,30 @@
 
 ****************************************************************************/
 
+/***************************************************************************/
+/*                      These defines control the ROM build                */
+/*                                                                         */
 
-#ifndef ROM
+#define   ROM
 
-#include  "kdefs.def"
+/***************************************************************************
+ *
+ * Here comes the ROM content
+ */
+
+#define PET_KEYB_GRAPHICS
+
+
+#include  "config.i65"
 #include  "kernel.i65"
+#include  "kdefs.i65"
 
-          ;.word $700
-          *=$700
-          
-/*#define   NOPRG*/
+	.(
+/************* devices                                  */
 
-#endif
+#echo ############ devices
 
-          
-/*        Device-Block        */
+#include  "devices/csadev.a65"
+	.)
 
-          .(
-
-          .word endd
-          .byt PK_DEV+$80
-          .word devstart
-	  .dsb P_NAME - P_RAM, $ff
-          .asc "devices",0,0
-
-devstart
-
-#define	CONSOLE_DEVICE	"devices/con_csa.a65"
-#include  "devices/console.a65"
-
-#include  "devices/par.a65"
-#include  "devices/nulldev.a65"
-#include  "devices/spooler.a65"
-
--sernr = "1"
-
-#define UARTBASE $e830
-/*#include  "devices/ser_uart.a65"*/
-
-          .word $ffff
-
-endd      .)
 

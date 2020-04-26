@@ -21,45 +21,33 @@
 
 ****************************************************************************/
 
+#define	BOOTDRV		"c"
+#define	ROOTPATH	"c:"
 
-#ifndef ROM
+	.(
 
-#include  "kdefs.def"
-#include  "kernel.i65"
 
-          ;.word $700
-          *=$700
-          
-/*#define   NOPRG*/
+/************* boot lsh from BOOTDRV                    */
 
-#endif
+#include "kdefs.i65"
 
-          
-/*        Device-Block        */
+#echo ************ lsh
 
-          .(
+        /* add autostart of lib6502 program 'lsh' */
 
-          .word endd
-          .byt PK_DEV+$80
-          .word devstart
-	  .dsb P_NAME - P_RAM, $ff
-          .asc "devices",0,0
+        .(
+        .word end_auto
+        .byt PK_LIB+PK_AUTOEXEC+PK_RESTART      ; is lib6502 program
+        .word 0         ; P_ADDR ignored
+        .byt 16         ; P_RAM
+        .byt 128        ; P_SHARED
+        .byt 0          ; P_PRIORITY
+        .byt 0,0        ; P_DEV
+        .byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0
+	.byt 0		; end of cmdline
+end_auto
+	.)
 
-devstart
+	.)
 
-#define	CONSOLE_DEVICE	"devices/con_csa.a65"
-#include  "devices/console.a65"
-
-#include  "devices/par.a65"
-#include  "devices/nulldev.a65"
-#include  "devices/spooler.a65"
-
--sernr = "1"
-
-#define UARTBASE $e830
-/*#include  "devices/ser_uart.a65"*/
-
-          .word $ffff
-
-endd      .)
 

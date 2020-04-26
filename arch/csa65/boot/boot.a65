@@ -1,0 +1,80 @@
+
+srcp 	=2
+trgp	=4
+
+	.word $0c00
+	*=$0c00
+
+	sei
+
+	; disable interrupt sources
+	lda #$7f
+	sta $e84e	; interrupt enable
+
+	lda $e811
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e811
+
+	lda $e813
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e813
+
+	lda $e821
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e821
+
+	lda $e823
+	and #$b6	; clear bits 0,3 IRQx1/IRQx2 flags, Cx2 input
+	sta $e823
+
+	; map the uppermost 32k of the 512k bus memory
+	; that is currently mapped to a 512k RAM on
+	; the BIOS board
+	ldy #$18
+	ldx #8
+map	tya
+	sta $eff0,x
+	iny
+	inx
+	cpx #16
+	bcc map
+
+	lda #0
+	sta srcp
+	sta trgp
+
+kernel	ldy #>$6000	; from $6000
+	lda #>$e400	; to $e400
+	ldx #7*4	; 7k (to $ffff)
+	jsr copy
+
+lib	ldy #>$4000	; from $4000
+	lda #>$c800	; to $c800
+	ldx #7*4	; 7k (to $e3ff)
+	jsr copy
+
+rom	ldy #>$1000	; from $1000
+	lda #>$8000	; to $8000
+	ldx #12*4	; 12k (to $c000)
+	jsr copy
+
+	jmp $e400
+
+copy	sty srcp+1
+	sta trgp+1
+cloop	lda trgp+1
+	and #%11111000	; $e800-$efff
+	cmp #%11101000
+	beq skip	; skip I/O
+	ldy #0
+loop	lda (srcp),y
+	sta (trgp),y
+	iny
+	bne loop
+skip	inc srcp+1
+	inc trgp+1
+	dex
+	bne cloop
+	rts
+
+

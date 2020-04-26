@@ -50,9 +50,9 @@
 
 #define	TE_NTASKS	0
 #define	TE_MMU		1	/* must be at least 1 - see getenv */
-#define	TE_MMU_LEN	15	/* allow up to 15 pages being mapped */
-#define	TE_RAMLEN	16	/* the number of RAM blocks allocated */
-#define	TE_SLEN		17	
+#define	TE_MMU_LEN	12	/* allow up to 12 pages being mapped ($0000-$BFFF), rest is lib,I/O,kernel */
+#define	TE_RAMLEN	13	/* the number of RAM blocks allocated */
+#define	TE_SLEN		14	
 
 	.data
 &actEnv	.byt 0
@@ -436,6 +436,8 @@ gdiv3	.byt 0
 &&kgetenv .(
 	sta gdiv	; number of 256-byte blocks as RAM from lo of mem
 	sty gdiv2	; number of shared 256-byte blocks from top of mem
+	; ---------------------------
+	; find entry in envTab
 	ldx #0
 l0	lda envTab + TE_NTASKS,x
 	beq found
@@ -446,35 +448,50 @@ l0	lda envTab + TE_NTASKS,x
 	cmp #TE_SLEN * MAXENVS
 	bcc l0	
 	rts
-found	stx gdiv3
+found	stx gdiv3	; new env number
+
+	; ---------------------------
 	; first clean table
+	; x has index in envTab (from above)
+	;
 	lda #$0f		; kernel ROM page, read-only
 	ldy #TE_MMU_LEN
 l0a	sta envTab + TE_MMU,x
 	inx
 	dey
 	bne l0a
+
+	; ---------------------------
 	; then copy shared
+	; x is index in envTab + TE_MMU + TE_MMU_LEN
+	; (points to byte after the last MMU entry)
+	;
 	lda gdiv2
 	beq noshared
 	; a memory page has 16 blocks - be sure to map all
 	; also already shorten to length of MMU table 
-#if 15-(16-TE_MMU_LEN)*16
 	clc
-	adc #< 15-(16-TE_MMU_LEN)*16
-#endif
+	adc #15		; make sure to copy shared 4k page
 	lsr
 	lsr
 	lsr
 	lsr
+
+	sec		; only need to copy those that are not auto-shared 
+	sbc #16-TE_MMU_LEN
+	bcc noshared 	; no extra memory shared
+	beq noshared
+
 	sta gdiv2	; number of 4k blocks
 
+	; check if parent has a valid entry
 	lda actEnv
-
 	cmp #<-1
 	bne valid
-	ldy #TE_MMU_LEN - 1
-l11	lda MMU,y
+
+	; if parent is not valid (i.e. during boot), copy from MMU
+	ldy #TE_MMU_LEN
+l11	lda MMU - 1,y
 	sta envTab + TE_MMU - 1, x
 	dex
 	dey
@@ -482,9 +499,11 @@ l11	lda MMU,y
 	bne l11
 	beq l12
 
-valid	clc
+	; parent has valid entry, copy from there
+valid	; lda actEnv
+	clc
 	adc #TE_MMU_LEN
-	tay
+	tay		; y points to after MMU mapping in current env
 l1
 	lda envTab + TE_MMU - 1, y	; TE_MMU is at least 1, so no
 	sta envTab + TE_MMU - 1, x	; wraparound
@@ -494,7 +513,7 @@ l1
 	bne l1
 noshared
 l12
-	
+	; ---------------------------
 	; now alloc the requested memory blocks
 	lda gdiv
 	beq end
@@ -632,7 +651,7 @@ read	ldx actEnv
  * Handle with care!
  */
 
-&&setblk .(
+&setblk .(
 	jsr memsys
 	cpy #TE_MMU_LEN
 	bcs indexerr

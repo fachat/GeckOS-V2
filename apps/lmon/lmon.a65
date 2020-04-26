@@ -1086,5 +1086,15 @@ found	jmp decpids
 
 	.)
 
+
+          .(
+
+&ropenfile lda #FS_OPEN_RD              /* FS-Kommando Lesen            */
+          .byt $2c
+&wopenfile lda #FS_OPEN_WR              /* FS-Kommando Schreiben        */
+	sec
+	rts
+          .)
+
 PRGEND    .)
 

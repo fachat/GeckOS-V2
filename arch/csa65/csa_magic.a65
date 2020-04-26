@@ -22,44 +22,24 @@
 ****************************************************************************/
 
 
-#ifndef ROM
+	.(
+          *=ROMSTART
 
-#include  "kdefs.def"
-#include  "kernel.i65"
+/************* ROM entries                              */
+/*
 
-          ;.word $700
-          *=$700
-          
-/*#define   NOPRG*/
+  The lib6502 needs to use addresses in each of the environments. 
+  Devices (normally) use the kernel address space.
+  All other tasks, including the kernel have their own environment.
+  Therefore they all get their own zero, data and bss addresses.
 
-#endif
+*/
 
-          
-/*        Device-Block        */
 
-          .(
+#echo ############ magic
 
-          .word endd
-          .byt PK_DEV+$80
-          .word devstart
-	  .dsb P_NAME - P_RAM, $ff
-          .asc "devices",0,0
+/* so that init recognizes a ROM */
+#include "sysapps/magic/magic.a65"
 
-devstart
-
-#define	CONSOLE_DEVICE	"devices/con_csa.a65"
-#include  "devices/console.a65"
-
-#include  "devices/par.a65"
-#include  "devices/nulldev.a65"
-#include  "devices/spooler.a65"
-
--sernr = "1"
-
-#define UARTBASE $e830
-/*#include  "devices/ser_uart.a65"*/
-
-          .word $ffff
-
-endd      .)
+	.)
 

@@ -1,0 +1,83 @@
+/*
+ * RAM test to be run from the BIOS board with a PET BASIC4 base system ROM
+ * BIOS board RAM is $00000-$07fff
+ *
+ * Tests the video RAM board RAM at $10000-$1ffff
+ */
+
+ptr=$01
+
+tstpage	=$9000
+dash	=$8000+400
+
+	.word $0401
+	*=$0401
+
+
+	.word link
+	.word 10
+	.byt $9e, "1040", 0
+link	.word 0
+
+	.dsb 1040-*, $ff
+
+	; set window into video board RAM at $9xxx
+	lda #$17
+	sta $eff0+(tstpage>>12)
+
+	; setup test page
+	lda #0
+	sta ptr
+	lda #tstpage>>8
+	sta ptr+1
+
+	jsr clrdash
+
+	ldx #32
+ckloop
+	lda #$00
+	jsr setloop
+	jsr chkloop
+
+	lda #$ff
+	jsr setloop
+	jsr chkloop
+
+	lda #$55
+	jsr setloop
+	jsr chkloop
+
+	lda #$aa
+	jsr setloop
+	jsr chkloop
+
+	dex
+	bne ckloop
+	rts
+
+chkloop	ldy #0
+kloop	cmp (ptr),y
+	beq next
+	pha
+	lda dash,y
+	clc
+	adc #1
+	sta dash,y
+	pla
+next	iny
+	bne kloop
+	rts
+
+setloop	ldy #0
+sloop	sta (ptr),y
+	iny
+	bne sloop
+	rts
+
+clrdash	ldy #0
+	tya
+cloop	sta dash,y
+	iny
+	bne cloop
+	rts
+

@@ -8,6 +8,7 @@ SBRK - set a memory block in the current task's memory mapping
 == SYNOPSIS
 Input::
 	* C=1 - set the new size of available memory for an environment
+		** AC = new required length of available memory, in 256 byte blocks
 	* C=0 - return the length of available memory in task, in 256 byte blocks
 Call::
 	jsr SBRK

@@ -21,45 +21,8 @@
 
 ****************************************************************************/
 
+/************* end of ROM executables                   */
 
-#ifndef ROM
+          .word -1
 
-#include  "kdefs.def"
-#include  "kernel.i65"
-
-          ;.word $700
-          *=$700
-          
-/*#define   NOPRG*/
-
-#endif
-
-          
-/*        Device-Block        */
-
-          .(
-
-          .word endd
-          .byt PK_DEV+$80
-          .word devstart
-	  .dsb P_NAME - P_RAM, $ff
-          .asc "devices",0,0
-
-devstart
-
-#define	CONSOLE_DEVICE	"devices/con_csa.a65"
-#include  "devices/console.a65"
-
-#include  "devices/par.a65"
-#include  "devices/nulldev.a65"
-#include  "devices/spooler.a65"
-
--sernr = "1"
-
-#define UARTBASE $e830
-/*#include  "devices/ser_uart.a65"*/
-
-          .word $ffff
-
-endd      .)
 

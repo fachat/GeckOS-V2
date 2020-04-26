@@ -1,0 +1,107 @@
+/*
+ * copy over the PET ROMs into video board RAM
+ * and run from there
+ *
+ * BIOS board RAM is $00000-$07fff
+ * BIOS board ROM is $08000-$0ffff (except for I/O area)
+ * video RAM board RAM at $10000-$1ffff
+ */
+
+p1=$01
+p2=$03
+
+tstpage	=$9000
+dash	=$8000+400
+
+	.word $0401
+	*=$0401
+
+
+	.word link
+	.word 10
+	.byt $9e, "1040", 0
+link	.word 0
+
+	.dsb 1040-*, $ff
+
+	sei
+	jsr saveptr
+
+	lda #5		; 5 blocks of 4k
+	sta cnt
+
+	lda #0		; ptr lo byte 
+	sta p1
+	sta p2
+
+	lda #$b0	; hi byte start of copy address
+	sta p2+1
+	
+loop	lda p2+1	; set memory mapping
+	lsr
+	lsr
+	lsr
+	lsr
+	ora #$10
+	sta $eff9
+
+	jsr copy
+
+	dec cnt
+	bne loop
+
+	ldy #$0b
+	lda #$1b
+mmuset	sta $eff0,y
+	iny
+	clc
+	adc #1
+	cpy #16
+	bcc mmuset
+
+	jsr restptr
+	
+	; done
+	cli
+	rts
+	
+restptr	; restore zp pointer
+	lda tmp1
+	sta p1
+	lda tmp1+1
+	sta p1+1
+	lda tmp2
+	sta p2
+	lda tmp2+1
+	sta p2+1
+	rts
+
+copy	; copy a 4k page	
+	lda #$90
+	sta p1+1
+	ldx #16
+	ldy #0
+cploop	lda (p2),y
+	sta (p1),y
+	iny
+	bne cploop
+	inc p1+1
+	inc p2+1
+	dex
+	bne cploop
+	rts
+	
+saveptr ; save zeropage ptr
+	lda p1
+	sta tmp1
+	lda p1+1
+	sta tmp1+1
+	lda p2
+	sta tmp2
+	lda p2
+	sta tmp2+1
+	rts
+
+tmp1	.word 0
+tmp2	.word 0
+cnt	.byt 0
