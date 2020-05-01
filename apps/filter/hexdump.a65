@@ -44,7 +44,6 @@ first
 	bpl short
 	lda #16
 short	sta optlong
-	jsr crlfout
 
 	jsr fileloop
 
