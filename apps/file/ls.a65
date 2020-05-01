@@ -151,13 +151,13 @@ showdate .(
 	pla
 	jsr intout
 	lda #"-"
-	jsr stdout
+	jsr chrout
 	lda entry+FD_MDATE+1
 	jsr byte2bcd
 	ldy #2		; we only need two digits
 	jsr bcd0out
 	lda #"-"
-	jsr stdout
+	jsr chrout
 	lda entry+FD_MDATE+2
 	jsr byte2bcd
 	ldy #2
@@ -177,7 +177,7 @@ showdate .(
 	.)
 
 twoxout	.(
-	jsr stdout
+	jsr chrout
 	tya
 &twoout	jsr byte2bcd
 	ldy #2
@@ -245,7 +245,7 @@ showperms .(
 permout	.(
 	bcs out
 	lda #"-"
-out	jmp stdout
+out	jmp chrout
 	.)
 
 	.data
