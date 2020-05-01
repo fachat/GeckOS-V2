@@ -4,7 +4,7 @@ MANPAGES=../../../*/*/*.1.adoc
 apps = lsh lmon
 APPSDIR=../../../apps
 
-sysapps = ps kill ontty #slipd
+sysapps = ps kill ontty lsmem
 SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls mv
