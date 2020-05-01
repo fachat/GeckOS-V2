@@ -1,16 +1,7 @@
 /****************************************************************************
    
     GeckOS/A65 Version 2.0.0
-    lsenv program - run a program on another console
-
-    This program is used to set up the standard I/O streams, including
-    the - otherwise hidden - STDCIN, that keeps being connected to the 
-    console even with input redirection. This is used e.g. by "more" to
-    read commands from it, in an analogue to the original unix'es 
-    reading from STDERR.
-
-    In future versions this program may also set things like line 
-    discipline etc.
+    lsmem program - display information on memory usage
 
     Copyright (C) 2020 Andre Fachat 
 
