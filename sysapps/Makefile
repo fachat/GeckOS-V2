@@ -1,6 +1,6 @@
 
 
-files= ps kill ontty
+files= ps kill ontty lsmem
 
 all: ${files}
 

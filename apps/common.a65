@@ -58,6 +58,7 @@
  *	spout - print a space on stdout
  *	stdout - print a character on stdout
  *			in: a value to be printed
+			preserves: xr,yr
  *
  *	wordout - print integer value in a/y (using word2bcd, bcdout)
  *			(print with variable length, i.e. without filler)
