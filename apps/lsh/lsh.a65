@@ -1136,13 +1136,13 @@ next	asl
 	.data
 	; immediate execution
 bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
-	.word bic_dup, bic_help, bic_source
+	.word bic_dup, bic_help, bic_source, bic_lsenv
 	; background execution after parsing
 bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
-	.word       0, bgc_help,          0
+	.word       0, bgc_help,          0, bgc_lsenv
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0, "help",0, "source", 0
+	.asc "dup",0, "help",0, "source", 0, "lsenv", 0
 	.byt 0
 	.text
 
@@ -1167,6 +1167,38 @@ bgc_help .(
 	jsr fclose
 	lda #E_OK
 	rts
+	.)
+
+	; print the set of environment variables
+bgc_lsenv .(
+	jsr bgpull
+	sta buf+1
+
+	jsr getenvp
+	sta cp
+	sty cp+1
+
+	ldx buf+1
+
+	ldy #0
+lse1	lda (cp),y
+	beq next
+	jsr fputc
+	iny
+	bne lse1
+	beq lsend
+next	iny
+	beq lsend
+	lda (cp),y
+	beq lsend
+	jsr xcrlfout
+	jmp lse1
+lsend
+	ldx buf+1
+	jsr fclose
+	lda #E_OK
+	rts
+
 	.)
 
 	; set the shell's stdx streams to the redirected streams from the dup command
@@ -1263,6 +1295,7 @@ bic_echo .(
 	sty cp+1
 
 	jsr bgpushpar
+&bic_lsenv
 &bic_help
 &bic_uname
 	ldx buf+1 
