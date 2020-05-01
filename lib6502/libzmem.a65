@@ -91,7 +91,7 @@ l1	sta zmem,y
 	jsr GETPID
 	pla
 	tay
-	inx
+	inx		; do not use PID=0, move one up
 	txa
 	pha
 	tya
