@@ -369,7 +369,7 @@ msys      pla
 	sec
 	lda #E_NOMEM
 	rts
-ok	lda #>ROMSTART		; return available memory
+ok	lda #>Memend		; return available memory
 	clc
 	rts
 	.)
