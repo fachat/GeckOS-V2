@@ -173,7 +173,10 @@ next	lda #" "
 	jsr waitpid
 	jmp loop
 
-errclr	cmp #E_EOF
+errclr	pha
+	jsr lcrlfout
+	pla
+	cmp #E_EOF
 	bne noteof
 	jsr source_pull	; check if we are "source'ing" a file, and restore old STDIN
 	bcc loop
@@ -230,12 +233,15 @@ getcmd	.(
 tx	.byt 0
 ty	.byt 0		; index in ap (cmdline arguments)
 ta	.byt 0
+didrd	.byt 0		; we did read, so successful parse gives crlf
 	.zero
 &ap	.word 0
 	.text
 
 	ldx #<-1
 	stx waitfl
+	inx
+	stx didrd
 
 	bit ispiped
 	bmi contpipe	; ok, piped
@@ -272,6 +278,8 @@ docmd	; pass a/y	; warning, argp is used outside loop
 	jsr tokenize
 	sta ap
 	sty ap+1
+
+	dec didrd	; mark for crlf at exit
 
 #ifdef LSH_DEBUG
 	lda #10
@@ -380,7 +388,10 @@ out1	jmp redir_out
 
 err1	jmp redir_err
 
-ende	
+ende	bit didrd
+	bpl nord
+	jsr lcrlfout
+nord
 	lda #<buf
 	ldy #>buf
 	clc
@@ -643,7 +654,7 @@ readline .(
 instr	.byt 0
 prev 	.byt 0
 	.data
-promptxt .byt 13,10,PROMPTCHAR,0
+promptxt .byt PROMPTCHAR,0
 	.text
 
 	stx instr
@@ -1075,11 +1086,6 @@ nextw2	inc cnt
 	jsr forkto
 	bcc ok
 	pha
-	lda #"?"
-	jsr putc
-	jsr crlfout
-	pla
-	pha
 	jsr hexout
 	jsr spout
 	pla
@@ -1148,6 +1154,9 @@ bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
 
 xcrlfout .(
 	ldx buf+1	; stdout
+	.byt $2c
+&ecrlfout
+	ldx #STDERR
 	lda #13
 	sec
 	jsr fputc
@@ -1194,6 +1203,7 @@ next	iny
 	jsr xcrlfout
 	jmp lse1
 lsend
+	jsr xcrlfout
 	ldx buf+1
 	jsr fclose
 	lda #E_OK
@@ -1644,6 +1654,7 @@ found	ldx #5
 	lda ctabr
 	jsr strerror
 	jsr etxtout
+	jsr ecrlfout
 	jsr decnum
 	jmp checksig
 	.)

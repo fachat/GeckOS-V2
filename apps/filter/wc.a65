@@ -45,8 +45,6 @@ first	.(		; loop over files
 	php
 	pha
 
-	jsr crlfout
-
 	lda nfiles
 	beq endok
 
@@ -185,7 +183,6 @@ trunclast
 	jsr fclose
 r1
 	; print counters
-	jsr crlfout
 	jsr spout
 	lda flines
 	ldy flines+1
@@ -210,6 +207,7 @@ r1
 	ldy argp+1
 	jsr strout
 nofilename
+	jsr crlfout
 	pla
 	cmp #E_EOF
 	bne rde2

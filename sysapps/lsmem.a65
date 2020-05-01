@@ -91,18 +91,18 @@ usagetxt
 	.asc 13,10,0
 
 zerohdr	
-	.asc 13,10,"Zeropage map (per byte)"
+	.asc "Zeropage map (per byte)"
 	.asc 13,10,0
 memhdr	
-	.asc 13,10,"Memory map (approx. per block)"
+	.asc "Memory map (approx. per block)"
 	.asc 13,10,0
 statshdr
-	.asc 13,10,"Memory statistics"
+	.asc "Memory statistics"
 	.asc 13,10,"# zp blk min  max totl"
 	.asc 13,10,0
 
 chainhdr
-	.asc 13,10,"Memory chain"
+	.asc "Memory chain"
 	.asc 13,10,"## addr next blk  len Tsk"
 	.asc 13,10,0
 
