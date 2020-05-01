@@ -56,7 +56,7 @@
  *			in: a value
  * 	crlfout - print cr/lf on stdout
  *	spout - print a space on stdout
- *	stdout - print a character on stdout
+ *	chrout - print a character on stdout
  *			in: a value to be printed
 			preserves: xr,yr
  *
@@ -174,14 +174,14 @@ pa     tya
        ldy #0
 pa1    lda partxt,y
        beq pa2
-       jsr stdout
+       jsr chrout
        iny
        bne pa1
 pa2    pla
        tay
 pa4    lda (argp),y
        beq pa3
-       jsr stdout
+       jsr chrout
        iny
        bne pa4
 pa3    jsr crlfout
@@ -392,9 +392,9 @@ decy	dey
 digit	and #15
 	bne print
 	lda fill
-	jmp stdout
+	jmp chrout
 print 	ora #"0"
-	jsr stdout
+	jsr chrout
 	lda #"0"
 	sta fill
 	rts
@@ -423,7 +423,7 @@ strout	.(
 	ldy #0
 loop	lda (strp),y
 	beq end
-	jsr stdout
+	jsr chrout
 	iny
 	bne loop
 	inc strp+1
@@ -456,7 +456,7 @@ nibble	and #$0f
 	cmp #"9"+1
 	bcc nibok
 	adc #6
-nibok	jmp stdout
+nibok	jmp chrout
 	.)
 
 #endif
@@ -466,7 +466,7 @@ nibok	jmp stdout
 crlfout .(
 
 	lda #13
-	jsr stdout
+	jsr chrout
 	lda #10
 #iflused spout		/* if spout is used, skip following lda */
 	.byt $2c
@@ -479,9 +479,9 @@ crlfout .(
 &spout	lda #" "
 	.)
 #endif	/* spout */
-#iflused stdout
+#iflused chrout
 
-stdout	.(
+chrout	.(
 	stx tx
 	ldx #STDOUT
 	sec

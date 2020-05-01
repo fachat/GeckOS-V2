@@ -169,13 +169,13 @@ free	lda #"-"
 	.byt $2c
 blocked	lda #"#"
 	tax
-	jsr stdout
+	jsr chrout
 	txa
-	jsr stdout
+	jsr chrout
 	txa
-	jsr stdout
+	jsr chrout
 	txa
-	jsr stdout
+	jsr chrout
 n2	lda cnt
 	clc
 	adc #4
@@ -254,7 +254,7 @@ loop	lda cnt
 	jmp next
 free
 	lda #"-"
-	jsr stdout
+	jsr chrout
 
 next	jsr crlfout
 
@@ -354,7 +354,7 @@ eom
 notyet	lda #"#"
 	sta prev
 doprev	lda prev
-	jsr stdout
+	jsr chrout
 doinc
 	inc cnt
 	bne loop
@@ -478,7 +478,7 @@ ploop	txa
 	cmp #$3a
 	bcc pl1
 	adc #6
-pl1	jsr stdout
+pl1	jsr chrout
 	jsr spout
 	jsr prt_line
 	inx
@@ -486,7 +486,7 @@ pl1	jsr stdout
 	bcc ploop
 	; print free line
 	lda #"-"
-	jsr stdout
+	jsr chrout
 	jsr spout
 	
 	ldx #FREETASK
@@ -616,9 +616,9 @@ ptl 	cpx numtask
 	cmp #$3a
 	bcc novfl
 	adc #6
-novfl	jsr stdout
+novfl	jsr chrout
 	lda #":"
-	jsr stdout
+	jsr chrout
 	
 	; now find the task ID in SENDBUF and print ID and name
 	lda tasks,x
@@ -639,7 +639,7 @@ chkloop	tay
 
 nameout	lda PCBUF+TN_NAME,y
 	beq end
-	jsr stdout
+	jsr chrout
 	iny
 	cpy tmp2
 	bcc nameout
@@ -656,7 +656,7 @@ notthis	tya
 	bcc chkloop
 
 	lda #"-"
-	jsr stdout
+	jsr chrout
 	ldy #8
 spo	jsr spout
 	dey
