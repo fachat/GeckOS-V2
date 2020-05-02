@@ -548,6 +548,7 @@ stre_idx
 	.byt E_FNODRV, E_FNOPATH, E_FILLNAM, E_FNAMLEN, E_FNOFIL, E_FWPROT, E_FILEXIST
 	.byt E_FDISKFULL, E_FDNEMPTY, E_FLOCKED, E_FMEDIA, E_FLOGICAL, E_FINTERNAL
 	.byt E_ILLADDR, E_NOFILE, E_NOSEEK, E_NOREAD, E_NOWRITE, E_FVERSION
+	.byt E_FILETYPE, E_DISKTYPE
 stre_idx_end
 stre_addr
 	.word se_ok, se_notimp, se_config, se_illpar, se_nomem
@@ -558,6 +559,7 @@ stre_addr
 	.word se_fnodrv, se_fnopath, se_fillnam, se_fnamlen, se_fnofil, se_fwprot, se_filexist
 	.word se_fdiskfull, se_fdnempty, se_flocked, se_fmedia, se_flogical, se_finternal
 	.word se_illaddr, se_nofile, se_noseek, se_noread, se_nowrite, se_fversion
+	.word se_filetype, se_disktype
 
 stre_unknown	.asc "UNKNOWN",0
 se_ok		.asc "OK",0
@@ -606,7 +608,8 @@ se_noseek	.asc "NOT SEEKABLE",0
 se_noread	.asc "READ WOULD BLOCK",0
 se_nowrite	.asc "WRITE WOULD BLOCK",0
 se_fversion	.asc "FILE VERSION NOT SUPPORTED",0
-
+se_filetype	.asc "FILE TYPE",0
+se_disktype	.asc "DISK TYPE",0
 	.)
 #endif
 
