@@ -48,7 +48,7 @@
 
 /*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
-#define	ROMSTART	$8400	/* where the ROM starts */
+#define	ROMSTART	$9000	/* where the ROM starts */
 
 #define	RAMSTART	1
 
@@ -151,7 +151,7 @@
 
 #define	STDIOADDR	$d000
 
-          .word $2400		/* load address */
+          .word $3000		/* load address */
 
 .(
 
@@ -195,6 +195,7 @@
 
 
 /************* mon - OS/A 1 old style monitor/shell	*/
+#if 0
 
 #define	MON_SHEXE $c0		/* ROM executable flag */
 #define	MON_MONEXE 0		/* ROM executable flag */
@@ -204,7 +205,7 @@
 
 #include  "sysapps/mon/mon.a65"
 
-
+#endif
 /************* boot slipd from BOOTDRV, wwwdrv c and stderr to video3	*/
 
 #ifdef INETSTART
@@ -285,7 +286,7 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$1680
+Memstart  =$1600
 Memend	  =ROMSTART
 Zerostart =$70
 
