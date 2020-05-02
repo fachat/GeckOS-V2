@@ -35,11 +35,6 @@
 #include "chips/tpi6525.i65"
 #include "chips/cia6526.i65"
 
-	.data
-byte      .byt 0
-bytfl     .byt 0
-eoifl     .byt 0
-	.text
 
         /* when we get the IEC semaphore, we have nothing to do left,
            assuming that no other program changes the I/O lines. 
