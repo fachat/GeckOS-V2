@@ -115,20 +115,6 @@ start     .word ende            ; pointer to end of file in ROM
 #define   FT_MOD_DIR     4
 #define   ANZ_FT         16
 
-#if 0
-
-#ifndef NOMMU
--syszp    =$40
--sysmem   =$300
--sysblk   =$800
-#endif
-
-#echo fsiec:
-#print syszp
-#print sysmem
-#print sysblk
-
-#endif
 
 	.data
 IECBUF	  .dsb MAXLEN
