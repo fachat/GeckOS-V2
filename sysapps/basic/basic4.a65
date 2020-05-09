@@ -60,6 +60,7 @@ usagetxt
 
 	.text
 
+	; TODO use exestart to run a command on startup
 
 BASIC     jsr getopts
 	  bcc ok
@@ -733,13 +734,18 @@ lfff3     =$fff3
 
 romanf    =*
 
+
 	.zero
+INT       .word 0	; =$14      ;.w
+
+STRSTCK   .dsb 9,0	; =$19     ; [0,+8]
+STRSTCK_END =STRSTCK+9	; =$22
+
 l0022     .word 0	; =$22
 l0023     =l0022+1	; =$23
 l0024     .word 0	; =$24
 l0025     =l0024+1	; =$25
           
-INT       .word 0	; =$14      ;.w
 
 BASANF    .word 0	; =$2b      ;.w
 STRANF    .word 0	; =$33      ;.w
@@ -791,7 +797,6 @@ ACTIO     .byt 0	; =$13
 
 STRPTR    .byt 0	; =$16
 STRZEI    .word 0	; =$17     ;.w
-STRSTCK   .dsb 9,0	; =$19     ; [0,+8]
 
 
 
@@ -2077,7 +2082,10 @@ la38a tsx
  105 cmp #$81:bne la3b7:lda FORVAR+1:bne la3a4:lda stack+2,x
  106 sta FORVAR:lda stack+3,x:sta FORVAR+1:la3a4 cmp stack+3,x:bne la3b0
  107 lda FORVAR:cmp stack+2,x:beq la3b7:la3b0 txa :clc 
- 108 adc #$12:tax :bne la38f:la3b7 rts :la3b8 jsr la408
+ 108 adc #$12:tax :bne la38f:la3b7 rts :
+
+; block move to create space
+la3b8 jsr la408
  109 sta ARREND:sty ARREND+1:la3bf sec :lda akku3+3:sbc NEWPTR
  110 sta l0022:tay :lda akku3+4:sbc NEWPTR+1:tax 
  111 inx :tya :beq la3f3:lda akku3+3:sec 
@@ -2085,14 +2093,63 @@ la38a tsx
  113 la3dc lda akku3+1:sbc l0022:sta akku3+1:bcs la3ec:dec akku3+2
  114 bcc la3ec:la3e8 lda (akku3+3),y:sta (akku3+1),y:la3ec dey :bne la3e8
  115 lda (akku3+3),y:sta (akku3+1),y:la3f3 dec akku3+4:dec akku3+2:dex 
- 116 bne la3ec:rts :la3fb asl :adc #$3e:bcs la435
- 117 sta l0022:tsx :cpx l0022:bcc la435:rts 
- 118 la408 cpy STRANF+1:bcc la434:bne la412:cmp STRANF:bcc la434
- 119 la412 pha :ldx #$09:tya :la416 pha :lda akku3,x
- 120 dex :bpl la416:jsr lb526:ldx #$f7:la421 pla 
- 121 sta FAC,x:inx :bmi la421:pla :tay 
- 122 pla :cpy STRANF+1:bcc la434:bne la435:cmp STRANF
- 123 bcs la435:la434 rts :la435 ldx #$10:la437 jmp (l0300):la43a txa 
+ 116 bne la3ec:rts
+; check for space on CPU stack
+; in AC has half the number of needed bytes
+la3fb 
+	asl
+	; adds lower bound of CPU stack (for use of 0x00ff buffer)
+	; and the used memory on stack, then compares with actual
+	; stack ptr. If clash - out of memory
+	; in GeckOS we either don't have the limit, or can use
+	; down to $0100 as we moved the buffer
+	;adc #$3e
+	;bcs la435	; oom
+ 	sta l0022
+	tsx 		; take stack
+	cpx l0022	; compare
+	bcc la435	; stack lower, then oom
+	rts 
+
+; find place in memory
+; a/y address up to which memory is needed
+la408 	cpy STRANF+1	; compare with start of string ptr	
+	bcc la434	; lower? then done
+	bne la412
+	cmp STRANF
+	bcc la434	; done
+	; requested memory higher than start of strings
+	; (that are stored at end of memory, so STRANF is lower
+	; bound of used string memory)
+la412 	pha 
+	; save YR, [akku3+9,akku3+1] on stack
+	; i.e. almost all of akku3 and akku4
+	; $60, $5f, ..., $58
+	ldx #$09:tya
+la416 	pha :lda akku3,x
+ 	dex :bpl la416
+
+	jsr lb526	; call garbage collection
+
+	; restore [FAC-9,FAC-1] from stack
+	; $58, $57, ..., $60
+	; restore [akku3+10-9,akku3+10-1] from stack
+	; relies on sta FAC,x not overflowing into page 1
+	ldx #$f7
+la421 	pla 
+	sta akku3+10,x:inx :bmi la421
+
+	pla :tay 
+	pla
+	cpy STRANF+1
+	bcc la434; done
+	bne la435; oom
+	cmp STRANF
+	bcs la435; oom
+la434 	rts
+	; out of memory
+la435 ldx #$10:la437 jmp (l0300)
+la43a txa 
  124 asl :tax :lda la328-2,x:sta l0022:lda la328-1,x
  125 sta l0022+1:jsr lffcc:lda #$00:sta ACTIO:jsr laad7
  126 jsr lab45:ldy #$00:la456 lda (l0022),y:pha :and  #$7f
@@ -2246,7 +2303,7 @@ MO2       jmp laaca
  lclr bne la68d:la660 jsr lffe7
  180 la663 lda BASEND:ldy BASEND+1:sta STRANF:sty STRANF+1:lda VARANF
  181 ldy VARANF+1:sta ARRANF:sty ARRANF+1:sta ARREND:sty ARREND+1
- 182 la677 jsr la81d:la67a ldx #$19:stx STRPTR:pla :tay 
+ 182 la677 jsr la81d:la67a ldx #STRSTCK:stx STRPTR:pla :tay 
  183 pla 
 	;ldx #$fa
 	ldx stackp
@@ -2819,7 +2876,8 @@ listfl    .byt 0
  503 lb2f2 sta l0071+1:iny :pla :tax :sta FAC+3
  504 pla :sta FAC+4:cmp (NEWPTR),y:bcc lb30e:bne lb308
  505 iny :txa :cmp (NEWPTR),y:bcc lb30f:lb308 jmp lb245
- 506 lb30b jmp la435:lb30e iny :lb30f lda l0071+1:ora l0071:clc 
+ 506 lb30b 
+	jmp la435:lb30e iny :lb30f lda l0071+1:ora l0071:clc 
  507 beq lb320:jsr lb34c:txa :adc FAC+3:tax 
  508 tya :ldy l0022:lb320 adc FAC+4:stx l0071:dec DIM
  509 bne lb2f2:sta l0071+1:ldx #$05:lda VARNAME:bpl lb331
@@ -2878,7 +2936,7 @@ listfl    .byt 0
  551 lb4a8 clc :lb4a9 sty FAC:tya :adc ARG+6:sta l0071
  552 ldx ARG+7:bcc lb4b5:inx :lb4b5 stx l0071+1:lda ARG+7
  553 beq lb4bf:cmp #>l0200:bne lb4ca:lb4bf tya :jsr lb475
- 554 ldx ARG+6:ldy ARG+7:jsr lb688:lb4ca ldx STRPTR:cpx #$22
+ 554 ldx ARG+6:ldy ARG+7:jsr lb688:lb4ca ldx STRPTR:cpx #STRSTCK_END
  555 bne lb4d5:ldx #$19:lb4d2 jmp la437:lb4d5 lda FAC:sta $00,x
  556 lda FAC+1:sta $01,x:lda FAC+2:sta $02,x:ldy #$00
  557 stx FAC+3:sty FAC+4:sty ARG+7:dey :sty STRINGFL
@@ -3269,8 +3327,9 @@ lbc98 jmp lbc31
  883 sta FAC+4:stx FAC+1:ldx FAC+2:lda FAC+3:sta FAC+2
  884 stx FAC+3:le0e3 lda #$00:sta FAC+5:lda FAC:sta ARG+7
  885 lda #$80:sta FAC:jsr lb8d7:ldx #$8b:ldy #$00
- 886 le0f6 jmp lbbd4:le0f9 cmp #$f0:bne le104:
-	.byt 2
+ 886 le0f6 jmp lbbd4:
+le0f9 cmp #$f0:bne le104:
+	.byt 2	; should not set BASEND like this?
 	sty BASEND+1:stx BASEND
  887 jmp la663:le104 tax :bne le109:ldx #$1e:le109 jmp la437
  888 le10c jsr lffd2:bcs le0f9:rts :/* le112 jsr lffcf:bcs le0f9
@@ -3498,32 +3557,6 @@ lbc98 jmp lbc31
 	jsr le422
 
 	jmp le386
-#if 0
-	; TODO stack
-	ldx #$fb
-	txs 
-       bne le386
-#endif
-	; else
-#if 0
-       ldy #<-1
- lexe1 iny
-       lda PCBUF,y
-       beq le386
-       cmp #" "
-       bne lexe1
-       ldx #<-1
- lexe2 iny
-       inx
-       lda PCBUF,y
-       sta l0200,x
-       bne lexe2
-       lda #<l0200-1
-       sta BASZEI
-       lda #>l0200-1
-       sta BASZEI+1
-       jmp exestart
-#endif
 
 	; CHRGET routine ROM copy (to be copied to actual CHRGET)
 le3a2 inc BASZEI:bne le3a8:inc BASZEI+1:le3a8 lda $ea60
@@ -3550,7 +3583,7 @@ le3bf lda #$4c:sta l0054:sta lusr:
 	lda #$00:sta FAC+7
 	sta ACTIO:sta STRZEI+1:
 	ldx #$01:stx l0200-3:stx l0200-4
-	ldx #$19:stx STRPTR:
+	ldx #STRSTCK:stx STRPTR:
 	; set BASIC memory limits
 	sec :jsr lff9c:stx BASANF
 	sty BASANF+1:
@@ -3569,7 +3602,7 @@ le422 	lda BASANF
 	jsr la408
 	lda #<le473:ldy #>le473
 	jsr xstrout		; print COMMODORE BASIC message
-.byt 2
+
 	lda BASEND:sec :sbc BASANF:tax :lda BASEND+1
 	sbc BASANF+1
 	jsr adrout		; print bytes free
