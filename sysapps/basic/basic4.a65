@@ -45,6 +45,8 @@ optsadh	.byt >optm-1
 basmem	.word 0
 baslen	.word 4096
 
+stackp	.byt 0		; initial stack pointer
+
 usagetxt 
 	.asc 13,10,"Usage:"
 	.asc 13,10,"  basic -m <n>"
@@ -52,6 +54,8 @@ usagetxt
 	.asc 13,10,"Options:"
 	.asc 13,10," -m <n>"
 	.asc 13,10,"      Using <n> kB or BASIC memory"
+	.asc 13,10,"      Defaults to 4k."
+	.asc 13,10,"-?    Print this help."
 	.asc 13,10,0
 
 	.text
@@ -74,6 +78,9 @@ ok
 	bcs erroptm2
 	sta basmem
 	sty basmem+1
+
+	tsx
+	stx stackp
 
 	  jsr inifiles
           jsr inidup
@@ -729,7 +736,8 @@ romanf    =*
 	.zero
 l0022     .word 0	; =$22
 l0023     =l0022+1	; =$23
-l0024     .byt 0	; =$24
+l0024     .word 0	; =$24
+l0025     =l0024+1	; =$25
           
 INT       .word 0	; =$14      ;.w
 
@@ -785,7 +793,6 @@ STRPTR    .byt 0	; =$16
 STRZEI    .word 0	; =$17     ;.w
 STRSTCK   .dsb 9,0	; =$19     ; [0,+8]
 
-l0025     .byt 0	; =$25
 
 
 VARANF    .word 0	; =$2d      ;.w
@@ -807,7 +814,6 @@ l0054     .byt 0	; =$54
 l0055     .word 0	; =$55      ;.w
 
 
-TMPFAC	  .dsb 8, 0	; "akku4+4"
 
 l008b     .dsb 5, 0	; =$8b; last random
 
@@ -2241,7 +2247,12 @@ MO2       jmp laaca
  180 la663 lda BASEND:ldy BASEND+1:sta STRANF:sty STRANF+1:lda VARANF
  181 ldy VARANF+1:sta ARRANF:sty ARRANF+1:sta ARREND:sty ARREND+1
  182 la677 jsr la81d:la67a ldx #$19:stx STRPTR:pla :tay 
- 183 pla :ldx #$fa:txs :pha :tya 
+ 183 pla 
+	;ldx #$fa
+	ldx stackp
+	dex
+
+	txs :pha :tya 
  184 pha :lda #$00:sta NEXTSTAT+1:sta FNFL:la68d rts 
  185 la68e clc :lda BASANF:adc #$ff:sta BASZEI:lda BASANF+1
  186 adc #$ff:sta BASZEI+1:rts 
@@ -3080,24 +3091,37 @@ listfl    .byt 0
  747 lda FAC+2:sta (l0022),y:dey :lda FAC+5:ora #$7f
  748 and  FAC+1:sta (l0022),y:dey :lda FAC:sta (l0022),y
  749 sty ARG+7:rts :lbbfc lda ARG+5:lbbfe sta FAC+5:ldx #$05
- 750 lbc02 lda FAC+7,x:sta TMPFAC,x:dex :bne lbc02:stx ARG+7
- 751 rts :lbc0c jsr lbc1b:lbc0f ldx #$06:lbc11 lda TMPFAC,x:sta FAC+7,x
+ 750 lbc02 lda ARG-1,x:sta FAC-1,x:dex :bne lbc02:stx ARG+7
+ 751 rts :lbc0c jsr lbc1b:lbc0f ldx #$06:lbc11 lda FAC-1,x:sta ARG-1,x
  752 dex :bne lbc11:stx ARG+7:lbc1a rts :lbc1b lda FAC
  753 beq lbc1a:asl ARG+7:bcc lbc1a:lbc23 jsr lb96f:bne lbc1a
- 754 jmp lb938:lbc2b lda FAC:beq lbc38:lbc2f lda FAC+5:lbc31 rol 
- 755 lda #$ff:bcs lbc38:lda #$01:lbc38 rts 
- lsgn jsr lbc2b
- 756 lbc3c sta FAC+1:lda #$00:sta FAC+2:ldx #$88:lbc44 lda FAC+1
- 757 eor  #$ff:rol :lbc49 lda #$00:sta FAC+4:sta FAC+3
- 758 lbc4f stx FAC:sta ARG+7:sta FAC+5:jmp lb8d2:
- labs lsr FAC+5
- 759 rts: lbc5b sta l0024:lbc5d sty l0025:ldy #$00:lda (l0024),y
+ 754 jmp lb938
+
+lbc2b 	lda FAC:beq lbc38
+lbc2f 	lda FAC+5
+lbc31 	rol 
+	lda #$ff:bcs lbc38:lda #$01:lbc38 rts 
+
+lsgn 	jsr lbc2b
+lbc3c 	sta FAC+1:lda #$00:sta FAC+2:ldx #$88:lbc44 lda FAC+1
+	eor  #$ff:rol :lbc49 lda #$00:sta FAC+4:sta FAC+3
+lbc4f 	stx FAC:sta ARG+7:sta FAC+5:jmp lb8d2:
+
+labs 	lsr FAC+5
+	rts 
+
+	; compare FAC with constant pointed to by y/a
+lbc5b 	sta l0024
+lbc5d 	sty l0025:ldy #$00:lda (l0024),y
  760 iny :tax :beq lbc2b:lda (l0024),y:eor  FAC+5
  761 bmi lbc2f:cpx FAC:bne lbc92:lda (l0024),y:ora #$80
  762 cmp FAC+1:bne lbc92:iny :lda (l0024),y:cmp FAC+2
  763 bne lbc92:iny :lda (l0024),y:cmp FAC+3:bne lbc92
  764 iny :lda #$7f:cmp ARG+7:lda (l0024),y:sbc FAC+4
- 765 beq lbcba:lbc92 lda FAC+5:bcc lbc98:eor  #$ff:lbc98 jmp lbc31
+ 765 beq lbcba:
+lbc92 lda FAC+5:bcc lbc98:eor  #$ff:
+lbc98 jmp lbc31
+
  766 lbc9b lda FAC:beq lbce9:sec :sbc #$a0:bit FAC+5
  767 bpl lbcaf:tax :lda #$ff:sta FAC+7:jsr lb94d
  768 txa :lbcaf ldx #FAC:cmp #$f9:bpl lbcbb:jsr lb999
@@ -3456,12 +3480,32 @@ listfl    .byt 0
           .byt $7f,$aa,$aa,$aa,$13
           .byt $81,$00,$00,$00,$00
 
- le37b jsr lffcc
-       lda #$00:sta ACTIO:jsr la67a:cli :le386 ldx #$80
-       jmp (l0300)
- le38b txa :bmi le391:jmp la43a:le391 jmp ready
- le394 jsr le453:jsr le3bf:jsr le422:ldx #$fb:txs 
+ le37b 	jsr lffcc
+       	lda #$00
+	sta ACTIO
+	jsr la67a
+	cli
+ le386 	ldx #$80
+       	jmp (l0300)	; $e38b
 
+ le38b 	txa 
+	bmi le391
+	jmp la43a
+ le391 	jmp ready
+
+ le394 	jsr le453
+	jsr le3bf
+	jsr le422
+
+	jmp le386
+#if 0
+	; TODO stack
+	ldx #$fb
+	txs 
+       bne le386
+#endif
+	; else
+#if 0
        ldy #<-1
  lexe1 iny
        lda PCBUF,y
@@ -3479,8 +3523,7 @@ listfl    .byt 0
        lda #>l0200-1
        sta BASZEI+1
        jmp exestart
-       
-       ;bne le386
+#endif
 
 	; CHRGET routine ROM copy (to be copied to actual CHRGET)
 le3a2 inc BASZEI:bne le3a8:inc BASZEI+1:le3a8 lda $ea60
@@ -3521,15 +3564,26 @@ le3bf lda #$4c:sta l0054:sta lusr:
 le421 	rts
 
 	; further init
-le422 lda BASANF
- 965 ldy BASANF+1:jsr la408:lda #<le473:ldy #>le473:jsr xstrout
+le422 	lda BASANF
+ 	ldy BASANF+1
+	jsr la408
+	lda #<le473:ldy #>le473
+	jsr xstrout		; print COMMODORE BASIC message
 .byt 2
- 966 lda BASEND:sec :sbc BASANF:tax :lda BASEND+1
- 967 sbc BASANF+1:jsr adrout:lda #<le460:ldy #>le460:jsr xstrout
- 968 jmp la644
+	lda BASEND:sec :sbc BASANF:tax :lda BASEND+1
+	sbc BASANF+1
+	jsr adrout		; print bytes free
+
+	lda #<le460:ldy #>le460
+	jsr xstrout		; print BYTES FREE text
+
+	jmp la644
+
  le447    .word le38b,la483,la57c,la71a,la7e4,lae86 
+
  le453 ldx #$0b
  le455 lda le447,x:sta l0300,x:dex :bpl le455:rts
+
           .byt 0
  le460    .byt " BASIC BYTES FREE",13,10,0
  le473    .byt TC_FF,13,"    **** COMMODORE 64 BASIC V2 ****",13,10,10
