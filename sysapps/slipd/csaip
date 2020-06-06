@@ -20,7 +20,8 @@
 # as a minimum slip daemon that uses "a:ser1" as I/O, which is the 9600 baud userport on the C64 arch.
 #
 
-device=/dev/cua2
+#device=/dev/cua2
+device=/tmp/viceser
 force=0
 
 while [[ $# -gt 0 ]]; do

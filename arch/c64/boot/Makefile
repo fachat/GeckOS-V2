@@ -52,8 +52,8 @@ osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} c64rom boot loader index.
 emurun: osa.d64
 	${X64} -autostart osa.d64
 
-emuslip: all
-	x64+rs232 -kernal ~/csa/tmp/kernalb -speed 200
+emuslip: osa.d64
+	${X64} -rsuser -rsuserdev 2 -rsuserbaud 9600 -rsdev3 "|socat - PTY,link=/tmp/viceser" -autostart osa.d64
 
 ##############################################################################
 #
