@@ -32,6 +32,8 @@
  *			      optsflg - list of option bytes (pre-filled with zero)
  *					in the same order as optslst
  *					will be set to $ff when option is set
+ *			      optsadl/optsdh - list of low/hi address-1 of a long option handlers
+ *					(this is optional, use see below)
  *			out: c=0	no error
  *			     y 		on c=0, (argp),y points to either next arg or zerobyte
  *			     c=1 ac="?"	print help
@@ -56,9 +58,14 @@
  *			in: a value
  * 	crlfout - print cr/lf on stdout
  *	spout - print a space on stdout
+ *
  *	chrout - print a character on stdout
  *			in: a value to be printed
-			preserves: xr,yr
+ *			preserves: xr,yr
+ *
+ * 	NOTE: 	if chrout is already defined, it will not create an error,
+ *		instead the given chrout will be used. So it can be overwritten
+ *		and the library used for non-lib6502 programs
  *
  *	wordout - print integer value in a/y (using word2bcd, bcdout)
  *			(print with variable length, i.e. without filler)
@@ -479,8 +486,12 @@ crlfout .(
 &spout	lda #" "
 	.)
 #endif	/* spout */
+	; fall through
 #iflused chrout
 
+#ifldef chrout
+	jmp chrout
+#else
 chrout	.(
 	stx tx
 	ldx #STDOUT
@@ -492,6 +503,7 @@ chrout	.(
 tx	.byt 0
 	.text
 	.)
+#endif
  
 #endif
 
