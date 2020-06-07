@@ -112,6 +112,8 @@
  *			   C=1        - error number of found, should be printed
  */
 
+	.text
+
 #iflused getopts
 
 	; parse command line options
