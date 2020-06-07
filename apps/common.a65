@@ -44,9 +44,10 @@
  *			    y         - pointer in string where value starts
  *			out: c=1      - parse error
  *			     c=0      - parse ok
- *			     Y        - pointer to terminating zerobyte after arg
+ *			     Y        - pointer to non-digit char or terminating zerobyte after arg
  *			     AC	      - value
  *			ref: BIN      - temporary value
+ *			keep: X	      - X is not modified
  *
  *	strout - print a string on stdout
  *			in: a/y pointer to zero-terminated string
@@ -204,75 +205,27 @@ optsadl .byt <pa-1,0,0
 
 #endif	/* getopts */
 
-/***********************************************************/
-
-#iflused parsebyte
-
-parsebyte .(
-	lda #0
-	sta BIN
-nextb
-	lda (argp),y
-	beq end
-	; multiply BIN by 10
-	asl BIN
-	bcs overflow
-	lda BIN
-	asl BIN
-	bcs overflow
-	asl BIN
-	bcs overflow
-	adc BIN
-	bcs overflow
-	sta BIN
-	lda (argp),y
-	and #$0f
-	adc BIN
-	bcs overflow
-	sta BIN
-	iny
-	bne nextb
-overflow
-end
-	lda BIN
-	rts
-	.)
-
-#endif
-
-/***********************************************************/
-
-#iflused wordout
-
-wordout	.(
-	sta BIN
-	sty BIN+1
-	jsr word2bcd
-	ldy #5
-	lda BCD+2
-	bne out 
-	dey
-	lda BCD+1
-	and #$f0
-	bne out
-	dey
-	lda BCD+1
-	bne out
-	dey
-	lda BCD
-	and #$f0
-	bne out
-	dey
-out	jmp bcdout
-	.)
-
-#endif
 
 /***********************************************************/
 
 #iflused long2bcd
 
 ; algorithm adapted from http://www.6502.org/source/integers/hex2dec-more.htm
+
+	; uses BIN, .., BIN+3
+	; uses BCD, .., BCD+4
+	; magically allocate required memory if not defined
+#ifldef BIN
+#else
+	.bss
+BIN	.dsb 4
+#endif
+#ifldef BCD
+#else
+	.bss
+BCD	.dsb 5
+#endif
+	.text
 
 long2bcd .(
 	SED		; Switch to decimal mode
@@ -310,7 +263,64 @@ CNVBIT:	ASL BIN+0	; Shift out one bit
 	.)
 #endif
 
+/***********************************************************/
+
+#iflused wordout
+
+	; uses BIN, BIN+1
+	; uses BCD, .., BCD+2
+	; magically allocate required memory if not defined
+#ifldef BIN
+#else
+	.bss
+BIN	.dsb 2
+#endif
+#ifldef BCD
+#else
+	.bss
+BCD	.dsb 3
+#endif
+	.text
+
+wordout	.(
+	sta BIN
+	sty BIN+1
+	jsr word2bcd
+	ldy #5
+	lda BCD+2
+	bne out 
+	dey
+	lda BCD+1
+	and #$f0
+	bne out
+	dey
+	lda BCD+1
+	bne out
+	dey
+	lda BCD
+	and #$f0
+	bne out
+	dey
+out	jmp bcdout
+	.)
+
+#endif
+
 #iflused word2bcd
+
+	; uses BIN, BIN+1
+	; uses BCD, .., BCD+2
+#ifldef BIN
+#else
+	.bss
+BIN	.dsb 2
+#endif
+#ifldef BCD
+#else
+	.bss
+BCD	.dsb 3
+#endif
+	.text
 
 word2bcd .(
 	SED		; Switch to decimal mode
@@ -341,6 +351,14 @@ CNVBIT:	ASL BIN+0	; Shift out one bit
 
 #iflused byte2bcd
 
+	; uses BCD, BCD+1
+#ifldef BCD
+#else
+	.bss
+BCD	.dsb 2
+#endif
+	.text
+
 byte2bcd .(
 	sed
 	ldx #0
@@ -365,10 +383,61 @@ cnvbit	asl
 
 /***********************************************************/
 
+#iflused parsebyte
+
+	; uses BIN
+#ifldef BIN
+#else
+	.bss
+BIN	.dsb 1
+#endif
+	.text
+
+parsebyte .(
+	lda #0
+	sta BIN
+nextb
+	lda (argp),y
+	beq end
+	cmp #$30
+	bcc end
+	cmp #$3a
+	bcs end
+	; multiply BIN by 10
+	asl BIN
+	bcs overflow
+	lda BIN
+	asl BIN
+	bcs overflow
+	asl BIN
+	bcs overflow
+	adc BIN
+	bcs overflow
+	sta BIN
+	lda (argp),y
+	and #$0f
+	adc BIN
+	bcs overflow
+	sta BIN
+	iny
+	bne nextb
+overflow
+end
+	lda BIN
+	rts
+	.)
+
+M
+#endif
+/***********************************************************/
+
 #iflused bcdout
 
 ; own algorithm. could probably be optimized using http://6502org.wikidot.com/software-output-decimal
 ; y is number of decimal digits to print up to
+
+	; uses unknown number of BCD bytes, so must be defined by app
+
 bcd0out .(
 	lda #"0"
 	.byt $2c
