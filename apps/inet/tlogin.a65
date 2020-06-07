@@ -44,7 +44,7 @@ buf	.dsb BUFLEN
 +main	.(
 	lda #<ltext
 	ldy #>ltext
-	jsr txtout
+	jsr strout
 
 	jsr getline
 	bcs terminate
@@ -56,14 +56,14 @@ buf	.dsb BUFLEN
 
 	lda #<ptext
 	ldy #>ptext
-	jsr txtout
+	jsr strout
 
 	jsr getline
 	bcs terminate
 
 	lda #<etext
 	ldy #>etext
-	jsr txtout
+	jsr strout
 
 	lda #<pw_passwd
 	ldy #>pw_passwd
@@ -80,7 +80,7 @@ buf	.dsb BUFLEN
 
 	lda #<errsh
 	ldy #>errsh
-	jsr txtout
+	jsr strout
 
 terminate
 	jsr clrbuf
@@ -154,27 +154,13 @@ telcmd	sec
 xende	jmp l0
 	.)
 
-txtout	.(
-
-	sta p
-	sty p+1
-	ldy #0
-l0	lda (p),y
-	beq end
-	sec
-	ldx #STDOUT
-	jsr fputc
-	iny
-	bne l0
-end	rts
-	.)
-
 	.data
 
-ltext	; .asc TEL_IAC, TEL_DO, TEL_SUPPRESSGA
-	.asc "^m^jC64 telnet server^m^jOS/A65 operating system^m^j"
-	.asc "http://www.6502.org/users/andre/osa/index.html"
-	.asc "^m^j^m^jlogin: ",0
+ltext	;.asc TEL_IAC, TEL_DO, TEL_SUPPRESSGA
+	.asc 13,10, "C64 telnet server"
+	.asc 13,10, "OS/A65 operating system"
+	.asc 13,10, "http:/","/www.6502.org/users/andre/osa/index.html"
+	.asc 13,10,13,10, "login: ",0
 ptext	.asc "password: ", TEL_IAC, TEL_WILL, TEL_ECHO, 0
 etext	.asc TEL_IAC, TEL_WONT, TEL_ECHO, 13,10,0 
 
@@ -187,6 +173,8 @@ pw_shell
 	.asc "c:lsh",0,0	/* replace this with shell to exec when
 				   login takes place - cwd as given to 
 				   tlogin, i.e. as given to slipd. */
+
+#include "../common.a65"
 
 	.)
 
