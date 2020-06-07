@@ -38,12 +38,26 @@
 * 								     
 **********************************************************************/
 
+;--------------------------------
+; if not defined from build. Can be set using command line option
 #ifndef MY_IP
 #define	MY_IP			192,168,0,64
-/* #define	MY_IP			193,197,89,64 */
-/* #define	MY_IP			0,0,0,0	*/	/* auto-detect */
 #endif
 
+;--------------------------------
+; services
+
+/* One of these two _must_ be defined. They don't work together! */
+#define	NO_FSTCP	/* if defined, do not use fstcp */
+#undef	NO_WWW		/* if defined, do not use internal www server */
+
+#undef	NO_TEST		/* if defined no echo, discard, chargen ports */
+#undef	NO_RSH		/* if defined no telnet port */
+#undef	NO_LIBIP	/* if defined no lib6502 ip connections */
+
+
+;--------------------------------
+; FSTCP host and port
 #ifndef FSTCP_SERVER_IP
 #define FSTCP_SERVER_IP		192,168,0,13
 #endif
@@ -52,25 +66,24 @@
 #define FSTCP_SERVER_PORT 	8090
 #endif
 
+;--------------------------------
+; GeckOS slipd WWW server
 #define WWW_DRV			2
 #define	WWW_DEFAULT		"index.html"
 #define	WWW_PATH		0
 
+;--------------------------------
+; GeckOS telnet port
 #ifndef RSH_PORT
 #define	RSH_PORT		23
 #endif
 
+; default login program to run on telnet connection
 #ifndef RSHNAME
-#define	RSHNAME			"f:tlogin"
+#define	RSHNAME			"c:tlogin"
 #endif
 
-/* One of these two _must_ be defined. They don't work together! */
-#define	NO_FSTCP	/* if defined, do not use fstcp */
-#undef	NO_WWW		/* if defined, do not use internal www server */
-#define	NO_TEST		/* if defined no echo, discard, chargen ports */
-#undef	NO_RSH		/* if defined no telnet port */
-#undef	NO_LIBIP	/* if defined no lib6502 ip connections */
-
+;--------------------------------
 #define	MAXOQUEUE	3
 #define	MTU		1024
 #define	MAXSLOT		24
@@ -309,8 +322,9 @@ helpstr	.asc 13,10, "Usage:"
 	.asc 13,10, " -i <a.b.c.d>   Define local IP addr"
 	.asc 13,10, " -l <logfile>   Output log to file"
 #ifndef NO_RSH
-	.asc 13,10, " -n <name>      Enable telnet login"
-	.asc 13,10, "                under given name"
+	.asc 13,10, " -n <name>      use given login prg"
+	.asc 13,10, "                on telnet login"
+	.asc 13,10, "                (default: ", RSHNAME, ")"
 #endif
 #ifndef NO_WWW
 	.asc 13,10, " -w <drive>     Use drive as source"
@@ -320,6 +334,10 @@ helpstr	.asc 13,10, "Usage:"
 	.asc 13,10, "  slipd a:ser1"
 	.asc 13,10, "    run on device a:ser1, log output"
 	.asc 13,10, "    to stdout"
+#ifndef NO_RSH
+ 	.asc 13,10, "  slipd -n c:ls a:ser1"
+	.asc 13,10, "    when telneting to GeckOS, run ls"
+#endif
 	.asc 13,10, 0
 
 &optslst	.asc "li"
