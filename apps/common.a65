@@ -49,6 +49,15 @@
  *			ref: BIN      - temporary value
  *			keep: X	      - X is not modified
  *
+ *	parseword - parse an int command line parameter into a word
+ *			in: argp      - pointer to string
+ *			    y         - pointer in string where value starts
+ *			out: c=1      - parse error
+ *			     c=0      - parse ok
+ *			     Y        - pointer to non-digit char or terminating zerobyte after arg
+ *			     AC/XR    - value
+ *			ref: BIN      - temporary value
+ *
  *	strout - print a string on stdout
  *			in: a/y pointer to zero-terminated string
  *			refs: strp    - zeropage ptr (will be defined if not def'd)
@@ -383,6 +392,65 @@ cnvbit	asl
 
 /***********************************************************/
 
+#iflused parseword
+
+	; uses BIN, BIN+1
+#ifldef BIN
+#else
+	.bss
+BIN	.dsb 2
+#endif
+	.text
+
+parseword .(
+	lda #0
+	sta BIN
+	sta BIN+1
+nextb
+	lda (argp),y
+	beq end
+	cmp #$30
+	bcc end
+	cmp #$3a
+	bcs end
+	; multiply BIN by 10
+	asl BIN
+	rol BIN+1
+	bcs overflow
+	lda BIN
+	ldx BIN+1
+	asl BIN
+	rol BIN+1
+	bcs overflow
+	asl BIN
+	rol BIN+1
+	bcs overflow
+	adc BIN
+	sta BIN
+	txa
+	adc BIN+1
+	bcs overflow
+	sta BIN+1
+	lda (argp),y
+	and #$0f
+	adc BIN
+	sta BIN
+	bcc next
+	inc BIN+1	; inc does not set C, so it stays set
+	beq overflow
+next	iny
+	bne nextb
+overflow
+end
+	ldx BIN+1
+	lda BIN
+	rts
+	.)
+
+#endif
+
+/***********************************************************/
+
 #iflused parsebyte
 
 	; uses BIN
@@ -427,8 +495,8 @@ end
 	rts
 	.)
 
-M
 #endif
+
 /***********************************************************/
 
 #iflused bcdout
