@@ -151,12 +151,12 @@ argp	.word 0
 	jsr dfltpars
 	jsr getopts
 	bcc nohelp
-	lda #<helpstr	; usage info
+usage	lda #<helpstr	; usage info
 	ldy #>helpstr
 	jmp strout	; and terminate
 nohelp	; now (argp),y should point to the device
 	lda (argp),y
-	beq nodev
+	beq usage
 	tya
 	pha
 
@@ -252,6 +252,26 @@ npar	iny
 	rts
 	.)
 
+opt_i	.(
+	ldx #0
+iloop 	jsr parsebyte
+	bcs syntax
+	sta MyIP,x
+	inx
+	cpx #4
+	bcs end
+	lda (argp),y
+	cmp #"."
+	bne syntax
+	iny
+	bne iloop
+end	clc
+	rts
+syntax	lda #E_SYNTAX
+	sec
+	rts	
+	.)
+
 #ifndef NO_RSH
 opt_n	.(
 	tya
@@ -286,6 +306,7 @@ helpstr	.asc 13,10, "Usage:"
 	.asc 13,10, "Runs SLIP internet protocol on the"
 	.asc 13,10, "given device."
 	.asc 13,10, "Options:"
+	.asc 13,10, " -i <a.b.c.d>   Define local IP addr"
 	.asc 13,10, " -l <logfile>   Output log to file"
 #ifndef NO_RSH
 	.asc 13,10, " -n <name>      Enable telnet login"
@@ -301,7 +322,7 @@ helpstr	.asc 13,10, "Usage:"
 	.asc 13,10, "    to stdout"
 	.asc 13,10, 0
 
-optslst	.asc "l"
+&optslst	.asc "li"
 #ifndef NO_RSH
 	.asc "n"
 #endif
@@ -310,7 +331,8 @@ optslst	.asc "l"
 #endif
 	.asc 0
 
-optsflg	.byt 0	; l
+&optsflg .byt 0	; l
+	.byt 0	; i
 #ifndef NO_RSH
 	.byt 0	; n
 #endif
@@ -318,7 +340,9 @@ optsflg	.byt 0	; l
 optwww	.byt 0	; w
 #endif
 
-optsadh	.byt >opt_l-1
+&optsadh
+	.byt >opt_l-1
+	.byt >opt_i-1
 #ifndef NO_RSH
 	.byt >opt_n-1
 #endif
@@ -326,7 +350,9 @@ optsadh	.byt >opt_l-1
 	.byt >opt_w-1
 #endif
 
-optsadl	.byt <opt_l-1
+&optsadl
+	.byt <opt_l-1
+	.byt <opt_i-1
 #ifndef NO_RSH
 	.byt <opt_n-1
 #endif
@@ -409,7 +435,7 @@ nofstcp
 	jmp libip_rxmess
 #endif
 	.)
-#endif
+#endif	/* RECEIVE_CHECK */
 
 	.data
 MyIP	.byt MY_IP
