@@ -13,7 +13,7 @@ FILESDIR=../../../apps/file
 filter = cat wc more hexdump
 FILTERDIR=../../../apps/filter
 
-inet = tlogind telnet httpd
+inet = tlogin telnet httpd
 INETDIR=../../../apps/inet
 
 XA=xa
