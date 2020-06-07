@@ -33,25 +33,6 @@ tcbno  	.byt 0
 	; server struct:
 	; remote_ip, remote_port, local_port, flag, queue_packet
 
-&user_init .(
-#ifndef NO_TEST
-	jsr tcp_test_init
-#endif
-#ifndef NO_FSTCP
-	jsr fstcp_init
-#endif
-#ifndef NO_WWW
-	jsr wwwsrv_init
-#endif
-#ifndef NO_RSH
-	jsr rsh_init
-#endif
-#ifndef NO_LIBIP
-	jsr libip_init
-#endif
-	rts
-	.)
-
 srv_open .(
 	ldy #TCB_SERVICE
 	lda (tcbp),y

@@ -59,7 +59,7 @@
 ;--------------------------------
 ; FSTCP host and port
 #ifndef FSTCP_SERVER_IP
-#define FSTCP_SERVER_IP		192,168,0,13
+#define FSTCP_SERVER_IP		192,168,0,1
 #endif
 
 #ifndef FSTCP_SERVER_PORT
@@ -118,7 +118,7 @@
 
 /* #define	DEBUG */
 /* #define	DEBUGMEM*/
-#define	DEBUGPKT
+/* #define	DEBUGPKT*/
 /* #define	DEBUGTCP*/
 /* #define	DEBUGTCP2*/
 /* #define	DEBUGICMP*/
@@ -312,6 +312,41 @@ opt_w	.(
 	.)
 #endif
 
+#ifndef NO_FSTCP
+opt_s	.(
+	ldx #0
+iloop 	jsr parsebyte
+	bcs osynt
+	jsr fstcp_setaddr
+	inx
+	cpx #4
+	bcs end
+	lda (argp),y
+	cmp #"."
+	bne osynt
+	iny
+	bne iloop
+end	clc
+	rts
+&osynt	lda #E_SYNTAX
+	sec
+	rts	
+	.)
+
+opt_p	.(
+	jsr parseword
+	bcs osynt
+	pha
+	txa
+	ldx #5
+	jsr fstcp_setaddr
+	pla
+	inx
+	jsr fstcp_setaddr
+	clc
+	rts
+	.)
+#endif
 
 	.data
 helpstr	.asc 13,10, "Usage:"
@@ -330,6 +365,10 @@ helpstr	.asc 13,10, "Usage:"
 	.asc 13,10, " -w <drive>     Use drive as source"
 	.asc 13,10, "                for the WWW server"
 #endif
+#ifndef NO_FSTCP
+	.asc 13,10, " -s <a.b.c.d>   Define fstcp server IP"
+	.asc 13,10, " -p <port>      fstcp server port"
+#endif
 	.asc 13,10, "Example:"
 	.asc 13,10, "  slipd a:ser1"
 	.asc 13,10, "    run on device a:ser1, log output"
@@ -347,6 +386,9 @@ helpstr	.asc 13,10, "Usage:"
 #ifndef NO_WWW
 	.asc "w"
 #endif
+#ifndef NO_FSTCP
+	.asc "sp"
+#endif
 	.asc 0
 
 &optsflg .byt 0	; l
@@ -355,7 +397,11 @@ helpstr	.asc 13,10, "Usage:"
 	.byt 0	; n
 #endif
 #ifndef NO_WWW
-optwww	.byt 0	; w
+	.byt 0	; w
+#endif
+#ifndef NO_FSTCP
+	.byt 0	; s
+	.byt 0	; p
 #endif
 
 &optsadh
@@ -367,6 +413,10 @@ optwww	.byt 0	; w
 #ifndef NO_WWW
 	.byt >opt_w-1
 #endif
+#ifndef NO_FSTCP
+	.byt >opt_s-1
+	.byt >opt_p-1
+#endif
 
 &optsadl
 	.byt <opt_l-1
@@ -376,6 +426,10 @@ optwww	.byt 0	; w
 #endif
 #ifndef NO_WWW
 	.byt <opt_w-1
+#endif
+#ifndef NO_FSTCP
+	.byt <opt_s-1
+	.byt <opt_p-1
 #endif
 
 	.text
@@ -406,12 +460,29 @@ DB("oinit ")
 	jsr iinit
 	bcs exit
 DB("iinit ")
+	jsr udpinit
+	bcs exit
+DB("udpinit ")
 	jsr tcpinit
 	bcs exit
 DB("tcpinit^m^j")
-	jsr udpinit
-	bcs exit
-DB("udpinit^m^j")
+
+	; user init
+#ifndef NO_TEST
+        jsr tcp_test_init
+#endif
+#ifndef NO_FSTCP
+        jsr fstcp_init
+#endif
+#ifndef NO_WWW
+        jsr wwwsrv_init
+#endif
+#ifndef NO_RSH
+        jsr rsh_init
+#endif
+#ifndef NO_LIBIP
+        jsr libip_init
+#endif
 
 doloop
 	jsr mon

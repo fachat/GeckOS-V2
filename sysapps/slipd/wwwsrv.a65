@@ -43,14 +43,23 @@
 #define	WE_TRYAGAIN	2	/* temporary resource shortage */
 #define	WE_NOTFOUND	3	/* file not found */
 
+	.data
 www_srv	.byte 0,0,0,0, 0,0, 80,0, SFL_MULT
         .word wwwsrv_open-1, wwwsrv_queue-1, wwwsrv_loop-1, wwwsrv_signal-1
 
+msg	.asc "Starting HTTP srv at port 80",13,10,0
+
 	.zero
 zp	.word 0
-	.text
 
-&wwwsrv_init .(
+	
+	.text
+	
+&&&wwwsrv_init .(
+	lda #<msg
+	ldy #>msg
+	jsr strout
+
 	lda #<www_srv
 	ldy #>www_srv
 	jmp tcp_listen

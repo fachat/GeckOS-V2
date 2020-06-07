@@ -52,7 +52,7 @@ listenp	.word 0
 
 	.text
 
-&libip_init .(
+&&&libip_init .(
 	lda #LIS_INACTIVE
 	sta lipstate
 
