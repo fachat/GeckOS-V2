@@ -1,0 +1,53 @@
+
+= fputc(1)
+:doctype: manpage
+
+== NAME
+fputc - get a character from a stream
+
+== SYNOPSIS
+Input::
+	* X - stream number
+	* A - data byte to write
+	* C - block flag
+		** C=0 - return immediately
+		** C=1 - block until byte is written
+Call::
+	jsr fputc
+Output::
+	* C=0
+		** AC - the byte sent
+	* C=1
+		** AC - error code 
+
+NOTE: preserves XR and YR
+
+== DESCRIPTION
+Write a byte to a stream.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOFILE:: 
+	file not open
+E_EMPTY::
+	if non-blocking, when no byte is available
+E_NUL::
+	File is closed on other side
+
+
+== SEE ALSO
+link:../lib6501.7.adoc[lib6501(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fopen.1.adoc[fopen(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fread.1.adoc[fread(1)]
+link:fwrite.1.adoc[fwrite(1)]
+link:fseek.1.adoc[fseek(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

@@ -1,0 +1,59 @@
+
+= fread(1)
+:doctype: manpage
+
+== NAME
+fread - get a buffer from a stream
+
+== SYNOPSIS
+Input::
+	* X - stream number
+	* A/Y address of struct: .word buffer_address; .word length_of_buffer
+	* C - block flag
+		** C=0 - return immediately even if nothing or only partially read
+		** C=1 - block until the full buffer is read
+Call::
+	jsr fread
+Output::
+	* C=0
+		** struct given in A/Y is updated with new buffer address and reduced length
+	* C=1
+		** AC - error code 
+
+NOTE: modifies all registers
+
+== DESCRIPTION
+Reads a number of bytes into a given buffer
+
+When calling *fread* a struct is given, that points to information on the buffer. That struct
+contains the address of the buffer and the length of the buffer.
+
+On return, the struct is updated - the buffer address is increased by the number of bytes 
+read, and the length of the buffer is reduced by the number of bytes read.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOFILE:: 
+	file not open
+E_EMPTY::
+	if non-blocking, when no bytes are available
+E_EOF::
+	end of file
+
+
+== SEE ALSO
+link:../lib6501.7.adoc[lib6501(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fopen.1.adoc[fopen(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fwrite.1.adoc[fwrite(1)]
+link:fseek.1.adoc[fseek(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

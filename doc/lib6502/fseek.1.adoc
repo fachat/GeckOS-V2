@@ -1,0 +1,62 @@
+
+= fseek(1)
+:doctype: manpage
+
+== NAME
+fseek - change position within a file
+
+== SYNOPSIS
+Input::
+	* X - stream number
+	* A/Y address of struct: .byt mode; .word offset_lo, offset_hi
+Call::
+	jsr fseek
+Output::
+	* C=0: ok
+	* C=1: AC - error code 
+
+NOTE: modifies all registers
+
+== DESCRIPTION
+Move the read/write pointer within a file.
+
+The address given to the call points to a structure that describes how to move the read/write pointer.
+The first byte is a mode that defines how to move the pointer:
+
+FSEEK_ABS:: 0 - count the position from the beginning of the file (must be positive)
+FSEEK_END:: 1 - count the position from the end of the file (must be negative)
+FSEEK_REL:: 2 - count from the current position (positive or negative)
+
+After that the struct contains a four byte signed integer that describes the offset.
+
+There are, however, files that cannot be seeked, namely character devices. If trying to use fseek on such a device, E_NOSEEK is returned. 
+
+NOTE: If a seekable file is given to STDIN and STDOUT/STDERR, the behaviour is not defined. Only non-seekable files should be given to STDIN and STDOUT/STDERR, when opened read-write.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOFILE:: 
+	file not open
+E_NOSEEK::
+	File cannot be seeked.
+E_ILLPAR::
+	applying the seek offset results in an illegal position (before the start, or after the end of the file).
+
+NOTE: In the case of E_ILLPAR, the resulting position in the file is undefined.
+
+== SEE ALSO
+link:../lib6501.7.adoc[lib6501(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fopen.1.adoc[fopen(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fread.1.adoc[fread(1)]
+link:fwrite.1.adoc[fwrite(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
