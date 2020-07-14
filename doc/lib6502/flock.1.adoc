@@ -1,0 +1,59 @@
+
+= flock(1)
+:doctype: manpage
+
+== NAME
+flock - lock a file for access from other tasks
+
+== SYNOPSIS
+Input::
+	* X: file nr
+	* A: operation
+		** LOCK_SH: shared lock
+		** LOCK_EX: exclusive lock
+		** LOCK_UN: unlock
+	* C=0: don't block
+	* C=1: block until lock can be got
+Call::
+	jsr flock
+Output::
+	* C=0: ok, no error
+	* C=1
+		** AC - error code 
+
+NOTE: modifies all registers
+
+== DESCRIPTION
+The flock call locks a file for other tasks access. If locked shared, then other tasks may also aquire shared locks - for reading, for example. An exclusive lock can only be aquired by exactly one task at a time - for writing. An exclusive lock can not be obtained when there are other shared locks, but a pending exclusive lock blocks all other attempts to lock it, even for shared locks. The flock implementation should be fair, i.e. lock attempts are served in the order they arrive, except that exclusive get served before shared locks. The flock call is optional. If not implemented, return E_NOTIMP 
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOTIMP::
+	Call not available
+E_NOFILE:: 
+	no file descriptor available
+E_LOCKED::
+	if non-blocking, file is already locked
+
+
+== SEE ALSO
+link:../lib6502.7.adoc[lib6502(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fopen.1.adoc[fopen(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fread.1.adoc[fread(1)]
+link:fseek.1.adoc[fseek(1)]
+link:pipe.1.adoc[pipe(1)]
+link:fcntl.1.adoc[fcntl(1)]
+link:fcmd.1.adoc[fcmd(1)]
+link:stddup.1.adoc[stddup(1)]
+link:dup.1.adoc[dup(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

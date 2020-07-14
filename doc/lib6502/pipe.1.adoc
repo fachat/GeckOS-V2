@@ -1,50 +1,43 @@
 
-= fputc(1)
+= pipe(1)
 :doctype: manpage
 
 == NAME
-fputc - get a character from a stream
+pipe - open a uni-directional pipe with two file descriptors
 
 == SYNOPSIS
 Input::
-	* X - stream number
-	* A - data byte to write
-	* C - block flag
-		** C=0 - return immediately
-		** C=1 - block until byte is written
 Call::
-	jsr fputc
+	jsr pipe
 Output::
 	* C=0
-		** AC - the byte sent
+		** X: file nr for reading
+		** Y: file nr for writing
 	* C=1
 		** AC - error code 
 
-NOTE: preserves XR and YR
+NOTE: modifies all registers
 
 == DESCRIPTION
-Write a byte to a stream.
+opens a uni-directional pipe with two file numbers,
+one for writing, and one for reading. To close the pipe,
+each end has to be closed separately.
 
 == RETURN CODES
 Error return codes are given when at return, C=1.
 
 E_NOFILE:: 
-	file not open
-E_EMPTY::
-	if non-blocking, when no byte is available
-E_NUL::
-	File is closed on other side
+	no file descriptor available
 
 
 == SEE ALSO
 link:../lib6502.7.adoc[lib6502(7)],
 link:fclose.1.adoc[fclose(1)]
 link:fopen.1.adoc[fopen(1)]
+link:fputc.1.adoc[fputc(1)]
 link:fgetc.1.adoc[fgetc(1)]
 link:fread.1.adoc[fread(1)]
-link:fwrite.1.adoc[fwrite(1)]
 link:fseek.1.adoc[fseek(1)]
-link:pipe.1.adoc[pipe(1)]
 link:flock.1.adoc[flock(1)]
 link:fcntl.1.adoc[fcntl(1)]
 link:fcmd.1.adoc[fcmd(1)]

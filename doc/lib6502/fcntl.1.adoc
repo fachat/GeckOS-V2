@@ -1,0 +1,61 @@
+
+= fcntl(1)
+:doctype: manpage
+
+== NAME
+fcntl - file control
+
+== SYNOPSIS
+Input::
+	* X: file nr
+	* A: operation
+		** FC_PUSH=0: all buffers are flushed
+		** FC_PULL=1: pull in all data available
+		** FC_RCHECK=2: check if data is available to read
+		** FC_WCHECK=3: check if at least a single byte can be written
+Call::
+	jsr fcntl
+Output::
+	* C=0: Ok
+	* C=1
+		** AC - error code 
+
+NOTE: modifies all registers
+
+== DESCRIPTION
+*fcntl* allows pushing and pulling of data, as well as checking whether data is available. 
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOTIMP::
+	Call not implemented
+E_NOFILE:: 
+	not a valid file descriptor
+E_NOREAD::
+	Not a read file (for FC_PULL, RC_RCHECK)
+E_NOWRITE::
+	Not a write file (for FC_PUSH, RC_WCHECK)
+
+NOTE: The fcntl return code should be ignored, as it is probably not implemented in most of the systems, except for RCHECK/WCHECK calls of course. 
+
+== SEE ALSO
+link:../lib6502.7.adoc[lib6502(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fopen.1.adoc[fopen(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fread.1.adoc[fread(1)]
+link:fseek.1.adoc[fseek(1)]
+link:pipe.1.adoc[pipe(1)]
+link:flock.1.adoc[flock(1)]
+link:fcmd.1.adoc[fcmd(1)]
+link:stddup.1.adoc[stddup(1)]
+link:dup.1.adoc[dup(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

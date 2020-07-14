@@ -43,13 +43,19 @@ E_NUL::
 
 
 == SEE ALSO
-link:../lib6501.7.adoc[lib6501(7)],
+link:../lib6502.7.adoc[lib6502(7)],
 link:fclose.1.adoc[fclose(1)]
 link:fopen.1.adoc[fopen(1)]
 link:fputc.1.adoc[fputc(1)]
 link:fgetc.1.adoc[fgetc(1)]
 link:fread.1.adoc[fread(1)]
 link:fseek.1.adoc[fseek(1)]
+link:pipe.1.adoc[pipe(1)]
+link:flock.1.adoc[flock(1)]
+link:fcntl.1.adoc[fcntl(1)]
+link:fcmd.1.adoc[fcmd(1)]
+link:stddup.1.adoc[stddup(1)]
+link:dup.1.adoc[dup(1)]
 
 == AUTHOR
 Written by André Fachat.
