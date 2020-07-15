@@ -27,6 +27,7 @@
  */
 
 	.(
+	.data
 echo_srv
         .byte 0,0,0,0, 0,0, 7,0, SFL_MULT
         .word dummy_open-1, tcp_echo_queue-1, 0, tcp_signal-1
@@ -37,7 +38,15 @@ chargen_srv
         .byte 0,0,0,0, 0,0, 19,0, SFL_MULT
         .word dummy_open-1, tcp_disc_queue-1, tcp_chargen_loop-1, tcp_signal-1
 
-&tcp_test_init
+msg	.asc "Starting Echo, Discard and Chargen",13,10,0
+
+	.text
+
+&&&tcp_test_init
+	lda #<msg
+	ldy #>msg
+	jsr strout
+
         lda #<echo_srv
         ldy #>echo_srv
         jsr tcp_listen

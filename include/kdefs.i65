@@ -125,6 +125,8 @@
 
 #define	  E_NOTHREAD  	<-26	/* no more free thread */
 
+#define	  E_SYNTAX  	<-27	/* syntax error */
+
 /* file handling errors */
 
 #define   E_FNODRV  	<-32	/* illegal drive number			*/

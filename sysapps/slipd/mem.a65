@@ -27,8 +27,6 @@
  *
  */
 
-#include "lib6502.i65"
-
 #define	NUMBLOCKS 32
 
 	.(

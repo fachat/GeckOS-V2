@@ -41,7 +41,7 @@ first   jsr fileloop
 	jmp showerr
 
 	; -----------------------------
-	; intepret the command line options
+	; interpret the command line options
 optL	jsr parsebyte
 	sta numL
 	rts
