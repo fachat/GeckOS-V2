@@ -53,7 +53,7 @@ echo "Using device $device"
 
 if [ "$1" != "stop" ]; then 
 
-  slattach -e -s 9600 -p slip $device 
+  slattach -s 9600 -p slip $device &
 
   echo "slattach returns $?"
 
