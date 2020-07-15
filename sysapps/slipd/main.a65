@@ -47,13 +47,12 @@
 ;--------------------------------
 ; services
 
-/* One of these two _must_ be defined. They don't work together! */
-#define	NO_FSTCP	/* if defined, do not use fstcp */
-#undef	NO_WWW		/* if defined, do not use internal www server */
+;#define	NO_FSTCP	/* if defined, do not use fstcp */
+;#define	NO_WWW		/* if defined, do not use internal www server */
 
-#undef	NO_TEST		/* if defined no echo, discard, chargen ports */
-#undef	NO_RSH		/* if defined no telnet port */
-#undef	NO_LIBIP	/* if defined no lib6502 ip connections */
+;#define	NO_TEST		/* if defined no echo, discard, chargen ports */
+;#define	NO_RSH		/* if defined no telnet port */
+;#define	NO_LIBIP	/* if defined no lib6502 ip connections */
 
 
 ;--------------------------------
@@ -314,6 +313,7 @@ opt_w	.(
 
 #ifndef NO_FSTCP
 opt_s	.(
+	inc opts_f
 	ldx #0
 iloop 	jsr parsebyte
 	bcs osynt
@@ -334,6 +334,7 @@ end	clc
 	.)
 
 opt_p	.(
+	inc opts_f
 	jsr parseword
 	bcs osynt
 	pha
@@ -366,6 +367,7 @@ helpstr	.asc 13,10, "Usage:"
 	.asc 13,10, "                for the WWW server"
 #endif
 #ifndef NO_FSTCP
+	.asc 13,10, " -f             Enable FSTCP"
 	.asc 13,10, " -s <a.b.c.d>   Define fstcp server IP"
 	.asc 13,10, " -p <port>      fstcp server port"
 #endif
@@ -387,7 +389,7 @@ helpstr	.asc 13,10, "Usage:"
 	.asc "w"
 #endif
 #ifndef NO_FSTCP
-	.asc "sp"
+	.asc "fsp"
 #endif
 	.asc 0
 
@@ -400,6 +402,11 @@ helpstr	.asc 13,10, "Usage:"
 	.byt 0	; w
 #endif
 #ifndef NO_FSTCP
+#ifdef NO_WWW
+opts_f	.byt 1	; f - auto enable
+#else
+opts_f	.byt 0	; f
+#endif /* NO_WWW */
 	.byt 0	; s
 	.byt 0	; p
 #endif
@@ -414,6 +421,7 @@ helpstr	.asc 13,10, "Usage:"
 	.byt >opt_w-1
 #endif
 #ifndef NO_FSTCP
+	.byt 0
 	.byt >opt_s-1
 	.byt >opt_p-1
 #endif
@@ -428,6 +436,7 @@ helpstr	.asc 13,10, "Usage:"
 	.byt <opt_w-1
 #endif
 #ifndef NO_FSTCP
+	.byt 0
 	.byt <opt_s-1
 	.byt <opt_p-1
 #endif
@@ -472,7 +481,10 @@ DB("tcpinit^m^j")
         jsr tcp_test_init
 #endif
 #ifndef NO_FSTCP
+	lda opts_f
+	beq no_fstcp
         jsr fstcp_init
+no_fstcp
 #endif
 #ifndef NO_WWW
         jsr wwwsrv_init
