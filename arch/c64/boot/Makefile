@@ -1,5 +1,5 @@
 
-MANPAGES=../../../*/*/*.1.adoc
+#MANPAGES=../../../*/*/*.1.adoc
 
 apps = lsh lmon
 APPSDIR=../../../apps
