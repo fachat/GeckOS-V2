@@ -39,6 +39,7 @@ libinit	.(
 	sei
 	pha
 	lda zen
+	ora zen+1
 	bne done
 doit
 	jsr minit
