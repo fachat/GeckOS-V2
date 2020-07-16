@@ -13,6 +13,10 @@
 #
 #	sudo tcpdump -i sl0 -XX -tttt -v
 #
+# Alternatively use
+#
+#	sudo ./csaip -d /tmp/viceser -l
+#
 # Then, in GeckOS in x64sc, run
 #
 #	slipd <a:ser1 >a:ser1
@@ -20,8 +24,10 @@
 # as a minimum slip daemon that uses "a:ser1" as I/O, which is the 9600 baud userport on the C64 arch.
 #
 
-device=/dev/cua2
+#device=/dev/cua2
+device=/tmp/viceser
 force=0
+log=0
 
 while [[ $# -gt 0 ]]; do
 	key="$1"
@@ -30,6 +36,10 @@ while [[ $# -gt 0 ]]; do
 		device=$2;
 		shift 
 		shift
+		;;
+	-l)
+		log=1
+		shift;
 		;;
 	*)
 		break
@@ -43,7 +53,7 @@ echo "Using device $device"
 
 if [ "$1" != "stop" ]; then 
 
-  slattach -e -s 9600 -p slip $device 
+  slattach -s 9600 -p slip $device &
 
   echo "slattach returns $?"
 
@@ -54,6 +64,10 @@ if [ "$1" != "stop" ]; then
 
 	ifconfig sl0 192.168.0.1/24 up
 	#route add -host 192.168.0.64 sl0
+
+	if [ $log -eq 1 ]; then 
+		tcpdump -i sl0 -XX -tttt -v
+	fi;
   else
 	echo "slattach failed"
   fi;

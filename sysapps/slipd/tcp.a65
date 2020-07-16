@@ -90,8 +90,6 @@ i1
 	cpx #MAXCONN
 	bcc i1
 
-	jsr user_init
-
 	clc
 	rts
 	.)

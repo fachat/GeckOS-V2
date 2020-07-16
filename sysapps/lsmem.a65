@@ -1,0 +1,683 @@
+/****************************************************************************
+   
+    GeckOS/A65 Version 2.0.0
+    lsmem program - display information on memory usage
+
+    Copyright (C) 2020 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#include "lib6502.i65"
+#include "kernel.i65"
+#include "kdefs.i65"
+
+; probably needs to go into own include
+; see libmem.a65
+#define LM_P            0       /* pointer to next struct */
+#define LM_MAGIC        2       /* magic number for a valid struct */
+#define LM_LEN          4       /* length of memory block */
+#define LM_TASK         6       /* task the block belongs to */
+#define LM_FL           7       /* 0 = free, 1 = in use */
+#define LM_SLEN         8       /* length of struct */
+
+main	.(
+	.zero
+argp	.word 0
+
+	.text
+	jsr getopts
+	bcc doit
+	
+	lda #<usagetxt
+	ldy #>usagetxt
+	jsr strout		
+	lda #E_ILLPAR
+	rts
+
+doit	jsr doexec
+	lda #E_OK
+	rts
+doexec
+	lda optz
+	beq noz
+	jsr do_zero
+noz	lda optm
+	beq nom
+	jsr do_mem
+nom	lda optc
+	beq noc
+	jsr do_chain
+noc
+	lda optsx
+	bne dos
+	lda optm
+	ora optz
+	ora optc
+	bne pt
+dos	jsr do_stats
+pt	jmp print_tasks
+
+
+optslst	.asc "zmcs",0
+optsflg
+optz	.byt 0
+optm	.byt 0
+optc	.byt 0
+optsx	.byt 0
+
+usagetxt
+	.asc 13,10, "Usage:"
+	.asc 13,10, " lsmem [options]"
+	.asc 13,10, "Print memory usage information"
+	.asc 13,10, "Options:"
+	.asc 13,10, " -z      Print zeropage usage details"
+	.asc 13,10, " -m      Print memory usage details"
+	.asc 13,10, " -c      Print memory block chain"
+	.asc 13,10, " -s      Print memory statistics (default)"
+	.asc 13,10,0
+
+zerohdr	
+	.asc "Zeropage map (per byte)"
+	.asc 13,10,0
+memhdr	
+	.asc "Memory map (approx. per block)"
+	.asc 13,10,0
+statshdr
+	.asc "Memory statistics"
+	.asc 13,10,"# zp blk min  max totl"
+	.asc 13,10,0
+
+chainhdr
+	.asc "Memory chain"
+	.asc 13,10,"## addr next blk  len Tsk"
+	.asc 13,10,0
+
+; -------------------------------------------
+
+p	=argp
+	.data
+numtask	.byt 0
+cnt	.byt 0
+zstart	.byt 0
+	.text
+
+do_zero	.(
+	lda #<zerohdr
+	ldy #>zerohdr
+	jsr strout
+
+	clc
+	jsr get_meminfo
+	sta p
+	sty p+1
+	stx zstart
+
+	lda #0
+loop	sta cnt
+	and #$1f
+	bne next
+	jsr crlfout
+	lda cnt
+	jsr hexout
+	jsr spout
+	jmp next2
+next	and #$07
+	bne next2
+	jsr spout
+next2	lda cnt
+	lsr
+	lsr
+	tay
+	lda (p),y
+	beq free
+	cmp #<-1
+	beq blocked
+
+	sec
+	sbc #1		; determine task ID
+	jsr reg_task	; register task
+	clc
+	adc #$30
+	cmp #$3a
+	bcc novfl
+	adc #6
+novfl	.byt $2c
+free	lda #"-"
+	.byt $2c
+blocked	lda #"#"
+	tax
+	jsr chrout
+	txa
+	jsr chrout
+	txa
+	jsr chrout
+	txa
+	jsr chrout
+n2	lda cnt
+	clc
+	adc #4
+	bne loop
+	rts
+	.)
+
+; -------------------------------------------
+
+do_chain .(
+	lda #<chainhdr
+	ldy #>chainhdr
+	jsr strout
+
+	lda #0
+	sta cnt
+
+	sec
+	jsr get_meminfo
+
+	sta p
+	sty p+1
+
+loop	lda cnt
+	jsr hexout
+	jsr spout
+
+	; addr	
+	lda p+1
+	jsr hexout
+	lda p
+	jsr hexout
+	jsr spout
+
+	; next
+	ldy #LM_P+1
+	lda (p),y
+	jsr hexout
+	dey
+	lda (p),y
+	jsr hexout
+	jsr spout
+
+	; blk
+	lda p
+	clc
+	adc #LM_SLEN
+	pha
+	lda p+1
+	adc #0
+	jsr hexout
+	pla
+	jsr hexout
+	jsr spout
+
+	; len
+	ldy #LM_LEN+1
+	lda (p),y
+	jsr hexout
+	dey
+	lda (p),y
+	jsr hexout
+	jsr spout
+
+	; task
+	ldy #LM_FL
+	lda (p),y
+	beq free
+	
+	ldy #LM_TASK
+	lda (p),y
+	jsr reg_task
+	ldy #LM_TASK
+	lda (p),y
+	jsr hexout
+	jmp next
+free
+	lda #"-"
+	jsr chrout
+
+next	jsr crlfout
+
+	inc cnt
+
+	ldy #LM_P
+	lda (p),y
+	tax
+	iny
+	and (p),y
+	cmp #$ff
+	beq end 
+	lda (p),y
+	sta p+1
+	stx p
+	jmp loop
+
+end	rts
+		
+	.)
+
+; -------------------------------------------
+
+do_mem	.(
+	.data
+prev	.byt 0
+endp	.word 0
+	.text
+
+	lda #<memhdr
+	ldy #>memhdr
+	jsr strout
+
+	lda #0
+	sta cnt
+
+	sec
+	jsr get_meminfo
+
+	sta p
+	sty p+1
+
+	jsr set_endp
+
+loop	lda cnt
+	and #$1f
+	bne next
+	jsr crlfout
+	lda cnt
+	jsr hexout
+	jsr spout
+	jmp next2
+next	and #$07
+	bne next2
+	jsr spout
+next2
+	lda cnt
+	cmp p+1
+	bcc notyet	; 
+	beq start
+	cmp endp+1	; end of block
+	bcc doprev
+	beq doprev
+
+	ldy #LM_P
+	lda (p),y
+	iny
+	and (p),y
+	cmp #$ff
+	beq eom
+
+	lda (p),y
+	pha
+	dey
+	lda (p),y
+	sta p
+	pla
+	sta p+1
+
+	jsr set_endp
+
+start	ldy #LM_FL
+	lda (p),y	; is free?
+	beq free
+	ldy #LM_TASK
+	lda (p),y
+	jsr reg_task
+	clc
+	adc #$30
+	cmp #$3a
+	bcc s1
+	adc #6
+s1	.byt $2c
+free	lda #"-"
+	.byt $2c
+eom
+notyet	lda #"#"
+	sta prev
+doprev	lda prev
+	jsr chrout
+doinc
+	inc cnt
+	bne loop
+	rts
+set_endp
+	ldy #LM_LEN
+	lda (p),y
+	clc
+	adc p
+	sta endp
+	iny
+	lda (p),y
+	adc p+1
+	sta endp+1
+	rts
+	.)
+
+; -------------------------------------------
+
+do_stats .(
+	.data
+zpcnt	.dsb 16,0	; count of zeropage memory used
+mcnt	.dsb 16,0	; count of memory blocks allocated
+maxhi	.dsb 16,0	; maximum size of mem block, per task
+maxlo	.dsb 16,0
+minhi	.dsb 16,<-1	; minimum size of mem block, per task
+minlo	.dsb 16,<-1
+sumhi	.dsb 16,0	; sum of allocated memory, per task
+sumlo	.dsb 16,0
+zblk	.byt 0		; blocked zeropage bytes
+	.text
+
+FREETASK=15		; last entry in table is data for free blocks
+
+	lda #<statshdr
+	ldy #>statshdr
+	jsr strout
+
+	sec
+	jsr get_meminfo
+	sta p
+	sty p+1
+
+loop	ldy #LM_FL
+	lda (p),y
+	bne isused
+
+	; is free
+	ldx #FREETASK
+	jsr do_memblk
+	jmp next
+
+isused	
+	ldy #LM_TASK
+	lda (p),y
+	jsr reg_task
+	tax
+	jsr do_memblk
+
+next	ldy #LM_P
+	lda (p),y
+	iny
+	and (p),y
+	cmp #$ff
+	beq zero
+	lda (p),y
+	tax
+	dey
+	lda (p),y
+	sta p
+	stx p+1
+	jmp loop
+
+	; --------------------
+zero
+	clc
+	jsr get_meminfo
+	sta p
+	sty p+1
+	stx zstart
+
+	lda #0
+zloop	sta cnt
+	lsr
+	lsr
+	tay
+	lda (p),y
+	beq zisfree
+	cmp #<-1
+	beq blocked
+	sec
+	sbc #1		; determine task ID
+	jsr reg_task	; register task
+	tax
+	.byt $2c
+zisfree	ldx #FREETASK
+	lda #4
+	clc
+	adc zpcnt,x
+	sta zpcnt,x
+	jmp nextz
+blocked
+	lda #4
+	clc
+	adc zblk
+	sta zblk
+nextz
+	lda #4
+	clc
+	adc cnt
+	bne zloop
+
+	; --------------------
+	; print table
+	;.asc 13,10,"# zp blks  min  max  total"
+	ldx #0
+	stx cnt
+ploop	txa
+	clc
+	adc #$30
+	cmp #$3a
+	bcc pl1
+	adc #6
+pl1	jsr chrout
+	jsr spout
+	jsr prt_line
+	inx
+	cpx numtask
+	bcc ploop
+	; print free line
+	lda #"-"
+	jsr chrout
+	jsr spout
+	
+	ldx #FREETASK
+	jmp prt_line
+
+do_memblk
+	inc mcnt,x
+	bne bc1
+	dec mcnt,x	; stop counting on overflow
+bc1	; add block to task in x
+	ldy #LM_LEN
+	lda (p),y
+	clc
+	adc sumlo,x
+	sta sumlo,x
+	iny		; hi byte
+	lda (p),y
+	adc sumhi,x
+	sta sumhi,x
+	; check min
+	lda minhi,x
+	cmp (p),y
+	bcc notmin
+	bne newmin
+	dey		; lo byte
+	lda minlo,x
+	cmp (p),y
+	bcc notminl
+	iny		; hi byte
+newmin  lda (p),y
+	sta minhi,x
+	dey		; lo byte
+	lda (p),y
+	sta minlo,x
+notminl	iny
+notmin	; hi byte
+	; check max
+	lda (p),y
+	cmp maxhi,x
+	bcc notmax
+	bne newmax
+	dey		; lo byte
+	lda (p),y
+	cmp maxlo,x
+	bcc notmaxl
+	iny		; hi byte
+newmax  lda (p),y
+	sta maxhi,x
+	dey
+	lda (p),y
+	sta maxlo,x
+notmax	
+notmaxl	rts
+
+prt_line
+	lda zpcnt,x
+	jsr hexout
+	jsr spout
+	lda mcnt,x
+	jsr hexout
+	jsr spout
+	lda minhi,x
+	jsr hexout
+	lda minlo,x
+	jsr hexout
+	jsr spout
+	lda maxhi,x
+	jsr hexout
+	lda maxlo,x
+	jsr hexout
+	jsr spout
+	lda sumhi,x
+	jsr hexout
+	lda sumlo,x
+	jsr hexout
+	jmp crlfout
+	.)
+
+; -------------------------------------------
+; register a task ID for display
+
+	.(
+	.data 
+tmp	.byt 0
+tmp2	.byt 0
+tasks	.dsb 16,0
+	.text
+
+	; AC has task ID
+&reg_task .(
+
+	ldy #0
+loop	cpy numtask
+	beq newtask
+	cmp tasks,y
+	beq found
+	iny
+	cpy #16
+	bcc loop
+	lda #"*"
+	rts
+newtask	sta tasks,y
+	inc numtask
+found	tya
+	clc
+	rts
+	.)
+
+&print_tasks .(
+	jsr crlfout
+
+	; get the task information
+	ldx #SEM_SENDBUF
+	clc
+	jsr PSEM
+
+	jsr GETINFO
+		
+	ldx #0
+	stx tmp
+ptl 	cpx numtask
+	bcs done
+
+	txa
+	clc
+	adc #$30
+	cmp #$3a
+	bcc novfl
+	adc #6
+novfl	jsr chrout
+	lda #":"
+	jsr chrout
+	
+	; now find the task ID in SENDBUF and print ID and name
+	lda tasks,x
+	jsr hexout
+	jsr spout
+
+	lda #TN_PID
+chkloop	tay
+	lda PCBUF,y
+	cmp tasks,x
+	bne notthis
+
+	; found name
+	tya
+	clc
+	adc #TNAMLEN
+	sta tmp2
+
+nameout	lda PCBUF+TN_NAME,y
+	beq end
+	jsr chrout
+	iny
+	cpy tmp2
+	bcc nameout
+	bcs nexttask
+end	jsr spout
+	iny
+	cpy tmp2
+	bcc end
+	bcs nexttask
+
+notthis	tya
+	clc
+	adc #TN_SLEN
+	bcc chkloop
+
+	lda #"-"
+	jsr chrout
+	ldy #8
+spo	jsr spout
+	dey
+	bne spo	
+nexttask
+	jsr spout
+	inc tmp	
+	lda tmp	
+	cmp #3
+	bne nocrlf
+	lda #0
+	sta tmp
+	jsr crlfout
+nocrlf
+	inx
+	bne ptl
+ 
+done	; free semaphore / sendbuf
+	ldx #SEM_SENDBUF
+	jsr VSEM
+	
+	lda tmp
+	beq nocrlf2
+	jsr crlfout
+nocrlf2	rts
+	.)
+
+	.)
+
+#include "../apps/common.a65"
+
+	.)
+

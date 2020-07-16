@@ -28,6 +28,7 @@
  * 	balloc, bfree, btrunc, bsplit, brealloc
  *	getbadr, getblen
  *	bcleanpid, bcleanpida
+ *	get_meminfo
  *
  * The routines are _not_ threadsave!
  * Alas they use a spin-lock on an environment semaphore.
@@ -821,6 +822,14 @@ notest
 	jsr free
 	jmp l1
 	.)
+
+&get_meminfo_i
+	bcc getzmem
+	lda #<Memstart
+	ldy #>Memstart
+	clc
+	rts
+getzmem	jmp get_zmeminfo
 
 	.)
 

@@ -63,16 +63,18 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 	.text
 #endif
 
-
 &inienv .(
-	lda #<-1
-	sta actThread
-	sta actTask
-	lda #1
-	sta Syscnt
-	clc
-	rts
-	.)
+        ldx #<-1
+        stx actThread
+        stx actTask
+        inx             ; 0
+        stx ENVSAVE
+        stx ENVSAVE+1
+        inx             ; 1
+        stx Syscnt
+        clc
+        rts
+        .)
 
 setthread .(
 	.data
@@ -369,7 +371,7 @@ msys      pla
 	sec
 	lda #E_NOMEM
 	rts
-ok	lda #>ROMSTART		; return available memory
+ok	lda #>Memend		; return available memory
 	clc
 	rts
 	.)

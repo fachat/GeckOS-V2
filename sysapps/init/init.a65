@@ -498,7 +498,7 @@ printfork .(
 	ldy #P_NAME+2
 ll	lda (pz),y
 	beq lx
-	jsr stdout
+	jsr chrout
 	iny
 	bne ll
 	beq end
@@ -506,7 +506,7 @@ lx	iny
 	lda (pz),y
 	beq end
 	lda #" "
-	jsr stdout
+	jsr chrout
 	jmp ll
 end
 	ldx #3

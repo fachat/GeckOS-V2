@@ -1,9 +1,9 @@
 /****************************************************************************
    
-    OS/A65 Version 2.0.0
+    OS/A65 Version 2.1
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-2020 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,53 +22,67 @@
 ****************************************************************************/
 
 
-/**********************************************************************/
-/* 			     SLIP/TCP				      */
-/*		Serial Line Internet Protocol Driver		      */
-/*								      */
-/* Driver connects STDIN/OUT with a serial line internet protocol     */
-/* 								      */
-/* Options:							      */
-/*   ROM							      */
-/*   NOPRG							      */
-/* 								      */
-/**********************************************************************/
+/**********************************************************************
+* 			     SLIP/TCP				      
+*		Serial Line Internet Protocol Driver		     
+*								   
+* Driver connects STDIN/OUT with a serial line internet protocol    
+* 								  
+* Options:							 
+*   NO_TEST 	- if set, do not build in echo, discard and chargen servers
+*   NO_WWW	- if set, do not build in the Web server
+*   NO_FSTCP 	- if set, do not provide files from an fstcp internet server
+*   NO_LIBIP	- do not integrate with lib6502
+*   RSH_BIN	- integrate telnet server (code required by libip as well)
+*  
+* 								     
+**********************************************************************/
 
-#define	NOMMU
-
+;--------------------------------
+; if not defined from build. Can be set using command line option
 #ifndef MY_IP
 #define	MY_IP			192,168,0,64
-/* #define	MY_IP			193,197,89,64 */
-/* #define		MY_IP			0,0,0,0	*/	/* auto-detect */
 #endif
 
+;--------------------------------
+; services
+
+;#define	NO_FSTCP	/* if defined, do not use fstcp */
+;#define	NO_WWW		/* if defined, do not use internal www server */
+
+;#define	NO_TEST		/* if defined no echo, discard, chargen ports */
+;#define	NO_RSH		/* if defined no telnet port */
+;#define	NO_LIBIP	/* if defined no lib6502 ip connections */
+
+
+;--------------------------------
+; FSTCP host and port
 #ifndef FSTCP_SERVER_IP
-#define FSTCP_SERVER_IP		192,168,0,13
+#define FSTCP_SERVER_IP		192,168,0,1
 #endif
 
 #ifndef FSTCP_SERVER_PORT
 #define FSTCP_SERVER_PORT 	8090
 #endif
 
+;--------------------------------
+; GeckOS slipd WWW server
 #define WWW_DRV			2
 #define	WWW_DEFAULT		"index.html"
 #define	WWW_PATH		0
 
+;--------------------------------
+; GeckOS telnet port
 #ifndef RSH_PORT
 #define	RSH_PORT		23
 #endif
 
+; default login program to run on telnet connection
 #ifndef RSHNAME
-#define	RSHNAME			"f:tlogin"
+#define	RSHNAME			"c:tlogin"
 #endif
 
-/* One of these two _must_ be defined. They don't work together! */
-#define	NO_FSTCP	/* if defined, do not use fstcp */
-#undef	NO_WWW		/* if defined, do not use internal www server */
-#define	NO_TEST		/* if defined no echo, discard, chargen ports */
-#undef	NO_RSH		/* if defined no telnet port */
-#undef	NO_LIBIP	/* if defined no lib6502 ip connections */
-
+;--------------------------------
 #define	MAXOQUEUE	3
 #define	MTU		1024
 #define	MAXSLOT		24
@@ -100,7 +114,6 @@
 
 /**********************************************************************/
 
-#ifndef ROM
 
 /* #define	DEBUG */
 /* #define	DEBUGMEM*/
@@ -113,7 +126,7 @@
 /* #define	DEBUGUDP*/
 
 #if 1
-#define	DB(A)	.(:.data:ll1 .byt A,0:.text:php:lda #<ll1:ldy #>ll1:jsr ETxtout:plp:.):
+#define	DB(A)	.(:.data:ll1 .byt A,0:.text:php:lda #<ll1:ldy #>ll1:jsr strout:plp:.):
 #else
 #define	DB(a)
 #endif
@@ -124,93 +137,115 @@
 #include "fdefs.i65"
 #include "lib6502.i65"
 
-#endif	/* ROM */
-
-#ifndef SLIPDEV
-#define	SLIPDEV	0
-#endif
+#define	ECout		chrout
+#define	ETxtout		strout
+#define	EHexout		hexout
+#define	ECrlfout	crlfout
 
 /**********************************************************************/
 
           .(
-#ifdef ROM
-
-          .word PRGEND
-          .byt  PK_PRG
-	  .word PRG
-          .byt  128,0,0
-          .byt  SLIPDEV,SLIPDEV
-          .byt  "slipd",0,0
-
-#else /* no ROM */
-
-+main
-	jmp PRG
-
-#endif /* ROM */
-
-/**********************************************************************/
 
 	.bss
 owntask	.byt 0
 sendbuf	.byt 0	 ; !=0 when WWW server reads file -> filesystem doesn't listen
-www_drv	.byt 0	 ; disk drive from which to read for www server
+
+	.data
+#ifndef NO_WWW
+www_drv	.byt WWW_DRV	 ; disk drive from which to read for www server
+#endif
 
 	.zero
 argp	.word 0
 	.text
 
-PRG	.(
++main	.(
+	jsr dfltpars
+	jsr getopts
+	bcc nohelp
+usage	lda #<helpstr	; usage info
+	ldy #>helpstr
+	jmp strout	; and terminate
+nohelp	; now (argp),y should point to the device
+	lda (argp),y
+	beq usage
+	tya
+	pha
+
+	jsr paray
+	ldx #OPEN_WR
+	jsr fopen
+	txa
+	pha
+	bcs wropenerr
+	tay
+	ldx #STDOUT
+	jsr stddup
+	bcs wropenerr
+	jsr fclose
+	pla		; drop
+
+	pla		; recover pointer in argp
+	pha
+	jsr paray
+	ldx #OPEN_RD
+	jsr fopen
+	txa
+	pha
+	bcs rdopenerr
+	tay
+	ldx #STDIN
+	jsr stddup
+	bcs rdopenerr
+	jsr fclose
+	pla		; drop
+
+	pla		; recover pointer in argp
+
+nodev 	jmp startup
+
+rdopenerr
+wropenerr
+	jsr strerror
+	jsr strout
+	jsr crlfout
+	pla		; file#
+	tax
+	jsr fclose
+	pla		; pointer in argp
+	lda #E_NODEV
+	sec
+	rts
+
+dfltpars .(
 	sta argp
 	sty argp+1
-;.byt 2
-	; default params
-	lda #WWW_DRV
-	sta www_drv
-
 #ifndef NO_RSH
 	; default login name
 	clc
 	jsr setlogin
 #endif
+	lda argp
+	ldy argp+1
+	rts
+	.)
 
-	; if stdout == stderr, replace stderr with stdnul
-	ldx #STDOUT
-	clc
-	jsr DUP
-	sta sendbuf
-	ldx #STDERR
-	clc
-	jsr DUP
-	cmp sendbuf
-	bne noclose
-	ldx #STDERR
-	lda #STDNUL
-	sec
-	jsr DUP
-noclose
-
-	; parse command line parameter
-
-	ldy #<-1
-l0	iny
-	lda (argp),y	; skip filename
-	bne l0
-	iny
-	lda (argp),y	; next arg or nothing?
-	beq endarg
-
-	cmp #"-"
-	beq nextarg2
-	tya
-	pha
+paray	.(
 	clc
 	adc argp
 	pha
-	lda argp+1
-	adc #0
+	lda #0
+	adc argp+1
 	tay
 	pla
+	rts
+	.)
+
+opt_l	.(
+	tya
+	pha
+	jsr paray
+
 	ldx #OPEN_WR
 	jsr fopen
 	bcs nextarg
@@ -220,61 +255,195 @@ l0	iny
 	jsr stddup
 	bcs nextarg
 	jsr fclose
-nextarg	pla
+&nextarg
+	pla
 	tay
-nextarg2
-
-l2	iny
-	lda (argp),y	; skip arg
-	bne l2
-	iny
+npar	iny
 	lda (argp),y
-	beq endarg
+	bne npar
+	rts
+	.)
 
+opt_i	.(
+	ldx #0
+iloop 	jsr parsebyte
+	bcs syntax
+	sta MyIP,x
+	inx
+	cpx #4
+	bcs end
+	lda (argp),y
+	cmp #"."
+	bne syntax
+	iny
+	bne iloop
+end	clc
+	rts
+syntax	lda #E_SYNTAX
+	sec
+	rts	
+	.)
+
+#ifndef NO_RSH
+opt_n	.(
+	tya
+	pha
+	jsr paray
+	sec
+	jsr setlogin
+	jmp nextarg
+	.)
+#endif
+
+#ifndef NO_WWW
+opt_w	.(
+	lda (argp),y
 	sec
 	sbc #"a"
 	and #$0f
 	sta www_drv
-
-	tya
-	pha
-	clc
-	adc argp
-	pha
-	lda argp+1
-	adc #0
-	tay
-	pla
-;.byt 2
-	jsr chdir
-	pla
-	tay
-
-l1	iny		; skip www drive
-	lda (argp),y
-	bne l1
-	iny
-	lda (argp),y
-	beq endarg
-
-#ifndef NO_RSH
-	tya
-	pha
-	clc
-	adc argp
-	pha
-	lda argp+1
-	adc #0
-	tay
-	pla
-	sec
-	jsr setlogin
-	pla
-	tay
+; NOTE WWW server still uses SEND(FS_OPEN) instead of fopen, so chdir has no effect (yet)
+;	tya
+;	pha
+;	jsr paray
+;	jsr chdir
+	jmp nextarg
+	.)
 #endif
 
-endarg
+#ifndef NO_FSTCP
+opt_s	.(
+	inc opts_f
+	ldx #0
+iloop 	jsr parsebyte
+	bcs osynt
+	jsr fstcp_setaddr
+	inx
+	cpx #4
+	bcs end
+	lda (argp),y
+	cmp #"."
+	bne osynt
+	iny
+	bne iloop
+end	clc
+	rts
+&osynt	lda #E_SYNTAX
+	sec
+	rts	
+	.)
 
+opt_p	.(
+	inc opts_f
+	jsr parseword
+	bcs osynt
+	pha
+	txa
+	ldx #5
+	jsr fstcp_setaddr
+	pla
+	inx
+	jsr fstcp_setaddr
+	clc
+	rts
+	.)
+#endif
+
+	.data
+helpstr	.asc 13,10, "Usage:"
+	.asc 13,10, "  slipd [options] <device>"
+	.asc 13,10, "Runs SLIP internet protocol on the"
+	.asc 13,10, "given device."
+	.asc 13,10, "Options:"
+	.asc 13,10, " -i <a.b.c.d>   Define local IP addr"
+	.asc 13,10, " -l <logfile>   Output log to file"
+#ifndef NO_RSH
+	.asc 13,10, " -n <name>      use given login prg"
+	.asc 13,10, "                on telnet login"
+	.asc 13,10, "                (default: ", RSHNAME, ")"
+#endif
+#ifndef NO_WWW
+	.asc 13,10, " -w <drive>     Use drive as source"
+	.asc 13,10, "                for the WWW server"
+#endif
+#ifndef NO_FSTCP
+	.asc 13,10, " -f             Enable FSTCP"
+	.asc 13,10, " -s <a.b.c.d>   Define fstcp server IP"
+	.asc 13,10, " -p <port>      fstcp server port"
+#endif
+	.asc 13,10, "Example:"
+	.asc 13,10, "  slipd a:ser1"
+	.asc 13,10, "    run on device a:ser1, log output"
+	.asc 13,10, "    to stdout"
+#ifndef NO_RSH
+ 	.asc 13,10, "  slipd -n c:ls a:ser1"
+	.asc 13,10, "    when telneting to GeckOS, run ls"
+#endif
+	.asc 13,10, 0
+
+&optslst	.asc "li"
+#ifndef NO_RSH
+	.asc "n"
+#endif
+#ifndef NO_WWW
+	.asc "w"
+#endif
+#ifndef NO_FSTCP
+	.asc "fsp"
+#endif
+	.asc 0
+
+&optsflg .byt 0	; l
+	.byt 0	; i
+#ifndef NO_RSH
+	.byt 0	; n
+#endif
+#ifndef NO_WWW
+	.byt 0	; w
+#endif
+#ifndef NO_FSTCP
+#ifdef NO_WWW
+opts_f	.byt 1	; f - auto enable
+#else
+opts_f	.byt 0	; f
+#endif /* NO_WWW */
+	.byt 0	; s
+	.byt 0	; p
+#endif
+
+&optsadh
+	.byt >opt_l-1
+	.byt >opt_i-1
+#ifndef NO_RSH
+	.byt >opt_n-1
+#endif
+#ifndef NO_WWW
+	.byt >opt_w-1
+#endif
+#ifndef NO_FSTCP
+	.byt 0
+	.byt >opt_s-1
+	.byt >opt_p-1
+#endif
+
+&optsadl
+	.byt <opt_l-1
+	.byt <opt_i-1
+#ifndef NO_RSH
+	.byt <opt_n-1
+#endif
+#ifndef NO_WWW
+	.byt <opt_w-1
+#endif
+#ifndef NO_FSTCP
+	.byt 0
+	.byt <opt_s-1
+	.byt <opt_p-1
+#endif
+
+	.text
+
+startup
 	jsr GETPID
 	stx owntask
 /*
@@ -300,16 +469,32 @@ DB("oinit ")
 	jsr iinit
 	bcs exit
 DB("iinit ")
+	jsr udpinit
+	bcs exit
+DB("udpinit ")
 	jsr tcpinit
 	bcs exit
 DB("tcpinit^m^j")
-	jsr udpinit
-	bcs exit
-DB("udpinit^m^j")
 
-	jmp doloop
-
-exit	rts
+	; user init
+#ifndef NO_TEST
+        jsr tcp_test_init
+#endif
+#ifndef NO_FSTCP
+	lda opts_f
+	beq no_fstcp
+        jsr fstcp_init
+no_fstcp
+#endif
+#ifndef NO_WWW
+        jsr wwwsrv_init
+#endif
+#ifndef NO_RSH
+        jsr rsh_init
+#endif
+#ifndef NO_LIBIP
+        jsr libip_init
+#endif
 
 doloop
 	jsr mon
@@ -327,6 +512,8 @@ doloop
 #endif
 	jsr YIELD
 	jmp doloop
+
+exit	rts
 	.)
 
 #ifdef RECEIVE_CHECK
@@ -349,7 +536,7 @@ nofstcp
 	jmp libip_rxmess
 #endif
 	.)
-#endif
+#endif	/* RECEIVE_CHECK */
 
 	.data
 MyIP	.byt MY_IP
@@ -381,6 +568,9 @@ pdl	.word 0
 
 #include "mem.a65"		/* now emulates old stdlib with lib6502 */
 #include "util.a65"
+
+
+#include "../apps/common.a65"
 
 PRGEND    .)
 

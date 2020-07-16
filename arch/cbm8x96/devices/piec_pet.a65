@@ -34,11 +34,6 @@
 #define	ASSIGN	Assign
 #endif
 
-	.data
-byte      .byt 0
-bytfl     .byt 0
-eoifl     .byt 0
-	.text
 
 &getif  clc
 	ldx #SEM_VIAE840_T1

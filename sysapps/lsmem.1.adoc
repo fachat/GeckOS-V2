@@ -1,0 +1,45 @@
+
+= LSMEM(1)
+:doctype: manpage
+
+== NAME
+lsmem - show information on used memory in current environment
+
+== SYNOPSIS
+*lsmem* [OPTION]...
+
+== OPTIONS
+*-s*::
+	Show statistics on programs running in the current environment (default)
+
+*-z*::
+	Show a map of the zeropage and which program uses which addresses
+
+*-m*::
+	Show a map of the 64k address space and which program uses which area
+
+*-c*::
+	Show the detailled chain of memory block structs 
+
+    
+== DESCRIPTION
+*lsmem* shows information on the programs running in the current environment and what memory areas
+they use.
+
+NOTE: the *current environment* means the 64k address space the *lsmem(1)* program is running in. 
+In the C64 there is only one such environment. In the CBM8x96 there are actually two, where one is 
+used for system programs only. In the CS/A machine each program has its own environment, so
+there *lsmem* is of little use actually as it only shows its own information.
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+== COPYRIGHT
+Copyright 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+== SEE ALSO
+

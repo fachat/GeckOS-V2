@@ -1,0 +1,107 @@
+
+= SLIPD(1)
+:doctype: manpage
+
+== NAME
+*slipd*, *slipmind*, *slipwwwd*, *slipfsd* - run an TCP/IP internet daemon
+
+== SYNOPSIS
+*slipd* [options] [device]::
+	run a full Internet daemon
+*slipmind* [options] [device]::
+	run an Internet daemon to serve GeckOS / lib6502 socket communications
+*slipwwwd* [options] [device]::
+	run a WWW server
+*slipfsd* [options] [device]::
+	
+    
+== DESCRIPTION
+*slipd* runs using a serial device as input/output channels, and implements a SLIP - serial line internet protocol - on top of that serial device. 
+
+As a TCP/IP daemon, it implements
+
+TELNET:: 
+	You can telnet into the GeckOS operating system on its IP address. It tries to run the *tlogin* program as shell.
+HTTP::
+	It implements a simple HTTP server that serves files from a given drive. See also *slipwwwd(8)*
+
+FSTCP::
+	This option lets it connect to a server on the net, to use as a file server with the FSTCP protocol. (see *slipfsd(8)*)
+LIB6502::
+	It registers as a SEND_NET daemon in GeckOS, to serve socket communication requests. (see also *slipmind(8)*)
+ECHO, CHARGEN, DISCARD::
+	Standard TCP/IP test ports.
+
+=== OPTIONS
+
+General options are:
+
+*-i <a.b.c.d>*::
+	Defines the local IP address as a quad-octet dot address (e.g. '192.168.0.64')
+*-l <logfile>*::
+	Redirect log output from STDERR to a log file
+
+=== TELNET
+Running as telnet daemon opens port 23 on the SLIP IP address. Once a connection is opened, *slipd* runs the
+*tlogin* program that handles the actual login. Once the login is successful, *tlogin* starts a shell.
+
+NOTE: telnet is enabled in *slipd* by default, and not available in the other builds.
+
+==== Options
+
+*-n <loginprg>*::
+	Define a replacement for the *tlogin* program.
+
+=== HTTP
+The HTTP server opens an HTTP 1.0 server on port 80 that serves files from the current drive, or the one given
+by the option
+
+NOTE: http is enabled in *slipd* by default, and only available in *slipwwwd* otherwise.
+
+==== Options
+
+*-w <drive>*::
+	Use drive as source for the HTTP server
+
+=== FSTCP
+The *slipd* can connect to an FSTCP server. A sample implementation of this server is in *fstcp.c*. *slipd* and the server communicate using the FSTCP protocol, so that the server provides remote filesystem access to GeckOS over the Internet.
+
+NOTE: fstcp can be enabled in *slipd* and is automatically enabled in *slipfsd* as sole service.
+
+==== Options
+
+*-f*::
+	Enable the FSTCP server (*slipd*)
+*-s <a.b.c.d>*::
+	Define the server IP address as quad-byte IP address (default: 192.168.0.1).
+*-p <port>*::
+	Define the server port (default 8090).
+
+NOTE: any of the options enable the FSTCP server, *-f* can be used if defaults should be used.
+
+=== ECHO
+Slipd listens on TCP port 7 and echos all input back to the sender
+
+=== DISCARD
+Slipd listens on TCP port 9 and discards all input.
+
+=== CHARGEN
+Slipd listens on TCP port 19, ignores all input and sends an ASCII charset in a loop until the connection is closed.
+
+== EXAMPLES
+*slipd -n c:ls a:ser1*::
+	when telnetting to GeckOS, run the 'ls' command (and terminate the connection afterwards)
+
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
+== COPYRIGHT
+Copyright 2020 André Fachat. License GPL2 or later.
+This is free software: you are free to change and redistribute it. There is no WARRANTY, to the extent permitted by law.
+
+== SEE ALSO
+

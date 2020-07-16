@@ -37,12 +37,11 @@ argp	.word 0
 	ldy #>usagetxt
 	jmp strout
 
-first	jsr crlfout
-	jsr fileloop
+first   jsr fileloop
 	jmp showerr
 
 	; -----------------------------
-	; intepret the command line options
+	; interpret the command line options
 optL	jsr parsebyte
 	sta numL
 	rts

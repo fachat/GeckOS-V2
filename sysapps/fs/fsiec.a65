@@ -136,6 +136,9 @@ IECBUF	  .dsb MAXLEN
 	.zero
 fzei      .word 0
 bzei      .word 0
+bytfl	.byt 0
+eoifl	.byt 0
+byte	.byt 0
 
 	.data
 owntask   .byt 0
@@ -775,7 +778,7 @@ rxop      sta cmd
           jsr IECOPEN
           bcs rxe2
           jsr DISKST
-          bcs rxe2
+          bcs rxest
           lda PCBUF+FS_OPEN_STR
           ldy #F_STR
           sta (fzei),y
@@ -800,8 +803,10 @@ rxr1      lda #F_MODE_WR
           ldy actfil
           jmp endrx
 
-rxe2      jsr IECLOSE
-          lda #E_FNODRV
+rxe2    lda #E_FNODRV
+rxest	pha
+	jsr IECLOSE
+	pla
           .byt $2c
 rxepfad   lda #E_FNOPATH
           .byt $2c
@@ -878,22 +883,14 @@ xx2       tya
 rxe2a     bcs rxe2b
           jsr DISKST
 /*.( :bcc lll1: inc $d020: lll1 .)*/
-          bcs rxe2a
+          bcs rxest2
 	jsr getif
-#if 0 /*def NMIDEV*/
-	lda #NMI_OFF
-	jsr CTRLNMI
-#endif
           jsr TALK
           jsr SECTALK
           jsr IECIN
           jsr IECIN
           jsr UNTALK
 	jsr freif
-#if 0 /*def NMIDEV*/
-	lda #NMI_ON
-	jsr CTRLNMI
-#endif
           lda #0
           ldy #F_DRV     
           sta (fzei),y
@@ -911,6 +908,7 @@ rxe2a     bcs rxe2b
           jmp endrx
           
 rxe2b     jmp rxe2
+rxest2	jmp rxest
 
 rxcmds    
 #ifdef    NOCMD
@@ -971,12 +969,9 @@ rcr6      txa
 cmds      jsr SETFNPAR
           jsr IECOPEN    
           jsr DISKST
-          php
+          pha
           jsr IECLOSE
-          plp
-          lda #E_OK
-          bcc rcr7
-          lda #E_NODEV
+          pla
 rcr7      jmp endrx
 
 rxc2      cmp #FS_DELETE
@@ -1307,7 +1302,12 @@ opend     lda #E_NODEV
 	cmp #1
           rts
           
-&&DISKST  
+&&DISKST  .(
+	.data
+tmpy	.byt 0
+st	.byt 0
+	.text
+	sty tmpy
 	  jsr getif 
 	  lda #0
           sta status
@@ -1315,31 +1315,115 @@ opend     lda #E_NODEV
           lda #$6f
           jsr sectalk
           jsr IECIN
-          cmp #"1"
-          beq lx1
-          cmp #"0"
+	and #$0f
+	asl
+	asl
+	asl
+	asl
+	sta st
+	 
+	jsr IECIN
+	and #$0f
+	ora st
+	sta st		; st has status in BCD
+	  
+	  ldy status
           bne lx
-lx1       lda status
-          bne lx
-          clc
-          .byt $24
-lx        sec
-          php
-tya
-pha 
-ldy #0    
+
+	lda st
+	cmp #$20
+	bcc lok
+
+	ldy #<-1
+eloop	iny
+	lda doserr,y
+	beq lx
+	cmp st
+	bne eloop
+	lda osaerr,y
+	.byt $2c
+lx        lda #E_FNODRV
+	.byt $2c
+lok	lda #E_OK
+          pha
+
+	; reading all of the status message clears the blinking light
+	ldy #0    
 lxxx0
-jsr IECIN
-;sta $e000,y
-iny
-lda status
-beq lxxx0
-pla
-tay 
+	jsr IECIN
+	;sta $e000,y
+	iny
+	lda status
+	beq lxxx0
+
           jsr UNTALK
 	  jsr freif
-          plp
+	ldy tmpy
+          pla
+	cmp #1
           rts
+
+	; DOS error codes in BCD
+doserr	.byt $20 	; READ ERROR (block header not found)
+	.byt $21	; READ ERROR (no sync)
+	.byt $22	; READ ERROR (no data block)
+	.byt $23	; READ ERROR (checksum in data block)
+	.byt $24	; READ ERROR (byte decoding error)
+	.byt $25	; WRITE ERROR (write verify error)
+	.byt $26	; WRITE PROTECT
+	.byt $27	; READ ERROR (checksum in header)
+	.byt $28	; WRITE ERROR (long data block)
+	.byt $29	; DISK ID MISMATCH
+	.byt $30	; SYNTAX (general)
+	.byt $31	; SYNTAX (invalid command)
+	.byt $32	; SYNTAX (long line)
+	.byt $33	; SYNTAX (invalid file name)
+	.byt $34	; SYNTAX (no file given)
+;	.byt $50	; RECORD NOT PRESENT (rel file)
+;	.byt $51	; OVERFLOW IN RECORD (rel file)
+;	.byt $52	; FILE TOO LARGE (rel file)
+	.byt $60	; WRITE FILE OPEN (file open for reading)
+	.byt $61	; FILE NOT OPEN
+	.byt $62	; FILE NOT FOUND
+	.byt $63	; FILE EXISTS
+	.byt $64	; FILE TYPE MISMATCH
+;	.byt $65	; NO BLOCK (block allocate)
+	.byt $70	; NO CHANNEL (out of channels when opening a file)
+	.byt $71	; DIR ERROR (BAM problem in disk memory)
+	.byt $72	; DISK FULL
+	.byt $73	; DOS MISMATCH (also on startup, identifying drive type)
+	.byt $74	; DRIVE NOT READY
+	.byt 0
+
+	; corresponding GeckOS error codes
+osaerr	.byt E_FMEDIA	; 20
+	.byt E_FMEDIA	; 21
+	.byt E_FMEDIA	; 22
+	.byt E_FMEDIA	; 23
+	.byt E_FMEDIA	; 24
+	.byt E_FMEDIA	; 25
+	.byt E_FWPROT	; 26
+	.byt E_FMEDIA	; 27
+	.byt E_FMEDIA	; 28
+	.byt E_FMEDIA	; 29
+	.byt E_FINTERNAL; 30
+	.byt E_FINTERNAL; 31
+	.byt E_FNAMLEN	; 32
+	.byt E_FILLNAM	; 33
+	.byt E_FINTERNAL; 34
+	; rel file 50-52 ignored
+	.byt E_FLOCKED	; 60
+	.byt E_FINTERNAL; 61
+	.byt E_FNOFIL	; 62
+	.byt E_FILEXIST	; 63
+	.byt E_FILETYPE	; 64
+	; 65 ignored
+	.byt E_NOMEM	; 70
+	.byt E_FLOGICAL	; 71
+	.byt E_FDISKFULL; 72
+	.byt E_DISKTYPE	; 73
+	.byt E_FMEDIA	; 74
+	.)
           .)
 #endif
 

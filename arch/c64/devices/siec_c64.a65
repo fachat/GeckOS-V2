@@ -32,11 +32,8 @@
 
 #include "chips/cia6526.i65"
 
-	.zero
+	.data
 cnt2      .byt 0
-byte      .byt 0
-bytfl     .byt 0
-eoifl     .byt 0
 	.text
 
 	/* when we get the IEC semaphore, we have nothing to do left,

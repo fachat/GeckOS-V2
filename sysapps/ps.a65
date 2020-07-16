@@ -166,7 +166,7 @@ i1        jsr spout
 name      ldy #0
 i4        lda PCBUF+TN_NAME,x
           beq i3
-          jsr stdout
+          jsr chrout
           iny
           inx
           cpy #TNAMLEN

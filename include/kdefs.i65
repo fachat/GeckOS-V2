@@ -125,6 +125,8 @@
 
 #define	  E_NOTHREAD  	<-26	/* no more free thread */
 
+#define	  E_SYNTAX  	<-27	/* syntax error */
+
 /* file handling errors */
 
 #define   E_FNODRV  	<-32	/* illegal drive number			*/
@@ -140,6 +142,8 @@
 #define	  E_FMEDIA	<-42	/* media error				*/
 #define	  E_FLOGICAL	<-43	/* bad logical structure on media 	*/
 #define	  E_FINTERNAL	<-44	/* internal error - should not happen!	*/
+#define	  E_FILETYPE	<-45	/* invalid file type / mismatch!	*/
+#define	  E_DISKTYPE	<-46	/* invalid file type / mismatch!	*/
 
 #define	  E_LASTERR	<-96	/* for customized error numbers 	*/
 

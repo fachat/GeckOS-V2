@@ -1,0 +1,52 @@
+
+= dup(1)
+:doctype: manpage
+
+== NAME
+dup - re-open a file by creating a new file descriptor for it
+
+== SYNOPSIS
+Input::
+	* X: old STDIO file nr (STDIN, STDOUT, or STDERR)
+Call::
+	jsr dup
+Output::
+	* C=0
+		** X: new file descriptor
+	* C=1
+		** AC - error code 
+
+NOTE: modifies all registers
+
+== DESCRIPTION
+This call 'reopens' a file, i.e. it returns a new file-nr that is used as the old one. They share the same read/write pointers etc. Both file-nrs must be closed. This way the same file can be given to STDOUT and STDERR in a fork call, for example.
+
+If dup is given a read-write file-nr, both sides are duped and the returned file-nr is bi-directional again.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOFILE:: 
+	not a valid file number
+
+
+== SEE ALSO
+link:../lib6502.7.adoc[lib6502(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fopen.1.adoc[fopen(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fread.1.adoc[fread(1)]
+link:fseek.1.adoc[fseek(1)]
+link:pipe.1.adoc[pipe(1)]
+link:flock.1.adoc[flock(1)]
+link:fcntl.1.adoc[fcntl(1)]
+link:fcmd.1.adoc[fcmd(1)]
+link:stddup.1.adoc[stddup(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

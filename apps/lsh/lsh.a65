@@ -173,7 +173,10 @@ next	lda #" "
 	jsr waitpid
 	jmp loop
 
-errclr	cmp #E_EOF
+errclr	pha
+	jsr lcrlfout
+	pla
+	cmp #E_EOF
 	bne noteof
 	jsr source_pull	; check if we are "source'ing" a file, and restore old STDIN
 	bcc loop
@@ -230,12 +233,15 @@ getcmd	.(
 tx	.byt 0
 ty	.byt 0		; index in ap (cmdline arguments)
 ta	.byt 0
+didrd	.byt 0		; we did read, so successful parse gives crlf
 	.zero
 &ap	.word 0
 	.text
 
 	ldx #<-1
 	stx waitfl
+	inx
+	stx didrd
 
 	bit ispiped
 	bmi contpipe	; ok, piped
@@ -272,6 +278,8 @@ docmd	; pass a/y	; warning, argp is used outside loop
 	jsr tokenize
 	sta ap
 	sty ap+1
+
+	dec didrd	; mark for crlf at exit
 
 #ifdef LSH_DEBUG
 	lda #10
@@ -380,7 +388,10 @@ out1	jmp redir_out
 
 err1	jmp redir_err
 
-ende	
+ende	bit didrd
+	bpl nord
+	jsr lcrlfout
+nord
 	lda #<buf
 	ldy #>buf
 	clc
@@ -643,7 +654,7 @@ readline .(
 instr	.byt 0
 prev 	.byt 0
 	.data
-promptxt .byt 13,10,PROMPTCHAR,0
+promptxt .byt PROMPTCHAR,0
 	.text
 
 	stx instr
@@ -1075,11 +1086,6 @@ nextw2	inc cnt
 	jsr forkto
 	bcc ok
 	pha
-	lda #"?"
-	jsr putc
-	jsr crlfout
-	pla
-	pha
 	jsr hexout
 	jsr spout
 	pla
@@ -1136,18 +1142,21 @@ next	asl
 	.data
 	; immediate execution
 bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
-	.word bic_dup, bic_help, bic_source
+	.word bic_dup, bic_help, bic_source, bic_lsenv
 	; background execution after parsing
 bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
-	.word       0, bgc_help,          0
+	.word       0, bgc_help,          0, bgc_lsenv
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0, "help",0, "source", 0
+	.asc "dup",0, "help",0, "source", 0, "lsenv", 0
 	.byt 0
 	.text
 
 xcrlfout .(
 	ldx buf+1	; stdout
+	.byt $2c
+&ecrlfout
+	ldx #STDERR
 	lda #13
 	sec
 	jsr fputc
@@ -1167,6 +1176,39 @@ bgc_help .(
 	jsr fclose
 	lda #E_OK
 	rts
+	.)
+
+	; print the set of environment variables
+bgc_lsenv .(
+	jsr bgpull
+	sta buf+1
+
+	jsr getenvp
+	sta cp
+	sty cp+1
+
+	ldx buf+1
+
+	ldy #0
+lse1	lda (cp),y
+	beq next
+	jsr fputc
+	iny
+	bne lse1
+	beq lsend
+next	iny
+	beq lsend
+	lda (cp),y
+	beq lsend
+	jsr xcrlfout
+	jmp lse1
+lsend
+	jsr xcrlfout
+	ldx buf+1
+	jsr fclose
+	lda #E_OK
+	rts
+
 	.)
 
 	; set the shell's stdx streams to the redirected streams from the dup command
@@ -1263,6 +1305,7 @@ bic_echo .(
 	sty cp+1
 
 	jsr bgpushpar
+&bic_lsenv
 &bic_help
 &bic_uname
 	ldx buf+1 
@@ -1611,6 +1654,7 @@ found	ldx #5
 	lda ctabr
 	jsr strerror
 	jsr etxtout
+	jsr ecrlfout
 	jsr decnum
 	jmp checksig
 	.)

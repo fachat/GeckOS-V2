@@ -44,7 +44,6 @@ first
 	bpl short
 	lda #16
 short	sta optlong
-	jsr crlfout
 
 	jsr fileloop
 
@@ -109,7 +108,7 @@ line	; do we need an address?
 	lda index
 	bne noaddr
 	lda #"."
-	jsr stdout
+	jsr chrout
 	lda offset
 	ldy offset+1
 	jsr hexwout
@@ -174,7 +173,7 @@ prout	lda lbuf,y
 	cmp #32
 	bcs prok
 	lda #"."
-prok	jsr stdout
+prok	jsr chrout
 	iny
 	cpy optlong
 	bcc prout

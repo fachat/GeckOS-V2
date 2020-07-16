@@ -45,6 +45,8 @@ The shell has a number of built-in commands:
 	Replace the input / output / error streams with the ones given for dup
 *source <FILE>*::
 	Execute the contents of the given file
+*lsenv*::
+	Print the list of environment variables
 *help*::
 	Print a short description
 

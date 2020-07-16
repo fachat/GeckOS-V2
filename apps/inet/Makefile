@@ -1,5 +1,5 @@
 
-files= tlogind telnet httpd
+files= tlogin telnet httpd
 
 all: ${files}
 
