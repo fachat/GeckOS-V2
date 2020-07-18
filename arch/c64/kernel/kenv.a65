@@ -65,11 +65,14 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 
 
 &inienv .(
-	lda #<-1
-	sta actThread
-	sta actTask
-	lda #1
-	sta Syscnt
+	ldx #<-1
+	stx actThread
+	stx actTask
+	inx		; 0
+	stx ENVSAVE
+	stx ENVSAVE+1
+	inx		; 1
+	stx Syscnt
 	clc
 	rts
 	.)
