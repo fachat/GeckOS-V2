@@ -1395,6 +1395,7 @@ gnext     inx
 &gsetxy	  txa
 	  and #7
 	  tay
+	  txa
 	  lsr
 	  lsr
 	  lsr
