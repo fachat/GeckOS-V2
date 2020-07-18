@@ -179,6 +179,7 @@ i3        cpy #TNAMLEN
 i2	rts
 	.)
 
+	.data
 	; references used by getopts
 	; same order and len as optall/optlong/... option bytes above
 optslst	.asc "al",0 
@@ -202,6 +203,8 @@ helpstr	.asc 13,10
 	.asc " -a     show all entries",13,10
 	.asc " -l     show all fields",13,10
 	.asc 0
+
+	.text
 
 #include "../apps/common.a65"
 
