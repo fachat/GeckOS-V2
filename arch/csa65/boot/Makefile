@@ -4,7 +4,7 @@ XA=xa
 
 all: osa.d64 prom prom_romtest
 
-MANPAGES=../../../*/*/*.1.adoc
+#MANPAGES=../../../*/*/*.1.adoc
 
 apps = lsh lmon
 APPSDIR=../../../apps
@@ -18,7 +18,7 @@ FILESDIR=../../../apps/file
 filter = cat wc more hexdump
 FILTERDIR=../../../apps/filter
 
-inet = tlogind telnet httpd
+inet = tlogin telnet httpd
 INETDIR=../../../apps/inet
 
 prom: rom kernel lib

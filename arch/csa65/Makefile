@@ -122,6 +122,13 @@ csa_lmon.o65: csa_lmon.a65
 		csa_lmon.a65
 	${FILE} $@
 
+csa_ps.o65: csa_ps.a65
+	@echo "Building ps at 0x8000"
+	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
+		-o csa_ps.o65 \
+		csa_ps.a65
+	${FILE} $@
+
 csa_end.o65: csa_end.a65
 	@echo "Building lsh at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
@@ -144,6 +151,7 @@ clean:
 	rm -f csa_fsiec csa_fsiec.o65 
 	rm -f csa_lsh csa_lsh.o65 
 	rm -f csa_lmon csa_lmon.o65 
+	rm -f csa_ps csa_ps.o65 
 	rm -f csa_end csa_end.o65 
 	rm -f csa*-reloc.o65
 	(cd boot; ${MAKE} clean ;)
