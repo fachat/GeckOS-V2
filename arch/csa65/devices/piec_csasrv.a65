@@ -23,7 +23,6 @@
 
 
 #define   VIA1      $e840
-#define   PIA1      $e820
 
 #include "chips/via6522.i65"
 #include "chips/pia6521.i65"
@@ -38,10 +37,7 @@
 	.data
 filetab   .dsb FT_SLEN*ANZ_FT
 	.text
-#endif
 
-
-#ifndef NOLOOP          
           .(
           
 &&&iniftab .(
@@ -1697,23 +1693,10 @@ no1       rts
 #endif /* FSIEC_USE_STDLIB */
           .)
 
-#endif	/* NOLOOP */
 
-/* Blocktiefe 2 */
-
-
-timeout   lda #1
-          .byt $2c
-devnotpr  lda #128
-          jsr seterr
-          jsr eoihi
-          jsr davhi
-          jsr ndachi
-          sec
-          cli
-          rts
-          
-#ifndef NOLOOP
+devnotprx
+	jmp devnotpr
+        
 tiecout   .(
           ldy filenr
           lda filetab+ANZ_FT*FT_ST,y
@@ -1739,7 +1722,7 @@ to1       txa
           sei
           jsr davhi
           jsr tstdev     ;nrfdhi & ndachi = z
-          beq devnotpr
+          beq devnotprx
           lda byte
           jsr out
 ox1       jsr fragatn
@@ -1867,11 +1850,9 @@ s         sec
           rts
           .)
           .)
-#endif
 
 
 #ifdef INVERT
-#ifndef NOLOOP
 atnalo    lda VIA1+VIA_DRB
           ora #%00100000
           sta VIA1+VIA_DRB
@@ -1880,41 +1861,9 @@ atnahi    lda VIA1+VIA_DRB
           and #%11011111
           sta VIA1+VIA_DRB
           rts
-#endif
 
-eoilo     lda VIA1+VIA_DRB
-          ora #%00010000
-          sta VIA1+VIA_DRB
-          rts
-eoihi     lda VIA1+VIA_DRB
-          and #%11101111
-          sta VIA1+VIA_DRB
-          rts
-
-ndaclo    lda VIA1+VIA_DRB
-          ora #%00001000
-          sta VIA1+VIA_DRB
-          rts
-ndachi    lda VIA1+VIA_DRB
-          and #%11110111
-          sta VIA1+VIA_DRB
-          rts
-
-nrfdlo    lda #60
-          sta PIA1+PIA_CRB
-          rts
-nrfdhi    lda #52
-          sta PIA1+PIA_CRB
-          rts
-
-davlo     lda #60
-          sta PIA1+PIA_CRA
-          rts
-davhi     lda #52
-          sta PIA1+PIA_CRA
-          rts
 #else
-#ifndef NOLOOP
+
 atnahi    lda VIA1+VIA_DRB
           ora #%00100000
           sta VIA1+VIA_DRB
@@ -1925,116 +1874,7 @@ atnalo    lda VIA1+VIA_DRB
           rts
 #endif
 
-eoihi     lda VIA1+VIA_DRB
-          ora #%00010000
-          sta VIA1+VIA_DRB
-          rts
-eoilo     lda VIA1+VIA_DRB
-          and #%11101111
-          sta VIA1+VIA_DRB
-          rts
+#endif	/* NOLOOP */
 
-ndachi    lda VIA1+VIA_DRB
-          ora #%00001000
-          sta VIA1+VIA_DRB
-          rts
-ndaclo    lda VIA1+VIA_DRB
-          and #%11110111
-          sta VIA1+VIA_DRB
-          rts
-
-nrfdhi    lda #60
-          sta PIA1+PIA_CRB
-          rts
-nrfdlo    lda #52
-          sta PIA1+PIA_CRB
-          rts
-
-davhi     lda #60
-          sta PIA1+PIA_CRA
-          rts
-davlo     lda #52
-          sta PIA1+PIA_CRA
-          rts
-#endif
-
-waitdavhi lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne waitdavhi
-          and #$40
-          beq waitdavhi
-          rts
-
-tstdev    lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne tstdev
-          and #%10000001
-          cmp #%10000001
-          rts
-
-#ifdef INVERT
-clrdata   lda #0
-          sta PIA1+PIA_PB
-          rts
-
-out       sta PIA1+PIA_PB
-          rts
-#else
-clrdata   lda #<-1
-          sta PIA1+PIA_PB
-          rts
-
-out       eor #$ff
-          sta PIA1+PIA_PB
-          rts
-#endif
-
-waitnrfdhi
-          lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne waitnrfdhi
-          asl
-          bcc waitnrfdhi
-          rts
-
-fragndac  lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne fragndac
-          lsr
-          rts
-
-fragdav   lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne fragdav
-          asl
-          asl
-          rts
-
-seterr    ora status
-          sta status
-          rts
-
-bytin     lda PIA1+PIA_PA
-          eor #$ff
-          rts
-
-&setti    lda #<65000
-          sta VIA1+VIA_T1CL
-          lda #>65000     
-          sta VIA1+VIA_T1CH
-          rts
-&fragti   lda VIA1+VIA_IFR
-          and #%01000000
-          rts
-
-frageoi   lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne frageoi
-          lsr
-          lsr
-          rts
-
-
-#undef PIA1
 #undef VIA1
 

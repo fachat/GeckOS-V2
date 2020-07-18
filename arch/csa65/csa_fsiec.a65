@@ -61,7 +61,7 @@
 /************* fsiec - as IEEE488 bus filesystem        */
 
 
-#undef	NOLOOP		/* currently there is a bug in xa 2.3.10 that prevents this */
+#define	NOLOOP		/* currently there is a bug in xa 2.3.10 that prevents this */
 #undef	NOFS
 #undef	NOCMD
 
