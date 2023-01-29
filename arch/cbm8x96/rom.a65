@@ -26,6 +26,9 @@
 /*			These defines control the ROM build		   */ 
 /*									   */ 
 
+#define PET_KEYB_GRAPHICS
+
+// test
 #define   ROM
 #undef   EMUTEST
 
