@@ -38,6 +38,7 @@ As the 6502 does not have enough and not large enough registers to give address 
 * 2/3: length of buffer (2 bytes)
 * 4: type of buffer (1 byte)
 * 5: buffer flags (1 byte)
+* (6/7: amount of data stored - see API)
 
 This buffer definition is given to the kernel once, and is then used throughout
 the communication in the channel (see below).
@@ -50,10 +51,195 @@ memory area - so no copying is required for the actual data transfer.
 
 === Channel
 
-Channel replace the stream. Once a communication is established and the
+Channels replace streams. Once a communication is established and the
 buffer is given to the kernel, only the channel number is used for further calls.
 
+The kernel maintains two buffers for each channel - one for the sender, one for the receiver.
+The sender writes data into its own buffer, then tells the kernel how many bytes are written.
+The kernel then copies the data over to the receiver buffer. When the receiver
+calls the kernel, it gets the amount of data that it can read from the buffer.
+
+If specific flags are given (tbd), the kernel can re-map the buffer, and overwrite
+the buffer definition block address and length. The reason is that re-mapping
+read- and write buffers to the same address allows for zero-copy loading or saving of 
+data from/to devices.
+
+=== Ports
+
+A process can register a port number with the kernel. This port number can be looked
+up using the locator API, and is then used to send a message to that process.
+
+This way a process can register multiple ports for multiple services.
+
+== Compatibility
+
+The streams API - GETSTR, GETC, PUTC, FRESTR, UNGETC - will be re-created for 
+buffers to allow simple migration.
+
+The SEND/RECEIVE API will be replaced with a new API.
 
 == APIs
+
+=== SEND/RECEIVE
+
+PCONNECT:: send a message to another task - initiate a SEND/RECEIVE channel.
+	The (best/only?) supported buffer type is the Message buffer.
+	PCONNECT blocks until the message has been fully taken out of the buffer.
+	Further communication on that channel is then done by using CPUSH and CPULL.
+	Input:::
+	* AC/YR - address of buffer definition block
+	* XR - target port number
+	Output:::
+	* C=1 - error
+		** AC - error code
+			*** E_ILLPAR - not a valid port number (not open for listening)
+			*** E_INT - the call has been interrupted by a signal
+				(semantics / preserved registers to be defined)
+	* C=0 - success
+		** XR - channel number to use for further communication
+
+PLISTEN:: register a port
+	Input:::
+		* none
+	Output:::
+	* C=1 - error
+		** AC - error code
+	* C=0 - success
+		** XR - port number to use for further communication
+
+PACCEPT:: bind a buffer to an incoming port send (PCONNECT) request.
+	Copy the initial message to the receiver buffer. The (best/only?) supported
+	buffer type is the Message buffer.
+	Further communication on that channel is then done by using CPUSH and CPULL.
+	Input:::
+	* AC/YR - address of buffer definition block
+	* XR - port number
+	Output:::
+	* C=1 - error
+		** AC - error code
+			*** E_ILLPAR - not a valid port number or port already in use (another process waiting)
+			*** E_INT - the call has been interrupted by a signal
+				(semantics / preserved registers to be defined)
+	* C=0 - success
+		** XR - channel number to use for further communication
+
+PCLOSE:: close a port
+	Input:::
+	* XR - port number
+	* C=1 - error
+		** AC - error code
+			*** E_ILLPAR - not a valid port number or port already closed
+	Output:::
+	* C=0 - success
+
+=== CHANNEL
+
+GETCHAN:: allocate a new channel
+	Replacement for GETSTR
+	Input:::
+		* n/a
+	Output:::
+	* C=0 - success
+		** XR - new channel number
+	* C=1 
+		** AC - error code
+
+CPUT:: send a byte to a channel
+	Input:::
+		** XR - channel number
+		** AC - byte to send
+	Output:::
+	* C=0 - success
+	* C=1 
+		** AC - error code
+
+CGET:: get a byte from a channel
+	Input:::
+		** XR - channel number
+	Output:::
+	* C=0 - success
+		** AC - byte taken from channel
+	* C=1 
+		** AC - error code
+
+FRECHAN:: release a channel
+	Replacement for FRESTR
+	Input:::
+		** XR - channel number
+	Output:::
+	* C=0 - success
+	* C=1 
+		** AC - error code
+
+CHANCMD:: modify a channel
+	Replacement for STDCMD
+
+CBUF:: set the read or write buffer for a channel
+	Input:::
+		** C - 0=read buffer, 1=write buffer
+		** XR - channel number
+		** AC/YR - address of buffer definition block
+	Output:::
+	* C=0 - success
+	* C=1 
+		** AC - error code
+
+CPUSH:: send bytes in buffer to other end
+	Input:::
+		** XR - channel number
+		** AC - number of bytes to be sent
+	Output:::
+	* C=0 - success
+		** AC - number of bytes the receiver has already taken from the local buffer since the last call
+	* C=1 
+		** AC - error code
+
+CPULL:: get bytes from other end into buffer
+	Input:::
+		** XR - channel number
+		** AC - number of bytes to acknowledge (that have been read) since the last call
+	Output:::
+	* C=0 - success
+		** AC - number of bytes that have been transferred to the local buffer
+	* C=1 
+		** AC - error code
+
+
+== Buffer types
+
+Four different buffer types can be used. Each buffer type works differently. The behaviour of each buffer type is described below
+
+=== Message buffers
+
+The Message buffer is a buffer that does an "all or nothing" approach when sending (CPUSH) or receiving (CPULL). It is used
+to replace the "PCBUF" used for sending and receiving in V1 and V2. 
+
+
+
+=== Ring buffers
+
+A Ring buffer allows continuous streaming, using a read and a write pointer that wrap around at the end of the buffer's size.
+
+
+
+=== RW buffers
+
+An RW buffer is a buffer that is read or written once. After that the channel is either closed, or the buffer
+needs to be re-defined with CBUF.
+
+
+=== Mapped buffers
+
+A Mapped buffer allows direct intercommunication between two processes through a memory mapped area.
+
+
+== Implementation guidelines
+
+In V1 and V2, the kernel manages a single, internal ring buffer to transfer bytes with streams.
+In V3, the kernel manages multiple buffer definition blocks - one for reading and one or potentially more
+for writing.
+
+When the channel is created, an internal ring buffer is allocated and set as read buffers.
+This channel is being used by CPUT and CGET.
 
 
