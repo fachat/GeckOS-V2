@@ -180,10 +180,12 @@ XTO       JSR YIELD
 timeout   lda #1
           .byt $2c
 devnotpr  lda #128
+	pha
           jsr seterr
           jsr eoihi
           jsr davhi
           jsr ndachi
+	pla
           sec
           cli
           rts
