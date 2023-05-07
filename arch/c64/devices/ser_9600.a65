@@ -53,10 +53,23 @@
  */
 
 #define	VICE
-;#define	RTSINVERT
-;#define	CTSINVERT
-;#define	RXINVERT
-;#define	TXINVERT
+
+#ifdef VICE
+#define	RTSINVERT	%00000010
+#define	CTSINVERT	%01000000
+#define DTRINVERT	%00000100
+#define	DSRINVERT	%10000000
+#endif
+#define	RXINVERT	0
+#define	TXINVERT	0
+
+#ifdef NTSC
+#define	RXTIMER		111
+#define	TXTIMER		55
+#else
+#define	RXTIMER		103
+#define	TXTIMER		51
+#endif
 
           .(
 	  .word devend2
@@ -163,14 +176,14 @@ l0	lsr
 	sta C64CIA1+CIA_ICR	; disable IRQ for CIA1 timer A
 	lda #%10001000		
 	sta C64CIA1+CIA_ICR	; enable IRQ for CIA1 SR empty/full
-	lda #<50
+	lda #<TXTIMER
 	sta C64CIA1+CIA_TAL
-	lda #>50
+	lda #>TXTIMER
 	sta C64CIA1+CIA_TAH
 	lda #%01010001		; start timer A, force load, cont mode, SR out
 	sta C64CIA1+CIA_CRA
 
-#ifdef TXINVERT
+#if TXINVERT
 	lda #$20
 #else
 	lda #$df
@@ -179,7 +192,7 @@ l0	lsr
 #ifdef VICE
 	jsr delay
 #endif
-#ifdef TXINVERT
+#if TXINVERT
 	lda #$00
 #else
 	lda #$ff
@@ -196,15 +209,13 @@ l0	lsr
 	and #%10111111
 	sta C64CIA2+CIA_CRA	; set SDR for input
 
-	; program CIA2 for I/O
-	; bit 7 = DSR out
+	; program CIA2 for I/O Port B
+	; bit 7 = DSR out - re-purposed for pulse output on PB7
 	; bit 2 = DTR out
 	; bit 1 = RTS out
-	lda #%10000110
+	lda #%10000110 ^ DTRINVERT ^ RTSINVERT
 	sta C64CIA2+CIA_PRB
-	lda C64CIA2+CIA_DDRB
-	and #%10000110
-	ora #%10000110
+	lda #%10000110
 	sta C64CIA2+CIA_DDRB
 
 	lda #$80
@@ -215,7 +226,7 @@ l0	lsr
 	ldy #>NMIserial
 	jsr SETNMI		; old NMIvector is saved by SETNMI 
 
-	lda #%10000010		; dtr low
+	lda #%10000000 ^ RTSINVERT ^ DTRINVERT		; dtr,rts low
 	sta C64CIA2+CIA_PRB
 
 	plp
@@ -244,7 +255,7 @@ notmyirq
 	bvc endtx		; we don't send (DC_SW_TX)
 
 	bit C64CIA2+CIA_PRB
-#ifdef CTSINVERT
+#if CTSINVERT
 	bvc endtx
 #else
 	bvs endtx		; CTS hi
@@ -264,7 +275,7 @@ valid
 	ldx prefetch
 	lda bytetab,x
 	lsr
-#ifdef TXINVERT
+#if TXINVERT
 	eor #$ff
 #endif
 	sta C64CIA1+CIA_SDR	; 7 data bits, 1 start bit
@@ -273,7 +284,7 @@ valid
 #ifdef VICE
 	jsr delay
 #endif
-#ifdef TXINVERT
+#if TXINVERT
 	eor #$ff
 #endif
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
@@ -303,10 +314,15 @@ endtx
 	cpx inp
 	beq nobyt	; no byte to fetch
 
+inc $e000+37
+
 fetch	lda inbuf,x
 	tax
 	lda bytetab,x
 	ldx outstr
+
+sta $e000+36
+stx $e000+35
 
 	cmp brkkey
 	bne nobrk
@@ -391,8 +407,13 @@ off
 	.word oldnmi
 	.word ctrlnmi
 NMIserial .(
+	bit C64CIA2+CIA_ICR	; clear NMI bit, check NMI
+	bpl notmine
+
 	pha
 	cld
+inc $d020
+
 	bit rmode
 	bmi startbit
 databyte
@@ -401,30 +422,32 @@ databyte
 
 	lda #%00010010
 	sta C64CIA2+CIA_CRB	; stop timer
-	lda #%00001000		; lsr was one byte less but more difficult to understand
-	sta C64CIA2+CIA_ICR	; disable SDR NMI
+	; we keep SDR NMI on at all times
+	;lda #%00001000		
+	;sta C64CIA2+CIA_ICR	; disable SDR NMI
 	lda #%10010000
 	sta C64CIA2+CIA_ICR	; enable Flag2 NMI
 	
 	inc rmode		; $7f -> $80
 
 	lda C64CIA2+CIA_SDR	; only SDR NMI should be set
-
-	bit C64CIA2+CIA_ICR	; clear NMI bit
-#ifdef RXINVERT
+	;bit C64CIA2+CIA_ICR	; clear NMI bit
+#if RXINVERT
 	eor #$ff
 #endif
 	ldx inp
 	sta inbuf,x
 	inc inp
 
+sta $e000+39
 	lda status		; are we at high water mark?
+sta $e000+38
 	and #DC_SW_RXHW
 	bne endnmi		; no, then do not allow next byte
 
 	; rts lo - allow next byte
 	lda C64CIA2+CIA_PRB
-#ifdef RTSINVERT
+#if RTSINVERT
 	ora #%00000010
 #else
 	and #%11111101
@@ -434,28 +457,30 @@ endnmi
 	pla
 	tax
 	pla
-	jmp (oldnmi)
+notmine	jmp (oldnmi)
 
 startbit	
 	dec rmode		; $80 -> $7f
-	lda C64CIA2+CIA_SDR
 	lda #%00010011
 	sta C64CIA2+CIA_CRB	; start timer, force load latch
 	sta C64CIA2+CIA_ICR	; disable Flag2 NMI
-	lda #%10001000
-	sta C64CIA2+CIA_ICR	; enable SR NMI
+
+	; SDR NMI is already set in nmi_on
+	;lda #%10001000
+	;sta C64CIA2+CIA_ICR	; enable SR NMI
 
 	; rts hi - so next byte is delayed until we got this one
+#ifndef VICE
 	lda C64CIA2+CIA_PRB
-#ifdef RTSINVERT
+#if RTSINVERT
 	and #%11111101
 #else
 	ora #%00000010
 #endif
 	sta C64CIA2+CIA_PRB
-
+#endif
 	pla
-	bit C64CIA2+CIA_ICR
+	;bit C64CIA2+CIA_ICR
 	jmp (oldnmi)
 	.)
 
@@ -467,17 +492,26 @@ nmion   .(
 	cmp #NMI_ON
 	bne nonmi
 &nmi_on
-	lda #<100
+	lda #<RXTIMER
 	sta C64CIA2+CIA_TBL
-	lda #>100
+	lda #>RXTIMER
 	sta C64CIA2+CIA_TBH
 
 	lda #%00010010
 	sta C64CIA2+CIA_CRB	; Timer B force load, stop, pulse PB7
 
-	lda C64CIA2+CIA_ICR	; clear NMI
-	lda #%10011000		; enable IRQ for Flag2
+	lda #%10011000		; enable IRQ for Flag2, SDR
+	bit C64CIA2+CIA_ICR	; clear NMI
 	sta C64CIA2+CIA_ICR
+
+	; rts lo - allow next byte
+	lda C64CIA2+CIA_PRB
+#if RTSINVERT
+	ora #%00000010
+#else
+	and #%11111101
+#endif
+	sta C64CIA2+CIA_PRB
 nonmi
 	rts
 	.)
@@ -503,7 +537,7 @@ rtshi
 	sta status	
 rts_hi
 	lda C64CIA2+CIA_PRB
-#ifdef RTSINVERT
+#if RTSINVERT
 	and #%11111101
 #else
 	ora #%00000010
@@ -523,7 +557,7 @@ rtslo
 	bne nolo
 rts_lo
 	lda C64CIA2+CIA_PRB
-#ifdef RTSINVERT
+#if RTSINVERT
 	ora #%00000010
 #else
 	and #%11111101

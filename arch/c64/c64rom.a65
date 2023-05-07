@@ -48,6 +48,10 @@
 
 /*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
+#define	VICE				/* UP9600 interface gets configured */
+
+/* #define	NTSC */			/* for the UP9600 interface */
+
 #define	ROMSTART	$9000	/* where the ROM starts */
 
 #define	RAMSTART	1
@@ -159,9 +163,18 @@
 
 /************* devices	 				*/
 
+#echo devices
+devices_start=*
+
 #include  "devices/c64dev.a65"
 
+#print devices_start
+#print *-devices_start
+
 /************* init process 				*/
+
+#echo init
+init_start=*
 
 #define	INIT_VERBOSE
 #define	INIT_RESTART
@@ -172,11 +185,23 @@
 
 #include  "sysapps/init/init.a65"
 
+#print init_start 
+#print *-init_start
+
 /************* fsdev - converts devices into files 	*/
+
+#echo fsdev
+fsdev_start=*
 
 #include  "sysapps/fs/fsdev.a65"
 
+#print fsdev_start
+#print *-fsdev_start
+
 /************* fsiec - IEEE488/IEC bus filesystem 	*/
+
+#echo fsiec
+fsiec_start=*
 
 /* both, the parallel and serial iec bus use the same timer */
 #define	SEM_CIA2TB	SEM_SERIEC
@@ -191,7 +216,9 @@
 #endif
 #include  "sysapps/fs/fsiec.a65"
 #undef	FSIEC_DEVICE
-#print *
+
+#print fsiec_start 
+#print *-fsiec_start
 
 
 /************* mon - OS/A 1 old style monitor/shell	*/
@@ -209,6 +236,9 @@
 /************* boot slipd from BOOTDRV, wwwdrv c and stderr to video3	*/
 
 #ifdef INETSTART
+
+#echo inetstart
+inet_start=*
 
 	/* add autostart of lib6502 program 'slipd' */
 
@@ -230,6 +260,9 @@
 end_slipd
 	.)
 
+#print inet_start 
+#print *-inet_start
+
 #endif
 
 /************* boot lsh from BOOTDRV			*/
@@ -237,6 +270,8 @@ end_slipd
 #ifdef BOOTDRV
 
 	/* add autostart of lib6502 program 'lsh' */
+#echo lshboot
+lsh_start=*
 
 	.(
 	.word end_auto
@@ -250,6 +285,9 @@ end_slipd
 end_auto
 	.)
 
+#print lsh_start 
+#print *-lsh_start
+
 #endif
 
 /************* end of ROM executables			*/
@@ -259,13 +297,19 @@ end_auto
 /************* lib6502 code				*/
 
 #echo "lib6502 starts at"
-#print *
+lib6502_start=*
 
 /* lib6502 jmp table is below STDIOADDR */
 
 #include  "lib6502/lib6502.a65"
 
+#print lib6502_start
+#print *-lib6502_start
+
 /************* fill not used area (I/O, screens)	*/
+
+#echo "filler"
+filler_start=*
 
 #if $d000-* < 0
 #echo "Error after lib6502"
@@ -276,8 +320,12 @@ end_auto
 .dsb $1c00, <-1			/* from d000 to f000 
 				   ($e000-ebff is screen buffer) */
 
+#print filler_start
+#print *-filler_start
+
 /************* Kernel					*/
-          
+
+#echo kernel          
 #print *
 
 #include  "kernel\kernel.a65"
