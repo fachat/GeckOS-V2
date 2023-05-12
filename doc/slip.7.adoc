@@ -239,19 +239,14 @@ To run the program, do the following steps:
     - You should have a shell prompt (">") with a binking cursor.
       Now start the slip.obj program by typing
 ----
-          c:slipd a:video3 c: c:tlogin <a:ser1 >a:ser1 &
+          slipd a:ser1 
 ----
 
-This starts the slip client from drive c: (usually Commodore serial 
-      IEC device #8, the floppy disk), piping the STDIO
-      to the C64 serial line ser1 (in standard C64 OS/A65 it's Daniel 
-      Dallmanns 9600 baud interface). STDERR is sent to the 3rd virtual
-      console (first command line parameter). The second parameter
-      is the drive to use as WWW server file source. The third parameter
-      is the program to start at a remote login on the telnet port.
-      The ampersand makes the slip program running in the background.
-      The slip program receives and sends its SLIP data via STDIO.
-      STDERR prints (currently a horrible lot of) debugging output.
+For more details see the man page for slipd, or run 
+
+----
+	slipd -?
+----
 
 You can also start the slipd program directly from the C64
       ROM, see c64rom.a65
