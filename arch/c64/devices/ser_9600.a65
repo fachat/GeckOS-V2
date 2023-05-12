@@ -314,15 +314,10 @@ endtx
 	cpx inp
 	beq nobyt	; no byte to fetch
 
-inc $e000+37
-
 fetch	lda inbuf,x
 	tax
 	lda bytetab,x
 	ldx outstr
-
-sta $e000+36
-stx $e000+35
 
 	cmp brkkey
 	bne nobrk
@@ -412,23 +407,24 @@ NMIserial .(
 
 	pha
 	cld
-inc $d020
 
 	bit rmode
 	bmi startbit
 databyte
-	txa
-	pha
 
 	lda #%00010010
 	sta C64CIA2+CIA_CRB	; stop timer
 	; we keep SDR NMI on at all times
 	;lda #%00001000		
 	;sta C64CIA2+CIA_ICR	; disable SDR NMI
+
+	inc rmode		; $7f -> $80
+
 	lda #%10010000
 	sta C64CIA2+CIA_ICR	; enable Flag2 NMI
 	
-	inc rmode		; $7f -> $80
+	txa
+	pha
 
 	lda C64CIA2+CIA_SDR	; only SDR NMI should be set
 	;bit C64CIA2+CIA_ICR	; clear NMI bit
@@ -439,9 +435,7 @@ databyte
 	sta inbuf,x
 	inc inp
 
-sta $e000+39
 	lda status		; are we at high water mark?
-sta $e000+38
 	and #DC_SW_RXHW
 	bne endnmi		; no, then do not allow next byte
 
