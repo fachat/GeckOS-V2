@@ -385,7 +385,9 @@ ctrlnmi	.(
 	lda status
 	and #DC_SW_RXHW
 	bne norts
+#ifndef VICE
 	jsr rts_lo
+#endif
 norts	lda status
 	and #%00010000
 	beq nonmi
@@ -393,8 +395,13 @@ norts	lda status
 nonmi	rts
 	
 off
+#ifdef VICE
+	jsr nmi_off
+;	jsr rts_hi
+#else
 	jsr rts_hi
 	jsr nmi_off
+#endif
 	rts
 	.)
 
@@ -439,6 +446,7 @@ databyte
 	and #DC_SW_RXHW
 	bne endnmi		; no, then do not allow next byte
 
+#ifndef VICE
 	; rts lo - allow next byte
 	lda C64CIA2+CIA_PRB
 #if RTSINVERT
@@ -447,6 +455,7 @@ databyte
 	and #%11111101
 #endif
 	sta C64CIA2+CIA_PRB
+#endif
 endnmi
 	pla
 	tax
@@ -530,6 +539,10 @@ rtshi
 	ora #DC_SW_RXHW
 	sta status	
 rts_hi
+#ifdef VICE
+	bit rmode
+	bpl rts_hi		; loop as long as we wait for byte
+#endif
 	lda C64CIA2+CIA_PRB
 #if RTSINVERT
 	and #%11111101

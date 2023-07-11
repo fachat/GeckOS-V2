@@ -19,6 +19,8 @@ FILTERDIR=../../../apps/filter
 inet = tlogin telnet httpd
 INETDIR=../../../apps/inet
 
+demo=forking forked semwait semlock sigrecv sigsend
+
 XA=xa
 
 X64=x64sc
@@ -49,7 +51,7 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${slipapps} ${apps} ${inet} c64rom boot loader index.html test.bat
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${SLIPAPPSDIR}/, ${slipapps}} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${SLIPAPPSDIR}/, ${slipapps}} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat $(demo)
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64

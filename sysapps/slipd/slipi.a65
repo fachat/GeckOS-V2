@@ -251,7 +251,7 @@ jsr ECrlfout
 	beq lenok
 	php
 discp	
-#if 0
+#if 1
 DB("discp: ip=")
 lda ip+1:jsr EHexout:lda ip:jsr EHexout
 DB(" ilen=")
