@@ -46,6 +46,7 @@
 
 
 #define	NOMIRRORMEM		/* ramtest kernel options */
+#define	RAMTEST
 #define	SHORTRAMTEST
 
 #define	NMIRESET

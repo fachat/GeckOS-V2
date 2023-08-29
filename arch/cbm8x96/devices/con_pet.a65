@@ -168,7 +168,7 @@ ix
 
 &setact   .(
 
-scrbuf	=$9000
+scrbuf	=$8800
 
 	.zero
 p1	.word 0

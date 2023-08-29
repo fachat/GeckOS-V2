@@ -44,10 +44,13 @@
 
 #undef    NMIDEV		/* there is no NMI in the PET machine */
 #undef   EOK_NOFILL		/* do not fill kernel to end of mem */
+#define	eok_addr $ffff
 
 #define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
 
 /* These are changeable ****************************************************/
+
+#define ROMSTART        43008   /* where the ROM starts */
 
 #define	MEMINIVAL	$0	/* Clear memory to 0 on boot */
 
@@ -64,10 +67,6 @@
 #undef	NEED_SLOCK
 #define	NEED_RENICE
 
-#define	BOOTDRV		"c"	/* where are the boot files (IEC device 8) */
-
-#define ROOTPATH        "c:"    /* where lsh chdirs into on boot */
-
 
 /***************************************************************************
  * 
@@ -81,118 +80,18 @@
 
 #include  "kernel.i65"
 
-#define SEM_VIAE840_T1  SEM_SERIEC
-#undef  SEM_SERIEC
-#undef  SEM_PARIEC
+
+/************* Kernel					*/
+
+#echo start of kernel:
+#print *
+s_kernel
 
 	.word *+2
-	  ; ROMSTART is here!
-#if ROMSTART-*
-	.x
-#endif
-.(
 
-/************* ROM entries 				*/
+#include  "kernel\kernel.a65"
 
-/************* devices	 				*/
-
-#echo start of devices: 
-#print *
-s_dev
-
-#include  "devices/devices.a65"
-
-#print *-s_dev
-
-/************* init process 				*/
-
-#echo start of init:
-#print *
-s_init
-
-#define	INIT_VERBOSE
-#define	INIT_RESTART
-#define	INIT_MERGE
-#define	INIT_LIB6502
-/* #define	INIT_USE_STDLIB */
-/* #define	INIT_OUTDEV	2*/
-#include  "sysapps/init/init.a65"
-
-#print *-s_init
-
-/************* fsdev - converts devices into files 	*/
-
-#echo start of fsdev:
-#print *
-s_fsdev
-
-#include  "sysapps/fs/fsdev.a65"
-
-#print *-s_fsdev
-
-/************* fsiec - IEEE488/IEC bus filesystem 	*/
-
-#echo start of fsiec:
-#print *
-s_fsiec
-
-/* both, the parallel and serial iec bus use the same timer */
-#define	SEM_CIA2TB	SEM_SERIEC
-#undef SEM_PARIEC
-#undef SEM_SERIEC
-
-#define	NOLOOP
-#define	FSIEC_DEVICE	"devices/piec_pet.a65"
-#include  "sysapps/fs/fsiec.a65"
-#undef	FSIEC_DEVICE
-
-#print *-s_fsiec
+#print *-s_kernel
 
 
-/************* mon - OS/A 1 old style monitor/shell	*/
-
-#echo start of mon:
-#print *
-s_mon
-
-#define	MON_SHEXE $c0		/* ROM executable flag */
-#define	MON_MONEXE 0		/* ROM executable flag */
-#define	MON_SHDEV 1		/* start on device 0 = video1 */
-#define	SHORTMON		/* no assembler/disassembler */
-#undef	NOSH
-#include  "sysapps/mon/mon.a65"
-
-#print *-s_mon
-
-
-/************* boot lsh from BOOTDRV			*/
-
-#echo start of boot entries:
-#print *
-s_boots
-
-#if 1
-	/* add autostart of lib6502 program 'lsh' */
-
-	.(
-	.word end_auto
-	.byt PK_LIB+PK_AUTOEXEC+PK_RESTART	; is lib6502 program
-	.word 0		; P_ADDR ignored
-	.byt 16		; P_RAM
-	.byt 128	; P_SHARED
-	.byt 0		; P_PRIORITY
-	.byt 0,0	; P_DEV
-	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH,0,0
-end_auto
-	.)
-
-#endif
-
-#print *-s_boots
-
-/************* end of ROM executables			*/
-
-          .word -1
-
-.)
 
