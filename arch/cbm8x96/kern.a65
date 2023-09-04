@@ -44,7 +44,6 @@
 
 #undef    NMIDEV		/* there is no NMI in the PET machine */
 #undef   EOK_NOFILL		/* do not fill kernel to end of mem */
-#define	eok_addr $ffff
 
 #define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
 

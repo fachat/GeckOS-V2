@@ -36,7 +36,8 @@ topclean:
 tar ../boot.tgz: rom loader howto.boot
 	tar czvf ../boot.tgz rom loader howto.boot
 
-loader: loader.bas
+loader: loader.bas romld.a65
+	xa romld.a65 -o romld.bin
 	petcat -l 0401 -w40 -o loader loader.bas
 
 ##############################################################################

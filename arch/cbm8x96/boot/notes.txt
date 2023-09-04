@@ -1,0 +1,4 @@
+
+Currently VICE screen goes blank at $fe28, when calling DEVCMD in idev
+(kernel/init.a65)
+
