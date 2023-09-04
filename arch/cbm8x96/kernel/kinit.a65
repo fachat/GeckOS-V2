@@ -82,6 +82,9 @@ ll1	  lda eok_addr,x	; set interrupt etc vectors
 	  dex
 	  bpl ll1
 
+#else
+	  lda #%11100000	; memory config plain bank 0
+	  sta $fff0		; I/O and screen peek through (system bank)
 #endif
 
 /* 
