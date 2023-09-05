@@ -49,7 +49,6 @@
 
 /* These are changeable ****************************************************/
 
-#define ROMSTART        43008   /* where the ROM starts */
 
 #define	MEMINIVAL	$0	/* Clear memory to 0 on boot */
 

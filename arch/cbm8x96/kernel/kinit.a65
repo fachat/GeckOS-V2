@@ -155,3 +155,10 @@ ok
  */
 #define	STARTMEM()
 
+/*
+ * Set memory map when entering the IRQ
+ */
+#define	SETENV4IRQ()	\
+	  lda #%11100000	;\
+	  sta $fff0		;
+

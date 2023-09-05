@@ -114,7 +114,6 @@ s_init
 #define	INIT_RESTART
 #define	INIT_MERGE
 #define	INIT_LIB6502
-/* #define	INIT_USE_STDLIB */
 /* #define	INIT_OUTDEV	2*/
 #include  "sysapps/init/init.a65"
 
@@ -126,6 +125,7 @@ s_init
 #print *
 s_fsdev
 
+/* #define	FSDEV_AS_INIT */
 #include  "sysapps/fs/fsdev.a65"
 
 #print *-s_fsdev
@@ -140,6 +140,8 @@ s_fsiec
 #define	SEM_CIA2TB	SEM_SERIEC
 #undef SEM_PARIEC
 #undef SEM_SERIEC
+
+/* #define	FSIEC_AS_INIT */
 
 #define	NOLOOP
 #define	FSIEC_DEVICE	"devices/piec_pet.a65"

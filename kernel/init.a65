@@ -504,6 +504,11 @@ c2	jmp (tmp2)
 #endif
           cld
           tsx
+
+#ifdef SETENV4IRQ
+	SETENV4IRQ()
+#endif
+
           lda $104,x
           and #$10
           beq pb1

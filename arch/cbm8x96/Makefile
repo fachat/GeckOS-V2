@@ -10,7 +10,7 @@ RELOC=reloc65
 
 lib lib.bin: lib.a65
 	# start binary at 910+2 = $0390
-	${XA} -I../../include -I../.. -DOSA2KERNEL=61140 -R -bt 910 -bd 768 -bz 8 -bb 65535 $< -o lib.o65 -l lib.lab;
+	${XA} -I../../include -I../.. -DOSA2KERNEL=61440 -R -bt 910 -bd 768 -bz 8 -bb 65535 $< -o lib.o65 -l lib.lab;
 	${FILE} lib.o65
 	${FILE} -V lib.o65 | grep LIB6502
 	${RELOC} -xt -o lib.bin lib.o65; 
@@ -22,7 +22,7 @@ kern kern.bin: kern.a65
 	${RELOC} -xt -o kern.bin kern.o65
 
 rom rom.bin: rom.a65
-	${XA} -I../../include -I../.. -R -DLIB6502=7103 -DOSA2KERNEL=61140 -bt 43006 -bd 56320 -bz 52 -bb 56960 $< -o rom.o65 -l rom.lab;
+	${XA} -I../../include -I../.. -R -DLIB6502=7103 -DOSA2KERNEL=61440 -bt 43006 -bd 56320 -bz 52 -bb 56960 $< -o rom.o65 -l rom.lab;
 	${FILE} rom.o65
 	${RELOC} -xt -o rom.bin rom.o65
 
