@@ -37,8 +37,10 @@ topclean:
 tar ../boot.tgz: rom loader howto.boot
 	tar czvf ../boot.tgz rom loader howto.boot
 
-loader: loader.bas romld.a65
+romld.bin: romld.a65
 	xa romld.a65 -o romld.bin
+
+loader: loader.bas romld.a65
 	petcat -l 0401 -w40 -o loader loader.bas
 
 ##############################################################################
@@ -46,7 +48,7 @@ loader: loader.bas romld.a65
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader
+osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader romld.bin
 	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom.bin lib.bin kern.bin romld.bin
 	rm -f ${sysapps} ${apps}
 
