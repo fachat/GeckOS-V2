@@ -27,7 +27,7 @@ rom rom.bin: rom.a65
 	${RELOC} -xt -o rom.bin rom.o65
 
 clean:
-	rm -f ${TRG} rom.lab rom.o65 boot.tgz lib.o65 lib.bin kern.bin kern.o65 rom.bin
+	rm -f ${TRG} *.lab rom.o65 boot.tgz lib.o65 lib.bin kern.bin kern.o65 rom.bin
 	(cd boot; ${MAKE} clean;)
 	# (cd apps; ${MAKE} clean;)
 

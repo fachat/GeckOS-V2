@@ -25,9 +25,10 @@ rom:
 	(cd ..; ${MAKE};)
 
 clean:
-	rm -f rom osa.d64 osa.x64
+	rm -f rom romld.bin osa.d64 osa.x64
 	rm -f ${sysapps} 
 	rm -f vice.trace reltest
+	rm -f monitor.log
 
 topclean:
 	# convenience
