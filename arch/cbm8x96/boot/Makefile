@@ -46,7 +46,7 @@ loader: loader.bas romld.a65
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader
-	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom 
+	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom.bin lib.bin kern.bin romld.bin
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64

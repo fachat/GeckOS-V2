@@ -27,7 +27,7 @@
 /*			These defines control the ROM build		   */ 
 /*									   */ 
 
-#define PET_KEYB_GRAPHICS
+;#define PET_KEYB_GRAPHICS
 
 /* These are necessary for PET kernel **************************************/
 
@@ -160,6 +160,11 @@ s_mon
 #define	MON_SHEXE $c0		/* ROM executable flag */
 #define	MON_MONEXE 0		/* ROM executable flag */
 #define	MON_SHDEV 1		/* start on device 0 = video1 */
+
+;#undef	SHORTMON		/* no assembler/disassembler */
+;#define	NOSH
+;#include  "apps/lmon/lmon.a65"
+; actually the old shell
 #define	SHORTMON		/* no assembler/disassembler */
 #undef	NOSH
 #include  "sysapps/mon/mon.a65"
