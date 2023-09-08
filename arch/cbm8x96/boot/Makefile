@@ -40,7 +40,7 @@ tar ../boot.tgz: rom loader howto.boot
 romld.bin: romld.a65
 	xa romld.a65 -o romld.bin
 
-loader: loader.bas romld.a65
+loader: loader.bas romld.bin
 	petcat -l 0401 -w40 -o loader loader.bas
 
 ##############################################################################
