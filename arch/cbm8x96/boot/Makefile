@@ -25,9 +25,10 @@ rom:
 	(cd ..; ${MAKE};)
 
 clean:
-	rm -f rom osa.d64 osa.x64
+	rm -f rom romld.bin osa.d64 osa.x64
 	rm -f ${sysapps} 
 	rm -f vice.trace reltest
+	rm -f monitor.log
 
 topclean:
 	# convenience
@@ -36,7 +37,10 @@ topclean:
 tar ../boot.tgz: rom loader howto.boot
 	tar czvf ../boot.tgz rom loader howto.boot
 
-loader: loader.bas
+romld.bin: romld.a65
+	xa romld.a65 -o romld.bin
+
+loader: loader.bas romld.bin
 	petcat -l 0401 -w40 -o loader loader.bas
 
 ##############################################################################
@@ -44,8 +48,8 @@ loader: loader.bas
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader
-	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom 
+osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader romld.bin
+	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom.bin lib.bin kern.bin romld.bin
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64

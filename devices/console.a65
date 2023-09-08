@@ -289,9 +289,9 @@ end1
 
 do_switch .(
           dex
-          bmi sw_mode    ; with shift
+          bmi sw_next    ; with shift
 	  dex
-	  bmi sw_next	 ; with ctrl
+	  bmi sw_mode	 ; with ctrl
 	  bpl sw_close
 
 	; next screen

@@ -222,16 +222,27 @@ A Ring buffer allows continuous streaming, using a read and a write pointer that
 
 
 
-=== RW buffers
+=== Uni buffers
 
-An RW buffer is a buffer that is read or written once. After that the channel is either closed, or the buffer
+An Uni buffer is a unidirectional, single use buffer that is read or written once. After that the channel is either closed, or the buffer
 needs to be re-defined with CBUF.
+This is used for example to load data from a file or store data in a file.
+
 
 
 === Mapped buffers
 
 A Mapped buffer allows direct intercommunication between two processes through a memory mapped area.
 
+
+== Buffer remapping
+
+To allow for optimized, if possible even zero-copy loads across environments, if a process is prepared for it,
+the channel buffer can be re-mapped by the kernel.
+
+1) flag to be set in CBUF to enable this feature
+
+2) specific return value for CPUSH/CPULL to then call CBUF again
 
 == Implementation guidelines
 

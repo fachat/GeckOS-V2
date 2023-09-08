@@ -257,15 +257,15 @@ ADR     .word 0
 	  bne mtask					:\
           tsx                                           :\
           stx SSP                                       :\
-          ldy actTask					:\
-          ldx taskTab+TT_ENV,y				:\
-          beq system					:\
-;.byt 2							:\
-          ldx #%10001100				:\
-          stx $fff0					:\
-system							:\
           ldy actThread                                 :\
           ldx threadTab+TH_SP,y                         :\
+          ldy actTask					:\
+          lda taskTab+TT_ENV,y				:\
+          beq system					:\
+;.byt 2							:\
+          lda #%10001100				:\
+          sta $fff0					:\
+system							:\
           txs						:\
 mtask	.)
 
@@ -295,17 +295,21 @@ mtask	.)
           ldx threadTab+TH_SP,y 
           txs
 
+          pha		 ; SR
+
+          lda AC
+	  pha
+
+	  lda #%11100000
 	  ldy actTask
 	  ldx taskTab+TT_ENV,y
 	  beq system
-	  ldx #%10001100	; map alternate 8x96 memory bank
-	  stx $fff0
+	  lda #%10001100	; map alternate 8x96 memory bank
 system
-
-          pha		 ; SR
-          lda AC
           ldy YR
           ldx XR
+	  sta $fff0		; must be after any access to kernel .data or .bss 
+	  pla
 mtask     
 	  plp
           rts
@@ -322,7 +326,7 @@ mtask
           pha
 
 	  lda #%11100000	; map system memory
-	  sta $fff0
+	  sta $fff0		; must be before any access to kernel .data or .bss
 
           lda Syscnt
           inc Syscnt

@@ -36,9 +36,6 @@
  * If you define INIT_OUTDEV with the device number, this device is used
  * to print the info, otherwise device 0 is used.
  * 
- * If INIT_USE_STDLIB is defined, init uses the (old) STDIO library, otherwise
- * it will include its own printing routines if INIT_VERBOSE is defined.
- *
  * If INIT_MERGE is defined, then files can be started with their STDOUT/STDERR
  * sent to the same device as the init process.
  *

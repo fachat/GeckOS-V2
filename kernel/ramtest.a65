@@ -30,6 +30,7 @@
  * memory areas and this is not checked.
  */
 
+#ifdef RAMTEST
 	  .(
           ; test mirrored memory, 256-byte-wise
 
@@ -110,6 +111,8 @@ mtlx
           bcc mtlx
 mtly      lda pz+1
 	  .)
-
+#else
+	lda #MIN_MEM
+#endif
 
 
