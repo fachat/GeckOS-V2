@@ -1605,8 +1605,8 @@ duperr    plp
           .)
     
           .(
-&&pbrk    
-	  jsr memsys
+&&pbrk    ; directly from the BRK interrupt handler
+	  jsr memsys		; before any access to kernel .data/.bss
           lda #TS_BRK
           ldy actThread
           sta threadTab+TH_ST,y

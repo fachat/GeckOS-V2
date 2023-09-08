@@ -505,10 +505,6 @@ c2	jmp (tmp2)
           cld
           tsx
 
-#ifdef SETENV4IRQ
-	SETENV4IRQ()
-#endif
-
           lda $104,x
           and #$10
           beq pb1
@@ -519,7 +515,7 @@ c2	jmp (tmp2)
           jmp pbrk
 &petirqjmp
 pb1 
-          jsr memsys
+          jsr memsys	; needs to be before accessing any kernel .data/.bss
 
 #ifdef SAVEMEM
 	  KERNELIRQ()
