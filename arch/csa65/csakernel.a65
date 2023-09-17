@@ -52,7 +52,7 @@
 #define	NMIRESET
 
 #undef	CMOSCPU
-#undef	NOSYSPORT
+#define	NOSYSPORT
 
 #define	RAMEND		$80	/* 32k in bank 0 */
 

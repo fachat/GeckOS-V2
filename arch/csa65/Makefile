@@ -78,6 +78,7 @@ csa_devices.o65: ../../devices/* devices/* csa_devices.a65
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 200 -bd 1800 -bb 3300 \
 		-DOSA2KERNEL=58368 \
 		-DROMSTART=32768 \
+		-l csa_devices.lab \
 		-o csa_devices.o65 \
 		csa_devices.a65
 	${FILE} $@
@@ -128,6 +129,7 @@ csa_mon.o65: csa_mon.a65
 	@echo "Building mon at 0x8000"
 	${XA} -I../.. -I../../include -I../../apps/lmon -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
 		-DOSA2KERNEL=58368 \
+		-DROMSTART=32768 \
 		-o csa_mon.o65 \
 		csa_mon.a65
 	${FILE} $@

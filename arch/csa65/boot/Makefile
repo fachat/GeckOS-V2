@@ -42,7 +42,7 @@ loader: loader.bas
 rom:
 	(cd ..; ${MAKE} csarom.bin;)
 	ln -sf ../csarom.bin
-	echo "00 00 10" | xxd -r > csarom
+	echo "00 00 08" | xxd -r > csarom
 	cat csarom.bin >> csarom
 
 rom_romtest:
