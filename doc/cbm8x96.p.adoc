@@ -1,0 +1,104 @@
+= CBM 8x96(P)
+:doctype: manpage
+
+== NAME
+OS/A65 CBM 8x96 Notes
+
+== DESCRIPTION
+The Commodore PET 8096 and 8296 (also known as CBM 8096 and CBM 9296) computers
+have at least 96 kByte of RAM and can remap the ROM area with RAM. This 
+makes them a nice base for OS/A65. Although they don't have many I/O devices
+at least they provide an 80 columns screen.
+
+The CBM8296 port is based on the PET 32k port regarding the types of devices and interrupt handling. But the memory management is considerably different, as shown in the next section.
+
+== Memory Map
+
+In the CBM 8x96 one can remap the upper 32k of CPU address space by 
+writing certain values to $fff0. The blocks +$8000-$bfff+ and
++$c000-$ffff+ can be remapped to two different banks of RAM
+each. The screen memory (+$8000-$9000+) and I/O 
+(+$e800-$efff+) can be set to `peek-through' separately.
+
+In the OS/A65 memory configuration the lower 32k and one bank of the upper
+32k of RAM are used for the the lib6502 managed application memory. 
+The screen memory and I/O area are not directly accessible for
+lib6502 applications. The second upper 32k RAM bank is used (with screen
+and I/O mapped through) as system memory area, for the "ROM" based applications
+(like filesystems, init, and devices). Also there are the mirrors of the other
+virtual console screen areas - when switching screens they are copied around.
+
+This memory setup leaves over 54.000 bytes free for lib6502-based applications.
+
+----
+Addr     RAM 0        RAM 1
+$ffff  ----------------------
+$fff0	configuration register
+$ff00   -------      -------
+        kernel       kernel
+$f000   -------      -------
+                     system 
+           |         memory
+$e900                -------
+           |         I/O
+$e800                -------
+        lib650       system
+        application  mem and
+        memory       'ROM'
+$a800                -------
+           |         virtual 
+                     screens
+$8800      |         -------
+                     screen
+$8000      |         -------
+
+           |           |
+
+           |           |
+
+$1c80   ------         
+        lib6502        no 
+$0300   ------       memory
+        PCBUF
+$0200   ------         |
+        Stack           
+$0100   ------         |
+        Zerop.
+$0000  ----------------------
+----
+
+== BUILDING
+Building the 8x96 ROM image is simple. Just go to the arch/cbm8x96/boot
+directory and type "make". This should build all files.
+"make osa.d64" should make a d64 VC1541 disk image with all necessary files.
+You have to have my new XA version in the path, though.
+
+To customize the ROM, change edit rom.a65 in arch/cbm8x96. You can gain some
+memory when you remove the shell/monitor from the ROM image.
+(You could replace it with the lib6502 monitor "mon" to be loaded like
+"lsh".)
+When running "make" then the command "file65" should print the addresses
+used for the different segments. They must not overlap. 
+
+To move the lib6502 RAM area, edit the values for +Memstart, Memend+
+and +Zerostart+ at the end of rom.a65.
+To move the segments, edit the Makefile and change the addresses for the 
+segments in the XA calls. The text segment address must be two below
+the actual start as it also counts the two byte starting address used
+for loading. In addition you have to edit the value for the definition
+of ROMSTART in rom.a65.
+
+=== BOOT
+Put the files "loader", "lsh", "rom.bin", "lib.bin" and "kern.bin" on a disk accessible by the 
+PET 8x96. load "loader" into BASIC memory and start it (probably edit 
+it for the right load device number). This boots OS/A65. 
+
+== SEE ALSO
+link:pet32k.p.adoc[PET32K(P)]
+
+== AUTHOR
+Written by André Fachat
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

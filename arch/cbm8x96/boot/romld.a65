@@ -1,0 +1,127 @@
+
+START	=$7000
+
+ZP	=$02
+LFNL	=1	; LIB
+LFNR	=2	; ROM
+LFNK	=3	; KERNEL
+ST	=$96
+
+CTRL	=$fff0
+
+MAPSYS	=%11100000	; screen/io peek through, banks 0/0, no wp
+MAPUSR	=%10001100	; full RAM mapping, banks 1/1, no wp
+MAPPET	=%00000000	; disable RAM, use ROM
+
+KERNEL	=$f000
+
+CHKIN	=$ffc6
+CHRIN	=$ffcf
+CLOSE	=$f2e0		; $ffc3 - calls into BASIC.... 
+CLRCH	=$ffcc
+
+	.word start
+	*= START
+
+start	jsr loadlib
+	jsr loadrom
+	jsr loadkern
+
+	sei
+
+	jsr dupkern
+
+	lda #MAPSYS
+	sta CTRL
+	jmp KERNEL	; RESET
+
+	;------------------
+dupkern	; endure kernel is in both RAM banks
+
+	lda #<KERNEL
+	sta ZP
+	lda #>KERNEL
+	sta ZP+1
+
+	ldy #0
+loopdup	ldx #MAPSYS
+	stx CTRL
+	lda (ZP),y
+	ldx #MAPUSR
+	stx CTRL
+	sta (ZP),y
+
+incdl	inc ZP
+	beq incdh
+	lda ZP
+	cmp #$f0
+	bne loopdup
+	ldx ZP+1
+	inx
+	bne loopdup
+	; skip $fff0
+	beq incdl
+
+incdh	inc ZP+1
+	bne loopdup
+	rts
+
+	;------------------
+
+loadlib	lda #LFNL
+	.byt $2c
+loadrom	lda #LFNR
+	.byt $2c
+loadkern
+	lda #LFNK
+	
+	;------------------
+load	pha
+	tax
+	jsr CHKIN
+
+	lda #0
+	sta ST
+
+	jsr CHRIN
+	sta ZP
+	jsr CHRIN
+	sta ZP+1
+
+l1	jsr CHRIN
+	ldy #0
+
+	php
+	sei
+	ldx #MAPSYS
+	stx CTRL
+
+	sta (ZP),y
+
+	ldx #MAPPET
+	stx CTRL
+	plp
+
+	lda ST
+	bne endload
+
+incl	inc ZP
+	beq inch
+	lda ZP
+	cmp #$f0
+	bne l1
+	ldx ZP+1
+	inx
+	bne l1
+	; $fff0 after increase
+	jsr CHRIN	; skip a byte
+	jmp incl
+inch	inc ZP+1
+	bne l1
+
+endload	
+	jsr CLRCH
+	pla
+	jmp CLOSE
+
+

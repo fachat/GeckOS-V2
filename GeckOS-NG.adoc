@@ -1,0 +1,98 @@
+
+= GeckOS Next Generation
+(c) 2023 A. Fachat (afachat@gmx.de)
+
+== Preface
+
+GeckOS was originally written for a 6502 computer with an MMU,
+so that each process could have its own memory map and needed no relocation 
+for binaries. So, the kernel managed the communication across memory maps
+using SEND/RECEIVE and Streams. Already V1 then learned to run without an MMU,
+and used relocatable binaries.
+
+V2 then saw a complete rework mainly of the scheduler. This allowed using
+Threads in a three-staged management: 
+1. memory map environments
+2. processes (task)
+3. threads. 
+Also, the lib6502 shared library was implemented
+for V2 to allow for easier developmen of programs.
+
+One shortcoming that was not fixed was that interprocess communication 
+still mainly worked with SEND/RECEIVE and Streams. SEND/RECEIVE uses a message
+buffer at the fixed address $0200 in an environment, so it had to be protected
+by a semaphore. Streams were still using a byte-wise transfer of data
+across the kernel buffer.
+
+The plan for GeckOS-NG (codename for Geckos-V3) is to implement the following
+improvements.
+
+Each of the three concepts and designs and API drafts will be discussed
+in a separate document.
+ 
+1. link:GeckOS-NG-Buffers.adoc[GeckOS-NG-Buffers]:: Unify SEND/RECEIVE and Streams with a buffer-oriented communications API,
+that specifically allows for shared memory streams and optimizes the
+number of kernel calls.
+
+2. link:GeckOS-NG-Locator.adoc[GeckOS-NG-Locator]:: Provide a "locator" service that replaces the FSM filesystem locator with
+a generic solution that can be used to lookup real names, and other types of
+elements. Use this to map drive names like "fd0", "8", or "sda1" to 
+drive numbers and server process ids. Also, this is the means to identify
+and address dynamically changing devices, like USB-connected mice or keyboards,
+or storage. It could also be used to identify networking devices.
+
+3. link:GeckOS-NG-Terminal.adoc[GeckOS-NG-Terminal]:: Establish the concept of a controlling terminal, that receives
+signals like Ctrl-C or Ctrl-Z from devices. This would also enable job control in the
+shell - that at this point can only wait for a child to end, or send it
+in the background altogether. In addition, an (optional) terminal process will be established that allows windowing of shells - similar to Linux tmux as an example.
+
+
+== Concepts
+
+These APIs are preliminary and the discussion documented here is basically 
+a scratchpad of ideas that will be further refined, and at some point implemented.
+
+=== Buffers
+
+The Buffers interface replaces the SEND/RECEIVE and Streams APIs at the same time.
+
+The main concept of the API is the Buffer. A buffer is a memory area 
+that is defined by a start address, a length, and a type that defines
+how read and write pointers, as well as changes to start address and length
+are handled.
+
+The following types are defined:
+1. message - this buffer will be atomically sent as one set of bytes, and receives sets of bytes atomically. This replaces the SEND/RECEIVE API
+2. ring - this buffer works as a ring buffer, similarly to the kernel buffers used in V2. This replaces the current Streams API
+3. rwbuf - a memory buffer that is being read from or written to. The extends to Streams API so that file servers can directly write to target environment instead of going through the kernel with every byte (zero-copy load)
+4. mmap - a shared memory area between two tasks/environments. This allows for disk servers to provide shared buffers to file servers.
+
+NOTE: a *file server* is what is today implemented in e.g. FSDEV and FSIEC, providing file system services to other processes. A *disk server* is a new type of process, that provides block-oriented access to partitions, disk images etc. A FAT file server could for example use an SCSI disk server to provide file systems from a SCSI disk partition.
+
+.Buffer definition
+
+As the 6502 does not have enough and not large enough registers to give address and length of a buffer and further parameters in a single call, a separate *buffer definition block* is used to define a buffer:
+
+* 0/1: address of buffer (2 bytes)
+* 2/3: length of buffer (2 bytes)
+* 4: type of buffer (1 byte)
+* 5: buffer flags (1 byte)
+
+This buffer definition is given to the kernel once, and is then used throughout
+the communication in the channel (see below).
+
+.Memory mapping
+
+A buffer can be - if appropriate flags are given - re-defined by the kernel.
+This allows the kernel for example to map buffers in two tasks into the same
+memory area - so no copying is required for the actual data transfer.
+
+=== Channel
+
+Channel replace the stream. Once a communication is established and the
+buffer is given to the kernel, only the channel number is used for further calls.
+
+
+== APIs
+
+

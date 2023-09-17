@@ -1,0 +1,18 @@
+
+= GeckOS Next Generation
+(c) 2023 A. Fachat (afachat@gmx.de)
+
+== High Level Goal
+
+Establish the concept of a controlling terminal, that receives
+signals like Ctrl-C or Ctrl-Z from devices. This would also enable job control in the
+shell - that at this point can only wait for a child to end, or send it
+in the background altogether. In addition, an (optional) terminal process will be established that allows windowing of shells - similar to Linux tmux as an example.
+
+
+== Concepts
+
+
+== APIs
+
+

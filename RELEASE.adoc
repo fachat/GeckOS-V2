@@ -17,12 +17,16 @@
 * Fix handshake handling of C64 userport 9600 baud interface
 
 === Kernel
-* Use of STDCIN to enable *more(1)* to read key presses from console, add *ontty(1)* for that
+* Use of STDCIN to enable *more(1)* to read key presses from console, add *ontty(1)* to redirect that
 
 === Ports
-* improve keyboard mapping on c64
-* On C64, use raster interrupt as main system interrupt to free a timer
-* improve keyboard mapping on pet32k
+
+==== C64
+* improve keyboard mapping
+* use raster interrupt as main system interrupt to free a timer
+
+==== PET
+* improve keyboard mapping on pet32k, cbm8x96 and csa
 
 === Contributors
 * André Fachat

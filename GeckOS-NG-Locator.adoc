@@ -1,0 +1,19 @@
+
+= GeckOS Next Generation
+(c) 2023 A. Fachat (afachat@gmx.de)
+
+== High Level Goal
+
+Provide a "locator" service that replaces the FSM filesystem locator with
+a generic solution that can be used to lookup real names, and other types of
+elements. Use this to map drive names like "fd0", "8", or "sda1" to 
+drive numbers and server process ids. Also, this is the means to identify
+and address dynamically changing devices, like USB-connected mice or keyboards,
+or storage. It could also be used to identify networking devices.
+
+== Concepts
+
+
+== APIs
+
+

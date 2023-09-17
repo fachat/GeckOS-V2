@@ -61,6 +61,8 @@
  * init memory configuration
  */
 
+#ifdef EOK_NOFILL
+
 	  /* check if it's really a 8x96 */
 	  lda #%10001100	; memory config plain bank 1
 	  sta $fff0		; no I/O and screen peek through (prg bank)
@@ -79,14 +81,20 @@ ll1	  lda eok_addr,x	; set interrupt etc vectors
 	  sta $fff4,x
 	  dex
 	  bpl ll1
+
+#else
+	  lda #%11100000	; memory config plain bank 0
+	  sta $fff0		; I/O and screen peek through (system bank)
+#endif
+
 /* 
- * C64 specific irq timer init, irq every 20ms 
  * We assume that the reset - or a loader program has disabled all irq 
  */
 
 	  lda #%00000001	; enable PIA1 CB1 screen retrace timer
 	  sta PETPIA1+PIA_CRA
 
+#if 0
 /*
  * check zeropage RAM, jump to he_zero if failure
  * clears zeropage - at least 2-7 is a _must_!
@@ -107,6 +115,8 @@ cnt	.byt 0
 	sta $fff0
 	jmp ($fffc)
 ok
+#endif
+
 /*
  * originally SYSPORT specific, they have a value for the C64 also...
  */
@@ -144,4 +154,5 @@ ok
  * no memory management...
  */
 #define	STARTMEM()
+
 
