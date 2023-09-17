@@ -13,6 +13,42 @@ in the background altogether. In addition, an (optional) terminal process will b
 == Concepts
 
 
+
+1) MORE:
+    STDCIN 
+        per process, inherited from parent
+        DUP can change it, to be used in
+        TTY command to switch to another console
+   -> DONE
+       
+ 
+2) TTY handling
+    Tasks get a PROCESS GROUP (PGRP), inherited from parent(?)
+    Fork can create new/use PGRP so tasks can be grouped into jobs by shell
+    STREAMS get an optional "line discipline"
+        if set
+            STREAM gets a PGRP attached
+            On GETC, if PGRP does not match block
+            On PUTC, 
+                if Ctrl-C -> signal (all) PGRP tasks SIGTERM
+                if Ctrl-D -> EOF
+                
+
+3) Job Control
+    STREAMS "line discipline"
+            On PUTC,
+                if Ctrl-Z -> SIGSTP to PGRP tasks, send SIGCHLD to parent
+    Shell manages jobs (PGRP)
+        SIGCONT to children on fg/bg
+            
+
+                    
+1a) followup:
+        XARGS
+        
+                        
+        
+
 == APIs
 
 
