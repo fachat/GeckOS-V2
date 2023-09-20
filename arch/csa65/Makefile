@@ -5,8 +5,8 @@ XA=xa #-2.1.4h
 FILE=file65
 RELOC=reloc65
 
-#PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lmon.o65 csa_lsh.o65 csa_end.o65
-PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_mon.o65 csa_lsh.o65 csa_end.o65
+PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lmon.o65 csa_lsh.o65 csa_end.o65
+#PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_mon.o65 csa_lsh.o65 csa_end.o65
 
 all: csarom.bin csakernel.bin csalib.bin csakernel_romtest.bin
 
