@@ -1,0 +1,94 @@
+= CS/A65 (P)
+:doctype: manpage
+
+== NAME
+OS/A65 CS/A65 Notes
+
+== DESCRIPTION
+The CS/A65 is basically a PET clone with the option to use many more I/O boards
+pluggable into the computer's backplane.
+In addition, the computer has an MMU, that maps each of the 16 4k-blocks in the CPU address space to any of 256 blocks in a 1MB bus address space.
+There typically a 512k RAM is available instead of the 32k of the PET.
+
+This port is thus based on the PET 32k port regarding the types of devices and interrupt handling. But the memory management is considerably different.
+One main difference is that every task gets its own memory setup, with its own zeropage and stack that is thus not shared as in some other ports.
+
+== Initial Memory Map
+
+As every task can have its own memory, in the initial memory map only the lowest 4k are allocated for a task. In the upper region, kernel
+and lib6502 are mapped, leaving about 48000 bytes for a task.
+
+Lib6502 malloc uses the SBRK system call to allocate additional memory pages if memory needs to be allocated for a task (e.g. when it is loaded)
+
+----
+Addr     RAM 0    
+$ffff   ---------
+        kernel  
+$f000   ---------         
+          I/O 
+$e800   ---------
+        kernel
+$e400   ---------
+        lib6502
+$c800   ---------          
+           |    
+            
+           |    
+               
+        unmapped 
+             
+           |   
+
+           |  
+
+           |  
+$1000   -------
+        lib6502  
+        application 
+        memory    
+$0400   ------         
+        lib6502  
+$0300   ------  
+        PCBUF
+$0200   ------    
+        Stack    
+$0100   ------   
+        Zerop.
+$0000  ----------------------
+----
+
+== BUILDING
+Building the 8x96 ROM image is simple. Just go to the arch/csa65/boot
+directory and type "make". This should build all files.
+"make osa.d64" should make a d64 VC1541 disk image with all necessary files.
+You have to have my new XA version in the path, though.
+
+To customize the ROM, change edit rom.a65 in arch/cbm8x96. You can gain some
+memory when you remove the shell/monitor from the ROM image.
+(You could replace it with the lib6502 monitor "mon" to be loaded like
+"lsh".)
+When running "make" then the command "file65" should print the addresses
+used for the different segments. They must not overlap. 
+
+To move the lib6502 RAM area, edit the values for +Memstart, Memend+
+and +Zerostart+ at the end of rom.a65.
+To move the segments, edit the Makefile and change the addresses for the 
+segments in the XA calls. The text segment address must be two below
+the actual start as it also counts the two byte starting address used
+for loading. In addition you have to edit the value for the definition
+of ROMSTART in rom.a65.
+
+=== BOOT
+Put the files "loader", "lsh", "rom.bin", "lib.bin" and "kern.bin" on a disk accessible by the 
+CS/A. Load "loader" into BASIC memory and start it (probably edit 
+it for the right load device number). This boots OS/A65. 
+
+== SEE ALSO
+link:pet32k.p.adoc[PET32K(P)]
+
+== AUTHOR
+Written by André Fachat
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
