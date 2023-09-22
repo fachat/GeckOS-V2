@@ -206,8 +206,10 @@ nocheck
 	bcs notact
 	cpy #SWITCHKEY
 	bne gotchar
+#ifndef SWITCHNOSHIFT
 	dex
 	bmi gotchar	; ignore switch key without shift/ctrl
+#endif
 	jsr crsroff	; must preserve xr
 	jsr do_switch
 	jmp notact

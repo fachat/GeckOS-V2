@@ -1,0 +1,52 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#define	BOOTDRV		"c"
+
+	.(
+
+
+/************* boot lmon from BOOTDRV                    */
+
+#include "kdefs.i65"
+
+#echo ************ lsh
+
+        /* add autostart of lib6502 program 'lsh' */
+
+        .(
+        .word end_auto
+        .byt PK_LIB+PK_AUTOEXEC+PK_RESTART      ; is lib6502 program
+        .word 0         ; P_ADDR ignored
+        .byt 16         ; P_RAM
+        .byt 128        ; P_SHARED
+        .byt 0          ; P_PRIORITY
+        .byt 0,0        ; P_DEV
+        .byt BOOTDRV,":ps", 0, "-l",0
+	.byt 0		; end of cmdline
+end_auto
+	.)
+
+	.)
+
+

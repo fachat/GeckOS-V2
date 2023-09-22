@@ -165,10 +165,17 @@ setthread .(
 newThread .byt 0
         .text
 
+; note - should in theory not conflict with mempage from memsys, as setthread is interruptible and memsys would mangle it
+; therefore now setting a new thread is interrupt-protected
+mempage	=3		
+
         cmp actThread
         bne doit
         rts
 doit
+	php
+	sei
+
         sta newThread
 
         ldx actThread
@@ -177,21 +184,21 @@ doit
 
 	ldy actEnv
 	lda envTab + TE_MMU,y
-	sta MMU+3
+	sta MMU+mempage
 
-        lda BLKSIZ*3 + THREADSAVE
+	; save thread
+        lda BLKSIZ*mempage + THREADSAVE
         sta threadTab + TH_LIBSAVE,x
-        lda BLKSIZ*3 + THREADSAVE+1
+        lda BLKSIZ*mempage + THREADSAVE+1
         sta threadTab + TH_LIBSAVE+1,x
 
-;savetask
+	; save task - is this actually needed when we have 1 task/env?
         ldy threadTab + TH_TASK,x
-        lda BLKSIZ*3 + TASKSAVE
+        lda BLKSIZ*mempage + TASKSAVE
         sta taskTab + TT_LIBSAVE,y
-        lda BLKSIZ*3 + TASKSAVE + 1
+        lda BLKSIZ*mempage + TASKSAVE + 1
         sta taskTab + TT_LIBSAVE + 1,y
 nosave
-;loadtask
         ldx newThread
         stx actThread
         cpx #<-1
@@ -206,21 +213,23 @@ load
 	sta actEnv
 	tay
 	lda envTab + TE_MMU,y
-	sta MMU+3
-;loadtask
+	sta MMU+mempage
+
+	;load task
 	ldy actTask
         lda taskTab + TT_LIBSAVE,y
-        sta BLKSIZ*3 + TASKSAVE
+        sta BLKSIZ*mempage + TASKSAVE
         lda taskTab + TT_LIBSAVE + 1,y
-        sta BLKSIZ*3 + TASKSAVE + 1
+        sta BLKSIZ*mempage + TASKSAVE + 1
 
-;loadthread
+	;load thread
         lda threadTab + TH_LIBSAVE,x
-        sta BLKSIZ*3 + THREADSAVE
+        sta BLKSIZ*mempage + THREADSAVE
         lda threadTab + TH_LIBSAVE+1,x
-        sta BLKSIZ*3 + THREADSAVE+1
+        sta BLKSIZ*mempage + THREADSAVE+1
 noload
-endset  rts
+endset  plp
+	rts
         .)
 
 initsp	.(

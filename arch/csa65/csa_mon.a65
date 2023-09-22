@@ -27,68 +27,23 @@
 
 #define   ROM
 
-;#define	ROMTEST
-
-/* These are necessary for CS/A65 kernel ***********************************/
-
-#define	OSA_ARCH	"CS/A65"
-
 /* These are changeable ****************************************************/
-
-#define	CSA_CONSOLE	0	/* device to output debug/log messages */
-
-
-#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
-				   lib6502 */
-#define	NEED_GETINFO
-#define	NEED_SETINFO
-#define	NEED_UNGETC
-
-
-#define	NOMIRRORMEM		/* ramtest kernel options */
-#define	RAMTEST
-#define	SHORTRAMTEST
-
-#define	NMIRESET
-
-#undef	CMOSCPU
-#define	NOSYSPORT
-
-#define	RAMEND		$80	/* 32k in bank 0 */
-
-#define	CLK2MHZ
-
-
-/***************************************************************************
- * 
- * Better not change anything below 
- */
-
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
 
 /***************************************************************************
  *
  * Here comes the ROM content
  */
 
-#include  "config.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"
 
-#define	ROMSTART	$8000
-#define	MIN_MEM		$20		/* 8 kbyte */
 	.(
 
-/************* Kernel                                   */
-          
-#echo ############ kernel:
+#echo ############ lmon (in ROM):
 
-#include  "kernel/kernel.a65"
+#include  "apps/lmon/lmon.a65"
+
 
 	.)
 

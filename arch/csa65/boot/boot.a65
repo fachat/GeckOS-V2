@@ -2,8 +2,8 @@
 srcp 	=2
 trgp	=4
 
-	.word $0c00
-	*=$0c00
+	.word $033c
+	*=$033c
 
 	sei
 
@@ -53,9 +53,9 @@ lib	ldy #>$4000	; from $4000
 	ldx #7*4	; 7k (to $e3ff)
 	jsr copy
 
-rom	ldy #>$1000	; from $1000
+rom	ldy #>$0800	; from $0800
 	lda #>$8000	; to $8000
-	ldx #12*4	; 12k (to $c000)
+	ldx #14*4	; 14k ($0800-$6000 to $8000-$b800)
 	jsr copy
 
 	jmp $e400

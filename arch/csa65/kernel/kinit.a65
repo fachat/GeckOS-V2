@@ -79,9 +79,15 @@ res1    txa		;lda mmu,x
 /*
  * CSA65 specific irq timer init, 50 Hz irq (well, i.e. line freq. irq)
  * We assume that the reset - or a loader program has disabled all irq
+ *
+ * Note that the SYSPORT 50Hz is not used anymore, but the PET-alike VSYNC
+ * VIA input, to allow easier emulator support.
  */
-	lda #SYS_IRQEN+SYS_EXTIO
+	lda #SYS_EXTIO
 	sta SYSPORT
+
+	lda #$3d
+	sta $e813
 
 /*
  * check zeropage RAM, jump to he_zero if failure
@@ -118,18 +124,12 @@ startmem .(
 xl      dec cnt
         ldx cnt
 #if SYSPAGE
+	bmi x1
         cpx #SYSPAGE
-        beq x1
+	beq xl
 #else
-        bmi x1
+        beq x1
 #endif
-/*
-#ifdef ROMTEST
-	txa
-	ora #$10
-	tax
-#endif
-*/
         jsr ENMEM
         jmp xl
 x1
@@ -142,6 +142,7 @@ x1
  * determine the speed the CPU is running with. We use the 50 Hz toggle
  * line for it.
  */
+#if 0
 getfreq	  .(        
           sei
           lda #SYS_IRQEN
@@ -170,6 +171,33 @@ gfe       cpx #8	; more, then 2 MHZ
 gf3	  lda #0	; 1 MHz
 	  rts
 	  .) 
+#else
+getfreq	  .(        
+        lda $e84b
+        and #%11011111	; continuous timer
+        sta $e84b
+        ldy #0
+        lda #$20
+l0      bit $e840       ; wait retrace end
+        bne l0
+l2      bit $e840       ; wait for start of vertical retrace
+        beq l2
+        sty $e848
+        sty $e849       ; start timer
+l3      bit $e840
+        bne l3          ; wait end vertical retrace
+l4      bit $e840
+        beq l4          ; wait for start of 2nd vertical retrace
+        ldx $e849       ; read timer - 1 MHZ should be around $b1cx, 2 MHz around 63cx
+	cpx #$a0	; 
+	bcc fast
+	lda #0
+	rts
+fast	lda #$80
+        rts
+	.)
+#endif
+
 
 #define	GETFREQ()	jsr getfreq
 
@@ -184,7 +212,8 @@ gf3	  lda #0	; 1 MHz
 /*
  * clear the scheduler preemption timer
  */
-#define	CLRTIMER()	lda SYSPORT:sta SYSPORT
+;#define	CLRTIMER()	lda SYSPORT:sta SYSPORT
+#define	CLRTIMER()	lda $e812
 
 /*
  * MMU systems may map task pages into kernel mem to make copying
