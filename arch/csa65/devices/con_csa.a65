@@ -32,9 +32,10 @@
 
 #define	MAX_ASCREEN	maxscr		/* soft limit */
 
-//#define	SWITCHKEY	79		/* Rev/off on graphics keyboard */
-#define	SWITCHKEY	70		/* "@" */
-#define	SWITCHNOSHIFT
+#define	SWITCHKEY	79		/* Rev/off on graphics keyboard */
+; for VICE?
+;#define	SWITCHKEY	70		/* "@" */
+;#define	SWITCHNOSHIFT
 
 #define	SET_MMU		ldy #$10:sty MMU+VIDPAGE
 
