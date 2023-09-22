@@ -1,4 +1,6 @@
 
+image::doc/GeckOS-logo2.png[]
+
 = GeckOS Operating System for the 6502 processor
 (c) 1989-2020 A. Fachat (afachat@gmx.de)
 
