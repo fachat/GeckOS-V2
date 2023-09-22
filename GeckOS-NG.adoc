@@ -46,8 +46,9 @@ signals like Ctrl-C or Ctrl-Z from devices. This would also enable job control i
 shell - that at this point can only wait for a child to end, or send it
 in the background altogether. In addition, an (optional) terminal process will be established that allows windowing of shells - similar to Linux tmux as an example.
 
+4. link:GeckOS-NG-romfs.adoc[GeckOS-NG-romfs]:: how to improve ROM handling, and enable o65 file handling in ROM, as well as other filesystems.
 
-== Concepts
+== New Main Concepts
 
 These APIs are preliminary and the discussion documented here is basically 
 a scratchpad of ideas that will be further refined, and at some point implemented.
@@ -61,38 +62,17 @@ that is defined by a start address, a length, and a type that defines
 how read and write pointers, as well as changes to start address and length
 are handled.
 
-The following types are defined:
-1. message - this buffer will be atomically sent as one set of bytes, and receives sets of bytes atomically. This replaces the SEND/RECEIVE API
-2. ring - this buffer works as a ring buffer, similarly to the kernel buffers used in V2. This replaces the current Streams API
-3. rwbuf - a memory buffer that is being read from or written to. The extends to Streams API so that file servers can directly write to target environment instead of going through the kernel with every byte (zero-copy load)
-4. mmap - a shared memory area between two tasks/environments. This allows for disk servers to provide shared buffers to file servers.
-
-NOTE: a *file server* is what is today implemented in e.g. FSDEV and FSIEC, providing file system services to other processes. A *disk server* is a new type of process, that provides block-oriented access to partitions, disk images etc. A FAT file server could for example use an SCSI disk server to provide file systems from a SCSI disk partition.
-
-.Buffer definition
-
-As the 6502 does not have enough and not large enough registers to give address and length of a buffer and further parameters in a single call, a separate *buffer definition block* is used to define a buffer:
-
-* 0/1: address of buffer (2 bytes)
-* 2/3: length of buffer (2 bytes)
-* 4: type of buffer (1 byte)
-* 5: buffer flags (1 byte)
-
-This buffer definition is given to the kernel once, and is then used throughout
-the communication in the channel (see below).
-
-.Memory mapping
-
-A buffer can be - if appropriate flags are given - re-defined by the kernel.
-This allows the kernel for example to map buffers in two tasks into the same
-memory area - so no copying is required for the actual data transfer.
-
 === Channel
 
-Channel replace the stream. Once a communication is established and the
+Channels replace streams. Once a communication is established and the channel
 buffer is given to the kernel, only the channel number is used for further calls.
 
+=== Locator
 
-== APIs
+Currently drives are addressed by number. There is no way to have symbolic drive names, or dynamic drive allocations.
+A Locator service replaces the fsm, so that drive names can be looked up dynamically. 
+This works together with the new Channel API.
+
+In addition, the locator can dynamically handle device names (e.g. for dynamic USB changes in devices, liked newly plugged in mouse or keyboard)
 
 
