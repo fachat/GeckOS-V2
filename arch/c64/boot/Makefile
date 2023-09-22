@@ -32,7 +32,7 @@ boot: boot.a65
 	${XA} boot.a65 -o boot
 
 clean:
-	rm -f c64rom boot osa.d64 osa.x64
+	rm -f c64rom boot osa.x64
 	rm -f ${sysapps}
 	rm -f vice.trace reltest
 

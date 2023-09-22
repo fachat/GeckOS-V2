@@ -81,8 +81,8 @@ inirom: inirom.a65
 	if [ $$? -ne 0 ]; then rm -f inirom; fi)
 
 clean:
-	rm -f csarom csakernel csalib boot inirom osa.d64 loader
-	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa.d64 osa_romtest.d64
+	rm -f csarom csakernel csalib boot inirom loader
+	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa_romtest.d64
 	rm -f csakernel_romtest prom prom_romtest
 	rm -f csarom_romtest csarom_romtest.bin
 

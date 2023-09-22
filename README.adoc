@@ -22,10 +22,19 @@ They should also assemble for other lib6502 operating systems.
 *sysapps* holds OS/A65 specific programs, like the slipd, or the
 filesystem servers.
 
+== Ports
+
 The previous directories are very independent from the actual system architecture.
 The *arch* directory holds the architecture specific parts. It contains a directory
 for each supported architecture. "proto" holds a prototype architecture
 that can be used for porting.
+
+Here you can find the current set of disk images for the currently active ports:
+
+* link:arch/pet32k/boot/osa.d64[PET 32k osa.d64]
+* link:arch/cbm8x96/boot/osa.d64[CBM 8x96 osa.d64]
+* link:arch/csa65/boot/osa.d64[CS/A65 osa.d64]
+* link:arch/c64/boot/osa.d64[C64 osa.d64]
 
 Have fun!
 

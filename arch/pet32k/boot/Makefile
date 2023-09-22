@@ -24,7 +24,7 @@ loader: loader.bas
 	petcat -w40 -o loader loader.bas
 
 clean:
-	rm -f rom osa.d64 osam.d64 loader
+	rm -f rom osam.d64 loader
 	rm -f ${sysapps}
 	rm -f vice.trace reltest
 
