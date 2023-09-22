@@ -167,7 +167,7 @@ newThread .byt 0
 
 ; note - should in theory not conflict with mempage from memsys, as setthread is interruptible and memsys would mangle it
 ; therefore now setting a new thread is interrupt-protected
-; note: mempage=3 is kernal memsys/memtask; mempage=4 is video device (map video during interrupt)
+; note - mempage=3 is kernal memsys/memtask; mempage=4 is video device (map video during interrupt)
 mempage	=3		
 
         cmp actThread

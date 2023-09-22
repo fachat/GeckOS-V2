@@ -150,7 +150,7 @@ csa_end.o65: csa_end.a65
 
 
 clean:
-	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin
+	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin csa_devices.lab
 	rm -f csakernel_romtest csakernel_romtest.o65 csakernel_romtest.lab csakernel_romtest.bin
 	rm -f csalib csalib.o65 csalib.lab csalib.bin
 	rm -f csarom csarom_romtest
