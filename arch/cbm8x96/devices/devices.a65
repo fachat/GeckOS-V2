@@ -58,12 +58,14 @@
 
 devstart
 
+sernr=0
 
 #define	CONSOLE_DEVICE	"devices/con_pet.a65"
 #include  "devices/console.a65"	; video device is merged with OS/A now...
 
 #include  "devices/nulldev.a65"	; null device
 #include  "devices/spooler.a65"	; spooler device
+#include  "devices/ser_uart.a65"; UART-based serial
 
           .word $ffff
 

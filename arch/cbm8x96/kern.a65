@@ -27,7 +27,6 @@
 /*			These defines control the ROM build		   */ 
 /*									   */ 
 
-#define PET_KEYB_GRAPHICS
 
 /* These are necessary for PET kernel **************************************/
 

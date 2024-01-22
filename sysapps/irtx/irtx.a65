@@ -112,11 +112,11 @@ main      .word mainmenu
           .word maincode
           .word mainloop
           
-mainmenu  .asc TC_FF,"^J^J^J"
-          .asc "[1]      Sony-Master^M^J"
-          .asc "[2]      Sony-CD^M^J"
-          .asc "[3]      Universum-TV^J^M"
-          .asc "^J^M[q]      Ende^M^J",0 
+mainmenu  .asc TC_FF,10,10,10
+          .asc "[1]      Sony-Master",13,10
+          .asc "[2]      Sony-CD",13,10
+          .asc "[3]      Universum-TV",13,10
+          .asc 13,10,"[q]      Ende",13,10,0 
 
 mainbef   .asc "123",0
 
@@ -185,20 +185,20 @@ sonycdtab .(
           .word sycdtab
           .word sendsony
                     
-menucdtxt .asc TC_FF,"^J^J^J"
-          .asc "[P]      Play^M^J"
-          .asc "[U]      Pause^M^J"
-          .asc "[I]      Continue^M^J"
-          .asc "[Y]      Display^M^J"
-          .asc "[S]      Stop^M^J"
-          .asc "[R]      Repeat^M^J"
-          .asc "[L]      Shuffle^M^J"
-          .asc "[N]      Next song^M^J"
-          .asc "[V]      Previous song^M^J"
-          .asc "[1-9]    Song no. 1-9^M^J"
-          .asc "[A-G]    Song no. 10-16^M^J"
-          .asc "[H]      >16^M^J"
-          .asc "[Q]      Quit^M^J"
+menucdtxt .asc TC_FF,10,10,10
+          .asc "[P]      Play",13,10
+          .asc "[U]      Pause",13,10
+          .asc "[I]      Continue",13,10
+          .asc "[Y]      Display",13,10
+          .asc "[S]      Stop",13,10
+          .asc "[R]      Repeat",13,10
+          .asc "[L]      Shuffle",13,10
+          .asc "[N]      Next song",13,10
+          .asc "[V]      Previous song",13,10
+          .asc "[1-9]    Song no. 1-9",13,10
+          .asc "[A-G]    Song no. 10-16",13,10
+          .asc "[H]      >16",13,10
+          .asc "[Q]      Quit",13,10
           .asc 0   
 
 befcdtab  .asc "puysrnv123456789abcdefghli",0
@@ -220,24 +220,24 @@ sonymaster .(
           .word symasc
           .word sendsony
           
-symamenu  .asc TC_FF,"^J^J^J"
-          .asc "[L]      LDP on/off^M^J"
-          .asc "[V]      VTR on/off^M^J"
-          .asc "[T]      TV on/off^M^J"
-          .asc "[A]      Audio on/off^M^J"
-          .asc "[+]      Master Volume up^M^J"
-          .asc "[-]      Master Volume down^M^J"
-          .asc "[M]      Muting^M^J"
-          .asc "  Signal sources:^M^J"
-          .asc "[1]      CD^M^J"
-          .asc "[2]      Tuner^M^J"
-          .asc "[3]      Phono^M^J"
-          .asc "[4]      Tape^M^J"
-          .asc "[5]      DAT^M^J"
-          .asc "[6]      Video 1^M^J"
-          .asc "[7]      Video 2^M^J"
-          .asc "[8]      Video 3^M^J"
-          .asc "[q]      End^M^J",0
+symamenu  .asc TC_FF,10,10,10
+          .asc "[L]      LDP on/off",13,10
+          .asc "[V]      VTR on/off",13,10
+          .asc "[T]      TV on/off",13,10
+          .asc "[A]      Audio on/off",13,10
+          .asc "[+]      Master Volume up",13,10
+          .asc "[-]      Master Volume down",13,10
+          .asc "[M]      Muting",13,10
+          .asc "  Signal sources:",13,10
+          .asc "[1]      CD",13,10
+          .asc "[2]      Tuner",13,10
+          .asc "[3]      Phono",13,10
+          .asc "[4]      Tape",13,10
+          .asc "[5]      DAT",13,10
+          .asc "[6]      Video 1",13,10
+          .asc "[7]      Video 2",13,10
+          .asc "[8]      Video 3",13,10
+          .asc "[q]      End",13,10,0
           
 symabef   .asc "lvta+-m12345678",0
 
@@ -253,15 +253,15 @@ unitv     .(
           .word unitvsc
           .word unitvsend
           
-unitvmenu .asc TC_FF,"^J^J^J"
-          .asc "[T]      TV on/off^J^M"
-          .asc "[V]      TV/VIDEO^J^M"
-          .asc "[+]      volume up^J^M"
-          .asc "[-]      volume down^J^M"
-          .asc "[M]      Muting^J^M"
-          .asc "[1-9]    Program 1-9^J^M"
-          .asc "[A-C]    Program 10-12^J^M"
-          .asc "[Q]      Ende^J^M",0
+unitvmenu .asc TC_FF,10,10,10
+          .asc "[T]      TV on/off",13,10
+          .asc "[V]      TV/VIDEO",13,10
+          .asc "[+]      volume up",13,10
+          .asc "[-]      volume down",13,10
+          .asc "[M]      Muting",13,10
+          .asc "[1-9]    Program 1-9",13,10
+          .asc "[A-C]    Program 10-12",13,10
+          .asc "[Q]      Ende",13,10,0
           
 unitvbef  .asc "tv+-m123456789abc",0
 

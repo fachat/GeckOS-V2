@@ -516,18 +516,18 @@ end
 
 	.(
 
-m0	.asc "Init V1.0 booting^M^J",0
+m0	.asc "Init V1.0 booting",13,10, 0
 m1	.asc "Start ",34,0
 m2=0
 m3	.asc 34,":",0
-m4	.asc " failed!^M^J",0
-m5	.asc " ok!^M^J",0
-m6	.asc "Couldn't alloc streams!^M^J",0
+m4	.asc " failed!",13,10,0
+m5	.asc " ok!",13,10,0
+m6	.asc "Couldn't alloc streams!",13,10,0
 #ifdef INIT_RESTART
-m7	.asc "^M^JReceived sigchld from ",0
+m7	.asc 13,10, "Received sigchld from ",0
 m8 	=m7-3	; CRLF
-m9	.asc "Prepared restart!^M^J",0
-m10	.asc "Could not set device stream!^M^J",0
+m9	.asc "Prepared restart!",13,10,0
+m10	.asc "Could not set device stream!",13,10,0
 #endif
 
 haddr	.byt >m0, >m1, >m2, >m3, >m4, >m5, >m6
