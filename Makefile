@@ -14,6 +14,9 @@ clean:
 cbm8x96:
 	(cd arch/cbm8x96; make; cd boot; make)
 
+c64:
+	(cd arch/c64; make; cd boot; make)
+
 tars:
 	tar czhvf ../oa-${version}.lib.tar.gz apps \
 		include/lib6502.i65 include/kdefs.i65 include/inet.i65

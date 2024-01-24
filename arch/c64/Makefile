@@ -2,7 +2,7 @@
 TRG=boot/c64rom
 
 XAINPUT=../../include,..,../..
-XA=xa
+XA=xa -XXA23
 FILE=file65
 RELOC=reloc65
 
