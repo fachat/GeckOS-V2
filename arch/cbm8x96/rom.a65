@@ -68,7 +68,7 @@
 
 #define ROOTPATH        "c:"    /* where lsh chdirs into on boot */
 
-#define	UARTBASE	$e818
+//#define	UARTBASE	$e818
 
 
 /***************************************************************************

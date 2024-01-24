@@ -65,7 +65,9 @@ sernr='0'
 
 #include  "devices/nulldev.a65"	; null device
 #include  "devices/spooler.a65"	; spooler device
+#ifdef UARTBASE
 #include  "devices/ser_uart.a65"; UART-based serial
+#endif
 
           .word $ffff
 
