@@ -27,7 +27,7 @@
 /*			These defines control the ROM build		   */ 
 /*									   */ 
 
-;#define PET_KEYB_GRAPHICS
+#define PET_KEYB_GRAPHICS
 
 /* These are necessary for PET kernel **************************************/
 
@@ -67,6 +67,8 @@
 #define	BOOTDRV		"c"	/* where are the boot files (IEC device 8) */
 
 #define ROOTPATH        "c:"    /* where lsh chdirs into on boot */
+
+//#define	UARTBASE	$e818
 
 
 /***************************************************************************

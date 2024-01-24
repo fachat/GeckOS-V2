@@ -118,8 +118,8 @@ doclose
 	.)
 
 	.data
-txt1	.asc "^m^jhttpd: start listening",0
-txt2	.asc "^m^jhttpd: start accepting",0
+txt1	.asc 13,10,"httpd: start listening",0
+txt2	.asc 13,10,"httpd: start accepting",0
 
 /***********************************************************************/
 
@@ -315,18 +315,18 @@ fwpars	.dsb 4
 eaddrs	.word err0, err1-err0
 	.word err1, err2-err1
 
-err0	.byt "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
-        .asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
-        .asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+err0	.byt "HTTP/1.0 400",13,10,"Content-Type: text/html",13,10,"",13,10
+        .asc "<HTML>",13,10,"<HEAD>",13,10,"<TITLE>Error</TITLE>",13,10,"</HEAD>",13,10
+        .asc "<BODY>",13,10,"<H1>Error 400</H1>",13,10,"",13,10
         .asc "<A HREF=",34,"http://www.6502.org/users/andre/osa/index.html",34,">OS/A65</A>"
-        .asc " TCP httpd server error: file not found^m^j"
-        .asc "</BODY>^m^j</HTML>^m^j"
-err1	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
-        .asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
-        .asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+        .asc " TCP httpd server error: file not found",13,10
+        .asc "</BODY>",13,10,"</HTML>",13,10
+err1	.asc "HTTP/1.0 400",13,10,"Content-Type: text/html",13,10,"",13,10
+        .asc "<HTML>",13,10,"<HEAD>",13,10,"<TITLE>Error</TITLE>",13,10,"</HEAD>",13,10
+        .asc "<BODY>",13,10,"<H1>Error 400</H1>",13,10,"",13,10
         .asc "<A HREF=",34,"http://www.6502.org/users/andre/osa/index.html",34,">OS/A65</A>"
-        .asc " TCP httpd server error: malformed request^m^j"
-        .asc "</BODY>^m^j</HTML>^m^j"
+        .asc " TCP httpd server error: malformed request",13,10
+        .asc "</BODY>",13,10,"</HTML>",13,10
 err2
 	.text
 	.)

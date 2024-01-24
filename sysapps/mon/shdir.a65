@@ -923,10 +923,10 @@ l5        stx LZEI
 pde       rts
 
 Anzdevcmd =12
-cmdtab    .asc "IRQ^@RES^@GETSTR^@PUTSTR^@"
-          .asc "RXON^@TXON^@RXOFF^@TXOFF^@"
-          .asc "SPEED^@HANDSHAKE^@STATUS^@"
-          .asc "EXIT^@"
+cmdtab    .asc "IRQ",0,"RES",0,"GETSTR",0,"PUTSTR",0
+          .asc "RXON",0,"TXON",0,"RXOFF",0,"TXOFF",0
+          .asc "SPEED",0,"HANDSHAKE",0,"STATUS",0
+          .asc "EXIT",0
           .)
 
 PGETSTR   .(
@@ -1297,10 +1297,10 @@ showlen   jsr showlenx
           jmp DEZOUT
 #endif
 
-dirtxt    .asc "<DIR>^@"
-namtxt    .asc "<NAME>^@"
-fretxt    .asc " BYTES FREE^@"
-pagetxt   .asc "^M^J<TASTE>^@"
+dirtxt    .asc "<DIR>",0
+namtxt    .asc "<NAME>",0
+fretxt    .asc " BYTES FREE",0
+pagetxt   .asc "^M^J<TASTE>",0
 
 	  .)	; showloop
 

@@ -31,9 +31,9 @@
 
 #define   VIDPAGE   4
 
-#define	MAX_SCREEN	4		/* hard limit for tables */
+#define	MAX_SCREEN	3		/* hard limit for tables */
 
-#define	MAX_ASCREEN	#4		/* soft limit */
+#define	MAX_ASCREEN	#3		/* soft limit */
 
 #ifdef PET_KEYB_GRAPHICS
 #define SWITCHKEY       79              /* graphics keyboard REV/OFF key */

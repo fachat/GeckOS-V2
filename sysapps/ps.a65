@@ -194,7 +194,7 @@ it1	.asc " Name"
 	.byt 0
 it2	.asc "Exec Th", 0
 it3	.asc " En Me", 0
-it4	.asc " Pa Sm SigA In OutErr^M^J",0
+it4	.asc " Pa Sm SigA In OutErr",13,10,0
 
 helpstr	.asc 13,10
 	.asc "ps [opts]",13,10

@@ -135,9 +135,9 @@ ende	lda #<usagetxt
 
 	.data
 usagetxt
-	.byt "^m^jUsage: ^m^j  telnet ip-address [port]^m^j"
-	.byt "where 'ip-address' is the 4 byte dot-^m^j"
-	.byt "separated IP address (like 192.168.0.1)^m^j",0
+	.byt 13,10, "Usage: ",13,10,"  telnet ip-address [port]",13,10
+	.byt "where 'ip-address' is the 4 byte dot-",13,10
+	.byt "separated IP address (like 192.168.0.1)",13,10,0
 	.text
 
 	.)
@@ -530,9 +530,9 @@ nibok     sec
 ; addr	.byt 7,  192,168,0,13, 0,19	/* chargen port */
 addr	.byt 7,  192,168,0,13, 0,23	/* telnet port */
 
-atext	.asc "^m^jTrying to Connect...^m^j",0
-etext	.asc "^m^jgot return: ",0
-rtext	.asc "^m^j",0
+atext	.asc 13,10,"Trying to Connect...",13,10,0
+etext	.asc 13,10,"got return: ",0
+rtext	.asc 13,10,"",0
 
 	.text
 	.)

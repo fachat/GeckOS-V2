@@ -29,7 +29,7 @@ prom_romtest: rom kernel_romtest lib
 
 osa.d64: rom rom_romtest kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
 	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csarom_romtest csakernel csakernel_romtest csalib boot index.html 
-	rm -f ${sysapps} ${apps} # csarom csakernel csalib
+	#rm -f ${sysapps} ${apps} # csarom csakernel csalib
 
 osa_romtest.d64: osa.d64
 	cp osa.d64 osa_romtest.d64

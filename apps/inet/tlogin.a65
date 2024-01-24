@@ -164,7 +164,7 @@ ltext	;.asc TEL_IAC, TEL_DO, TEL_SUPPRESSGA
 ptext	.asc "password: ", TEL_IAC, TEL_WILL, TEL_ECHO, 0
 etext	.asc TEL_IAC, TEL_WONT, TEL_ECHO, 13,10,0 
 
-errsh	.asc "^m^jCould not open shell!^m^j",0
+errsh	.asc 13,10,"Could not open shell!",13,10,0
 
 pw_name	.asc "c64",0		/* replace this with login name */
 pw_passwd

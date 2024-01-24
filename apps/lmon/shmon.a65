@@ -1088,12 +1088,12 @@ s1        lda #"0"
           ldx Z3
           rts
 
-M0TXT     .ASC "^M^JC*^M^J"
-          .ASC "MON V"
+M0TXT     .ASC 13,10,"C*"
+          .ASC 13,10,"MON V"
           .BYT MA+"0",".",MB+"0"
-          .asc " (c) A.Fachat^@"
+          .asc " (c) A.Fachat",0
 M3TXT     .BYT " ","?",0
-R1TXT     .ASC "^M^J   PC  AC XR YR SP   NV1BDIZC^M^J^@"
+R1TXT     .ASC 13,10,"   PC  AC XR YR SP   NV1BDIZC",13,10,0
 
 MONBEF    .ASC "ESMGLCTOPUIFXDBRA"
           .BYT MEBYT,MEREG,MEASS

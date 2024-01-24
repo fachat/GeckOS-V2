@@ -11,6 +11,18 @@ clean:
 	(cd sysapps; ${MAKE} clean;)
 	(cd kernel; ${MAKE} clean;)
 
+cbm8x96: clean
+	(cd arch/cbm8x96; make; cd boot; make)
+
+c64: clean
+	(cd arch/c64; make; cd boot; make)
+
+pet32k: clean
+	(cd arch/pet32k; make; cd boot; make)
+
+csa65: clean
+	(cd arch/csa65; make; cd boot; make)
+
 tars:
 	tar czhvf ../oa-${version}.lib.tar.gz apps \
 		include/lib6502.i65 include/kdefs.i65 include/inet.i65

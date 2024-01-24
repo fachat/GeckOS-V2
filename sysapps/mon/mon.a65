@@ -360,12 +360,12 @@ anzbef    =23
 	 .data
 #endif
 
-beftab    .asc "DIR^@TYPE^@DEL^@FORMAT^@CHKDSK^@RENAME^@"
-          .asc "B^@BATCH^@"
-          .asc "LOGOFF^@"
-          .asc "COPYCON^@DUP^@CD^@DEVCMD^@COPY^@"
-          .asc "GETSTR^@FRESTR^@SETMEM^@"
-          .asc "INFO^@KILL^@MKDIR^@RMDIR^@CHDIR^@"
+beftab    .asc "DIR",0,"TYPE",0,"DEL",0,"FORMAT",0,"CHKDSK",0,"RENAME",0
+          .asc "B",0,"BATCH",0
+          .asc "LOGOFF",0
+          .asc "COPYCON",0,"DUP",0,"CD",0,"DEVCMD",0,"COPY",0
+          .asc "GETSTR",0,"FRESTR",0,"SETMEM",0
+          .asc "INFO",0,"KILL",0,"MKDIR",0,"RMDIR",0,"CHDIR",0
 
 befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word RENAME-1,BATCH-1,BATCH-1
@@ -374,11 +374,11 @@ befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word SETMEM-1,PINFO-1,PKILL-1
           .word MKDIR-1,RMDIR-1,CD-1
 
-initxt    .asc "^M^JSHELL V"
+initxt    .asc 13,10,"SHELL V"
           .byt VSA+"0",".",VSB+"0"
-          .asc "^M^J(C) 1990-97 BY A.FACHAT^M^J^@"
-errtxt    .asc " ?^M^J^@"
-metxt     .asc "^M^J"
+          .asc 13,10,"(C) 1990-97 BY A.FACHAT",13,10,0
+errtxt    .asc " ?",13,10,0
+metxt     .asc 13,10
           .byt MESSAGE,0
 
 	.text

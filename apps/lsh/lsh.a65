@@ -1805,9 +1805,9 @@ notfound
 
 #ifdef ENVTEST
 	.data
-fvar	.asc "^m^jfound var :",0
-cvar	.asc "^m^j",0
-evar	.asc "^m^jgot var :",0
+fvar	.asc 13,10, "found var :",0
+cvar	.asc 13,10,0
+evar	.asc 13,10, "got var :",0
 	.text
 #endif
 	.)

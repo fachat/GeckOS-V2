@@ -138,11 +138,11 @@ x1
 
 #define	STARTMEM()	jsr startmem
 
+#if 0
 /*
  * determine the speed the CPU is running with. We use the 50 Hz toggle
  * line for it.
  */
-#if 0
 getfreq	  .(        
           sei
           lda #SYS_IRQEN
@@ -172,6 +172,10 @@ gf3	  lda #0	; 1 MHz
 	  rts
 	  .) 
 #else
+/*
+ * determine the speed the CPU is running with. We use the 50/60 Hz 
+ * screen retrace for it.
+ */
 getfreq	  .(        
         lda $e84b
         and #%11011111	; continuous timer

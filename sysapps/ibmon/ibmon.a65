@@ -164,20 +164,20 @@ MONADR    .word MOX-1,mread-1,mwrite-1,MOM-1,BI-1,MOI-1
           .word lread-1,lwrite-1
           .word MOO-1,MOT-1,MOF-1,MOC-1,BB-1,MON-1
 
-M0TXT     .ASC "^M^JC*^M^J"
-          .ASC "DMON V"
+M0TXT     .ASC 13,10,"C*"
+          .ASC 13,10,"DMON V"
           .BYT MA+"0",".",MB+"0"
-          .asc " (c) A.Fachat^@"
+          .asc " (c) A.Fachat",0
 M3TXT     .BYT " ","?",0
-MTTXT     .asc "^M^JBye!^M^J",0
+MTTXT     .asc 13,10,"Bye!",13,10,0
 
-m0rtxt    .asc "^MLese",0
-m0wtxt    .asc "^MSchreibe",0
+m0rtxt    .asc 13,"Lese",0
+m0wtxt    .asc 13,"Schreibe",0
 m1txt     .asc " Block: Drive ",0
 m2txt     .asc ", Seite ",0
 m3txt     .asc ", Track ",0
 m4txt     .asc ", Sektor ",0
-fmtxt     .asc "^M^JSind Sie sicher (J/N)?",0
+fmtxt     .asc 13,10,"Sind Sie sicher (J/N)?",0
 
 /**************************************************************************/
 

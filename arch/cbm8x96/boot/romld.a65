@@ -68,16 +68,43 @@ incdh	inc ZP+1
 
 	;------------------
 
-loadlib	lda #LFNL
-	.byt $2c
-loadrom	lda #LFNR
-	.byt $2c
-loadkern
-	lda #LFNK
-	
+libname	.asc "LIB.BIN"
+libnlen	=*-libname
+
+kernname .asc "KERN.BIN"
+kernnlen =*-kernname
+
+romname	.asc "ROM.BIN"
+romnlen	=*-romname
+
+
+loadlib	lda #libnlen
+	ldx #<libname
+	ldy #>libname
+	jmp do_load
+
+loadrom	lda #romnlen
+	ldx #<romname
+	ldy #>romname
+	jmp do_load
+
+loadkern lda #kernnlen
+	ldx #<kernname
+	ldy #>kernname
+	;jsr do_load
+
+do_load	jsr SETNAM
+	lda #1		; LFN
+	ldx $d4		; current device (from where loader has been loaded)
+	ldy #0		; SEC = load
+	jsr SETLFS
+
+	jsr OPEN	
+
 	;------------------
-load	pha
-	tax
+	; load and store in 8x96 extra memory banks
+
+load	ldx #1		; LFN
 	jsr CHKIN
 
 	lda #0
@@ -121,7 +148,35 @@ inch	inc ZP+1
 
 endload	
 	jsr CLRCH
-	pla
+	lda #1		; LFN
 	jmp CLOSE
 
+	;----------------------------------
+	; C64 kernal jump table adapters for the PET ROM
+
+SETLFS  ; SETLFS        set logical/first/second address
+        .(
+        sta $d2         ; logical file no
+        stx $d4         ; unit address
+        sty $d3         ; secondary address
+        rts
+        .)
+
+SETNAM  ; SETNAM        set filename
+        .(
+        sta $d1         ; filename length
+        stx $da         ; address low
+        sty $db         ; address high
+        rts
+        .)
+
+LOAD    ; LOAD          load
+        .(
+        stx $fb         ; start lo
+        sty $fc         ; start hi
+        sta $9d         ; load/verify flag
+        jmp $f356
+        .)
+
+OPEN	=$f563
 

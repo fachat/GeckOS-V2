@@ -332,26 +332,26 @@ notx	lda #<-1
 msgtab	.word m_illf, m_again, m_notf
 lentab	.word e_illf-m_illf, e_again-m_again, e_notf-m_notf
 
-m_illf	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
-	.asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
-	.asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+m_illf	.asc "HTTP/1.0 400",13,10,"Content-Type: text/html",13,10,"",13,10
+	.asc "<HTML>",13,10,"<HEAD>",13,10,"<TITLE>Error</TITLE>",13,10,"</HEAD>",13,10
+	.asc "<BODY>",13,10,"<H1>Error 400</H1>",13,10,"",13,10
 	.asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
-	.asc " TCP simple WWW server error: malformed request^m^j"
-	.asc "</BODY>^m^j</HTML>^m^j"
+	.asc " TCP simple WWW server error: malformed request",13,10
+	.asc "</BODY>",13,10,"</HTML>",13,10
 e_illf
-m_again	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
-	.asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
-	.asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+m_again	.asc "HTTP/1.0 400",13,10,"Content-Type: text/html",13,10,"",13,10
+	.asc "<HTML>",13,10,"<HEAD>",13,10,"<TITLE>Error</TITLE>",13,10,"</HEAD>",13,10
+	.asc "<BODY>",13,10,"<H1>Error 400</H1>",13,10,"",13,10
 	.asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
-	.asc " TCP simple WWW server error: try again^m^j"
-	.asc "</BODY>^m^j</HTML>^m^j"
+	.asc " TCP simple WWW server error: try again",13,10
+	.asc "</BODY>",13,10,"</HTML>",13,10
 e_again
-m_notf	.asc "HTTP/1.0 400^m^jContent-Type: text/html^m^j^m^j"
-	.asc "<HTML>^m^j<HEAD>^m^j<TITLE>Error</TITLE>^m^j</HEAD>^m^j"
-	.asc "<BODY>^m^j<H1>Error 400</H1>^m^j^m^j"
+m_notf	.asc "HTTP/1.0 400",13,10,"Content-Type: text/html",13,10,"",13,10
+	.asc "<HTML>",13,10,"<HEAD>",13,10,"<TITLE>Error</TITLE>",13,10,"</HEAD>",13,10
+	.asc "<BODY>",13,10,"<H1>Error 400</H1>",13,10,"",13,10
 	.asc "<A HREF=",34,"http://www.tu-chemnitz.de/~fachat/8bit/osa/index.html",34,">OS/A65</A>"
-	.asc " TCP simple WWW server error: file not found^m^j"
-	.asc "</BODY>^m^j</HTML>^m^j"
+	.asc " TCP simple WWW server error: file not found",13,10
+	.asc "</BODY>",13,10,"</HTML>",13,10
 e_notf
 	.text
 
@@ -600,9 +600,9 @@ types	.asc "lmth.",0, "fig.",0, "gpj.",0, 0
 tadrs	.word tt0,       tt1,       tt2
 tlens	.word tt1-tt0-1, tt2-tt1-1, tt3-tt2-1
 
-tt0	.asc "HTTP/1.0 200 OK^m^jContent-Type: text/html^m^j^m^j",0
-tt1	.asc "HTTP/1.0 200 OK^m^jContent-Type: image/gif^m^j^m^j",0
-tt2	.asc "HTTP/1.0 200 OK^m^jContent-Type: image/jpg^m^j^m^j",0
+tt0	.asc "HTTP/1.0 200 OK",13,10,"Content-Type: text/html",13,10,"",13,10,0
+tt1	.asc "HTTP/1.0 200 OK",13,10,"Content-Type: image/gif",13,10,"",13,10,0
+tt2	.asc "HTTP/1.0 200 OK",13,10,"Content-Type: image/jpg",13,10,"",13,10,0
 tt3
 	.)
 
