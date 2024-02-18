@@ -353,7 +353,7 @@ stab      .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
 	  .byt "'YG(BHUV"
           .byt ")IJ0MKON"
 	  .byt "+PL_>[@<"
-          .byt "\*]", TC_CLR, 1 /* shift */, "=^^?"
+          .byt "\\*]", TC_CLR, 1 /* shift */, "=^^?"
           .byt "!", TC_ESC, 2 /* control */, 34," ", 6 /* C= */, "Q", 3 /*stop*/
 #ifdef CHECK_C128
 	  .byt TC_HELP, "85", TC_HT, "2471"
@@ -381,7 +381,7 @@ sctab     .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
 	  .byt "7^Y^G8^B^H^U^V"
           .byt "9^I^J0^M^K^O^N"
 	  .byt "+^P^L_.:@,"
-          .byt "\*;", TC_CLR, 1 /* shift */, "=^^/"
+          .byt "\\*;", TC_CLR, 1 /* shift */, "=^^/"
           .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /* stop */
 #ifdef CHECK_C128
 	  .byt TC_HELP, "85", TC_HT, "2471"

@@ -4,7 +4,7 @@ all: lib.bin kern.bin rom.bin
 TRG=boot/rom
 
 XAINPUT=../../include,..,../..
-XA=xa -XXA23
+XA=xa -k
 FILE=file65
 RELOC=reloc65
 

@@ -1,6 +1,6 @@
 
 
-XA=xa -XXA23 -XMASM #-2.1.4h
+XA=xa -k -XMASM 
 
 FILE=file65
 RELOC=reloc65

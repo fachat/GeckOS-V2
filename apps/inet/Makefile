@@ -1,5 +1,5 @@
 
-XA=xa -XXA23
+XA=xa -k
 
 files= tlogin telnet httpd
 
