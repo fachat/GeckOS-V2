@@ -180,6 +180,10 @@
 #define	  SCE_WERRM %00000011	/* writer has error condition (read error,..)*/
 			        /* %00 = no error, != $00 error, to be def'd */ 
 
+#define   LM_NONE	0
+#define	  LM_TERM	1
+#define	  LM_KEEP	$ff
+
 /*        Device-Commands          */
 
 #define   DC_IRQ    0
@@ -315,11 +319,11 @@
 
 #define	SIG_INTABLE	%10000000	/* interruptable system call mask */
 #define	SIG_CHLD	%01000000	/* child has terminated */
-#define	SIG_KILL	%00100000	/* process shall terminate */
+#define	SIG_KILL	%00100000	/* process shall terminate (ctrl-D) */
 #define	SIG_BRK		%00010000	/* ctrl-C received */
+#define	SIG_SUSPEND	%00001000	/* ctrl-Z received */
 
-#define	SIG_USR4	%00001000	/* 4 user signals */
-#define	SIG_USR3	%00000100
+#define	SIG_USR3	%00000100	/* 3 user signals */
 #define	SIG_USR2	%00000010
 #define	SIG_USR1	%00000001
 

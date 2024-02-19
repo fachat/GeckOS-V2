@@ -32,6 +32,9 @@
 &&getstr	=notimp
 &&frestr	=notimp
 
+&&setlmode	=notimp
+&&sendctrl	=notimp
+
 #else	/* NO_STREAMS */
 
 /*        Struct StreamData        */
@@ -41,7 +44,9 @@
 #define   S_CNTW    2*ANZSTRM      /* number of Writer         */
 #define   S_CNTR    3*ANZSTRM      /* number of Reader         */
 #define   S_ESTAT   4*ANZSTRM      /* error state byte	       */
-#define   S_SLEN    5*ANZSTRM      /* Length of struct         */
+#define   S_LMODE   5*ANZSTRM      /* error state byte	       */
+#define   S_PGRP    6*ANZSTRM      /* Length of struct         */
+#define   S_SLEN    7*ANZSTRM      /* Length of struct         */
 
 /*
  * The stream buffer length must be a power of two, 64 or 128 (tested).
@@ -89,7 +94,8 @@ l1        sta STRM,x
           clc
           rts       ;          jmp inifstr
           .)
-          
+
+setstdstr jsr teststd          
 #if S_AMAX = $80
 setstream .(
           cpx #ANZSTRM
@@ -141,8 +147,9 @@ ssok
           php
           sei
           sty SYR
-          jsr teststd
-          jsr setstream
+          ;jsr teststd
+          ;jsr setstream
+          jsr setstdstr
           bcs putnostr
           lda STRM+S_IO,x
           cmp STRM+S_II,x
@@ -185,9 +192,10 @@ xx
           php
           sei
           sty SYR
-          jsr teststd
           sta SAC
-          jsr setstream
+          ;jsr teststd
+          ;jsr setstream
+          jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
           beq snul            ; NUL-Status dann ende
@@ -222,9 +230,10 @@ full      lda #E_SFULL
           php
           sei
           sty SYR
-          jsr teststd
           sta SAC
-          jsr setstream
+          ;jsr teststd
+          ;jsr setstream
+          jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
           beq snul            ; NUL-Status dann ende
@@ -268,9 +277,10 @@ full      lda #E_SFULL
           bne a0
           jmp findnew
 
-a0        jsr teststd
-          sta SAC
-          jsr setstream
+a0        sta SAC
+	  ;jsr teststd
+          ;jsr setstream
+          jsr setstdstr
           bcs putnostr
           ldy SYR
           lda SAC
@@ -335,7 +345,9 @@ a00       cmp #SC_EOF
 
 a1        cmp #SC_CLR
           bne a2
-clrstr    lda #0
+clrstr    lda #<-1
+	  sta STRM+S_LMODE,x
+	  lda #0
           sta STRM+S_II,x
           sta STRM+S_IO,x
           sta STRM+S_ESTAT,x
@@ -372,7 +384,7 @@ a6        cmp #SC_RWANZ
           jmp retx
 
 nofrex    lda #E_NOSTR
-	  bne ret
+	  bne ret2
 
 estat          
 	  cmp #SC_ESTAT		; get error stat byte in yr
@@ -385,7 +397,7 @@ sestat	  cmp #SC_SSTAT		; set error stat byte
 	  tya
 	  ora STRM+S_ESTAT,x
 	  sta STRM+S_ESTAT,x
-	  jmp ret
+ret2	  jmp ret
 cestat	  cmp #SC_CSTAT		; clear error stat byte
 	  bne illcode1
 	  tya
@@ -409,195 +421,61 @@ ly        inc STRM+S_CNTR,x
           jmp clrstr      
           .)
 
-#if 0
-	  .(
-&&getb    .(
+/* ----------------------------------------------------------------- */
+
+&&setlmode .(
           jsr memsys
-          php
-          sei
-          sty SYR
-          jsr teststd
-
-          sta SAC
-
-          jsr setstream
-          bcs putnostr3
-
-	  lda STRM+S_II,x
-	  cmp STRM+S_IO,x
-	  beq empty3
-
-#ifndef NO_MMU
-	  lda #0
-	  jsr setmmu1
-	  ldy SYR
-	  lda BLKSIZ,y
-	  sec
-	  sbc STRM+S_IO,x
-	  sta BZEI
 	  php
-	  lda BLKSIZ+1,y
-	  sta BZEI+1
-	  lsr
-	  lsr
-	  lsr
-	  lsr
-	  jsr setmmu1
-	  lda BZEI+1
-	  and #$0f
-	  ora #$01
-	  plp
-	  sbc #0
-	  sta BZEI+1
-#else
-	  ldy SYR
-	  sec
-	  lda 0,y
-	  sbc STRM+S_IO,x
-	  sta BZEI
-	  lda 1,y
-	  sbc #0
-	  sta BZEI+1
-#endif
-	  lda SAC
-	  sta SYR
-
-          ldy STRM+S_IO,x
-l0
-	  lda (SZEI),y
-	  sta (BZEI),y
-	  iny
-	  tya
-	  bpl l1		; this heavily depends on Streamsize = 128!!
-	  clc
-	  adc BZEI
-	  sta BZEI
-	  lda #0
-	  bcc l1
-	  inc BZEI+1	  
-l1	  tay
-	  cmp STRM+S_II,x
-	  beq end
-l2 	  dec SYR
-	  bne l0
-end
-	  tya
-	  sta STRM+S_IO,x
-	  lda SAC
-	  sec
-	  sbc SYR
-	  clc
-
-          plp
-          clc
-          jmp memtask
-	  ;jsr memtask
-          ;rts
-          .)
-
-snul3     lda #E_NUL
-          .byt $2c
-putnostr3 lda #E_NOSTR
-          .byt $2c
-full3     lda #E_SFULL
-          .byt $2c
-empty3    lda #E_SEMPTY
-          jmp xerr
-
-&&putb    .(
-          jsr memsys
-          php
-          sei
+	  sei
           sty SYR
-          jsr teststd
-
-          sta SAC
-
-          jsr setstream
-          bcs putnostr3
-          lda STRM+S_CNTR,x
-          beq snul3            ; NUL-Status dann ende
-
-	  ldy STRM+S_II,x
-	  iny
-	  tya
-	  and #$7f
-	  cmp STRM+S_IO,x
-	  beq full3
-
-#ifndef NO_MMU
-	  lda #0
-	  jsr setmmu1
-	  ldy SYR
-	  lda BLKSIZ,y
-	  sec
-	  sbc STRM+S_II,x
-	  sta BZEI
+	  sta SAC
 	  php
-	  lda BLKSIZ+1,y
-	  sta BZEI+1
-	  lsr
-	  lsr
-	  lsr
-	  lsr
-	  jsr setmmu1
-	  lda BZEI+1
-	  and #$0f
-	  ora #$01
+          jsr teststd
+	  cpx #ANZSTRM
+          bcs nostrx
+	  lda SAC
+	  cmp #LM_KEEP
+	  beq keep
+	  sta STRM+S_LMODE,x
+keep	  plp
+	  bcs force
+	  lda STRM+S_PGRP,x
+	  cmp actTask
+	  bne ignore
+force	  lda SYR
+	  sta STRM+S_PGRP,x
+ignore 	  plp
+	  clc
+	  bcc ok
+
+nostrx	  plp
+&nostr	  lda #E_NOSTR
+	  .byt $2c
+&notask	  lda #E_NOTASK
 	  plp
-	  sbc #0
-	  sta BZEI+1
-#else
-	  ldy SYR
 	  sec
-	  lda 0,y
-	  sbc STRM+S_II,x
-	  sta BZEI
-	  lda 1,y
-	  sbc #0
-	  sta BZEI+1
-#endif
 
-	  lda SAC
-	  sta SYR
+ok 	  jmp memtask  
+	.)
 
-          ldy STRM+S_II,x
-l0
-	  lda (BZEI),y
-	  sta (SZEI),y
-	  iny
-	  tya
-	  bpl l1		; this heavily depends on Streamsize = 128!!
-	  clc
-	  adc BZEI
-	  sta BZEI
-	  lda #0
-	  bcc l1
-	  inc BZEI+1	  
-l1	  tay
-	  cmp STRM+S_IO,x
-	  bne l2
-	  dey
-	  jmp end
-l2 	  dec SYR
-	  bne l0
-end
-	  tya
-	  sta STRM+S_II,x
-	  lda SAC
-	  sec
-	  sbc SYR
-	  clc
+&&sendctrl .(
+	jsr memsys
+	php
+	sei
+	jsr teststd
+	cpx #ANZSTRM
+	bcs nostr
+	sta SAC
+	lda STRM+S_PGRP,x
+	cmp #<-1
+	beq notask
+	tax
+	lda SAC
+	plp
+	jsr sendsig
+	jmp memtask
+	.)
 
-          plp
-          clc
-          jmp memtask
-	  ;jsr memtask
-          ;rts
-          .)
-
-	  .)
-#endif		/* endif 0 to disable getb/putb */
           .)
 
 #endif	/* NO_STREAMS */

@@ -1,0 +1,52 @@
+
+= SETSIG(2)
+:doctype: manpage
+
+== NAME
+SETLMODE - set a stream's line mode and attached foreground process.
+
+== SYNOPSIS
+Input::
+	* C - 0: only set foreground process if we are the current foreground process; 1: do it anyway
+	* AC - line mode to set
+	* XR - stream number
+	* YR - foreground process attached to stream
+
+Call::
+	jsr SETLMODE
+Output::
+	* C=0: ok
+	* C=1: 
+		** AC - error code
+
+== DESCRIPTION
+Sets the line mode and foreground process attached to a stream. The following list gives the currently defined line modes:
+
+LM_NONE::
+	No special handling is performed on SENDCTRL(2).
+LM_KEEP::
+	Keep the existing line mode, do not change it.
+LM_TERM::
+	Signals sent with SENDCTRL are forwarded to the attached foreground process 
+
+Note that this function is mainly called from within FORK.
+
+Also, setting the foreground process only succeeds if the current process is the current foreground process.
+
+== RETURN CODES
+The call returns without value on success (with C=0), or AC contains one of the following error codes:
+
+E_NOSTR:: 
+	XR is not a valid stream
+
+== SEE ALSO
+link:../signals.7.adoc[signals(7)],
+link:FORK.2.adoc[FORK(2)],
+link:SENDCTRL.2.adoc[FORK(2)],
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

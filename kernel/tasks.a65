@@ -98,7 +98,7 @@
 	.data
 #endif
 
-actTask  .byt 0
+&actTask  .byt 0
 actThread .byt 0
 
 &Syscnt	  .byt 0
@@ -256,6 +256,11 @@ cin_ok	  sta taskTab + TT_STDCIN,x
 
 	  tya
 	  sta taskTab + TT_PARENT,x
+
+	  ; set as foreground task
+	  lda #LM_TERM	; YR=fg task and XR=stream are already set
+	  clc
+	  jsr SETLMODE
 
 	  jsr getthread
 	  bcc gotthread
@@ -442,6 +447,15 @@ suicide	  ldx actTask
 k1 	  .(
 	  sta taskTab2 + TT_RETCODE,x
 	  stx div2		; XR / div2 is taskID of task to be killed
+
+	  ; if we are the foreground process, set the parent as foreground process
+	  lda taskTab + TT_PARENT,x
+	  tay
+	  lda taskTab + TT_STDCIN,x
+	  tax
+	  lda #LM_KEEP
+	  clc
+	  jsr SETLMODE
 
 	  ; free all threads with the task
 	  .(
@@ -857,6 +871,7 @@ err	lda #E_ILLPAR
 #else	/* NEED_GETINFO */
 
 &getinfo = notimp
+&setinfo = notimp
 
 #endif
 
@@ -1497,6 +1512,9 @@ noown	pla
 
 /************************************************************************/
 
+	; teststd replaces a stream number in XR with its real stream
+	; number if it is one of the defined STDxxx streams.
+	; note destroys AC
           .(
 &&teststd php
 	  ldy actTask
@@ -1504,7 +1522,7 @@ noown	pla
 	  beq stdok
           cpx #STDCIN
           bcc stdok
-          pha
+          ;pha
           txa
           sec
           sbc #STDCIN
@@ -1513,7 +1531,7 @@ noown	pla
           tax
           lda taskTab+TT_STDCIN,x
           tax
-          pla
+          ;pla
 stdok     plp
           rts
           .)
