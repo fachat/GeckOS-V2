@@ -188,7 +188,7 @@ end_auto
 /************* Constants for lib6502 memory handling	*/
 
 ;Memstart  =$5380
-Memstart  =$53c0
+Memstart  =$5500
 Memend	  =$7800
 Zerostart =$94		/* PET ROM irq vectors at $90-$93 */
 
