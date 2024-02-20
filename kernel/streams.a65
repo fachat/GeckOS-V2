@@ -32,9 +32,6 @@
 &&getstr	=notimp
 &&frestr	=notimp
 
-&&setlmode	=notimp
-&&sendctrl	=notimp
-
 #else	/* NO_STREAMS */
 
 /*        Struct StreamData        */
@@ -146,8 +143,6 @@ ssok
           php
           sei
           sty SYR
-          ;jsr teststd
-          ;jsr setstream
           jsr setstdstr
           bcs putnostr
           lda STRM+S_IO,x
@@ -192,8 +187,6 @@ xx
           sei
           sty SYR
           sta SAC
-          ;jsr teststd
-          ;jsr setstream
           jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
@@ -230,8 +223,6 @@ full      lda #E_SFULL
           sei
           sty SYR
           sta SAC
-          ;jsr teststd
-          ;jsr setstream
           jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
@@ -349,8 +340,7 @@ a00       cmp #SC_EOF
 	  ; -------------
 a1        cmp #SC_CLR
           bne a2
-clrstr    lda #<-1
-	  sta STRM+S_FGPID,x
+clrstr    
 	  lda #0
           sta STRM+S_II,x
           sta STRM+S_IO,x
@@ -454,6 +444,8 @@ lx        lda STRM+S_CNTW,x
           bcs nofrex
 ly        inc STRM+S_CNTR,x
           inc STRM+S_CNTW,x
+	  lda #<-1
+	  sta STRM+S_FGPID,x
           jmp clrstr      
           .)
 
