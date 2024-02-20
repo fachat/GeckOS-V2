@@ -162,5 +162,7 @@ dochild	jsr CHECKCHLD
 jmpzth	jmp (zth)
 
 	; SIG_CHLD must be the last one, it cannot be sent.
-sigtab	.byt SIG_USR1, SIG_USR2, SIG_USR3, SIG_CHLD
+sigtab	.byt SIG_USR1, SIG_USR2, SIG_USR3, SIG_SUSPEND, SIG_CHLD
+
+	.assert sigtab + NUMOFSIG == *, "number of handled signals inconsistent"
 

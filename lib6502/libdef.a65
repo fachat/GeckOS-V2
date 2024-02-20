@@ -26,14 +26,14 @@
  * two bytes in LT_ENV to zero, clearing the env list.
  * If LT_ENV increases, this will be bugged in taskinit (libglob.a65)
  */
-#define	NUMOFSIG	4	/* number of handled signals */
+#define	NUMOFSIG	5	/* number of handled signals */
 #define	PATHLEN		64	/* 64 byte max path len, incl drive byte */
 #define	MAXFILES	16	/* number of open files */
 #define	CMDLEN		128	/* maximum length of command line saved */
 #define	ENVLEN		192	/* size of env var list (max 256 byte) */
 
 
-#define	LT_SIGADDR	0			/* signal addresses */
+#define	LT_SIGADDR	0			/* list of signal handler addresses */
 #define	LT_NTHREADS	0+(NUMOFSIG*2)		/* number of active threads */
 #define	LT_INISTACK	1+LT_NTHREADS		/* number of active threads */
 #define	LT_FTAB		2+LT_NTHREADS		/* table with file modes */

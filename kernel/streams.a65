@@ -226,7 +226,7 @@ full      lda #E_SFULL
           jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
-          beq snul            ; NUL-Status dann ende
+          beq snul            ; NUL-Status then end
           lda STRM+S_IO,x
           sec
           sbc #1
@@ -262,7 +262,6 @@ full      lda #E_SFULL
           sei
 
           sty SYR
-          sta SAC
 
 	  ; -------------
           cmp #SC_GET

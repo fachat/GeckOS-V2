@@ -455,6 +455,8 @@ k1 	  .(
 	  lda #SC_FGPID
 	  jsr STRCMD
 
+	  ldx div2
+
 	  ; free all threads with the task
 	  .(
 	  ldy #0
@@ -1520,7 +1522,6 @@ noown	pla
 	  beq stdok
           cpx #STDCIN
           bcc stdok
-          ;pha
           txa
           sec
           sbc #STDCIN
@@ -1529,7 +1530,6 @@ noown	pla
           tax
           lda taskTab+TT_STDCIN,x
           tax
-          ;pla
 stdok     plp
           rts
           .)
