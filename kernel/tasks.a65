@@ -258,9 +258,8 @@ cin_ok	  sta taskTab + TT_STDCIN,x
 	  sta taskTab + TT_PARENT,x
 
 	  ; set as foreground task
-	  lda #LM_TERM	; YR=fg task and XR=stream are already set
-	  clc
-	  jsr SETLMODE
+	  lda #SC_FGPID	; YR=fg task and XR=stream are already set
+	  jsr STRCMD
 
 	  jsr getthread
 	  bcc gotthread
@@ -453,9 +452,8 @@ k1 	  .(
 	  tay
 	  lda taskTab + TT_STDCIN,x
 	  tax
-	  lda #LM_KEEP
-	  clc
-	  jsr SETLMODE
+	  lda #SC_FGPID
+	  jsr STRCMD
 
 	  ; free all threads with the task
 	  .(

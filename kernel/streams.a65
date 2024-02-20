@@ -27,7 +27,7 @@
 
 &&getc		=notimp
 &&putc		=notimp
-&&gets		=notimp
+&&strcmd	=notimp
 &&ungetc	=notimp
 &&getstr	=notimp
 &&frestr	=notimp
@@ -44,9 +44,8 @@
 #define   S_CNTW    2*ANZSTRM      /* number of Writer         */
 #define   S_CNTR    3*ANZSTRM      /* number of Reader         */
 #define   S_ESTAT   4*ANZSTRM      /* error state byte	       */
-#define   S_LMODE   5*ANZSTRM      /* error state byte	       */
-#define   S_PGRP    6*ANZSTRM      /* Length of struct         */
-#define   S_SLEN    7*ANZSTRM      /* Length of struct         */
+#define   S_FGPID   5*ANZSTRM      /* Length of struct         */
+#define   S_SLEN    6*ANZSTRM      /* Length of struct         */
 
 /*
  * The stream buffer length must be a power of two, 64 or 128 (tested).
@@ -266,27 +265,29 @@ full      lda #E_SFULL
           .byt $2c
 &&frestr   lda #SC_FRE
 
-&&gets    
+&&strcmd    
           jsr memsys
 	  php
           sei
 
           sty SYR
-          
+          sta SAC
+
+	  ; -------------
           cmp #SC_GET
           bne a0
           jmp findnew
 
+	  ; -------------
 a0        sta SAC
-	  ;jsr teststd
-          ;jsr setstream
           jsr setstdstr
           bcs putnostr
           ldy SYR
           lda SAC
 
+	  ; -------------
           cmp #SC_STAT
-          bne andere	
+          bne others	
 sc_stat
           lda STRM+S_CNTR,x
           beq nul
@@ -325,8 +326,9 @@ retx
           cmp #1
 	  jmp memtask
 
-andere
-	  cmp #SC_GANZ
+	  ; -------------
+others
+	  cmp #SC_NUMBYTES
           bne a00
           sec
           lda STRM+S_IO,x
@@ -336,6 +338,7 @@ andere
           and #S_AMASK
           jmp ret
 
+	  ; -------------
 a00       cmp #SC_EOF
           bne a1   
           lda STRM+S_CNTW,x
@@ -343,16 +346,18 @@ a00       cmp #SC_EOF
           dec STRM+S_CNTW,x
           jmp ok
 
+	  ; -------------
 a1        cmp #SC_CLR
           bne a2
 clrstr    lda #<-1
-	  sta STRM+S_LMODE,x
+	  sta STRM+S_FGPID,x
 	  lda #0
           sta STRM+S_II,x
           sta STRM+S_IO,x
           sta STRM+S_ESTAT,x
           beq ok1
 
+	  ; -------------
 a2        cmp #SC_FRE
           bne a3
           lda STRM+S_CNTW,x
@@ -360,16 +365,19 @@ a2        cmp #SC_FRE
           dec STRM+S_CNTW,x
 a2a       jmp frer
 
+	  ; -------------
 a3        cmp #SC_REG_RD
           bne a4
           inc STRM+S_CNTR,x
           bne ok1
 
+	  ; -------------
 a4        cmp #SC_REG_WR
           bne a5
           inc STRM+S_CNTW,x
           bne ok1
 
+	  ; -------------
 a5        cmp #SC_NUL
           bne a6;   illcode
 frer      lda STRM+S_CNTR,x
@@ -377,35 +385,63 @@ frer      lda STRM+S_CNTR,x
           dec STRM+S_CNTR,x
 ok1       jmp ok
 
+	  ; -------------
 a6        cmp #SC_RWANZ
           bne estat
           ldy STRM+S_CNTR,x
           lda STRM+S_CNTW,x
           jmp retx
 
+	  ; -------------
 nofrex    lda #E_NOSTR
 	  bne ret2
 
+	  ; -------------
 estat          
 	  cmp #SC_ESTAT		; get error stat byte in yr
 	  bne sestat
 	  lda STRM+S_ESTAT,x
 	  sta SYR
 	  jmp sc_stat
+	  ; -------------
 sestat	  cmp #SC_SSTAT		; set error stat byte
 	  bne cestat
 	  tya
 	  ora STRM+S_ESTAT,x
 	  sta STRM+S_ESTAT,x
 ret2	  jmp ret
+	  ; -------------
 cestat	  cmp #SC_CSTAT		; clear error stat byte
-	  bne illcode1
+	  bne fgpid
 	  tya
 	  eor #$ff
 	  and STRM+S_ESTAT,x
 	  sta STRM+S_ESTAT,x
 	  jmp ret
 
+	  ; -------------
+fgpid	  cmp #SC_FGPID
+	  bne fgsig
+	  lda STRM+S_FGPID,x
+	  cmp actTask
+	  bne ignore
+force	  lda SYR
+	  sta STRM+S_FGPID,x
+ignore 	  jmp ok
+	
+	  ; -------------
+fgsig     cmp #SC_FGSIG
+	  bne illcode1
+	  lda STRM+S_FGPID,x
+	  cmp #<-1
+	  beq ignore
+	  tax
+	  lda SYR
+	  sec
+	  jsr sendsig
+	  jmp ret
+
+	  ; -------------
 illcode1  jmp illcode
 
 findnew   ldx #0
@@ -420,61 +456,6 @@ ly        inc STRM+S_CNTR,x
           inc STRM+S_CNTW,x
           jmp clrstr      
           .)
-
-/* ----------------------------------------------------------------- */
-
-&&setlmode .(
-          jsr memsys
-	  php
-	  sei
-          sty SYR
-	  sta SAC
-	  php
-          jsr teststd
-	  cpx #ANZSTRM
-          bcs nostrx
-	  lda SAC
-	  cmp #LM_KEEP
-	  beq keep
-	  sta STRM+S_LMODE,x
-keep	  plp
-	  bcs force
-	  lda STRM+S_PGRP,x
-	  cmp actTask
-	  bne ignore
-force	  lda SYR
-	  sta STRM+S_PGRP,x
-ignore 	  plp
-	  clc
-	  bcc ok
-
-nostrx	  plp
-&nostr	  lda #E_NOSTR
-	  .byt $2c
-&notask	  lda #E_NOTASK
-	  plp
-	  sec
-
-ok 	  jmp memtask  
-	.)
-
-&&sendctrl .(
-	jsr memsys
-	php
-	sei
-	jsr teststd
-	cpx #ANZSTRM
-	bcs nostr
-	sta SAC
-	lda STRM+S_PGRP,x
-	cmp #<-1
-	beq notask
-	tax
-	lda SAC
-	plp
-	jsr sendsig
-	jmp memtask
-	.)
 
           .)
 

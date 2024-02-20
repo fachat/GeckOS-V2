@@ -81,10 +81,6 @@
 #define		SETINFO	  OSA2KERNEL+$66
 #define		LOCKSEM	  OSA2KERNEL+$69
 
-/* preview code for GeckOS-V3 */
-
-#define		SETLMODE  OSA2KERNEL+$6c	/* set the line mode and process (group) for a stream */
-#define		SENDCTRL  OSA2KERNEL+$6f	/* send a signal to all processes (in the process group) attached to a stream */
 
 #endif
 
@@ -105,7 +101,7 @@ jmp frestr
 jmp putc
 jmp getc
 jmp ungetc
-jmp gets
+jmp strcmd
 
 jmp devcmd
 
@@ -146,8 +142,6 @@ jmp checkchld
 jmp setinfo
 jmp locksem
 
-jmp setlmode
-jmp sendctrl
 
 #endif
 

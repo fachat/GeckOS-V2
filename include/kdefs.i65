@@ -158,19 +158,21 @@
 /**************************************************************************/
 /*        Stream-Commands          */
 
-#define   SC_GET    0
-#define   SC_REG_RD 1
-#define   SC_REG_WR 2
-#define   SC_CLR    3
-#define   SC_EOF    4
-#define   SC_NUL    5
-#define   SC_FRE    6
-#define   SC_STAT   7
-#define   SC_GANZ   8
-#define   SC_RWANZ  9
+#define   SC_GET    0		/* get a new stream (reader = writer counter = 1) */
+#define   SC_REG_RD 1		/* register a new reader for a stream (reader counter ++) */
+#define   SC_REG_WR 2		/* register a new writer for a stream (writer counter ++) */
+#define   SC_CLR    3		/* empty a stream */
+#define   SC_EOF    4		/* send an EOF (writer counter --) */
+#define   SC_NUL    5		/* notify that (reader counter --) */
+#define   SC_FRE    6		/* free a stream (reader & writer counter --) */
+#define   SC_STAT   7		/* return stream status byte */
+#define   SC_NUMBYTES 8		/* get current number of data bytes in stream */
+#define   SC_RWANZ  9		/* return the reader counter in YR and the writer counter in AC */
 #define	  SC_ESTAT  10		/* get error state */
 #define   SC_SSTAT  11		/* set error state */
 #define   SC_CSTAT  12		/* clear error state */
+#define   SC_FGPID  13		/* attach the PID of the foreground process */
+#define   SC_FGSIG  14		/* send a signal to the PID of the attached foreground process */
 
 #define	  SCE_PULL  %10000000	/* reader pulls */
 #define	  SCE_PUSH  %01000000	/* writer pushes */
