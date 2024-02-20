@@ -176,6 +176,11 @@
 
 #echo lib6502 jump table
 
+#ifdef LIB6502
+//#print LIB6502-5*3-*
+	.dsb LIB6502-(*+5*3)
+#endif
+
 ; no more code goes here, as start and end addresses are computed from number of calls
 
 /* OS/A specific calls */
@@ -188,7 +193,16 @@ jmp Flib2osa_w
 
 /* official lib6502 is here */
 
+#ifdef LIB6502
+#print LIB6502
+#endif
+#print *
+
+#ifdef LIB6502
+	.assert * == LIB6502, "LIB6502 address mismatch"
+#else
 +LIB6502=*
+#endif
 
 jmp Fopen
 jmp Fclose

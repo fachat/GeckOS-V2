@@ -16,6 +16,6 @@
    95 a=4
    100 load"boot",8
    110 print "Press key to Start GeckOS"
-   115 rem get a$:if a$="" then 115
+   115 get a$:if a$="" then 115
    120 sys 828: rem boot code
 
