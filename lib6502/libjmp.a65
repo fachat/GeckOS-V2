@@ -174,13 +174,6 @@
 
 #ifdef LIB6502BIN
 
-#echo lib6502 jump table
-
-#ifdef LIB6502
-//#print LIB6502-5*3-*
-	.dsb LIB6502-(*+5*3)
-#endif
-
 ; no more code goes here, as start and end addresses are computed from number of calls
 
 /* OS/A specific calls */

@@ -1,5 +1,5 @@
 
-version="2.0.9"
+version="2.1.1"
 
 all:
 	(cd apps; ${MAKE};)
@@ -11,6 +11,10 @@ clean:
 	(cd sysapps; ${MAKE} clean;)
 	(cd kernel; ${MAKE} clean;)
 	(cd lib6502; ${MAKE} clean;)
+
+#####################################################
+
+XCSA=~/8bit/xcbm/bin/xcsa
 
 #####################################################
 
@@ -41,18 +45,7 @@ runpet32k: pet32k
 csa65: clean
 	(cd arch/csa65; make; cd boot; make)
 
-tars:
-	tar czhvf ../oa-${version}.lib.tar.gz apps \
-		include/lib6502.i65 include/kdefs.i65 include/inet.i65
-	(cd ..; \
-	tar czhvf oa-${version}.base.tar.gz \
-		--exclude oa-${version}/arch/csa65 \
-		--exclude oa-${version}/arch/gecko \
-		--exclude oa-${version}/sysapps/basic \
-		--exclude oa-${version}/sysapps/irtx \
-		oa-${version} ;\
-	tar czhvf oa-${version}.tar.gz \
-		oa-${version} ;\
-	)
+runcsa65: csa65
+	(cd arch/csa65/boot; $(XCSA))
 
 
