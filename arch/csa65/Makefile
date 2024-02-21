@@ -46,6 +46,7 @@ csalib.bin: ../../lib6502/*.a65 csalib.a65
 	# note: ROMSTART here is shared ROM, so start of lib6502
 	${XA} -I../.. -I../../include -R -bt 51200 -bz 8 -bd 768 -bb 1536 \
 		-DOSA2KERNEL=58368 \
+		-DLIB6502=58233 \
 		-DROMSTART=51200 \
 		-l csalib.lab \
 		-o csalib.o65 \

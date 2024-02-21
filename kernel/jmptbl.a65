@@ -81,6 +81,7 @@
 #define		SETINFO	  OSA2KERNEL+$66
 #define		LOCKSEM	  OSA2KERNEL+$69
 
+
 #endif
 
 #ifdef    SYSTEM
@@ -100,7 +101,7 @@ jmp frestr
 jmp putc
 jmp getc
 jmp ungetc
-jmp gets
+jmp strcmd
 
 jmp devcmd
 
@@ -140,6 +141,7 @@ jmp checkchld
 
 jmp setinfo
 jmp locksem
+
 
 #endif
 

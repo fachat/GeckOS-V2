@@ -33,7 +33,7 @@
 #define	ENVLEN		192	/* size of env var list (max 256 byte) */
 
 
-#define	LT_SIGADDR	0			/* signal addresses */
+#define	LT_SIGADDR	0			/* list of signal handler addresses */
 #define	LT_NTHREADS	0+(NUMOFSIG*2)		/* number of active threads */
 #define	LT_INISTACK	1+LT_NTHREADS		/* number of active threads */
 #define	LT_FTAB		2+LT_NTHREADS		/* table with file modes */

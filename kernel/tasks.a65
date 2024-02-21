@@ -98,7 +98,7 @@
 	.data
 #endif
 
-actTask  .byt 0
+&actTask  .byt 0
 actThread .byt 0
 
 &Syscnt	  .byt 0
@@ -247,6 +247,11 @@ setprio	  ; normal fork, inherit priority and STDCIN (if possible)
 	  ; inherit from parent
 	  lda taskTab2 + TT_PRIORITY,y
 prio_ok	  sta taskTab2 + TT_PRIORITY,x
+
+	  ; set paremt
+	  tya
+	  sta taskTab + TT_PARENT,x
+
 	  ; check STDCIN from parent
 	  lda taskTab + TT_STDCIN,y
 	  cmp #STDNUL	; replace STDNUL with STDIN from FORK param
@@ -254,8 +259,12 @@ prio_ok	  sta taskTab2 + TT_PRIORITY,x
 cin_boot  lda SYSBUF+FORK_STDIN
 cin_ok	  sta taskTab + TT_STDCIN,x
 
-	  tya
-	  sta taskTab + TT_PARENT,x
+	  ; set as foreground task on stdcin
+	  ; TODO flag if this needs to be done (for bg tasks)
+	  ldy div2	  
+	  ldx taskTab + TT_STDCIN,y
+	  lda #SC_FGPID	; YR=fg task and XR=stream are already set
+	  jsr STRCMD
 
 	  jsr getthread
 	  bcc gotthread
@@ -442,6 +451,16 @@ suicide	  ldx actTask
 k1 	  .(
 	  sta taskTab2 + TT_RETCODE,x
 	  stx div2		; XR / div2 is taskID of task to be killed
+
+	  ; if we are the foreground process, set the parent as foreground process
+	  lda taskTab + TT_PARENT,x
+	  tay
+	  lda taskTab + TT_STDCIN,x
+	  tax
+	  lda #SC_FGPID
+	  jsr STRCMD
+
+	  ldx div2
 
 	  ; free all threads with the task
 	  .(
@@ -857,6 +876,7 @@ err	lda #E_ILLPAR
 #else	/* NEED_GETINFO */
 
 &getinfo = notimp
+&setinfo = notimp
 
 #endif
 
@@ -1497,6 +1517,9 @@ noown	pla
 
 /************************************************************************/
 
+	; teststd replaces a stream number in XR with its real stream
+	; number if it is one of the defined STDxxx streams.
+	; note destroys AC
           .(
 &&teststd php
 	  ldy actTask
@@ -1504,7 +1527,6 @@ noown	pla
 	  beq stdok
           cpx #STDCIN
           bcc stdok
-          pha
           txa
           sec
           sbc #STDCIN
@@ -1513,7 +1535,6 @@ noown	pla
           tax
           lda taskTab+TT_STDCIN,x
           tax
-          pla
 stdok     plp
           rts
           .)

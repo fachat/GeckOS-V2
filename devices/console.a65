@@ -226,6 +226,12 @@ gotchar
 	lda #SC_SSTAT
 	ldy #SCE_BRK
 	jsr STRCMD
+	; send BRK signal to foreground process
+	ldy screen
+	ldx outstr,y
+	lda #SC_FGSIG
+	ldy #SIG_BRK
+	jsr STRCMD
 nobrk
 	ldx zei2
 	ldy screen

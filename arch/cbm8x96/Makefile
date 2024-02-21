@@ -8,11 +8,13 @@ XA=xa -k
 FILE=file65
 RELOC=reloc65
 
+LIB=7200
+KERNEL=61440
+
 lib lib.bin: lib.a65
 	# start binary at 910+2 = $0390
-	${XA} -I../../include -I../.. -DOSA2KERNEL=61440 -R -bt 910 -bd 768 -bz 8 -bb 65535 $< -o lib.o65 -l lib.lab;
+	${XA} -I../../include -I../.. -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB) -R -bt 910 -bd 768 -bz 8 -bb 65535 $< -o lib.o65 -l lib.lab;
 	${FILE} lib.o65
-	${FILE} -v lib.o65 | grep LIB6502
 	${RELOC} -xt -o lib.bin lib.o65; 
 
 kern kern.bin: kern.a65
@@ -22,7 +24,7 @@ kern kern.bin: kern.a65
 	${RELOC} -xt -o kern.bin kern.o65
 
 rom rom.bin: rom.a65
-	${XA} -I../../include -I../.. -R -DLIB6502=7103 -DOSA2KERNEL=61440 -bt 40958 -bd 55296 -bz 52 -bb 56320 $< -o rom.o65 -l rom.lab;
+	${XA} -I../../include -I../.. -R -DLIB6502=$(LIB) -DOSA2KERNEL=$(KERNEL) -bt 40958 -bd 55296 -bz 52 -bb 56320 $< -o rom.o65 -l rom.lab;
 	${FILE} rom.o65
 	${RELOC} -xt -o rom.bin rom.o65
 

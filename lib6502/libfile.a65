@@ -1192,7 +1192,7 @@ nowcheck
 	bcc rcok
 	jsr checkfd_d
 	bcs efile
-rcok	lda #SC_GANZ
+rcok	lda #SC_NUMBYTES
 	jsr STRCMD
 	bcs enord
 	cmp #0
@@ -1269,7 +1269,7 @@ nopull
 	tay
 	lda (zta),y
 	tax
-	lda #SC_GANZ
+	lda #SC_NUMBYTES
 	jsr STRCMD
 	tax
 	pla		; missing check for directory-read

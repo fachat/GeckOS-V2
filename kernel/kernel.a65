@@ -91,7 +91,7 @@
 #define	ROMSTART	$8000
 #endif
 
-#include  "arch/config.i65"
+#include  "config.i65"
 #include  "kdefs.i65"
 
 #endif	/* ROM */
