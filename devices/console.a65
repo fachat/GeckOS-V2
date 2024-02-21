@@ -222,9 +222,17 @@ gotchar
 	lda zei2
 	cmp brkkey,y
 	bne nobrk
+lda #"X"
+sta zei2
 	ldx outstr,y
 	lda #SC_SSTAT
 	ldy #SCE_BRK
+	jsr STRCMD
+	; send BRK signal to foreground process
+	ldy screen
+	ldx outstr,y
+	lda #SC_FGSIG
+	ldy #SIG_BRK
 	jsr STRCMD
 nobrk
 	ldx zei2

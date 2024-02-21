@@ -58,7 +58,8 @@ s_lib
 #echo LIB6502:
 #print LIB6502
 
-Memstart  =$1c80
+;Memstart  =$1c80
+Memstart  =*
 Zerostart =$68
 
 
