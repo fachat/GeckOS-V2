@@ -247,6 +247,11 @@ setprio	  ; normal fork, inherit priority and STDCIN (if possible)
 	  ; inherit from parent
 	  lda taskTab2 + TT_PRIORITY,y
 prio_ok	  sta taskTab2 + TT_PRIORITY,x
+
+	  ; set paremt
+	  tya
+	  sta taskTab + TT_PARENT,x
+
 	  ; check STDCIN from parent
 	  lda taskTab + TT_STDCIN,y
 	  cmp #STDNUL	; replace STDNUL with STDIN from FORK param
@@ -254,10 +259,11 @@ prio_ok	  sta taskTab2 + TT_PRIORITY,x
 cin_boot  lda SYSBUF+FORK_STDIN
 cin_ok	  sta taskTab + TT_STDCIN,x
 
-	  tya
-	  sta taskTab + TT_PARENT,x
-
-	  ; set as foreground task
+	  ; set as foreground task on stdcin
+	  ; TODO flag if this needs to be done (for bg tasks)
+	  ldy div2	  
+	  ldx taskTab + TT_STDCIN,y
+	  ;ldx taskTab + TT_STDIN,y
 	  lda #SC_FGPID	; YR=fg task and XR=stream are already set
 	  jsr STRCMD
 

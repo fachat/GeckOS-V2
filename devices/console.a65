@@ -222,8 +222,6 @@ gotchar
 	lda zei2
 	cmp brkkey,y
 	bne nobrk
-lda #"X"
-sta zei2
 	ldx outstr,y
 	lda #SC_SSTAT
 	ldy #SCE_BRK

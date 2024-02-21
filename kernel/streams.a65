@@ -411,9 +411,9 @@ cestat	  cmp #SC_CSTAT		; clear error stat byte
 	  ; -------------
 fgpid	  cmp #SC_FGPID
 	  bne fgsig
-	  lda STRM+S_FGPID,x
-	  cmp actTask
-	  bne ignore
+	  ;lda STRM+S_FGPID,x
+	  ;cmp actTask
+	  ;bne ignore
 	  lda SYR
 	  sta STRM+S_FGPID,x
 ignore 	  jmp ok
@@ -423,7 +423,7 @@ fgsig     cmp #SC_FGSIG
 	  bne illcode1
 	  lda STRM+S_FGPID,x
 	  cmp #<-1
-.byt 2
+;.byt 2
 	  beq ignore
 	  tax
 	  lda SYR
