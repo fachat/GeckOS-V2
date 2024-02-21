@@ -263,7 +263,6 @@ cin_ok	  sta taskTab + TT_STDCIN,x
 	  ; TODO flag if this needs to be done (for bg tasks)
 	  ldy div2	  
 	  ldx taskTab + TT_STDCIN,y
-	  ;ldx taskTab + TT_STDIN,y
 	  lda #SC_FGPID	; YR=fg task and XR=stream are already set
 	  jsr STRCMD
 

@@ -1605,7 +1605,12 @@ ctabh	.dsb MAXCHLD
 ctabr	.dsb MAXCHLD
 	.text
 
-&sigrchld .(
+sigrbrk	.(
+	; TODO real handler
+	rts
+	.)
+
+sigrchld .(
 	php
 	sei
 	pha
@@ -1629,6 +1634,10 @@ noinc	plp
 	lda #<sigrchld
 	ldy #>sigrchld
 	ldx #SIG_CHLD
+	jsr signal
+	lda #<sigrbrk
+	ldy #>sigrbrk
+	ldx #SIG_BRK
 	jmp signal
 	.)
 
