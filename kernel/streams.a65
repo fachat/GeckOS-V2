@@ -411,10 +411,12 @@ cestat	  cmp #SC_CSTAT		; clear error stat byte
 	  ; -------------
 fgpid	  cmp #SC_FGPID
 	  bne fgsig
-	  ;lda STRM+S_FGPID,x
-	  ;cmp actTask
-	  ;bne ignore
-	  lda SYR
+	  lda STRM+S_FGPID,x
+	  cmp #<-1		; only set the fg pid when it is either not set 
+	  beq notsetyet
+	  cmp actTask		; or we currently are the fg pid (typically assigning to parent)
+	  bne ignore
+notsetyet lda SYR
 	  sta STRM+S_FGPID,x
 ignore 	  jmp ok
 	
