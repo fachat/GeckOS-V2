@@ -45,7 +45,7 @@ l0	sta (zta),y
 	ldy #>rxsig
 	sec
 	jsr SETSIG
-	lda #SIG_USR1 | SIG_USR2 | SIG_USR3 | SIG_BRK | SIG_CHLD
+	lda #SIG_USR1 | SIG_USR2 | SIG_USR3 | SIG_SUSPEND | SIG_BRK | SIG_CHLD
 	clc
 	jmp SETSIG
 	.)
@@ -136,7 +136,7 @@ doit
 	sta zth
 	iny
 	ora (zta),y
-	beq checkchild	; l1
+	beq checkchild	; mo application signal handler set - use our own
 	lda (zta),y
 	sta zth+1
 	pla		; signal mask
@@ -152,9 +152,14 @@ cc	jsr CHECKCHLD
 	bcc cc
 l1a	jmp l1
 chkbrk	cmp #SIG_BRK
-	bne l1a
+	bne checksus
 ;.byt 2
 	jmp Term
+checksus
+	cmp #SIG_SUSPEND
+	bne l1a
+	jsr SUSPEND
+	jmp l1
 
 dochild	jsr CHECKCHLD
 	bcs l1a
@@ -166,7 +171,7 @@ dochild	jsr CHECKCHLD
 jmpzth	jmp (zth)
 
 	; SIG_CHLD must be the last one, it cannot be sent.
-sigtab	.byt SIG_USR1, SIG_USR2, SIG_USR3, SIG_BRK, SIG_CHLD
+sigtab	.byt SIG_SUSPEND, SIG_BRK, SIG_USR1, SIG_USR2, SIG_USR3, SIG_CHLD
 
 	.assert sigtab + NUMOFSIG == *, "number of handled signals inconsistent"
 
