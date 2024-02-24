@@ -160,6 +160,7 @@ openmode .byt 0
 	tax
 	jsr fopen2
 
+&&freepcbuf
 	php
 	pha
 	txa

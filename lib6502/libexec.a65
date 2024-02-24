@@ -537,19 +537,9 @@ c0	lda (zth),y
 	jsr lunlock
 
 	ldx #0
-	jsr fopen2	; like fopen, does not release PCBUF
+	jsr fopen2	; like fopen2, does not release PCBUF
 
-
-	php
-	pha
-	txa
-	pha
-	ldx #SEM_SENDBUF
-	jsr VSEM
-	pla
-	tax
-	pla
-	plp
+	jsr freepcbuf
 
 	bcs ende
 	txa
