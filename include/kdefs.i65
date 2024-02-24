@@ -234,6 +234,7 @@
 #define   TS_WXTX   8	/* wait for certain task to SEND	*/
 #define   TS_WFSEM  9	/* wait for semaphore			*/
 #define	  TS_WSIG   10	/* wait for signal 			*/
+#define	  TS_SUSP   11	/* task is suspended                    */
 
 /*        GETINFO-struct            */
 

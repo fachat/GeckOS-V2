@@ -673,7 +673,14 @@ s2a	  ;jmp endirq
 
 /*********************************************************************/
 
-&suspend  .(
+&suspend .(
+	jsr memsys
+	sty div
+	ldy actThread
+	sta threadTab+TH_PAR+2,y
+	lda #TS_SUSP
+	bne wsigentry
+&&yield  
 	  jsr memsys
           sty div
           ldy actThread

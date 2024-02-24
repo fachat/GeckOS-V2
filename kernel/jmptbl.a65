@@ -81,6 +81,7 @@
 #define		SETINFO	  OSA2KERNEL+$66
 #define		LOCKSEM	  OSA2KERNEL+$69
 
+#define		SUSPEND	  OSA2KERNEL+$6c
 
 #endif
 
@@ -108,7 +109,7 @@ jmp devcmd
 jmp fork
 jmp kterm
 jmp kkill
-jmp suspend
+jmp yield
 jmp forkt
 jmp sbrk
 
@@ -142,6 +143,7 @@ jmp checkchld
 jmp setinfo
 jmp locksem
 
+jmp suspend
 
 #endif
 
