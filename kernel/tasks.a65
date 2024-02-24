@@ -678,8 +678,29 @@ s2a	  ;jmp endirq
 	sty div
 	ldy actThread
 	sta threadTab+TH_PAR+2,y
+	txa
+	sta threadTab+TH_PAR,y
+	; set the fg task to the parent
+	ldy actTask
+	lda taskTab + TT_STDCIN,y
+	tax
+	lda taskTab + TT_PARENT,y
+	pha
+	tay
+	lda #SC_FGPID
+	jsr STRCMD
+	; send SIG_CHILD signal to parent
+	pla
+	tax
+	lda #SIG_CHLD
+	sec
+	jsr SENDSIG
+	; set status to suspended
+        ldy actThread
 	lda #TS_SUSP
-	bne wsigentry
+	sta threadTab+TH_ST,y
+	bne wse
+
 &&yield  
 	  jsr memsys
           sty div
@@ -690,7 +711,7 @@ s2a	  ;jmp endirq
           sta threadTab+TH_ST,y
           txa
           sta threadTab+TH_PAR,y
-          lda div
+wse       lda div
           sta threadTab+TH_PAR+1,y
           jmp nexttask
           .)
