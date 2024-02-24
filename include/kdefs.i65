@@ -221,7 +221,7 @@
 #define	NMI_ON     	0	/* beq */
 #define	NMI_OFF		1
 
-/*        task state              */
+/*        task (thread) state              */
 
 #define   TS_FREE   0
 #define   TS_ENV    1	/* allocated but not running		*/
@@ -235,6 +235,15 @@
 #define   TS_WFSEM  9	/* wait for semaphore			*/
 #define	  TS_WSIG   10	/* wait for signal 			*/
 #define	  TS_SUSP   11	/* task is suspended                    */
+
+/*        task (task) state              */
+
+/* note: status affects all threads */
+
+TTS_FREE		=0	/* task not used */
+TTS_RUN			=1	/* task has threads */
+TTS_DEAD		=2	/* task is dead, but waiting for CHECKCHILD */
+TTS_SUSP		=3	/* task is suspended */
 
 /*        GETINFO-struct            */
 
