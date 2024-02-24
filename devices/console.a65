@@ -221,16 +221,23 @@ gotchar
         beq notact
 	lda zei2
 	cmp brkkey,y
+	beq dobrk
+	cmp #"^Z"
 	bne nobrk
+	; send suspend signal
+	lda #SIG_SUSPEND
+	bne sendsig
+dobrk
 	ldx outstr,y
 	lda #SC_SSTAT
 	ldy #SCE_BRK
 	jsr STRCMD
 	; send BRK signal to foreground process
-	ldy screen
+	lda #SIG_BRK
+sendsig	ldy screen
 	ldx outstr,y
+	tay
 	lda #SC_FGSIG
-	ldy #SIG_BRK
 	jsr STRCMD
 nobrk
 	ldx zei2
