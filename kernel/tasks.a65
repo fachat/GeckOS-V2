@@ -695,9 +695,62 @@ s2a	  ;jmp endirq
 
 /*********************************************************************/
 
-&suspend .(
+/* 
+	jobcmd handles sending task into background / foreground in relation
+	to their respective controlling terminal, connected via STDCIN
+
+	C=1, JC_BACKGROUND sends task in XR to background, i.e. sets it running
+	(if it isn't already), but keeps STDCIN foreground PID as it is.
+	Caller task must be parent
+
+	C=1, JC_FOREGROUND sends task in XR to foreground, i.e. sets it running
+	and sets the foreground PID on STDCIN to the task.
+	Caller task must be parent
+
+	C=0 suspends the current task, so that it can only be re-started by
+	either a signal interrupt, or another JC_* call from its parent. 
+*/
+  
+&jobcmd	.(
 	jsr memsys
 	sty div
+	bcc suspend
+	; is caller the parent?
+	lda taskTab+TT_PARENT,x
+	cmp actTask
+	bne notask
+	; check for JC commands
+	cmp #JC_BACKGROUND
+	beq dobg
+	cmp #JC_FOREGROUND
+	bne illpar
+
+	; set foreground PID for task
+	; x is task to be changed (needs to be preserved)
+	txa
+	pha
+	tay
+	lda taskTab + TT_STDCIN,x
+	tax
+	lda #SC_FGPID
+	jsr STRCMD
+	pla
+	tax
+
+	; set task to be changed to RUN status
+dobg 	lda #TTS_RUN
+	sta taskTab + TT_STATUS,x
+
+	lda #E_OK
+	.byt $2c
+notask	lda #E_NOTASK
+	.byt $2c
+illpar	lda #E_ILLPAR
+	ldy div
+	cmp #0
+	jmp memtask
+
+suspend 
 	ldy actThread
 	sta threadTab+TH_PAR+2,y
 	txa

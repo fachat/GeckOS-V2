@@ -245,6 +245,11 @@ TTS_RUN			=1	/* task has threads */
 TTS_DEAD		=2	/* task is dead, but waiting for CHECKCHILD */
 TTS_SUSP		=3	/* task is suspended */
 
+/* 	  job commands			*/
+
+JC_BACKGROUND		=1	/* send given task into background */
+JC_FOREGROUND		=1	/* pull given task into foreground */
+
 /*        GETINFO-struct            */
 
 #define   ANZ_ENV   12	/* number of valid entries		*/

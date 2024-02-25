@@ -158,7 +158,8 @@ chkbrk	cmp #SIG_BRK
 checksus
 	cmp #SIG_SUSPEND
 	bne l1a
-	jsr SUSPEND
+	clc		; suspend own task (all threads)
+	jsr JOBCMD
 	jmp l1
 
 dochild	jsr CHECKCHLD

@@ -81,7 +81,7 @@
 #define		SETINFO	  OSA2KERNEL+$66
 #define		LOCKSEM	  OSA2KERNEL+$69
 
-#define		SUSPEND	  OSA2KERNEL+$6c
+#define		JOBCMD	  OSA2KERNEL+$6c
 
 #endif
 
@@ -143,7 +143,7 @@ jmp checkchld
 jmp setinfo
 jmp locksem
 
-jmp suspend
+jmp jobcmd
 
 #endif
 
