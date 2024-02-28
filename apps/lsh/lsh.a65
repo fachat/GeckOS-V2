@@ -411,7 +411,7 @@ wait1	.(
 	sty ty
 	stx tx
 	lda #$40
-	sta ispiped
+	sta ispiped	; last command ended with ";"
 	asl
 	sta waitfl
 	lda #0

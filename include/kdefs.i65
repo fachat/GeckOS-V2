@@ -173,6 +173,7 @@
 #define   SC_CSTAT  12		/* clear error state */
 #define   SC_FGPID  13		/* attach the PID of the foreground process */
 #define   SC_FGSIG  14		/* send a signal to the PID of the attached foreground process */
+#define   SC_GETFGPID 15	/* get the foreground PID attached to a stream */
 
 #define	  SCE_PULL  %10000000	/* reader pulls */
 #define	  SCE_PUSH  %01000000	/* writer pushes */
@@ -244,11 +245,14 @@ TTS_FREE		=0	/* task not used */
 TTS_RUN			=1	/* task has threads */
 TTS_DEAD		=2	/* task is dead, but waiting for CHECKCHILD */
 TTS_SUSP		=3	/* task is suspended */
+TTS_SUSP_ACK		=4	/* task is suspended and has been sent to parent */
 
 /* 	  job commands			*/
 
 JC_BACKGROUND		=1	/* send given task into background */
-JC_FOREGROUND		=1	/* pull given task into foreground */
+JC_FOREGROUND		=2	/* pull given task into foreground */
+JC_SUSPEND		=3	/* suspend current task */
+JC_SUSPIFBG		=4	/* suspend current task if not foreground */
 
 /*        GETINFO-struct            */
 
@@ -339,8 +343,9 @@ JC_FOREGROUND		=1	/* pull given task into foreground */
 #define	SIG_KILL	%00100000	/* process shall terminate (ctrl-D) */
 #define	SIG_BRK		%00010000	/* ctrl-C received */
 #define	SIG_SUSPEND	%00001000	/* ctrl-Z received */
+#define	SIG_CONT	%00000100	/* child task got suspended */
 
-#define	SIG_USR3	%00000100	/* 3 user signals */
+/* 2 user signals */
 #define	SIG_USR2	%00000010
 #define	SIG_USR1	%00000001
 

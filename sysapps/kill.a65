@@ -286,8 +286,8 @@ usage    .asc $0a,$0d,"Usage: kill [signal] PID",$0a,$0d
          .asc "(PID must be in hex)",$0a,$0d,0
 args     .asc "-9",0  ;kill -9
          .asc "-SIG_KILL",0,"-SIG_BRK",0,"-SIG_USR1",0,"-SIG_USR2",0
-         .asc "-SIG_USR3",0,"-SIG_SUSPEND",0,0
-signals  .byt SIG_KILL,SIG_KILL,SIG_BRK, SIG_USR1,SIG_USR2,SIG_USR3,SIG_SUSPEND
+         .asc "-SIG_CONT",0,"-SIG_SUSPEND",0,0
+signals  .byt SIG_KILL,SIG_KILL,SIG_BRK, SIG_USR1,SIG_USR2,SIG_CONT,SIG_SUSPEND
 ;               $20      $20      $10      $01      $02      $04      $08
 illsig   .asc $0a,$0d,"Illegal signal: ",0
 illpid   .asc $0a,$0d,"Illegal PID: ",0

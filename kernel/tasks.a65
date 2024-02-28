@@ -707,6 +707,11 @@ s2a	  ;jmp endirq
 	and sets the foreground PID on STDCIN to the task.
 	Caller task must be parent
 
+	C=1, JC_SUSPIFBG sends own task to suspend IFF it is not the
+	foreground task. This is for shells to manage tasks e.g. setting
+	up a shell pipe, and avoiding race conditions in case the FG
+	child exists before the shell is finished (for whatever reason)
+
 	C=0 suspends the current task, so that it can only be re-started by
 	either a signal interrupt, or another JC_* call from its parent. 
 */
@@ -714,7 +719,10 @@ s2a	  ;jmp endirq
 &jobcmd	.(
 	jsr memsys
 	sty div
-	bcc suspend
+	cmp #JC_SUSPIFBG
+	beq susifbg
+	cmp #JC_SUSPEND
+	beq suspend
 	; is caller the parent?
 	lda taskTab+TT_PARENT,x
 	cmp actTask
@@ -741,7 +749,7 @@ s2a	  ;jmp endirq
 dobg 	lda #TTS_RUN
 	sta taskTab + TT_STATUS,x
 
-	lda #E_OK
+ok	lda #E_OK
 	.byt $2c
 notask	lda #E_NOTASK
 	.byt $2c
@@ -750,9 +758,19 @@ illpar	lda #E_ILLPAR
 	cmp #0
 	jmp memtask
 
+susifbg
+	ldx actTask
+	lda taskTab+TT_STDCIN,x
+	tax
+	lda #SC_GETFGPID
+	jsr STRCMD
+	cpy actTask	; is fg pid our PID?
+	beq ok		; if so, return
+			; otherwise suspend
 suspend 
+	tya
 	ldy actThread
-	sta threadTab+TH_PAR+2,y
+	sta threadTab+TH_PAR+1,y
 	txa
 	sta threadTab+TH_PAR,y
 
@@ -770,10 +788,10 @@ suspend
 	lda #SC_FGPID
 	jsr STRCMD
 
-	; send SIG_CHILD signal to parent
+	; send SIG_CONT signal to parent
 	pla
 	tax
-	lda #SIG_CHLD
+	lda #SIG_CONT
 	sec
 	jsr SENDSIG
 
@@ -848,8 +866,29 @@ unlock	  lda #0
 
 &checkchld .(
 	jsr memsys
-	lda #0
-loop	tax
+	bcs killed
+	; check for suspended tasks
+sloop	; xr has PID to start search at. either 0 or taken from previous call
+	lda actTask
+	cmp taskTab + TT_PARENT,x
+	bne snext
+	lda #TTS_SUSP
+	cmp taskTab + TT_STATUS,x
+	bne snext
+	inc taskTab + TT_STATUS,x
+	clc
+	bne end
+
+snext	txa
+	clc
+	adc #TT_SLEN
+	tax
+	cmp #TT_SLEN*MAXNTASKS
+	bcc sloop
+	bcs end
+
+killed
+loop	; xr has PID to start search at. either 0 or taken from previous call
 	lda actTask
 	cmp taskTab + TT_PARENT,x
 	bne next
@@ -865,6 +904,7 @@ loop	tax
 next	txa
 	clc
 	adc #TT_SLEN
+	tax
 	cmp #TT_SLEN*MAXNTASKS
 	bcc loop
 end	jmp memtask

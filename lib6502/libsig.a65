@@ -45,7 +45,7 @@ l0	sta (zta),y
 	ldy #>rxsig
 	sec
 	jsr SETSIG
-	lda #SIG_USR1 | SIG_USR2 | SIG_USR3 | SIG_SUSPEND | SIG_BRK | SIG_CHLD
+	lda #SIG_USR1 | SIG_USR2 | SIG_CONT | SIG_SUSPEND | SIG_BRK | SIG_CHLD
 	clc
 	jmp SETSIG
 	.)
@@ -158,7 +158,7 @@ chkbrk	cmp #SIG_BRK
 checksus
 	cmp #SIG_SUSPEND
 	bne l1a
-	clc		; suspend own task (all threads)
+	lda #JC_SUSPEND	; suspend own task (all threads)
 	jsr JOBCMD
 	jmp l1
 
@@ -172,7 +172,7 @@ dochild	jsr CHECKCHLD
 jmpzth	jmp (zth)
 
 	; SIG_CHLD must be the last one, it cannot be sent.
-sigtab	.byt SIG_SUSPEND, SIG_BRK, SIG_USR1, SIG_USR2, SIG_USR3, SIG_CHLD
+sigtab	.byt SIG_SUSPEND, SIG_BRK, SIG_USR1, SIG_USR2, SIG_CONT, SIG_CHLD
 
 	.assert sigtab + NUMOFSIG == *, "number of handled signals inconsistent"
 

@@ -410,7 +410,7 @@ cestat	  cmp #SC_CSTAT		; clear error stat byte
 
 	  ; -------------
 fgpid	  cmp #SC_FGPID
-	  bne fgsig
+	  bne gfgpid
 	  lda STRM+S_FGPID,x
 	  cmp #<-1		; only set the fg pid when it is either not set 
 	  beq notsetyet
@@ -420,6 +420,12 @@ notsetyet lda SYR
 	  sta STRM+S_FGPID,x
 ignore 	  jmp ok
 	
+gfgpid	  cmp #SC_GETFGPID
+	  bne fgsig
+	  lda STRM+S_FGPID,x
+	  tay
+	  jmp ok
+
 	  ; -------------
 fgsig     cmp #SC_FGSIG
 	  bne illcode1

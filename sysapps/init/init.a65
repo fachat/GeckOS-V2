@@ -59,6 +59,8 @@
 #include "kernel.i65"
 #include "kdefs.i65"
 
+#define	INIT_VERBOSE
+
 #ifdef INIT_LIB6502
 #echo init uses lib6502
 #include "lib6502.i65"
@@ -170,12 +172,12 @@ no_out
 	jsr itout
 #endif
 #ifdef INIT_RESTART
-	lda #<sigadr
-	ldy #>sigadr
+	lda #<sigaddr
+	ldy #>sigaddr
 	sec
 	jsr SETSIG
 
-	lda #SIG_CHLD
+	lda #SIG_CHLD | SIG_CONT
 	clc
 	jsr SETSIG
 
@@ -528,15 +530,16 @@ m7	.asc 13,10, "Received sigchld from ",0
 m8 	=m7-3	; CRLF
 m9	.asc "Prepared restart!",13,10,0
 m10	.asc "Could not set device stream!",13,10,0
+m11	.asc 13,10, "Received sigcont from ",0
 #endif
 
 haddr	.byt >m0, >m1, >m2, >m3, >m4, >m5, >m6
 #ifdef INIT_RESTART
-	.byt >m7, >m8, >m9, >m10
+	.byt >m7, >m8, >m9, >m10, >m11
 #endif
 laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
 #ifdef INIT_RESTART
-	.byt <m7, <m8, <m9, <m10
+	.byt <m7, <m8, <m9, <m10, <m11
 #endif
 
 &itout	.(
@@ -605,16 +608,54 @@ ok	sta pid,y
 	jmp rmpid
 	.)
 
-sigadr	.(
+sigaddr	.(
+	pha
 	txa
 	pha
-	tya 
+	tya
 	pha
+
+	tsx
+	lda $0103,x
+	and #SIG_CONT
+	beq nocont
+
+#ifdef INIT_VERBOSE
+	ldx #11
+	jsr itout
+#endif
+	ldx #0
+sloop	clc
+	jsr CHECKCHLD
+	bcs nocont
+#ifdef INIT_VERBOSE
+	txa
+	jsr hexout
+#endif
+	txa		; PID to store
+	php
+	sei
+	ldy kpid
+	sta killed,y
+	iny
+	cpy #INIT_MAXRESTART
+	bcs l1x
+	sty kpid
+l1x	plp			/* TODO: give message if overflow */
+	jmp sloop
+
+nocont	tsx
+	lda $0103,x
+	and #SIG_CHLD
+	beq end
+
 #ifdef INIT_VERBOSE
 	ldx #7
 	jsr itout
 #endif
-loop	jsr CHECKCHLD
+	ldx #0	; start check with PID 0
+loop	sec	; check for died processes
+	jsr CHECKCHLD
 	bcs end
 #ifdef INIT_VERBOSE
 	pha	; error code
@@ -634,14 +675,15 @@ loop	jsr CHECKCHLD
 	pla
 	txa
 #endif
+	txa		; PID to store
 	php
 	sei
-	ldx kpid
-	sta killed,x
-	inx
-	cpx #INIT_MAXRESTART
+	ldy kpid
+	sta killed,y
+	iny
+	cpy #INIT_MAXRESTART
 	bcs l1
-	stx kpid
+	sty kpid
 l1	plp			/* TODO: give message if overflow */
 	jmp loop
 end
@@ -653,7 +695,8 @@ end
 	tay
 	pla
 	tax
-	pla
+	pla		; signal mask, ignore here
+	pla		; AC to be restored as prep'd by the kernel signal code
 	rti
 	.)
 
