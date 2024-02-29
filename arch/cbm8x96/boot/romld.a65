@@ -33,7 +33,7 @@ start	jsr loadlib
 
 	lda #MAPSYS
 	sta CTRL
-	jmp KERNEL	; RESET
+	jmp ($fffc)	; RESET
 
 	;------------------
 dupkern	; endure kernel is in both RAM banks

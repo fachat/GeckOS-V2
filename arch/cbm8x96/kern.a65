@@ -60,7 +60,7 @@
 #define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
 				   lib6502 */
 #define	NEED_GETINFO
-#define	NEED_SETINFO
+;#define	NEED_SETINFO
 #undef	NEED_SLOCK
 #define	NEED_RENICE
 

@@ -556,9 +556,15 @@ laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
 #ifdef INIT_RESTART
 
 restarts .(
-	jsr YIELD
+	; make check if we have received a signal and pause for signal atomic
+	sei
 	ldx kpid
-	beq restarts
+	bne gotsig
+	; pause and only wake on signals
+	lda #JC_PAUSE
+	jsr JOBCMD
+	jmp restarts
+gotsig	cli
 
 	lda killed
 	ldx #0
@@ -628,20 +634,17 @@ sigaddr	.(
 sloop	clc
 	jsr CHECKCHLD
 	bcs nocont
-#ifdef INIT_VERBOSE
 	txa
+	pha
+#ifdef INIT_VERBOSE
 	jsr hexout
 #endif
-	txa		; PID to store
-	php
-	sei
-	ldy kpid
-	sta killed,y
-	iny
-	cpy #INIT_MAXRESTART
-	bcs l1x
-	sty kpid
-l1x	plp			/* TODO: give message if overflow */
+	lda #E_INT
+	jsr KILL	; will trigger a SIG_CHILD
+
+	pla
+	tax
+
 	jmp sloop
 
 nocont	tsx

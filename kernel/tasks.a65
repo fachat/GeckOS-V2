@@ -533,15 +533,10 @@ k4	  txa
 	  ldx taskTab + TT_PARENT,y
 	  cpx #<-1
 	  beq nosig
+	  ; send SIG_CHILD to parent (in XR from above)
 	  lda #SIG_CHLD
-	  and taskTab + TT_SIGMASK,x
-	  beq nosig
-	  lda #SIG_CHLD
-	  php
-	  sei
-	  ora taskTab + TT_SIGPEND,x
-	  sta taskTab + TT_SIGPEND,x
-	  plp
+	  jsr dosig
+	  ldy div2
 	  lda #<-1
 	  sta taskTab + TT_NTHREADS,y
 	  bne nosig1
@@ -570,7 +565,8 @@ nexttask .(			; the next thread should be scheduled
 #else
 	.data
 #endif
-schedThread .byt 0	/* ??? current scheduled thread number */
+schedThread .byt 0	/* current scheduled thread number */
+countPaused .byt 0	/* number of paused threads */
 
 	.text
 
@@ -597,6 +593,8 @@ psi	  iny
 	  lda actThread
 ok	  tay
 	  sta schedThread
+	  lda #0
+	  sta countPaused
 	  cld
           cli
 psl
@@ -614,9 +612,15 @@ psl
 
 nosig	  ldx threadTab + TH_TASK,y
 	  lda taskTab+TT_STATUS,x
-	  cmp #TTS_RUN
+	  ; note if we have tasks waiting for signals
+	  cmp #TTS_PAUSE
+	  bne nopause
+	  inc countPaused
+	  ; check if task is allowed to run
+nopause	  cmp #TTS_RUN
 	  bne next
 
+	  ; now check thread status
 	  lda threadTab + TH_ST,y
 
           cmp #TS_RDY         ; thread ready
@@ -630,7 +634,10 @@ next                          ; check next thread
 	  cmp schedThread     ; test if we started the loop with this
 			      ; thread - if yes, none is able to run...
           bne psl 
-          
+
+          lda countPaused     ; check if some tasks are waiting for signal
+	  bne psl
+
           ldx #HE_TASK        ; no task runnable - reset machine (will change!)
           jmp HERROR
           .)
@@ -699,21 +706,24 @@ s2a	  ;jmp endirq
 	jobcmd handles sending task into background / foreground in relation
 	to their respective controlling terminal, connected via STDCIN
 
-	C=1, JC_BACKGROUND sends task in XR to background, i.e. sets it running
+	JC_BACKGROUND sends task in XR to background, i.e. sets it running
 	(if it isn't already), but keeps STDCIN foreground PID as it is.
 	Caller task must be parent
 
-	C=1, JC_FOREGROUND sends task in XR to foreground, i.e. sets it running
+	JC_FOREGROUND sends task in XR to foreground, i.e. sets it running
 	and sets the foreground PID on STDCIN to the task.
 	Caller task must be parent
 
-	C=1, JC_SUSPIFBG sends own task to suspend IFF it is not the
+	JC_SUSPIFBG sends own task to suspend IFF it is not the
 	foreground task. This is for shells to manage tasks e.g. setting
 	up a shell pipe, and avoiding race conditions in case the FG
 	child exists before the shell is finished (for whatever reason)
 
-	C=0 suspends the current task, so that it can only be re-started by
+	JC_SUSPEND suspends the current task, so that it can only be re-started by
 	either a signal interrupt, or another JC_* call from its parent. 
+
+	JC_PAUSE pauses the current task - like suspend, but allows to wake
+	up on signals.
 */
   
 &jobcmd	.(
@@ -723,6 +733,8 @@ s2a	  ;jmp endirq
 	beq susifbg
 	cmp #JC_SUSPEND
 	beq suspend
+	cmp #JC_PAUSE
+	beq pause
 	; is caller the parent?
 	lda taskTab+TT_PARENT,x
 	cmp actTask
@@ -767,7 +779,12 @@ susifbg
 	cpy actTask	; is fg pid our PID?
 	beq ok		; if so, return
 			; otherwise suspend
-suspend 
+suspend lda #TTS_SUSP
+	.byt $2c
+pause	lda #TTS_PAUSE
+	pha
+
+	; save registers X/Y
 	tya
 	ldy actThread
 	sta threadTab+TH_PAR+1,y
@@ -776,8 +793,11 @@ suspend
 
 	; set the task to suspended
 	ldy actTask
-	lda #TTS_SUSP
+	pla
 	sta taskTab + TT_STATUS,y
+
+	cmp #TTS_PAUSE
+	beq p2
 
 	; set the fg task to the parent
 	lda taskTab + TT_STDCIN,y
@@ -795,11 +815,11 @@ suspend
 	sec
 	jsr SENDSIG
 
-	; set thread status to RDY, so returns after wakeup
+p2	; set thread status to RDY, so returns after wakeup
         ldy actThread
 	lda #TS_RDY
 	sta threadTab+TH_ST,y
-	bne wse
+	bne wse		; always
 
 &&yield  
 	  jsr memsys
@@ -1239,21 +1259,36 @@ setadr	php		; this address might be used in IRQ and exchange is
 sends
 	ldy taskTab + TT_NTHREADS,x
 	beq not
-	tay
-	and taskTab + TT_SIGMASK,x
-	beq ok
-	tya
-	php		; make operation atomic
-	sei
-	ora taskTab + TT_SIGPEND,x
-	sta taskTab + TT_SIGPEND,x
-	plp
-ok	lda #E_OK
+	; call subroutine
+	jsr dosig
+	; return
+	lda #E_OK
 	.byt $2c
 not	lda #E_NOTASK
 	ldy div
 	cmp #1
 	jmp memtask
+
+	; called from sendsig as well as kill (sending SIG_CHLD)
+	; requires signal mask to send in AC, task to signal in XR
+&dosig	tay
+	and taskTab + TT_SIGMASK,x
+	beq ok
+	tya
+	; make operation atomic
+	php		
+	sei
+	; set pending signal bits
+	ora taskTab + TT_SIGPEND,x
+	sta taskTab + TT_SIGPEND,x
+	; wake up paused tasks
+	lda taskTab + TT_STATUS,x
+	cmp #TTS_PAUSE
+	bne nopause
+	lda #TTS_RUN
+	sta taskTab + TT_STATUS,x
+nopause	plp
+ok	rts
 	.)
 
 /*
