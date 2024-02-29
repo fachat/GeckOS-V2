@@ -13,7 +13,6 @@ MAPSYS	=%11100000	; screen/io peek through, banks 0/0, no wp
 MAPUSR	=%10001100	; full RAM mapping, banks 1/1, no wp
 MAPPET	=%00000000	; disable RAM, use ROM
 
-KERNEL	=$f000
 
 CHKIN	=$ffc6
 CHRIN	=$ffcf
@@ -25,22 +24,22 @@ CLRCH	=$ffcc
 
 start	jsr loadlib
 	jsr loadrom
-	jsr loadkern
+	jsr loadkern	; leaves load start address in startp
 
 	sei
 
-	jsr dupkern
+	jsr dupkern	; takes kernel start address from startp
 
 	lda #MAPSYS
 	sta CTRL
 	jmp ($fffc)	; RESET
 
 	;------------------
-dupkern	; endure kernel is in both RAM banks
+dupkern	; ensure kernel is in both RAM banks
 
-	lda #<KERNEL
+	lda startp
 	sta ZP
-	lda #>KERNEL
+	lda startp+1
 	sta ZP+1
 
 	ldy #0
@@ -112,8 +111,10 @@ load	ldx #1		; LFN
 
 	jsr CHRIN
 	sta ZP
+	sta startp
 	jsr CHRIN
 	sta ZP+1
+	sta startp+1
 
 l1	jsr CHRIN
 	ldy #0
@@ -179,4 +180,7 @@ LOAD    ; LOAD          load
         .)
 
 OPEN	=$f563
+
+	; -----------------------------
+startp	.word 0
 

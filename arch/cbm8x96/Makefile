@@ -11,8 +11,8 @@ FILE=file65
 RELOC=reloc65
 
 LIB=7200	# $1c20
-#KERNEL=61184	# $ef00
-KERNEL=61440	# $f000
+KERNEL=61184	# $ef00
+#KERNEL=61440	# $f000
 
 lib lib.bin: lib.a65
 	# start binary at 910+2 = $0390
