@@ -1597,9 +1597,17 @@ copy	iny
 ;
 
 	.(
-	.bss
-wpid	.word 0
+	.data
+	; these are explicitely data segment to ensure proper init with zero
+	; flag if we have received a SIG_CONT
+gotcont	.byt 0
+	; number of children we received signal from
 cnum	.byt 0
+
+	.bss
+	; PID we are waiting for
+wpid	.word 0
+	; list of lo/hi PID for received signals, and corresponding return value
 ctabl	.dsb MAXCHLD
 ctabh	.dsb MAXCHLD
 ctabr	.dsb MAXCHLD
@@ -1607,6 +1615,13 @@ ctabr	.dsb MAXCHLD
 
 sigrbrk	.(
 	; TODO real handler
+	; currently ignored
+	rts
+	.)
+
+sigrcont .(
+	lda #1
+	sta gotcont
 	rts
 	.)
 
@@ -1633,11 +1648,15 @@ noinc	plp
 	sta cnum
 	lda #<sigrchld
 	ldy #>sigrchld
-	ldx #SIG_CHLD
+	ldx #SIG_CHLD	; child has died
+	jsr signal
+	lda #<sigrcont
+	ldy #>sigrcont
+	ldx #SIG_CONT	; fg child has suspended
 	jsr signal
 	lda #<sigrbrk
 	ldy #>sigrbrk
-	ldx #SIG_BRK
+	ldx #SIG_BRK	; we have received Ctrl-C
 	jmp signal
 	.)
 
@@ -1691,6 +1710,8 @@ f1	lda ctabl+1,y
 
 loop	lda cnum
 	bne gotone
+	lda gotcont
+	bne exit
 	jsr yield
 	jmp loop
 
@@ -1703,6 +1724,10 @@ gotone	lda wpid
 notthis	jsr decnum
 	jmp loop
 found	jmp decnum
+
+exit	lda #0
+	sta gotcont
+	rts
 	.)
 
 	.)	; signal handling
