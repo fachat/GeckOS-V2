@@ -136,7 +136,7 @@ doit
 	sta zth
 	iny
 	ora (zta),y
-	beq checkchild	; mo application signal handler set - use our own
+	beq checkchild	; no application signal handler set - use our own
 	lda (zta),y
 	sta zth+1
 	pla		; signal mask
@@ -148,6 +148,7 @@ checkchild
 	pla
 	cmp #SIG_CHLD
 	bne chkbrk
+	ldx #0
 cc	jsr CHECKCHLD
 	bcc cc
 l1a	jmp l1
@@ -162,11 +163,12 @@ checksus
 	jsr JOBCMD
 	jmp l1
 
-dochild	jsr CHECKCHLD
+dochild	ldx #0
+doc1	jsr CHECKCHLD
 	bcs l1a
 	ldy #0		; high byte PID
 	jsr jmpzth
-	jmp dochild
+	jmp doc1
 	.)
 
 jmpzth	jmp (zth)
