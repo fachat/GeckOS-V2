@@ -821,7 +821,7 @@ p2	; set thread status to RDY, so returns after wakeup
 	sta threadTab+TH_ST,y
 	bne wse		; always
 
-&&yield  
+&&kyield  
 	  jsr memsys
           sty div
           ldy actThread

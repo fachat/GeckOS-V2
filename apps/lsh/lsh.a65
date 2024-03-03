@@ -1692,6 +1692,7 @@ found	ldx #5
 	.)
 
 decnum	.(
+	; TODO: remove from cmdtab
 	sei
 	ldy #0
 f1	lda ctabl+1,y

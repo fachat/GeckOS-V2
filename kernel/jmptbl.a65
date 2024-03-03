@@ -109,7 +109,7 @@ jmp devcmd
 jmp fork
 jmp kterm
 jmp kkill
-jmp yield
+jmp kyield
 jmp forkt
 jmp sbrk
 
