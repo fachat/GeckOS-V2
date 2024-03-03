@@ -152,12 +152,18 @@ next	lda #" "
 	jsr putc
 #endif
 	jsr execfork
-	stx argp
+	stx argp	; PID as returned from Forkto
 	sty argp+1
 	php
 	jsr clear
 	plp
 	bcs loop	; no task forked, x/y invalid
+
+
+	ldx argp
+	ldy argp+1
+	jsr savecmd
+
 	bit waitfl
 	bpl loop	; no wait
 #ifdef LOCKSEM
@@ -1142,13 +1148,13 @@ next	asl
 	.data
 	; immediate execution
 bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
-	.word bic_dup, bic_help, bic_source, bic_lsenv
+	.word bic_dup, bic_help, bic_source, bic_lsenv, bic_jobs
 	; background execution after parsing
 bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
-	.word       0, bgc_help,          0, bgc_lsenv
+	.word       0, bgc_help,          0, bgc_lsenv, bgc_jobs
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0, "help",0, "source", 0, "lsenv", 0
+	.asc "dup",0, "help",0, "source", 0, "lsenv", 0, "jobs", 0
 	.byt 0
 	.text
 
@@ -1172,10 +1178,7 @@ bgc_help .(
 	lda #<usage
 	ldy #>usage
 	jsr xtxtout
-	ldx buf+1
-	jsr fclose
-	lda #E_OK
-	rts
+	jmp bgc_end
 	.)
 
 	; print the set of environment variables
@@ -1308,6 +1311,7 @@ bic_echo .(
 &bic_lsenv
 &bic_help
 &bic_uname
+&bic_jobs
 	ldx buf+1 
 	jsr dup
 	bcs err
@@ -1848,6 +1852,116 @@ evar	.asc 13,10, "got var :",0
 
 	.)	; command line escape handling
 
+	; -----------------------------------------------
+	; job handling
+	;
+	; This code stores command lines for background jobs
+	; so they can be displayed with the "jobs" command
+	; and also fore-grounded when needed.
+	.(
+
+	; length of command line buffer
+CBUFLEN	=128
+
+	; savecmd takes the command line from buf+3
+	; and PID from x/y (as returned from execfork),
+	; and saves it in a buffer.
+&savecmd .(
+	txa
+	ldx numpids
+	cpx #MAXCHLD
+	bcc :+
+	rts
+:	sta pidl,x
+	tya
+	sta pidh,x
+	inc numpids
+
+	.assert CBUFLEN == 128, "buffer length mismatch with algo"
+	lda buflen
+	sta index,x
+	tax
+	bmi ovfl
+	ldy #0
+cpcmd	lda buf+3,y
+	bne store
+	lda #" "
+	sta cmdbuf,x
+	iny
+	inx
+	bmi ovfl
+	lda buf+3,y
+	beq end
+store	sta cmdbuf,x
+	iny
+	inx
+	bpl cpcmd
+ovfl	dex
+	lda #0
+end	sta cmdbuf,x
+	inx
+	bpl eok
+	dex
+eok	stx buflen
+	clc
+	rts
+	.)
+
+	; print the jobs list
+&bgc_jobs .(
+	jsr bgpull
+	sta buf+1
+
+	lda #0
+	sta jcnt
+	
+loop	lda jcnt
+	cmp numpids
+	bcs end
+	; output job number
+	jsr byte2bcd
+	ldx #3
+	jsr bcdout
+	jsr spout
+
+	ldx jcnt
+	lda pidh,x
+	jsr hexout
+	lda pidl,x
+	jsr hexout
+	jsr spout
+
+	lda index,x
+	tay
+:	lda cmdbuf,y
+	beq next
+	jsr chrout
+	iny
+	bpl :-
+
+next	sty jidx
+	jsr crlfout
+	inc jcnt
+	bne loop
+
+end	jmp bgc_end
+	.)
+
+	.data
+buflen	.byt 0
+numpids	.byt 0
+
+	.bss
+jcnt	.byt 0
+jidx	.byt 0
+pidl	.dsb MAXCHLD
+pidh	.dsb MAXCHLD
+index	.dsb MAXCHLD
+cmdbuf	.dsb CBUFLEN
+
+	.text
+
+	.)
  
 
 #include "../common.a65"
