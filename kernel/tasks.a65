@@ -736,15 +736,24 @@ s2a	  ;jmp endirq
 	cmp #JC_PAUSE
 	beq pause
 	; is caller the parent?
+	tay
 	lda taskTab+TT_PARENT,x
 	cmp actTask
 	bne notask
+	tya
 	; check for JC commands
 	cmp #JC_BACKGROUND
 	beq dobg
 	cmp #JC_FOREGROUND
+	beq dofg
+	cmp #JC_INFO
 	bne illpar
-
+	lda taskTab + TT_NTHREADS,x
+	tay
+	lda taskTab + TT_STATUS,x
+	clc
+	jmp memtask
+dofg
 	; set foreground PID for task
 	; x is task to be changed (needs to be preserved)
 	txa

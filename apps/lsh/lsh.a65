@@ -1951,6 +1951,17 @@ loop	lda jcnt
 	jsr hexout
 	jsr spout
 
+	/* TODO: this is missing a lib6502 way to determine the status of a task/child */
+	lda pidl,x
+	tax
+	lda #JC_INFO
+	jsr JOBCMD
+	jsr hexout
+	tya
+	jsr hexout
+	jsr spout
+	ldx jcnt
+
 	lda index,x
 	tay
 :	lda cmdbuf,y
