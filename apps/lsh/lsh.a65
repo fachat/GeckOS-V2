@@ -2008,7 +2008,8 @@ shiftnxt
 	sbc jcnt
 	sta index,x
 	inx
-	bne shiftnxt
+	cpx numpids
+	bcc shiftnxt
 
 	; shift cmd buffer
 	ldx jidx

@@ -917,11 +917,11 @@ loop	; xr has PID to start search at
 	lda #<-1
 	cmp taskTab + TT_NTHREADS,x
 	bne next
-	lda taskTab2 + TT_RETCODE,x	; error code
 	inc taskTab + TT_NTHREADS,x	; release task resources for new use
 	lda #TTS_FREE
 	sta taskTab + TT_STATUS,x
-	clc
+	lda taskTab2 + TT_RETCODE,x	; return error code in AC
+	clc				; and task in XR
 	bcc end				; always
 next	txa
 	clc

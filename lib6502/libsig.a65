@@ -141,21 +141,24 @@ doit
 	sta zth+1
 	pla		; signal mask
 	cmp #SIG_CHLD
-	beq dochild
-	jsr jmpzth
+	beq dochild	; if child signal - handle per task
+	jsr jmpzth	; otherwise just call application signal handler
 	jmp l1
+
+	; use the library signal handler
 checkchild
 	pla
 	cmp #SIG_CHLD
 	bne chkbrk
-	ldx #0
-cc	jsr CHECKCHLD
+cc	sec		; search for killed tasks
+	jsr CHECKCHLD
 	bcc cc
 l1a	jmp l1
+
 chkbrk	cmp #SIG_BRK
 	bne checksus
-;.byt 2
 	jmp Term
+
 checksus
 	cmp #SIG_SUSPEND
 	bne l1a
@@ -163,23 +166,21 @@ checksus
 	jsr JOBCMD
 	jmp l1
 
-dochild	ldx #0
-doc1	jsr CHECKCHLD
+	; call application signal handler per task
+dochild	sec		; search for dead children
+	jsr CHECKCHLD
 	bcs l1a
-	stx sigtmp
 	ldy #0		; high byte PID
 	jsr jmpzth
-	ldx sigtmp
-	jmp doc1
+	ldy #CHLDIDX
+	jmp doit	; no loop to dochild, as handler may call lib, which in turn uses zth
 	.)
 
 jmpzth	jmp (zth)
 
 	; SIG_CHLD must be the last one, it cannot be sent.
 sigtab	.byt SIG_SUSPEND, SIG_BRK, SIG_USR1, SIG_USR2, SIG_CONT, SIG_CHLD
+CHLDIDX	=5
 
 	.assert sigtab + NUMOFSIG == *, "number of handled signals inconsistent"
 
-	.bss
-sigtmp	.byt 0
-	.text
