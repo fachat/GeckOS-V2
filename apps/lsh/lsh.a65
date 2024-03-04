@@ -1640,6 +1640,10 @@ sigrchld .(
 	sta ctabl,y
 	pla
 	sta ctabr,y
+lda #"Z"
+jsr chrout
+tya
+jsr hexout
 	cpy #MAXCHLD-1
 	bcs noinc
 	inc cnum
@@ -1693,7 +1697,18 @@ found	ldx #5
 
 decnum	.(
 	; TODO: remove from cmdtab
+lda #"X"
+jsr chrout
+lda ctabh
+jsr hexout
+lda ctabl
+jsr hexout
+jsr YIELD
+jsr YIELD
 	sei
+	ldx ctabl
+	ldy ctabh
+	jsr clrcmdbuf
 	ldy #0
 f1	lda ctabl+1,y
 	sta ctabl,y
@@ -1720,7 +1735,10 @@ loop	lda cnum
 	jsr yield
 	jmp loop
 
-gotone	lda wpid
+gotone	
+lda #"Y"
+jsr chrout
+	lda wpid
 	cmp ctabl
 	bne notthis
 	lda wpid+1
@@ -1908,6 +1926,7 @@ eok	stx buflen
 	rts
 	.)
 
+
 	; print the jobs list
 &bgc_jobs .(
 	jsr bgpull
@@ -1948,13 +1967,85 @@ next	sty jidx
 end	jmp bgc_end
 	.)
 
+&clrcmdbuf .(
+	stx tmp
+	sty tmp+1
+
+	; search for PID to remove from list
+	ldx #0
+loop	cpx numpids
+	bcs done
+	lda tmp
+	cmp pidl,x
+	bne next
+	lda tmp+1
+	cmp pidh,x
+	beq found
+next	inx
+	bne loop
+found	stx jidx
+	inx
+	cpx numpids
+	dex
+	bcs waslast
+
+	; calc index diff
+	lda index,x
+	sta jcnt
+	lda index+1,x
+	sec
+	sbc jcnt
+	sta jcnt
+
+	; remove PID and index
+shiftnxt
+	lda pidl+1,x
+	sta pidl,x
+	lda pidh+1,x
+	sta pidh,x
+	lda index+1,x
+	sec
+	sbc jcnt
+	sta index,x
+	inx
+	bne shiftnxt
+
+	; shift cmd buffer
+	ldx jidx
+	lda index,x
+	tay
+	clc
+	adc jcnt
+	tax
+:	lda cmdbuf,x
+	sta cmdbuf,y
+	iny
+	inx
+	bpl :-
+
+	; cleanup
+	lda buflen
+	sec
+	sbc jcnt
+	jmp eob
+
+waslast	lda index,x
+eob	sta buflen
+ 	dec numpids
+
+done	;.byt 2
+	rts
+	.)
+
 	.data
 buflen	.byt 0
 numpids	.byt 0
 
 	.bss
-jcnt	.byt 0
-jidx	.byt 0
+tmp	.word 0
+jcnt	=tmp
+jidx	=tmp+1
+
 pidl	.dsb MAXCHLD
 pidh	.dsb MAXCHLD
 index	.dsb MAXCHLD

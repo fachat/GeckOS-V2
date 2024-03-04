@@ -166,8 +166,10 @@ checksus
 dochild	ldx #0
 doc1	jsr CHECKCHLD
 	bcs l1a
+	stx sigtmp
 	ldy #0		; high byte PID
 	jsr jmpzth
+	ldx sigtmp
 	jmp doc1
 	.)
 
@@ -178,3 +180,6 @@ sigtab	.byt SIG_SUSPEND, SIG_BRK, SIG_USR1, SIG_USR2, SIG_CONT, SIG_CHLD
 
 	.assert sigtab + NUMOFSIG == *, "number of handled signals inconsistent"
 
+	.bss
+sigtmp	.byt 0
+	.text

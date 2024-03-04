@@ -886,15 +886,17 @@ unlock	  lda #0
 
 &checkchld .(
 	jsr memsys
+	ldx #0
 	bcs killed
 	; check for suspended tasks
-sloop	; xr has PID to start search at. either 0 or taken from previous call
+sloop	; xr has PID to start search at
 	lda actTask
 	cmp taskTab + TT_PARENT,x
 	bne snext
 	lda #TTS_SUSP
 	cmp taskTab + TT_STATUS,x
 	bne snext
+	; set status to TTS_SUSP_ACK
 	inc taskTab + TT_STATUS,x
 	clc
 	bne end
@@ -908,7 +910,7 @@ snext	txa
 	bcs end
 
 killed
-loop	; xr has PID to start search at. either 0 or taken from previous call
+loop	; xr has PID to start search at
 	lda actTask
 	cmp taskTab + TT_PARENT,x
 	bne next
