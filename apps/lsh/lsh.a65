@@ -120,9 +120,10 @@ nodbg
 
 	/* command loop */
 loop
-
 	jsr checksig
 
+	; note that getcmd has internal state when doing a pipe,
+	; as each command in the pipe is returned separately
 	jsr getcmd
 	sta argp
 	sty argp+1
@@ -1059,7 +1060,7 @@ execfork .(
 &cnt	.byt 0
 	.text
 
-	/* search builtin table */
+	/* search table for built-in commands */
 	lda #<bictbl
 	sta cp
 	lda #>bictbl
@@ -1072,7 +1073,7 @@ execfork .(
 	sty cnt
 e1	ldx #0
 e0	lda (cp),y
-	beq found
+	beq found	; end of internal command reached
 	cmp cmdline,x
 	bne nextw
 	inx
@@ -1086,7 +1087,7 @@ nextw2	inc cnt
 	lda (cp),y
 	bne e1
 
-	; no internal command
+	; no internal command, fork it
 	lda #<buf
 	ldy #>buf
 	jsr forkto
@@ -1103,6 +1104,7 @@ nextw2	inc cnt
 sret	sec
 ok	rts 
 
+	; found a built-in command
 found	
 	cmp cmdline,x	; cmdline token must be at end too
 	bne nextw2
@@ -1118,8 +1120,12 @@ found
 	sta cp+1
 	lda bicaddr,y
 	sta cp
-	lda #<buf+3
-	ldy #>buf+3
+	; doit calls the internal command
+	; with a/y containing the buffer and x the position of the first parameter
+	; in the buffer.
+	inx
+	lda #<cmdline
+	ldy #>cmdline
 	jsr doit
 	sec	; means to close the stdio streams; ac gives return code
 	rts
@@ -1148,13 +1154,16 @@ next	asl
 	.data
 	; immediate execution
 bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
-	.word bic_dup, bic_help, bic_source, bic_lsenv, bic_jobs
+	.word bic_dup, bic_help, bic_source, bic_lsenv 
+	.word bic_jobs, bic_fg, bic_bg
 	; background execution after parsing
 bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
-	.word       0, bgc_help,          0, bgc_lsenv, bgc_jobs
+	.word       0, bgc_help,          0, bgc_lsenv
+	.word bgc_jobs,      0,      0
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0, "help",0, "source", 0, "lsenv", 0, "jobs", 0
+	.asc "dup",0, "help",0, "source",0, "lsenv",0
+	.asc "jobs",0, "fg",0, "bg",0
 	.byt 0
 	.text
 
@@ -1481,6 +1490,7 @@ bic_source .(
 	jmp source_push
 	.)
 
+	; TODO: this may block if output buffer is full
 bic_pwd	.(
 	jsr lcrlfout
 	lda #<buf+3
@@ -1491,9 +1501,10 @@ bic_pwd	.(
 	lda #<buf+3
 	ldy #>buf+3
 	jsr xtxtout
-	lda #0
+	lda #E_OK
 ende	rts
 	.)
+
 
 ;----------------------------------------------
 ; background command buffer handling
@@ -1623,7 +1634,10 @@ sigrbrk	.(
 	rts
 	.)
 
+	; called when a child suspends and shell is back in fg
+	; in: x/y is PID of child task
 sigrcont .(
+	jsr notesusp
 	lda #1
 	sta gotcont
 	rts
@@ -1894,6 +1908,8 @@ CBUFLEN	=128
 :	sta pidl,x
 	tya
 	sta pidh,x
+	lda #0
+	sta flag,x
 	inc numpids
 
 	.assert CBUFLEN == 128, "buffer length mismatch with algo"
@@ -1959,8 +1975,12 @@ loop	lda jcnt
 	jsr hexout
 	tya
 	jsr hexout
-	jsr spout
 	ldx jcnt
+
+	; bg flag updated from SIG_CONT
+	lda flag,x
+	jsr hexout
+	jsr spout
 
 	lda index,x
 	tay
@@ -2049,6 +2069,67 @@ done	;.byt 2
 	rts
 	.)
 
+	; note that a child task has been suspended
+	; x/y is PID of child task
+	; set flag.7 
+&notesusp .(
+	stx sigtmp
+	ldx #0
+loop	cpx numpids
+	bcc :+
+	rts
+:	lda sigtmp
+	cmp pidl,x
+	bne next
+	tya
+	cmp pidh,x
+	bne next
+	lda flag,x
+	ora #$80
+	sta flag,x
+	rts
+next	inx
+	bne loop
+	.)
+
+&bic_bg	clc
+	.byt $24
+&bic_fg	.(
+	sec
+	php
+
+	; parse parameter
+	sta argp
+	sty argp+1
+	txa
+	tay
+	lda (argp),y
+	beq noparam
+	jsr parsebyte
+	bcs illpar
+	cmp numpids
+	bcs illpar
+
+	tax		; job number
+	lda pidl,x
+	tax		; PID
+
+	plp
+	bcc bg
+	; send to fg
+	lda #JC_FOREGROUND
+	jsr JOBCMD
+	bcs end
+	lda #JC_PAUSEIFBG
+	jmp JOBCMD
+bg	lda #JC_BACKGROUND
+	jmp JOBCMD
+noparam	
+illpar	lda #E_ILLPAR
+	plp
+end	rts
+	.)
+
 	.data
 buflen	.byt 0
 numpids	.byt 0
@@ -2057,10 +2138,12 @@ numpids	.byt 0
 tmp	.word 0
 jcnt	=tmp
 jidx	=tmp+1
+sigtmp	.byt 0		; used during signal processing (in interrupts)
 
 pidl	.dsb MAXCHLD
 pidh	.dsb MAXCHLD
 index	.dsb MAXCHLD
+flag	.dsb MAXCHLD
 cmdbuf	.dsb CBUFLEN
 
 	.text

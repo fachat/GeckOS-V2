@@ -729,6 +729,8 @@ s2a	  ;jmp endirq
 &jobcmd	.(
 	jsr memsys
 	sty div
+	cmp #JC_PAUSEIFBG
+	beq pauseifbg
 	cmp #JC_SUSPIFBG
 	beq susifbg
 	cmp #JC_SUSPEND
@@ -776,8 +778,18 @@ notask	lda #E_NOTASK
 	.byt $2c
 illpar	lda #E_ILLPAR
 	ldy div
-	cmp #0
+	cmp #1
 	jmp memtask
+
+pauseifbg
+	ldx actTask
+	lda taskTab+TT_STDCIN,x
+	tax
+	lda #SC_GETFGPID
+	jsr STRCMD
+	cpy actTask	; is fg pid our PID?
+	beq ok		; if so, return
+	bne pause	; otherwise pause
 
 susifbg
 	ldx actTask

@@ -256,6 +256,7 @@ JC_SUSPEND		=3	/* suspend current task */
 JC_SUSPIFBG		=4	/* suspend current task if not foreground */
 JC_PAUSE		=5	/* pause current task and wait for signal */
 JC_INFO			=6	/* return # of threads in Y and TTS_* status in AC for a task given in X */
+JC_PAUSEIFBG		=7	/* pause current task if not foreground */
 
 /*        GETINFO-struct            */
 

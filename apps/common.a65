@@ -39,7 +39,7 @@
  *			     c=1 ac="?"	print help
  *			     c=1 	other unknown option
  *
- *	parsebyte - parse an int command line parameter into a byte
+ *	parsebyte - parse a decimal int command line parameter into a byte
  *			in: argp      - pointer to string
  *			    y         - pointer in string where value starts
  *			out: c=1      - parse error
@@ -49,7 +49,7 @@
  *			ref: BIN      - temporary value
  *			keep: X	      - X is not modified
  *
- *	parseword - parse an int command line parameter into a word
+ *	parseword - parse a decimal int command line parameter into a word
  *			in: argp      - pointer to string
  *			    y         - pointer in string where value starts
  *			out: c=1      - parse error
