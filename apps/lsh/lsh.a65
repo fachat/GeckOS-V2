@@ -26,7 +26,7 @@
 
 /* #define	LSH_DEBUG  */
 
-#define	DEBUG_CHILD
+;#define	DEBUG_CHILD
 
 #define	PROMPTCHAR	"#"
 
@@ -731,11 +731,19 @@ errout	.(
 	bcc e1
 	ldx #0
 e1
+	txa
+	pha
+
 	lda errh,x
 	tay
 	lda errl,x
 	jsr etxtout
 
+	pla
+	cmp #5
+	bne eto
+	rts
+eto
 	lda #<errortxt
 	ldy #>errortxt
 	jmp etxtout
@@ -749,7 +757,7 @@ t1	.asc "-", 0; .asc " : Command line syntax",0
 t2	.asc "-", 0; " : Unknown option",0
 t3	.asc "Input I/O",0
 t4	.asc " : File",0
-t5	.asc "Received sigchld:",0
+t5	.asc "Child terminated:",0
 
 errortxt .asc " error",10,13,0
 	.text
@@ -1702,13 +1710,17 @@ found	;jsr printsig
 	.)
 
 printsig .(
+	lda ctabr
+	bne print
+	rts
+print
 	ldx #5
 	jsr errout
 	lda ctabh
 	jsr ehexout
 	lda ctabl
 	jsr ehexout
-	lda #","
+	lda #":"
 	ldx #STDERR
 	sec
 	jsr fputc
