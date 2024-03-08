@@ -66,6 +66,7 @@
 #define	TT_NTHREADS	10	/* number of running threads */
 #define	TT_SIGMASK	11	/* mask of allowed signals */
 #define	TT_SIGPEND	12	/* mask of pending signals */
+#define	TT_STATUS	13
 
 /* second part of taskTab */
 #define	TT_PRIORITY	0	/* priority (i.e. irqcnt) of task */
@@ -74,7 +75,7 @@
 #define	TT_NAME		4	/* name of the forked tasks (note: stored backwards) */
 
 /* entries in both tables are the same size, to use the same index */
-#define	TT_SLEN		13	/* length of task struct */
+#define	TT_SLEN		14	/* length of task struct */
 
 
 /****************************************************/
@@ -122,6 +123,8 @@ threadTab .dsb MAXNTHREADS * TH_SLEN
 
 /******************************************************************/
 /* here are the routines to handle the task and thread tables */
+
+	.assert	TTS_FREE == 0, "free task state must be 0"
 
 &initthreads .(
 	ldx #0
@@ -281,6 +284,10 @@ gotthread ; y has thread no
 	  lda #1
 	  sta taskTab + TT_NTHREADS,x	; reserve task
 
+	  ; set task status
+	  lda #TTS_RUN
+	  sta taskTab + TT_STATUS,x
+
 	  ; register CIN
 	  lda taskTab + TT_STDCIN,x
 	  tax
@@ -427,7 +434,6 @@ nothread  pla
 &kterm    		; active thread terminates
 	  .(
 	  jsr memsys
-;.byt 2
           ldx actTask
 	  tay
 	  lda taskTab + TT_NTHREADS,x
@@ -451,6 +457,9 @@ suicide	  ldx actTask
 k1 	  .(
 	  sta taskTab2 + TT_RETCODE,x
 	  stx div2		; XR / div2 is taskID of task to be killed
+
+	  lda #TTS_DEAD
+	  sta taskTab + TT_STATUS,x
 
 	  ; if we are the foreground process, set the parent as foreground process
 	  lda taskTab + TT_PARENT,x
@@ -487,9 +496,13 @@ k3	  tax
 	  bne k4
 	  lda #<-1
 	  sta taskTab + TT_PARENT,x
-	  cmp taskTab + TT_NTHREADS,x	; waiting for checkchld
+	  cmp taskTab + TT_NTHREADS,x	; waiting for checkchld?
 	  bne k4
-	  inc taskTab + TT_NTHREADS,x
+
+	  inc taskTab + TT_NTHREADS,x	; release waiting child task
+	  lda #TTS_FREE	
+	  sta taskTab + TT_STATUS,x
+
 k4	  txa
 	  clc
 	  adc #TT_SLEN
@@ -519,18 +532,17 @@ k4	  txa
 	  ldx taskTab + TT_PARENT,y
 	  cpx #<-1
 	  beq nosig
+	  ; send SIG_CHILD to parent (in XR from above)
 	  lda #SIG_CHLD
-	  and taskTab + TT_SIGMASK,x
-	  beq nosig
-	  lda #SIG_CHLD
-	  php
-	  sei
-	  ora taskTab + TT_SIGPEND,x
-	  sta taskTab + TT_SIGPEND,x
-	  plp
+	  jsr dosig
+	  ldy div2
 	  lda #<-1
 	  sta taskTab + TT_NTHREADS,y
+	  bne nosig1
 nosig	  .)
+	  lda #TTS_FREE
+	  sta taskTab + TT_STATUS,x
+nosig1
 	  ; clear the semaphores held by the task
 	  jsr clrsem	; y is task number to clear
 
@@ -552,7 +564,8 @@ nexttask .(			; the next thread should be scheduled
 #else
 	.data
 #endif
-schedThread .byt 0	/* ??? current scheduled thread number */
+schedThread .byt 0	/* current scheduled thread number */
+countPaused .byt 0	/* number of paused threads */
 
 	.text
 
@@ -579,6 +592,8 @@ psi	  iny
 	  lda actThread
 ok	  tay
 	  sta schedThread
+	  lda #0
+	  sta countPaused
 	  cld
           cli
 psl
@@ -593,7 +608,19 @@ psl
 	  beq nosig
 	  jsr checksig
 	  ldy schedThread
-nosig	  lda threadTab + TH_ST,y
+
+nosig	  ldx threadTab + TH_TASK,y
+	  lda taskTab+TT_STATUS,x
+	  ; note if we have tasks waiting for signals
+	  cmp #TTS_PAUSE
+	  bne nopause
+	  inc countPaused
+	  ; check if task is allowed to run
+nopause	  cmp #TTS_RUN
+	  bne next
+
+	  ; now check thread status
+	  lda threadTab + TH_ST,y
 
           cmp #TS_RDY         ; thread ready
           beq s1              ; then start
@@ -606,14 +633,16 @@ next                          ; check next thread
 	  cmp schedThread     ; test if we started the loop with this
 			      ; thread - if yes, none is able to run...
           bne psl 
-          
+
+          lda countPaused     ; check if some tasks are waiting for signal
+	  bne psl
+
           ldx #HE_TASK        ; no task runnable - reset machine (will change!)
           jmp HERROR
           .)
           
           .(
 &s1       
-	  ldx threadTab + TH_TASK,y
 	  lda taskTab2 + TT_PRIORITY,x
 	  sta Irqcnt
 	  tya
@@ -641,7 +670,6 @@ next                          ; check next thread
           sta threadTab+TH_ST,y
 	  jmp nexttask
 &s2	  
-	  ldx threadTab + TH_TASK,y
 	  lda taskTab2 + TT_PRIORITY,x
 	  sta Irqcnt
 	  tya
@@ -673,7 +701,147 @@ s2a	  ;jmp endirq
 
 /*********************************************************************/
 
-&suspend  .(
+/* 
+	jobcmd handles sending task into background / foreground in relation
+	to their respective controlling terminal, connected via STDCIN
+
+	JC_BACKGROUND sends task in XR to background, i.e. sets it running
+	(if it isn't already), but keeps STDCIN foreground PID as it is.
+	Caller task must be parent
+
+	JC_FOREGROUND sends task in XR to foreground, i.e. sets it running
+	and sets the foreground PID on STDCIN to the task.
+	Caller task must be parent
+
+	JC_SUSPIFBG sends own task to suspend IFF it is not the
+	foreground task. This is for shells to manage tasks e.g. setting
+	up a shell pipe, and avoiding race conditions in case the FG
+	child exists before the shell is finished (for whatever reason)
+
+	JC_SUSPEND suspends the current task, so that it can only be re-started by
+	either a signal interrupt, or another JC_* call from its parent. 
+
+	JC_PAUSE pauses the current task - like suspend, but allows to wake
+	up on signals.
+*/
+  
+&jobcmd	.(
+	jsr memsys
+	sty div
+	cmp #JC_PAUSEIFBG
+	beq pauseifbg
+	cmp #JC_SUSPIFBG
+	beq susifbg
+	cmp #JC_SUSPEND
+	beq suspend
+	cmp #JC_PAUSE
+	beq pause
+	; is caller the parent?
+	tay
+	lda taskTab+TT_PARENT,x
+	cmp actTask
+	bne notask
+	tya
+	; check for JC commands
+	cmp #JC_BACKGROUND
+	beq dobg
+	cmp #JC_FOREGROUND
+	beq dofg
+	cmp #JC_INFO
+	bne illpar
+	lda taskTab + TT_NTHREADS,x
+	tay
+	lda taskTab + TT_STATUS,x
+	clc
+	jmp memtask
+dofg
+	; set foreground PID for task
+	; x is task to be changed (needs to be preserved)
+	txa
+	pha
+	tay
+	lda taskTab + TT_STDCIN,x
+	tax
+	lda #SC_FGPID
+	jsr STRCMD
+	pla
+	tax
+
+	; set task to be changed to RUN status
+dobg 	lda #TTS_RUN
+	sta taskTab + TT_STATUS,x
+
+ok	lda #E_OK
+	.byt $2c
+notask	lda #E_NOTASK
+	.byt $2c
+illpar	lda #E_ILLPAR
+	ldy div
+	cmp #1
+	jmp memtask
+
+pauseifbg
+	ldx actTask
+	lda taskTab+TT_STDCIN,x
+	tax
+	lda #SC_GETFGPID
+	jsr STRCMD
+	cpy actTask	; is fg pid our PID?
+	beq ok		; if so, return
+	bne pause	; otherwise pause
+
+susifbg
+	ldx actTask
+	lda taskTab+TT_STDCIN,x
+	tax
+	lda #SC_GETFGPID
+	jsr STRCMD
+	cpy actTask	; is fg pid our PID?
+	beq ok		; if so, return
+			; otherwise suspend
+suspend lda #TTS_SUSP
+	.byt $2c
+pause	lda #TTS_PAUSE
+	pha
+
+	; save registers X/Y
+	tya
+	ldy actThread
+	sta threadTab+TH_PAR+1,y
+	txa
+	sta threadTab+TH_PAR,y
+
+	; set the task to suspended
+	ldy actTask
+	pla
+	sta taskTab + TT_STATUS,y
+
+	cmp #TTS_PAUSE
+	beq p2
+
+	; set the fg task to the parent
+	lda taskTab + TT_STDCIN,y
+	tax
+	lda taskTab + TT_PARENT,y
+	pha
+	tay
+	lda #SC_FGPID
+	jsr STRCMD
+
+	; send SIG_CONT signal to parent
+	pla
+	tax
+	lda #SIG_CONT
+	sec
+	jsr SENDSIG
+
+p2	; set thread status to RDY, so returns after wakeup
+        ldy actThread
+	lda #TS_RDY
+	sta threadTab+TH_ST,y
+	bne wse		; always
+
+&&kyield  
 	  jsr memsys
           sty div
           ldy actThread
@@ -683,7 +851,7 @@ s2a	  ;jmp endirq
           sta threadTab+TH_ST,y
           txa
           sta threadTab+TH_PAR,y
-          lda div
+wse       lda div
           sta threadTab+TH_PAR+1,y
           jmp nexttask
           .)
@@ -738,21 +906,47 @@ unlock	  lda #0
 
 &checkchld .(
 	jsr memsys
-	lda #0
-loop	tax
+	ldx #0
+	bcs killed
+	; check for suspended tasks
+sloop	; xr has PID to start search at
+	lda actTask
+	cmp taskTab + TT_PARENT,x
+	bne snext
+	lda #TTS_SUSP
+	cmp taskTab + TT_STATUS,x
+	bne snext
+	; set status to TTS_SUSP_ACK
+	inc taskTab + TT_STATUS,x
+	clc
+	bne end
+
+snext	txa
+	clc
+	adc #TT_SLEN
+	tax
+	cmp #TT_SLEN*MAXNTASKS
+	bcc sloop
+	bcs end
+
+killed
+loop	; xr has PID to start search at
 	lda actTask
 	cmp taskTab + TT_PARENT,x
 	bne next
 	lda #<-1
 	cmp taskTab + TT_NTHREADS,x
 	bne next
-	lda taskTab2 + TT_RETCODE,x	; error code
 	inc taskTab + TT_NTHREADS,x	; release task resources for new use
-	clc
+	lda #TTS_FREE
+	sta taskTab + TT_STATUS,x
+	lda taskTab2 + TT_RETCODE,x	; return error code in AC
+	clc				; and task in XR
 	bcc end				; always
 next	txa
 	clc
 	adc #TT_SLEN
+	tax
 	cmp #TT_SLEN*MAXNTASKS
 	bcc loop
 end	jmp memtask
@@ -1087,21 +1281,36 @@ setadr	php		; this address might be used in IRQ and exchange is
 sends
 	ldy taskTab + TT_NTHREADS,x
 	beq not
-	tay
-	and taskTab + TT_SIGMASK,x
-	beq ok
-	tya
-	php		; make operation atomic
-	sei
-	ora taskTab + TT_SIGPEND,x
-	sta taskTab + TT_SIGPEND,x
-	plp
-ok	lda #E_OK
+	; call subroutine
+	jsr dosig
+	; return
+	lda #E_OK
 	.byt $2c
 not	lda #E_NOTASK
 	ldy div
 	cmp #1
 	jmp memtask
+
+	; called from sendsig as well as kill (sending SIG_CHLD)
+	; requires signal mask to send in AC, task to signal in XR
+&dosig	tay
+	and taskTab + TT_SIGMASK,x
+	beq ok
+	tya
+	; make operation atomic
+	php		
+	sei
+	; set pending signal bits
+	ora taskTab + TT_SIGPEND,x
+	sta taskTab + TT_SIGPEND,x
+	; wake up paused tasks
+	lda taskTab + TT_STATUS,x
+	cmp #TTS_PAUSE
+	bne nopause
+	lda #TTS_RUN
+	sta taskTab + TT_STATUS,x
+nopause	plp
+ok	rts
 	.)
 
 /*
@@ -1525,11 +1734,12 @@ noown	pla
 	  ldy actTask
 	  cpy #<-1
 	  beq stdok
-          cpx #STDCIN
-          bcc stdok
+          ;cpx #STDCIN
+          ;bcc stdok
           txa
           sec
           sbc #STDCIN
+          bcc stdok	; underflow means it's a normal stream
           clc
           adc actTask
           tax

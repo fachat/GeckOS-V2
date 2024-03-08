@@ -135,7 +135,7 @@ showlen .(
 	lda entry+FD_LENGTH+3
 	sta BIN+3
 	jsr long2bcd
-	ldy #9
+	ldx #9
 	jsr bcdout
 	jmp spout
 	.)
@@ -154,13 +154,13 @@ showdate .(
 	jsr chrout
 	lda entry+FD_MDATE+1
 	jsr byte2bcd
-	ldy #2		; we only need two digits
+	ldx #2		; we only need two digits
 	jsr bcd0out
 	lda #"-"
 	jsr chrout
 	lda entry+FD_MDATE+2
 	jsr byte2bcd
-	ldy #2
+	ldx #2
 	jsr bcd0out
 
 	lda #" "
@@ -180,7 +180,7 @@ twoxout	.(
 	jsr chrout
 	tya
 &twoout	jsr byte2bcd
-	ldy #2
+	ldx #2
 	jmp bcd0out
 	.)
 
@@ -200,7 +200,7 @@ intout 	.(
 	sta BIN
 	sty BIN+1
 	jsr word2bcd
-	ldy #5
+	ldx #5
 	jmp bcdout
 	.)
 

@@ -177,7 +177,7 @@ ferr
 ok	
 	pla			; stream number
 	sta zth
-	stx zth+1
+	stx zth+1		; new PID
 
 	; copy cwd to communication stream
 	lda zta		; check if task is lib6502, otherwise 
@@ -209,7 +209,7 @@ ll	iny
 	lda zth
 	tax
 	pha
-	lda zth+1
+	lda zth+1	; PID returned from FORK
 	pha
 	lda zta
 	clc
@@ -234,7 +234,7 @@ le	iny
 	jmp le
 lee	
 	pla
-	sta zth+1
+	sta zth+1	; PID returned from FORK
 	pla
 	sta zth
 
@@ -257,7 +257,7 @@ l2	jsr YIELD
 	jsr STRCMD
 
 	pla
-	ldx zth+1
+	ldx zth+1	; PID returned from FORK
 	ldy #0
 	cmp #1
 	rts
@@ -464,7 +464,7 @@ l1	iny
 	jsr GETPID
 	jsr bcleanpid		; free all memory allocated by this task
 	jsr zpidfree
-	pha
+	pla
 	jmp TERM
 
 closefd	
@@ -537,19 +537,9 @@ c0	lda (zth),y
 	jsr lunlock
 
 	ldx #0
-	jsr fopen2	; like fopen, does not release PCBUF
+	jsr fopen2	; like fopen2, does not release PCBUF
 
-
-	php
-	pha
-	txa
-	pha
-	ldx #SEM_SENDBUF
-	jsr VSEM
-	pla
-	tax
-	pla
-	plp
+	jsr freepcbuf
 
 	bcs ende
 	txa

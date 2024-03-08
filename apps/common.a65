@@ -39,7 +39,7 @@
  *			     c=1 ac="?"	print help
  *			     c=1 	other unknown option
  *
- *	parsebyte - parse an int command line parameter into a byte
+ *	parsebyte - parse a decimal int command line parameter into a byte
  *			in: argp      - pointer to string
  *			    y         - pointer in string where value starts
  *			out: c=1      - parse error
@@ -49,7 +49,7 @@
  *			ref: BIN      - temporary value
  *			keep: X	      - X is not modified
  *
- *	parseword - parse an int command line parameter into a word
+ *	parseword - parse a decimal int command line parameter into a word
  *			in: argp      - pointer to string
  *			    y         - pointer in string where value starts
  *			out: c=1      - parse error
@@ -91,15 +91,18 @@
  *			in: BIN       - Address of 4 byte integer value
  *			    BCD	      - Address of 5 byte BCD buffer for output
  *			out: value in BCD
+ *			preserves YR, uses XR
  *
  *	word2bcd - convert a 2-byte value to BCD
  *			in: BIN       - Address of 2 byte integer value
  *			    BCD	      - Address of 3 byte BCD buffer for output
  *			out: value in BCD
+ *			preserves YR, uses XR
  *
  *	byte2bcd - convert a byte value to BCD
  *			in: AC	      - byte to convert
  *			out: BCD      - address of 2 byte BCD buffer for output
+ *			preserves YR, uses XR
  *
  *	iswhite	- check if character in AC is whitespace
  *			in: AC	      - byte to check
@@ -297,21 +300,21 @@ wordout	.(
 	sta BIN
 	sty BIN+1
 	jsr word2bcd
-	ldy #5
+	ldx #5
 	lda BCD+2
 	bne out 
-	dey
+	dex
 	lda BCD+1
 	and #$f0
 	bne out
-	dey
+	dex
 	lda BCD+1
 	bne out
-	dey
+	dex
 	lda BCD
 	and #$f0
 	bne out
-	dey
+	dex
 out	jmp bcdout
 	.)
 
@@ -514,24 +517,24 @@ bcd0out .(
 &bcdout 
 	lda #" "
 	sta fill
-	tya
+	txa
 	lsr
-	tay
+	tax
 	bcs nextd
 	bcc decy
-loop 	lda BCD,y
+loop 	lda BCD,x
 	lsr
 	lsr
 	lsr
 	lsr
 	jsr digit
-nextd	tya
+nextd	txa
 	bne show
 	lda #"0"
 	sta fill
-show 	lda BCD,y
+show 	lda BCD,x
 	jsr digit
-decy	dey
+decy	dex
 	bpl loop
 	rts
 

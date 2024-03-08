@@ -3,13 +3,16 @@ all: lib.bin kern.bin rom.bin
 
 TRG=boot/rom
 
+SHELL=/bin/bash	# for arithmetic expansion
+
 XAINPUT=../../include,..,../..
 XA=xa -k
 FILE=file65
 RELOC=reloc65
 
-LIB=7200
-KERNEL=61440
+LIB=7200	# $1c20
+KERNEL=61184	# $ef00
+#KERNEL=61440	# $f000
 
 lib lib.bin: lib.a65
 	# start binary at 910+2 = $0390
@@ -18,7 +21,7 @@ lib lib.bin: lib.a65
 	${RELOC} -xt -o lib.bin lib.o65; 
 
 kern kern.bin: kern.a65
-	${XA} -I../../include -I../.. -R -bt 61438 -bd 59648 -bz 32 -bb 58368 $< -o kern.o65 -l kern.lab;
+	${XA} -I../../include -I../.. -R -bt $$(($(KERNEL)-2)) -bd 59648 -bz 32 -bb 58368 $< -o kern.o65 -l kern.lab;
 	${FILE} kern.o65
 	${FILE} -v kern.o65 | grep OSA2KERNEL
 	${RELOC} -xt -o kern.bin kern.o65

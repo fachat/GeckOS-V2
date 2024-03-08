@@ -26,6 +26,8 @@
 
 /* #define	LSH_DEBUG  */
 
+;#define	DEBUG_CHILD
+
 #define	PROMPTCHAR	"#"
 
 #define	BUFLEN 	255
@@ -120,9 +122,10 @@ nodbg
 
 	/* command loop */
 loop
-
 	jsr checksig
 
+	; note that getcmd has internal state when doing a pipe,
+	; as each command in the pipe is returned separately
 	jsr getcmd
 	sta argp
 	sty argp+1
@@ -152,12 +155,18 @@ next	lda #" "
 	jsr putc
 #endif
 	jsr execfork
-	stx argp
+	stx argp	; PID as returned from Forkto
 	sty argp+1
 	php
 	jsr clear
 	plp
 	bcs loop	; no task forked, x/y invalid
+
+
+	ldx argp
+	ldy argp+1
+	jsr savecmd
+
 	bit waitfl
 	bpl loop	; no wait
 #ifdef LOCKSEM
@@ -411,7 +420,7 @@ wait1	.(
 	sty ty
 	stx tx
 	lda #$40
-	sta ispiped
+	sta ispiped	; last command ended with ";"
 	asl
 	sta waitfl
 	lda #0
@@ -722,11 +731,19 @@ errout	.(
 	bcc e1
 	ldx #0
 e1
+	txa
+	pha
+
 	lda errh,x
 	tay
 	lda errl,x
 	jsr etxtout
 
+	pla
+	cmp #5
+	bne eto
+	rts
+eto
 	lda #<errortxt
 	ldy #>errortxt
 	jmp etxtout
@@ -736,11 +753,11 @@ errh	.byt >t0, >t1, >t2, >t3, >t4, >t5
 errl	.byt <t0, <t1, <t2, <t3, <t4, <t5
 
 t0	.asc "Unknown",0
-t1	.asc " : Command line syntax",0
-t2	.asc " : Unknown option",0
+t1	.asc "-", 0; .asc " : Command line syntax",0
+t2	.asc "-", 0; " : Unknown option",0
 t3	.asc "Input I/O",0
 t4	.asc " : File",0
-t5	.asc "Received sigchld:",0
+t5	.asc "Child terminated:",0
 
 errortxt .asc " error",10,13,0
 	.text
@@ -958,7 +975,7 @@ duperr	pla
 &s_duperr
 	tax
 	jsr fclose
-	lda #5
+	lda #0
 	.byt $2c
 ferror  lda #4
 ;       .byt $2c
@@ -1053,7 +1070,7 @@ execfork .(
 &cnt	.byt 0
 	.text
 
-	/* search builtin table */
+	/* search table for built-in commands */
 	lda #<bictbl
 	sta cp
 	lda #>bictbl
@@ -1066,7 +1083,7 @@ execfork .(
 	sty cnt
 e1	ldx #0
 e0	lda (cp),y
-	beq found
+	beq found	; end of internal command reached
 	cmp cmdline,x
 	bne nextw
 	inx
@@ -1080,7 +1097,7 @@ nextw2	inc cnt
 	lda (cp),y
 	bne e1
 
-	; no internal command
+	; no internal command, fork it
 	lda #<buf
 	ldy #>buf
 	jsr forkto
@@ -1097,6 +1114,7 @@ nextw2	inc cnt
 sret	sec
 ok	rts 
 
+	; found a built-in command
 found	
 	cmp cmdline,x	; cmdline token must be at end too
 	bne nextw2
@@ -1112,8 +1130,12 @@ found
 	sta cp+1
 	lda bicaddr,y
 	sta cp
-	lda #<buf+3
-	ldy #>buf+3
+	; doit calls the internal command
+	; with a/y containing the buffer and x the position of the first parameter
+	; in the buffer.
+	inx
+	lda #<cmdline
+	ldy #>cmdline
 	jsr doit
 	sec	; means to close the stdio streams; ac gives return code
 	rts
@@ -1142,13 +1164,16 @@ next	asl
 	.data
 	; immediate execution
 bicaddr .word bic_echo,   bic_exit, bic_cd, bic_pwd, bic_set, bic_uname, bic_reset
-	.word bic_dup, bic_help, bic_source, bic_lsenv
+	.word bic_dup, bic_help, bic_source, bic_lsenv 
+	.word bic_jobs, bic_fg, bic_bg
 	; background execution after parsing
 bgcaddr .word bgc_echo, bgc_inpipe,      0,       0,       0, bgc_uname,         0
 	.word       0, bgc_help,          0, bgc_lsenv
+	.word bgc_jobs,      0,      0
 	; command names for parsing
 bictbl	.asc "echo",0, "exit",0, "cd",0, "pwd",0, "set",0, "uname",0, "reset",0
-	.asc "dup",0, "help",0, "source", 0, "lsenv", 0
+	.asc "dup",0, "help",0, "source",0, "lsenv",0
+	.asc "jobs",0, "fg",0, "bg",0
 	.byt 0
 	.text
 
@@ -1172,10 +1197,7 @@ bgc_help .(
 	lda #<usage
 	ldy #>usage
 	jsr xtxtout
-	ldx buf+1
-	jsr fclose
-	lda #E_OK
-	rts
+	jmp bgc_end
 	.)
 
 	; print the set of environment variables
@@ -1308,6 +1330,7 @@ bic_echo .(
 &bic_lsenv
 &bic_help
 &bic_uname
+&bic_jobs
 	ldx buf+1 
 	jsr dup
 	bcs err
@@ -1477,6 +1500,7 @@ bic_source .(
 	jmp source_push
 	.)
 
+	; TODO: this may block if output buffer is full
 bic_pwd	.(
 	jsr lcrlfout
 	lda #<buf+3
@@ -1487,9 +1511,10 @@ bic_pwd	.(
 	lda #<buf+3
 	ldy #>buf+3
 	jsr xtxtout
-	lda #0
+	lda #E_OK
 ende	rts
 	.)
+
 
 ;----------------------------------------------
 ; background command buffer handling
@@ -1597,9 +1622,17 @@ copy	iny
 ;
 
 	.(
-	.bss
-wpid	.word 0
+	.data
+	; these are explicitely data segment to ensure proper init with zero
+	; flag if we have received a SIG_CONT
+gotcont	.byt 0
+	; number of children we received signal from
 cnum	.byt 0
+
+	.bss
+	; PID we are waiting for
+wpid	.word 0
+	; list of lo/hi PID for received signals, and corresponding return value
 ctabl	.dsb MAXCHLD
 ctabh	.dsb MAXCHLD
 ctabr	.dsb MAXCHLD
@@ -1607,6 +1640,16 @@ ctabr	.dsb MAXCHLD
 
 sigrbrk	.(
 	; TODO real handler
+	; currently ignored
+	rts
+	.)
+
+	; called when a child suspends and shell is back in fg
+	; in: x/y is PID of child task
+sigrcont .(
+	jsr notesusp
+	lda #1
+	sta gotcont
 	rts
 	.)
 
@@ -1624,7 +1667,18 @@ sigrchld .(
 	cpy #MAXCHLD-1
 	bcs noinc
 	inc cnum
-noinc	plp
+noinc	
+#ifdef DEBUG_CHILD
+	lda #"S"
+	jsr chrout
+	lda ctabh,y
+	jsr hexout
+	lda ctabl,y
+	jsr hexout
+	lda ctabr,y
+	jsr hexout
+#endif
+	plp
 	rts
 	.)
 
@@ -1633,11 +1687,15 @@ noinc	plp
 	sta cnum
 	lda #<sigrchld
 	ldy #>sigrchld
-	ldx #SIG_CHLD
+	ldx #SIG_CHLD	; child has died
+	jsr signal
+	lda #<sigrcont
+	ldy #>sigrcont
+	ldx #SIG_CONT	; fg child has suspended
 	jsr signal
 	lda #<sigrbrk
 	ldy #>sigrbrk
-	ldx #SIG_BRK
+	ldx #SIG_BRK	; we have received Ctrl-C
 	jmp signal
 	.)
 
@@ -1646,13 +1704,23 @@ noinc	plp
 	bne found
 	rts
 
-found	ldx #5
+found	;jsr printsig
+	jsr decnum
+	jmp checksig
+	.)
+
+printsig .(
+	lda ctabr
+	bne print
+	rts
+print
+	ldx #5
 	jsr errout
 	lda ctabh
 	jsr ehexout
 	lda ctabl
 	jsr ehexout
-	lda #","
+	lda #":"
 	ldx #STDERR
 	sec
 	jsr fputc
@@ -1663,13 +1731,16 @@ found	ldx #5
 	lda ctabr
 	jsr strerror
 	jsr etxtout
-	jsr ecrlfout
-	jsr decnum
-	jmp checksig
+	jmp ecrlfout
 	.)
 
 decnum	.(
+	jsr printsig
+	; TODO: remove from cmdtab
 	sei
+	ldx ctabl
+	ldy ctabh
+	jsr clrcmdbuf
 	ldy #0
 f1	lda ctabl+1,y
 	sta ctabl,y
@@ -1688,13 +1759,35 @@ f1	lda ctabl+1,y
 &waitpid .(
 	stx wpid
 	sty wpid+1
+#ifdef DEBUG_CHILD
+	lda #"W"
+	jsr chrout
+	lda wpid+1
+	jsr hexout
+	lda wpid
+	jsr hexout
+#endif
+loop
+#ifdef DEBUG_CHILD
+	lda #"X"
+	jsr chrout
+	ldx #STDCIN
+	lda #SC_GETFGPID
+	jsr STRCMD
+	tya
+	jsr hexout
+#endif
+	lda #JC_PAUSEIFBG
+	jsr JOBCMD
 
-loop	lda cnum
+	lda cnum
 	bne gotone
+	lda gotcont
+	bne exit
 	jsr yield
 	jmp loop
-
-gotone	lda wpid
+gotone	
+	lda wpid
 	cmp ctabl
 	bne notthis
 	lda wpid+1
@@ -1703,6 +1796,10 @@ gotone	lda wpid
 notthis	jsr decnum
 	jmp loop
 found	jmp decnum
+
+exit	lda #0
+	sta gotcont
+	rts
 	.)
 
 	.)	; signal handling
@@ -1823,7 +1920,279 @@ evar	.asc 13,10, "got var :",0
 
 	.)	; command line escape handling
 
+	; -----------------------------------------------
+	; job handling
+	;
+	; This code stores command lines for background jobs
+	; so they can be displayed with the "jobs" command
+	; and also fore-grounded when needed.
+	.(
+
+	; length of command line buffer
+CBUFLEN	=128
+
+	; savecmd takes the command line from buf+3
+	; and PID from x/y (as returned from execfork),
+	; and saves it in a buffer.
+&savecmd .(
+	txa
+	ldx numpids
+	cpx #MAXCHLD
+	bcc :+
+	rts
+:	sta pidl,x
+	tya
+	sta pidh,x
+	lda #0
+	sta flag,x
+	inc numpids
+
+	.assert CBUFLEN == 128, "buffer length mismatch with algo"
+	lda buflen
+	sta index,x
+	tax
+	bmi ovfl
+	ldy #0
+cpcmd	lda buf+3,y
+	bne store
+	lda #" "
+	sta cmdbuf,x
+	iny
+	inx
+	bmi ovfl
+	lda buf+3,y
+	beq end
+store	sta cmdbuf,x
+	iny
+	inx
+	bpl cpcmd
+ovfl	dex
+	lda #0
+end	sta cmdbuf,x
+	inx
+	bpl eok
+	dex
+eok	stx buflen
+	clc
+	rts
+	.)
+
+
+	; print the jobs list
+&bgc_jobs .(
+	jsr bgpull
+	sta buf+1
+
+	lda #0
+	sta jcnt
+	
+loop	lda jcnt
+	cmp numpids
+	bcs end
+	; output job number
+	jsr byte2bcd
+	ldx #3
+	jsr bcdout
+	jsr spout
+
+	ldx jcnt
+	lda pidh,x
+	jsr hexout
+	lda pidl,x
+	jsr hexout
+	jsr spout
+
+	/* TODO: this is missing a lib6502 way to determine the status of a task/child */
+	lda pidl,x
+	tax
+	lda #JC_INFO
+	jsr JOBCMD
+	jsr hexout
+	tya
+	jsr hexout
+	ldx jcnt
+
+	; bg flag updated from SIG_CONT
+	lda flag,x
+	jsr hexout
+	jsr spout
+
+	lda index,x
+	tay
+:	lda cmdbuf,y
+	beq next
+	jsr chrout
+	iny
+	bpl :-
+
+next	sty jidx
+	jsr crlfout
+	inc jcnt
+	bne loop
+
+end	jmp bgc_end
+	.)
+
+&clrcmdbuf .(
+	stx tmp
+	sty tmp+1
+
+	; search for PID to remove from list
+	ldx #0
+loop	cpx numpids
+	bcs done
+	lda tmp
+	cmp pidl,x
+	bne next
+	lda tmp+1
+	cmp pidh,x
+	beq found
+next	inx
+	bne loop
+found	stx jidx
+	inx
+	cpx numpids
+	dex
+	bcs waslast
+
+	; calc index diff
+	lda index,x
+	sta jcnt
+	lda index+1,x
+	sec
+	sbc jcnt
+	sta jcnt
+
+	; remove PID and index
+shiftnxt
+	lda pidl+1,x
+	sta pidl,x
+	lda pidh+1,x
+	sta pidh,x
+	lda index+1,x
+	sec
+	sbc jcnt
+	sta index,x
+	inx
+	cpx numpids
+	bcc shiftnxt
+
+	; shift cmd buffer
+	ldx jidx
+	lda index,x
+	tay
+	clc
+	adc jcnt
+	tax
+:	lda cmdbuf,x
+	sta cmdbuf,y
+	iny
+	inx
+	bpl :-
+
+	; cleanup
+	lda buflen
+	sec
+	sbc jcnt
+	jmp eob
+
+waslast	lda index,x
+eob	sta buflen
+ 	dec numpids
+
+done	;.byt 2
+	rts
+	.)
+
+	; note that a child task has been suspended
+	; x/y is PID of child task
+	; set flag.7 
+&notesusp .(
+	stx sigtmp
+	ldx #0
+loop	cpx numpids
+	bcc :+
+	rts
+:	lda sigtmp
+	cmp pidl,x
+	bne next
+	tya
+	cmp pidh,x
+	bne next
+	lda flag,x
+	ora #$80
+	sta flag,x
+	rts
+next	inx
+	bne loop
+	.)
+
+&bic_bg	clc
+	.byt $24
+&bic_fg	.(
+	sec
+	php
+
+	; parse parameter
+	sta argp
+	sty argp+1
+	txa
+	tay
+	lda (argp),y
+	beq noparam
+	jsr parsebyte
+	bcs illpar
+	cmp numpids
+	bcs illpar
+
+	tax		; job number
+	lda pidh,x
+	sta argp+1
+	lda pidl,x
+	sta argp
+	tax		; PID
+
+	plp
+	bcc bg
+	; send to fg
+	lda #JC_FOREGROUND
+	jsr JOBCMD
+	bcs end
+
+	ldx argp
+	ldy argp+1
+	jmp waitpid
+	
+
+bg	lda #JC_BACKGROUND
+	jmp JOBCMD
+noparam	
+illpar	lda #E_ILLPAR
+	plp
+end	rts
+	.)
+
+	.data
+buflen	.byt 0
+numpids	.byt 0
+
+	.bss
+tmp	.word 0
+jcnt	=tmp
+jidx	=tmp+1
+sigtmp	.byt 0		; used during signal processing (in interrupts)
+
+pidl	.dsb MAXCHLD
+pidh	.dsb MAXCHLD
+index	.dsb MAXCHLD
+flag	.dsb MAXCHLD
+cmdbuf	.dsb CBUFLEN
+
+	.text
+
+	.)
  
+#undef	DEBUG_CHILD
 
 #include "../common.a65"
 	
