@@ -172,6 +172,7 @@ checksus
 dochild	sec		; search for dead children
 	jsr CHECKCHLD
 	bcs l1a
+;.byt 2
 	ldy #0		; high byte PID
 	jsr jmpzth
 	ldy #CHLDIDX

@@ -424,7 +424,8 @@ gfgpid	  cmp #SC_GETFGPID
 	  bne fgsig
 	  lda STRM+S_FGPID,x
 	  tay
-	  jmp ok
+	  lda #E_OK
+	  jmp retx		; keep YR
 
 	  ; -------------
 fgsig     cmp #SC_FGSIG

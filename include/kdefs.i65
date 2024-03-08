@@ -173,7 +173,7 @@
 #define   SC_CSTAT  12		/* clear error state */
 #define   SC_FGPID  13		/* attach the PID of the foreground process */
 #define   SC_FGSIG  14		/* send a signal to the PID of the attached foreground process */
-#define   SC_GETFGPID 15	/* get the foreground PID attached to a stream */
+#define   SC_GETFGPID 15	/* get the foreground PID attached to a stream (returned in YR) */
 
 #define	  SCE_PULL  %10000000	/* reader pulls */
 #define	  SCE_PUSH  %01000000	/* writer pushes */

@@ -60,6 +60,7 @@ Possible commands (as defined in link:../../include/kdefs.i65[kdefs.i65] are:
 					Reads from other processes block/return empty
 		SC_FGSIG	14	Send a signal to the currently attached foreground
 					process
+		SC_GETFGPID	15	Return the foreground PID of a stream in YR (if C=0)
 ----
 
 The error code byte has the following bits:

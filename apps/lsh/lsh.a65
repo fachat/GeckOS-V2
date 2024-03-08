@@ -26,6 +26,8 @@
 
 /* #define	LSH_DEBUG  */
 
+#define	DEBUG_CHILD
+
 #define	PROMPTCHAR	"#"
 
 #define	BUFLEN 	255
@@ -743,8 +745,8 @@ errh	.byt >t0, >t1, >t2, >t3, >t4, >t5
 errl	.byt <t0, <t1, <t2, <t3, <t4, <t5
 
 t0	.asc "Unknown",0
-t1	.asc " : Command line syntax",0
-t2	.asc " : Unknown option",0
+t1	.asc "-", 0; .asc " : Command line syntax",0
+t2	.asc "-", 0; " : Unknown option",0
 t3	.asc "Input I/O",0
 t4	.asc " : File",0
 t5	.asc "Received sigchld:",0
@@ -965,7 +967,7 @@ duperr	pla
 &s_duperr
 	tax
 	jsr fclose
-	lda #5
+	lda #0
 	.byt $2c
 ferror  lda #4
 ;       .byt $2c
@@ -1654,14 +1656,21 @@ sigrchld .(
 	sta ctabl,y
 	pla
 	sta ctabr,y
-lda #"Z"
-jsr chrout
-tya
-jsr hexout
 	cpy #MAXCHLD-1
 	bcs noinc
 	inc cnum
-noinc	plp
+noinc	
+#ifdef DEBUG_CHILD
+	lda #"S"
+	jsr chrout
+	lda ctabh,y
+	jsr hexout
+	lda ctabl,y
+	jsr hexout
+	lda ctabr,y
+	jsr hexout
+#endif
+	plp
 	rts
 	.)
 
@@ -1687,7 +1696,13 @@ noinc	plp
 	bne found
 	rts
 
-found	ldx #5
+found	;jsr printsig
+	jsr decnum
+	jmp checksig
+	.)
+
+printsig .(
+	ldx #5
 	jsr errout
 	lda ctabh
 	jsr ehexout
@@ -1704,21 +1719,12 @@ found	ldx #5
 	lda ctabr
 	jsr strerror
 	jsr etxtout
-	jsr ecrlfout
-	jsr decnum
-	jmp checksig
+	jmp ecrlfout
 	.)
 
 decnum	.(
+	jsr printsig
 	; TODO: remove from cmdtab
-lda #"X"
-jsr chrout
-lda ctabh
-jsr hexout
-lda ctabl
-jsr hexout
-jsr YIELD
-jsr YIELD
 	sei
 	ldx ctabl
 	ldy ctabh
@@ -1741,17 +1747,34 @@ f1	lda ctabl+1,y
 &waitpid .(
 	stx wpid
 	sty wpid+1
+#ifdef DEBUG_CHILD
+	lda #"W"
+	jsr chrout
+	lda wpid+1
+	jsr hexout
+	lda wpid
+	jsr hexout
+#endif
+loop
+#ifdef DEBUG_CHILD
+	lda #"X"
+	jsr chrout
+	ldx #STDCIN
+	lda #SC_GETFGPID
+	jsr STRCMD
+	tya
+	jsr hexout
+#endif
+	lda #JC_PAUSEIFBG
+	jsr JOBCMD
 
-loop	lda cnum
+	lda cnum
 	bne gotone
 	lda gotcont
 	bne exit
 	jsr yield
 	jmp loop
-
 gotone	
-lda #"Y"
-jsr chrout
 	lda wpid
 	cmp ctabl
 	bne notthis
@@ -2111,7 +2134,10 @@ next	inx
 	bcs illpar
 
 	tax		; job number
+	lda pidh,x
+	sta argp+1
 	lda pidl,x
+	sta argp
 	tax		; PID
 
 	plp
@@ -2120,8 +2146,12 @@ next	inx
 	lda #JC_FOREGROUND
 	jsr JOBCMD
 	bcs end
-	lda #JC_PAUSEIFBG
-	jmp JOBCMD
+
+	ldx argp
+	ldy argp+1
+	jmp waitpid
+	
+
 bg	lda #JC_BACKGROUND
 	jmp JOBCMD
 noparam	
@@ -2150,6 +2180,7 @@ cmdbuf	.dsb CBUFLEN
 
 	.)
  
+#undef	DEBUG_CHILD
 
 #include "../common.a65"
 	

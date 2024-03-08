@@ -434,7 +434,6 @@ nothread  pla
 &kterm    		; active thread terminates
 	  .(
 	  jsr memsys
-;.byt 2
           ldx actTask
 	  tay
 	  lda taskTab + TT_NTHREADS,x
@@ -1735,11 +1734,12 @@ noown	pla
 	  ldy actTask
 	  cpy #<-1
 	  beq stdok
-          cpx #STDCIN
-          bcc stdok
+          ;cpx #STDCIN
+          ;bcc stdok
           txa
           sec
           sbc #STDCIN
+          bcc stdok	; underflow means it's a normal stream
           clc
           adc actTask
           tax
