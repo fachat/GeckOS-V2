@@ -203,6 +203,15 @@ l0	tay
 /* memory management related, but architecture specific parts
  */
 
+#ifdef SPLITKENV
+#print *
+#print SPLITKENV
+	.dsb SPLITKENV-*,$ff
+#endif
+
+KENV=*
+#print KENV
+
 #include "kernel/kenv.a65"
 
 /************************************************************************/

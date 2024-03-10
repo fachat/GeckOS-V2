@@ -20,7 +20,7 @@ csakernel.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
 	${XA} -I../.. -I../../include -P $@.lst -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
 		-DROMTEST \
-		-DSPLIT1K=61440 \
+		-DSPLITKENV=61440 \
 		-l csakernel.lab \
 		-o csakernel.o65 \
 		csakernel.a65
@@ -31,7 +31,7 @@ csakernel_romtest.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
 	${XA} -I../.. -I../../include -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
 		-DROMTEST \
-		-DSPLIT1K=61440 \
+		-DSPLITKENV=61440 \
 		-l csakernel_romtest.lab \
 		-o csakernel_romtest.o65 \
 		csakernel.a65
