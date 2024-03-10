@@ -1512,7 +1512,7 @@ rtask	jmp memtask
 	jsr remap
 	bcs rtaskx
 	plp
-	bcc ps1
+	bcs ps1
         jsr tstnset
 	jmp memtask
 
