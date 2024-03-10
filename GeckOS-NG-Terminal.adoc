@@ -32,7 +32,8 @@ in the background altogether. In addition, an (optional) terminal process will b
             On PUTC, 
                 if Ctrl-C -> signal (all) PGRP tasks SIGTERM
                 if Ctrl-D -> EOF
-                
+
+   -> This will be deferred to a point when FSDEV and devices will get the ability to process OPEN options. In such a case, the serial devices could send Ctrl-D/Ctrl-C/Ctrl-Z as well, if setup this way. 
 
 3) Job Control
     STREAMS "line discipline"
@@ -40,13 +41,20 @@ in the background altogether. In addition, an (optional) terminal process will b
                 if Ctrl-Z -> SIGSTP to PGRP tasks, send SIGCHLD to parent
     Shell manages jobs (PGRP)
         SIGCONT to children on fg/bg
+
+   -> DONE: just without specific "line discipline". A signal sent to a stream will be sent to the foreground PID of the stream, if so attached. The console can send appropriate Ctrl-Z/Ctrl-C signals at this time.
             
 
                     
 1a) followup:
         XARGS
         
-                        
+   -> ???
+
+4) Terminal server
+    This implements a terminal sharing task that works similar to e.g. tmux or screen on Linux/Unix machines.
+    It requires a defined protocol between shell and terminal, that may be defined/enabled by an environment variable.
+ 
         
 
 == APIs
