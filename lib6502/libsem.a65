@@ -42,11 +42,11 @@ Semfre	.(
 	.)
 
 Psem	.(
-	bcs cs		; grr - carry just the other way round... 
-	sec
-	.byt $24
-cs	clc
-	jmp PSEM
+	;bcs cs		; grr - carry just the other way round... - not anymore
+	;clc
+	;.byt $24
+cs	;sec
+	jmp PSEM2
 	.)
 
 Vsem	.(

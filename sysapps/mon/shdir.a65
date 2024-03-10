@@ -68,9 +68,9 @@ tpe       ldx tpstr                     /* Stream-Nummer als Returnwert */
 &openf    
 #if 1 /* def NOMMU */
 	  pha
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 	  pla
 	  jsr xopenf
 	  php
@@ -278,9 +278,9 @@ lbde
           sec
           jsr SETBLK     
 #if 1 /* def NOMMU */
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif  
           ; lda fh+P_NAME   	; register device
           ; sta PCBUF+REGDEV_MPOS
@@ -425,9 +425,9 @@ la2
 	  jmp romok	; returns PID in x
 norom
 
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF	; get send buffer 
-	  jsr PSEM
+	  jsr PSEM2
 
           lda lzei       ; start des Namens
           sta LZEI
@@ -589,9 +589,9 @@ ok	stx LZEI
 
 	jsr ropenfile
 	bcs nook
-	clc
+	sec
 	ldx #SEM_SENDBUF
-	jsr PSEM
+	jsr PSEM2
 loop
 	ldx tpstr
 	jsr IN		; get first byte
@@ -952,9 +952,9 @@ pfe       rts
           
 FORMAT    .(
 #if 1 /* def NOMMU */
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 	  jsr format_
 	  php
 	  ldx #SEM_SENDBUF
@@ -1004,9 +1004,9 @@ dcmd      .byt 0
 
 #if 1 /* def NOMMU */
 	  pha
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 	  pla
 #endif
           ldx #0
@@ -1041,9 +1041,9 @@ dx        cmp #1
 
 RENAME    .(
 #if 1 /* def NOMMU */
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif
           ldy LZEI
           ;ldy #FS_CMD_NAME
@@ -1107,9 +1107,9 @@ de        sty LZEI
 				; This should be reworked for not
 				; blocking the send buffer all the time:
 PC_BUF=IOBUF		; done...
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #else
 PC_BUF= PCBUF
 #endif

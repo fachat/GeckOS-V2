@@ -57,7 +57,7 @@
 
 #define		GETSEM    OSA2KERNEL+$36
 #define		FRESEM    OSA2KERNEL+$39
-#define		PSEM      OSA2KERNEL+$3c
+#define		PSEM2     OSA2KERNEL+$3c
 #define		VSEM      OSA2KERNEL+$3f
 
 #define		SEND      OSA2KERNEL+$42

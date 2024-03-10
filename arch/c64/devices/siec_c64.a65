@@ -42,9 +42,9 @@ cnt2      .byt 0
 	   is needed. We also assume that any timer interrupt is 
 	   disabled by other devices when releasing the interface. */
 &getif 	.(
-	clc
+	sec
 	ldx #SEM_CIA2TB
-	jsr PSEM
+	jsr PSEM2
 #ifdef NMIDEV
 	lda #NMI_OFF
 	jmp CTRLNMI

@@ -209,9 +209,9 @@ badpid
 
 ;binary PID in pid, check if valid PID number
 validpid .(
-  clc
+  sec
   ldx #SEM_SENDBUF
-  jsr PSEM
+  jsr PSEM2
   jsr GETINFO
   ldx #0  ;index into GETINFO table
   ldy #0  ;count of GETINFO entries

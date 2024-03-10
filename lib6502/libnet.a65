@@ -65,8 +65,8 @@ wret	sta zth
 doitnow
 	pha
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	pla
 	sta PCBUF+FSN_PORT
@@ -166,8 +166,8 @@ eclose	ldx PCBUF+FSN_RXSTR
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	pla
 	sta PCBUF+FSN_PORT
@@ -190,8 +190,8 @@ listenopen
 	jsr taskinit
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	pla
 	sta PCBUF+FSN_PROT
@@ -264,8 +264,8 @@ gotfd
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	pla
 	pha

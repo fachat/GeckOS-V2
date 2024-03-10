@@ -403,9 +403,9 @@ i0        lda it,y
           
 info      .(
 #ifdef NOMMU
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif
 	  jsr GETINFO
           ldx #0

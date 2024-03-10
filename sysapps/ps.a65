@@ -66,9 +66,9 @@ noenv	lda #<it4
 
 info	.(
 #if 1 /* fdef NOMMU */
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif
 	  jsr GETINFO
 infoloop  

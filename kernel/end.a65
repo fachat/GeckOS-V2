@@ -27,7 +27,7 @@ eok_addr =*
 
 #else
 
-#if * < $fff4
+#if * =< $fff4
           .dsb $fffa-*-6,<-1
 #else
 #echo "Warning: ROM too large!"

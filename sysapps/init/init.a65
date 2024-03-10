@@ -416,9 +416,9 @@ ifs
 iprg	  jsr getstrs
 	  bcs slx2a
 ifs1      
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM		; alloc PCBUF - also does serializing, as
+	  jsr PSEM2		; alloc PCBUF - also does serializing, as
 				; forked process releases it
 	  lda s2
           sta PCBUF+FORK_STDOUT
@@ -722,8 +722,8 @@ noend2
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 	
 	pla
 	sta PCBUF+FORK_PAR	; stream number where environment is sent

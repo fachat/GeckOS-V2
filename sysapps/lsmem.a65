@@ -591,8 +591,8 @@ found	tya
 
 	; get the task information
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	jsr GETINFO
 		

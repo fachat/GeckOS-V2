@@ -34,16 +34,17 @@ lflag     .byt 0
           sec
 
 #ifdef FSIBM_AS_INIT
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif
 
 ;.byt 2
 lda #"A":jsr SEROUT
 
+	  clc
           ldx #SEM_IBMDISK
-          jsr PSEM
+          jsr PSEM2
           bcs rel_term
 
           jsr init

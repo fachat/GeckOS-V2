@@ -90,8 +90,8 @@ fstcp_open
 	sta fsconn
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	lda #1
 	sta PCBUF+FM_REG_DRVS

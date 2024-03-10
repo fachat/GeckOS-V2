@@ -152,9 +152,9 @@ openmode .byt 0
 
 	jsr taskinit		; be save...
 
-	clc
+	sec
 	ldx #SEM_SENDBUF
-	jsr PSEM		; this can block, so we do it first.
+	jsr PSEM2		; this can block, so we do it first.
 
 	pla
 	tax
@@ -320,9 +320,9 @@ localfscmd
 	sta zth
         sty zth+1
 
-        clc
+        sec
         ldx #SEM_SENDBUF
-        jsr PSEM
+        jsr PSEM2
 
 	jsr fllock
 
@@ -1320,9 +1320,9 @@ cmderr	lda #E_NOTIMP
 
 	jsr taskinit		; be save...
 
-	clc
+	sec
 	ldx #SEM_SENDBUF
-	jsr PSEM		; this can block, so we do it first.
+	jsr PSEM2		; this can block, so we do it first.
 
 	jsr fllock
 
@@ -1421,9 +1421,9 @@ fderror lda #E_NOFILE
 
         jsr taskinit            ; be save...
 
-        clc
+        sec
         ldx #SEM_SENDBUF
-        jsr PSEM                ; this can block, so we do it first.
+        jsr PSEM2                ; this can block, so we do it first.
 
         jsr fllock
 

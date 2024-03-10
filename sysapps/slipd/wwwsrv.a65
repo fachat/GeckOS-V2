@@ -400,8 +400,8 @@ loop_rxd .(
 
 #if 1  /* def NOMMU */
 	ldx #SEM_SENDBUF
-	sec
-	jsr PSEM
+	clc
+	jsr PSEM2
 	bcc semerrok
 	jmp semerr
 semerrok

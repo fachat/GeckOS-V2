@@ -35,9 +35,9 @@
 #endif
 
 
-&getif  clc
+&getif  sec
 	ldx #SEM_VIAE840_T1
-	jmp PSEM
+	jmp PSEM2
 &freif	ldx #SEM_VIAE840_T1
 	jmp VSEM
  

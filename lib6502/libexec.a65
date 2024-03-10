@@ -62,8 +62,8 @@ strerr	rts
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM		; get the sendbuf which we need to FORK
+	sec
+	jsr PSEM2		; get the sendbuf which we need to FORK
 
 	pla
 	sta PCBUF+FORK_PAR	; - no name, give comm stream as parameter

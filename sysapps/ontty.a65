@@ -170,8 +170,8 @@ dofork	; re-do some of the lib6502 forkto code, as we have to set the
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	; store comms stream as parameter
 	pla
