@@ -2002,6 +2002,7 @@ loop	lda jcnt
 	jsr hexout
 	jsr spout
 
+#if 0
 	/* TODO: this is missing a lib6502 way to determine the status of a task/child */
 	lda pidl,x
 	tax
@@ -2011,12 +2012,16 @@ loop	lda jcnt
 	tya
 	jsr hexout
 	ldx jcnt
+#endif
 
 	; bg flag updated from SIG_CONT
 	lda flag,x
-	jsr hexout
-	jsr spout
+	bpl running
+	lda #<stopped
+	ldy #>stopped
+	jsr txtout
 
+running	ldx jcnt
 	lda index,x
 	tay
 :	lda cmdbuf,y
@@ -2031,6 +2036,10 @@ next	sty jidx
 	bne loop
 
 end	jmp bgc_end
+
+	.data
+stopped	.asc "[Stopped] ",0
+	.text
 	.)
 
 &clrcmdbuf .(
@@ -2146,6 +2155,9 @@ next	inx
 	bcs illpar
 
 	tax		; job number
+	lda flag,x
+	and #$7f
+	sta flag,x
 	lda pidh,x
 	sta argp+1
 	lda pidl,x
