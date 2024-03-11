@@ -7,21 +7,22 @@ CHECKCHLD - check the status of a child after SIG_CHLD, and release the child's 
 
 == SYNOPSIS
 Input::
+	* C=0 - search for newly suspended child tasks
+	* C=1 - search for newly killed child tasks
 Call::
 	jsr CHECKCHLD
 Output::
 	* C=0 - found a child
-		** AC - child return code
-		** XR - task ID of dead child
+		** AC - child return code (for killed children; invalid for suspended)
+		** XR - task ID of dead/suspended child
 	* C=1 - no child found
 
 NOTE: YR is preserved
 
 == DESCRIPTION
-Checks the list of child tasks of the caller, whether one has died, and returns the task ID and
-return code of the child task.
+Checks the list of child tasks of the caller, whether one has died resp. has been suspended, and returns the task ID. In case a dead child was found, it returns the return code of the child task.
 
-NOTE: this information is only available when the child died while in the parent SIG_CHLD was set.
+NOTE: the information for dead children is only available when the child died while in the parent SIG_CHLD was set.
 
 
 == SEE ALSO
