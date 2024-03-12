@@ -828,21 +828,7 @@ pause	lda #TTS_PAUSE
 	cmp #TTS_PAUSE
 	beq p2
 
-	; set the fg task to the parent
-	lda taskTab + TT_STDCIN,y
-	tax
-	lda taskTab + TT_PARENT,y
-	pha
-	tay
-	lda #SC_FGPID
-	jsr STRCMD
-
-	; send SIG_CONT signal to parent
-	pla
-	tax
-	lda #SIG_CONT
-	sec
-	jsr SENDSIG
+	jsr sig_on_suspend
 
 p2	; set thread status to RDY, so returns after wakeup
         ldy actThread
@@ -864,6 +850,23 @@ wse       lda div
           sta threadTab+TH_PAR+1,y
           jmp nexttask
           .)
+
+	; input yr is task ID to suspend
+sig_on_suspend .(
+	; set the fg task to the parent
+	lda taskTab + TT_STDCIN,y
+	tax				; real stream number
+	lda taskTab + TT_PARENT,y
+	pha
+	jsr sig_fgpid
+
+	; send SIG_CONT signal to parent
+	pla
+	tax
+	lda #SIG_CONT
+	sec
+	jmp SENDSIG
+	.)
 
 /*********************************************************************/
 
@@ -1279,6 +1282,9 @@ setadr	php		; this address might be used in IRQ and exchange is
  * sendsig can also be called from a device or interrupt routine,
  * therefore we only save the signal and let the scheduler do all
  * the resolving 
+ *
+ * Note: the actTask/actThread can not be relied on, as we may
+ * be called from an interrupt!
  */
 
 &sendsig .(		; ac = signal mask, xr = target task
@@ -1319,7 +1325,18 @@ not	lda #E_NOTASK
 	lda #TTS_RUN
 	sta taskTab + TT_STATUS,x
 nopause	plp
-ok	rts
+ret	rts
+
+ok	tya			; signal mask to send
+	and #SIG_SUSPEND	; is it suspend?
+	beq ret			; no, ignore
+
+	lda #TTS_SUSP
+	sta taskTab + TT_STATUS,x
+	txa
+	tay
+	jsr sig_on_suspend
+	rts
 	.)
 
 /*

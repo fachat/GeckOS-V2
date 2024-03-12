@@ -420,6 +420,7 @@ notsetyet lda SYR
 	  sta STRM+S_FGPID,x
 ignore 	  jmp ok
 	
+
 gfgpid	  cmp #SC_GETFGPID
 	  bne fgsig
 	  lda STRM+S_FGPID,x
@@ -457,6 +458,14 @@ ly        inc STRM+S_CNTR,x
 	  sta STRM+S_FGPID,x
           jmp clrstr      
           .)
+
+	; set foreground PID from signal handler
+	; X is stream number
+	; A is PID
+&sig_fgpid .(
+	sta STRM+S_FGPID,x
+	rts
+	.)
 
           .)
 

@@ -1669,7 +1669,7 @@ sigrchld .(
 	inc cnum
 noinc	
 #ifdef DEBUG_CHILD
-	lda #"S"
+	lda #"R"
 	jsr chrout
 	lda ctabh,y
 	jsr hexout
@@ -1767,6 +1767,12 @@ f1	lda ctabl+1,y
 	lda wpid
 	jsr hexout
 #endif
+#ifdef LOCKSEM
+	; make sure other programs can run while we wait for completion
+	ldx #SEM_SENDBUF
+	clc
+	JSR LOCKSEM
+#endif
 loop
 #ifdef DEBUG_CHILD
 	lda #"X"
@@ -1799,6 +1805,7 @@ found	jmp decnum
 
 exit	lda #0
 	sta gotcont
+	jsr crlfout
 	rts
 	.)
 
@@ -2002,7 +2009,7 @@ loop	lda jcnt
 	jsr hexout
 	jsr spout
 
-#if 0
+#ifdef DEBUG_CHILD
 	/* TODO: this is missing a lib6502 way to determine the status of a task/child */
 	lda pidl,x
 	tax
@@ -2118,6 +2125,16 @@ done	;.byt 2
 	; set flag.7 
 &notesusp .(
 	stx sigtmp
+#ifdef DEBUG_CHILD
+	lda #"S"
+	jsr chrout
+	lda numpids
+	jsr hexout
+	tya
+	jsr hexout
+	lda sigtmp
+	jsr hexout
+#endif
 	ldx #0
 loop	cpx numpids
 	bcc :+
