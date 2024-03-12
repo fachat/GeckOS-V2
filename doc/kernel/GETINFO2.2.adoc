@@ -7,17 +7,23 @@ GETINFO - get information on the currently running tasks
 
 == SYNOPSIS
 Input::
+	* C=0 
+		** previous task ID in XR, or *TID_START*, to get the information for the task after the given one
+	* C=1
+		** task ID in XR, for which the data is returned
 Call::
 	jsr GETINFO
 Output::
 	* SENDBUF - table with task info
+	* C=0 - data is valid (task has been found for both input modes)
+	* C=1 - end of list reached, or task ID is invalid.
 
 NOTE: before calling *GETINFO*, the *SEM_SENDBUF* must be passed, and after the information has been read from SENDBUF, SEM_SENDBUF must be freed again.
 
 == DESCRIPTION
-Returns a table with information on tasks. 
+Returns a table with information the identified task. 
 
-There are ANZ_ENV valid entries in the table, 0 in the TN_NTHREADS field indictaes an unused slot.
+There is one valid entries in the table, 0 in the TN_NTHREADS field indictaes an unused slot.
 
 ----
 		ANZ_ENV		12	number of valid entries in SENDBUF
@@ -44,6 +50,7 @@ length of the name field is TNAMLEN. If the name is longer
 than TNAMLEN-1, the the last characters are cut off, and in
 the table the ending nullbyte is missing.
 
+To get the information for all tasks, call *GETINFO2* with *C=0* and *TID_START* in XR, and repeat with the PID of the returned task info in XR until C=1.
 
 == SEE ALSO
 link:../scheduler.7.adoc[scheduler(7)],

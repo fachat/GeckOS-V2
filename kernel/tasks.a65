@@ -974,47 +974,77 @@ end	jmp memtask
 
 #ifdef NEED_GETINFO
 
-&getinfo
+	; The getinfo2 call takes X as task ID of a previously returned
+	; task (or TID_INVAL to get the info for the first task), and returns, in
+	; SYSBUF, the info for that task with the next task ID
+&getinfo2
 	.(
 	jsr memsys
+	; save C
+#ifdef MAPSYSBUF
+	php	
+	; keeps X, destroys Y
 	MAPSYSBUF
-	ldy #0
-	sty div
-loop
+	plp
+#endif
+	bcc doloop
+	; get for specific task
+	lda taskTab + TT_NTHREADS,x
+	bne found
+	sec
+	bcs done
+
+doloop	; iterate over all tasks
+	txa
+	cmp #TID_START
+	bne next
+	ldx #0
+	beq test
+next	clc
+	adc #TT_SLEN
+	cmp #MAXNTASKS * TT_SLEN
+	tax
+	bcs done
+
+test	ldy taskTab + TT_NTHREADS,x
+	beq next
+found
+	txa
+	tay
+	; expects task ID in Y
 	GETTASKMEM
-	ldx div
-	sta SYSBUF + TN_MEM,x
-	tya
-	sta SYSBUF + TN_PID,x
-	lda taskTab + TT_ENV,y
-	sta SYSBUF + TN_ENV,x
-	lda taskTab + TT_PARENT,y
-	sta SYSBUF + TN_PARENT,x
-	lda taskTab + TT_NTHREADS,y
-	sta SYSBUF + TN_NTHREADS,x
+	sta SYSBUF + TN_MEM
+	txa
+	sta SYSBUF + TN_PID
+	lda taskTab + TT_ENV,x
+	sta SYSBUF + TN_ENV
+	lda taskTab + TT_PARENT,x
+	sta SYSBUF + TN_PARENT
+	lda taskTab + TT_NTHREADS,x
+	sta SYSBUF + TN_NTHREADS
 
-	lda taskTab + TT_STDIN,y
-	sta SYSBUF + TN_STDIN,x
-	lda taskTab + TT_STDOUT,y
-	sta SYSBUF + TN_STDOUT,x
-	lda taskTab + TT_STDERR,y
-	sta SYSBUF + TN_STDERR,x
+	lda taskTab + TT_STDIN,x
+	sta SYSBUF + TN_STDIN
+	lda taskTab + TT_STDOUT,x
+	sta SYSBUF + TN_STDOUT
+	lda taskTab + TT_STDERR,x
+	sta SYSBUF + TN_STDERR
 
-	lda taskTab + TT_SIGADR,y
-	sta SYSBUF + TN_SIGNAL,x
-	lda taskTab + TT_SIGADR + 1,y
-	sta SYSBUF + TN_SIGNAL + 1,x
+	lda taskTab + TT_SIGADR,x
+	sta SYSBUF + TN_SIGNAL
+	lda taskTab + TT_SIGADR + 1,x
+	sta SYSBUF + TN_SIGNAL + 1
 
-	lda taskTab + TT_SIGMASK,y
-	sta SYSBUF + TN_SIGMASK,x
+	lda taskTab + TT_SIGMASK,x
+	sta SYSBUF + TN_SIGMASK
 
-	lda taskTab2 + TT_EXECADDR,y
-	sta SYSBUF + TN_EXECADDR,x
-	lda taskTab2 + TT_EXECADDR + 1,y
-	sta SYSBUF + TN_EXECADDR + 1,x
+	lda taskTab2 + TT_EXECADDR,x
+	sta SYSBUF + TN_EXECADDR
+	lda taskTab2 + TT_EXECADDR + 1,x
+	sta SYSBUF + TN_EXECADDR + 1
 
-	lda taskTab2 + TT_PRIORITY,y
-	sta SYSBUF + TN_PRIO,x
+	lda taskTab2 + TT_PRIORITY,x
+	sta SYSBUF + TN_PRIO
 
 	; copy name
 #if TNAMLEN > TT_SLEN-TT_NAME
@@ -1024,35 +1054,18 @@ loop
 	tocopy = TNAMLEN
 	offset = TT_SLEN-TT_NAME-TNAMLEN
 #endif
-	txa
-	clc
-	adc #tocopy
-	tax
+	ldy #tocopy
 name
-	dex
-	lda taskTab2 + TT_NAME + offset,y
-	sta SYSBUF + TN_NAME,x
-	iny
-	cpx div
+	dey
+	lda taskTab2 + TT_NAME + offset,x
+	sta SYSBUF + TN_NAME,y
+	inx
+	cpy #0
 	bne name
 
-	txa
+	ldx SYSBUF + TN_PID
 	clc
-	adc #TN_SLEN
-	sta div
-	tya
-	clc
-	adc #TT_SLEN-tocopy
-	tay
-#if MAXNTASKS <= ANZ_ENV
-	cpy #TT_SLEN * MAXNTASKS
-#else
-	lda div
-	cmp #TN_SLEN * ANZ_ENV
-#endif
-	bcc loop
-	clc
-	jmp memtask
+done	jmp memtask
 
 	.)
 

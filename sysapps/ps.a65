@@ -70,15 +70,13 @@ info	.(
 	  ldx #SEM_SENDBUF
 	  jsr PSEM2
 #endif
-	  jsr GETINFO
-infoloop  
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-	  bne print
-	  bit optall
-	  bmi print
-	  jmp next
+	ldx #TID_START
+infoloop  clc		; loop over items
+	  jsr GETINFO2
+	bcc print
+	jmp done
 print
+	ldx #0
 	  lda PCBUF+TN_PID,x
           jsr hexout
           jsr spout
@@ -87,45 +85,43 @@ print
 	jsr printname
 i2        jsr spout
 skipfrontname
-          ldx zei
-	lda PCBUF+TN_EXECADDR+1,x
+	lda PCBUF+TN_EXECADDR+1
 	jsr hexout
-	lda PCBUF+TN_EXECADDR,x
+	lda PCBUF+TN_EXECADDR
 	jsr hexout
 	jsr spout
 
-          lda PCBUF+TN_NTHREADS,x
+          lda PCBUF+TN_NTHREADS
 	  jsr hexout
 	  jsr spout
 
 	bit optlong
 	bpl noenv
-          lda PCBUF+TN_ENV,x
+          lda PCBUF+TN_ENV
 	  jsr hexout
 	  jsr spout
-          ldx zei
-          lda PCBUF+TN_MEM,x
+          lda PCBUF+TN_MEM
           jsr hexout
           jsr spout
 noenv
-	  lda PCBUF+TN_PARENT,x
+	  lda PCBUF+TN_PARENT
 	  jsr hexout
           jsr spout
-	  lda PCBUF+TN_SIGMASK,x
+	  lda PCBUF+TN_SIGMASK
           jsr hexout
           jsr spout
-	  lda PCBUF+TN_SIGNAL+1,x
+	  lda PCBUF+TN_SIGNAL+1
 	  jsr hexout
-	  lda PCBUF+TN_SIGNAL,x
+	  lda PCBUF+TN_SIGNAL
 	  jsr hexout
 	  jsr spout
-          lda PCBUF+TN_STDIN,x
+          lda PCBUF+TN_STDIN
           jsr hexout
           jsr spout
-          lda PCBUF+TN_STDOUT,x
+          lda PCBUF+TN_STDOUT
           jsr hexout
           jsr spout
-          lda PCBUF+TN_STDERR,x
+          lda PCBUF+TN_STDERR
           jsr hexout
           jsr spout
 	bit optlong
@@ -136,16 +132,9 @@ noenv
 	jsr printname
 nextline
 	jsr crlfout
-next	  lda zei
-	  clc
-	  adc #TN_SLEN
-	  sta zei
-          inc cnt
-          lda cnt
-          cmp #ANZ_ENV
-          bcs ie
-          jmp infoloop
-ie        
+next	  ldx PCBUF + TN_PID
+	jmp infoloop
+done        
 #if 1 /* def NOMMU */
 	  ldx #SEM_SENDBUF
 	  jsr VSEM
@@ -155,14 +144,7 @@ ie
 	.)
 
 printname .(
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-          bne name
-          ldx #TNAMLEN
-i1        jsr spout
-          dex
-          bne i1
-          beq i2
+	ldx #0
 name      ldy #0
 i4        lda PCBUF+TN_NAME,x
           beq i3

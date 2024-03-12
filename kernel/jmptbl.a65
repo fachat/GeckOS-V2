@@ -51,7 +51,7 @@
 #define		FORKT	  OSA2KERNEL+$2a
 #define		SBRK	  OSA2KERNEL+$2d
 
-#define		GETINFO   OSA2KERNEL+$30
+#define		GETINFO2  OSA2KERNEL+$30
 
 #define		DUP       OSA2KERNEL+$33
 
@@ -113,7 +113,7 @@ jmp kyield
 jmp forkt
 jmp sbrk
 
-jmp getinfo
+jmp getinfo2
 
 jmp kdup
 

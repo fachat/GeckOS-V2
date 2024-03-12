@@ -407,40 +407,48 @@ info      .(
 	  ldx #SEM_SENDBUF
 	  jsr PSEM2
 #endif
-	  jsr GETINFO
           ldx #0
           stx cnt
 	  stx zei
+	ldx #TID_START
 infoloop  
-          ldx zei
+	clc
+	  jsr GETINFO2
+	bcc ok
+	jmp ie
+ok	ldx #0
 	  lda PCBUF+TN_PID,x
           jsr HEXOUT
           jsr SSPOUT
           ldx zei
           lda PCBUF+TN_NTHREADS,x
           bne name
+
+	  ; task not active, print spaces (should not be needed in GETINFO2)
           ldx #TNAMLEN
 i1        jsr SSPOUT
           dex
           bne i1
           beq i2
-name      ldy #0
-          ldx zei
+
+	  ; print name
+name      ldx #0
 i4        lda PCBUF+TN_NAME,x
           beq i3
           jsr SEROUT
-          iny
           inx
-          cpy #TNAMLEN
+          cpx #TNAMLEN
           bcc i4
-i3        cpy #TNAMLEN
+
+	  ; fill name with spaces
+i3        cpx #TNAMLEN
           bcs i2
           jsr SSPOUT
-          iny
+          inx
           bne i3
 i2        jsr SSPOUT
 
-          ldx zei
+          ldx #0
           lda PCBUF+TN_NTHREADS,x
 	  jsr HEXOUT
 	  jsr SSPOUT
@@ -459,7 +467,7 @@ i2        jsr SSPOUT
 ;          dey
 ;          bne i5
           jsr SSPOUT
-          ldx zei
+          ldx #0
           lda PCBUF+TN_MEM,x
           jsr HEXOUT
           jsr SSPOUT
@@ -481,15 +489,9 @@ i2        jsr SSPOUT
           jsr HEXOUT
           jsr SSPOUT
           jsr CRLFOUT
-	  lda zei
-	  clc
-	  adc #TN_SLEN
-	  sta zei
-          inc cnt
-          lda cnt
-          cmp #ANZ_ENV
-          bcs ie
-          jmp infoloop
+
+	ldx PCBUF + TN_PID
+	jmp infoloop
 ie        
 #ifdef NOMMU
 	  ldx #SEM_SENDBUF

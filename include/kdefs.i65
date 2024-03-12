@@ -260,6 +260,8 @@ JC_PAUSEIFBG		=7	/* pause current task if not foreground */
 
 /*        GETINFO-struct            */
 
+#define	TID_START	<-1
+
 #define   ANZ_ENV   12	/* number of valid entries		*/
 
 #define   TN_PID    0	/* process ID 				*/
