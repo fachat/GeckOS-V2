@@ -407,9 +407,6 @@ info      .(
 	  ldx #SEM_SENDBUF
 	  jsr PSEM2
 #endif
-          ldx #0
-          stx cnt
-	  stx zei
 	ldx #TID_START
 infoloop  
 	clc
@@ -420,7 +417,6 @@ ok	ldx #0
 	  lda PCBUF+TN_PID,x
           jsr HEXOUT
           jsr SSPOUT
-          ldx zei
           lda PCBUF+TN_NTHREADS,x
           bne name
 
@@ -449,36 +445,37 @@ i3        cpx #TNAMLEN
 i2        jsr SSPOUT
 
           ldx #0
+	; task status
+          lda PCBUF+TN_STATUS,x
+	jsr print_tsstat
+	  jsr SSPOUT
+	; number of threads
           lda PCBUF+TN_NTHREADS,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+	; env number
           lda PCBUF+TN_ENV,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+	; parent task
 	  lda PCBUF+TN_PARENT,x
 	  jsr HEXOUT
-;          asl
-;          asl
-;          tax
-;          ldy #4
-;i5        lda st,x
-;          jsr SEROUT
-;          inx
-;          dey
-;          bne i5
           jsr SSPOUT
-          ldx #0
+	; available memory for task
           lda PCBUF+TN_MEM,x
           jsr HEXOUT
           jsr SSPOUT
+	; signal mask
 	  lda PCBUF+TN_SIGMASK,x
           jsr HEXOUT
           jsr SSPOUT
+	; signal address
 	  lda PCBUF+TN_SIGNAL+1,x
 	  jsr HEXOUT
 	  lda PCBUF+TN_SIGNAL,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+	; std streams
           lda PCBUF+TN_STDIN,x
           jsr HEXOUT
           jsr SSPOUT
@@ -489,7 +486,45 @@ i2        jsr SSPOUT
           jsr HEXOUT
           jsr SSPOUT
           jsr CRLFOUT
-
+	; check thread infos
+	lda PCBUF + TN_NTHREADS
+	beq next
+	cmp #<-1
+	beq next
+	; init thread loop
+	ldx #0
+	ldy #0
+	; display thread infos
+thloop	jsr SSPOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_ID,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_ST,x
+	jsr print_thstat
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_SP,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_PAR,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_PAR + 1,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_PAR + 2,x
+	jsr HEXOUT
+	jsr CRLFOUT
+	; next thread
+	txa
+	clc
+	adc #TNT_SLEN
+	tax
+	iny
+	cpy PCBUF + TN_NTHREADS
+	bcc thloop
+next	
+	; next task
 	ldx PCBUF + TN_PID
 	jmp infoloop
 ie        
@@ -499,12 +534,89 @@ ie
 #endif
 	  clc
           rts
-	  .)
-          
+         .)
+ 
 ; st        .asc "FRE ENV IBRKBRK RDY IRQ WFRXWFTXWSEMWTRM"
 it        .asc "^M^JPID Name"
 	  .dsb TNAMLEN-5, 32
-	  .asc " Th En Pa Me Sm SigA In OutErr^M^J",0
+	  .asc " ST   Th En Pa Me Sm SigA In OutErr^M^J",0
+
+print_tsstat .(
+	cmp #TTS_PAUSE+1
+	bcs range
+	asl
+	asl
+	tay
+	ldx #4
+loop	lda tstat,y
+	jsr SEROUT
+	iny
+	dex
+	bne loop
+	rts
+range	jsr HEXOUT
+	jsr SSPOUT
+	jmp SSPOUT
+
+tstat	.assert TTS_FREE == 0, "value coded in table position"
+	.asc "FREE"
+	.assert TTS_RUN == 1, "value coded in table position"
+	.asc "RUN "
+	.assert TTS_DEAD == 2, "value coded in table position"
+	.asc "DEAD"
+	.assert TTS_SUSP == 3, "value coded in table position"
+	.asc "SUSP"
+	.assert TTS_SUSP_ACK == 4, "value coded in table position"
+	.asc "SUSA"
+	.assert TTS_PAUSE == 5, "value coded in table position"
+	.asc "PAUS"
+	.)
+
+print_thstat .(
+	stx cnt
+	cmp #TS_RUN+1
+	bcs range
+	asl
+	asl
+	tay
+	ldx #4
+loop	lda th_free,y
+	jsr SEROUT
+	iny
+	dex
+	bne loop
+	ldx cnt
+	rts
+range	jsr HEXOUT
+	jsr SSPOUT
+	jmp SSPOUT
+
+	.assert TS_FREE == 0, "value coded in table position"
+th_free	.asc "FREE"
+	.assert TS_ENV == 1, "value coded in table position"
+th_env	.asc "ENV "
+	.assert TS_IBRK == 2, "value coded in table position"
+th_ibrk	.asc "IBRK"
+	.assert TS_BRK == 3, "value coded in table position"
+th_brk	.asc "BRK "
+	.assert TS_RDY == 4, "value coded in table position"
+th_rdy	.asc "RDY "
+	.assert TS_IRQ == 5, "value coded in table position"
+th_irq	.asc "IRQ "
+	.assert TS_WFRX == 6, "value coded in table position"
+th_wfrx	.asc "WFRX"
+	.assert TS_WFTX == 7, "value coded in table position"
+th_wftx	.asc "WFTX"
+	.assert TS_WXTX == 8, "value coded in table position"
+th_wxtx	.asc "WXTX"
+	.assert TS_WFSEM == 9, "value coded in table position"
+th_wsem	.asc "WSEM"
+	.assert TS_WSIG == 10, "value coded in table position"
+th_wsig	.asc "WSIG"
+	.assert TS_RUN == 11, "value coded in table position"
+	.asc "RUN "
+	.)
+
 
 &PKILL    jsr GETADR
           bcs pke

@@ -240,6 +240,7 @@ initsp	.(
 	rts
 	.)
 
+	; note: works for the active thread only
 pull	.(
 	MAPSYSBUF
 	ldx actThread
@@ -250,6 +251,7 @@ pull	.(
 	rts
 	.)
 
+	; note: works for the active thread only
 push	.(
 	pha
 	MAPSYSBUF

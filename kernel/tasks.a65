@@ -992,7 +992,7 @@ end	jmp memtask
 	lda taskTab + TT_NTHREADS,x
 	bne found
 	sec
-	bcs done
+done1	jmp done
 
 doloop	; iterate over all tasks
 	txa
@@ -1004,18 +1004,21 @@ next	clc
 	adc #TT_SLEN
 	cmp #MAXNTASKS * TT_SLEN
 	tax
-	bcs done
+	bcs done1
 
 test	ldy taskTab + TT_NTHREADS,x
 	beq next
-found
+found	
+	stx div		; save for later
 	txa
 	tay
-	; expects task ID in Y
+	; expects task ID in Y (to be changed?)
 	GETTASKMEM
 	sta SYSBUF + TN_MEM
 	txa
 	sta SYSBUF + TN_PID
+	lda taskTab + TT_STATUS,x
+	sta SYSBUF + TN_STATUS
 	lda taskTab + TT_ENV,x
 	sta SYSBUF + TN_ENV
 	lda taskTab + TT_PARENT,x
@@ -1063,6 +1066,48 @@ name
 	cpy #0
 	bne name
 
+	; copy over thread info
+	ldx #0
+	ldy #0
+thloop	lda threadTab + TH_TASK,x
+	cmp div
+	bne next_thread
+
+	txa
+	sta SYSBUF + TN_SLEN + TNT_ID,y
+	cpx actThread
+	beq run
+	lda threadTab + TH_ST,x
+	.byt $2c
+run	lda #TS_RUN
+	sta SYSBUF + TN_SLEN + TNT_ST,y	
+	lda threadTab + TH_PAR,x
+	sta SYSBUF + TN_SLEN + TNT_PAR,y
+	lda threadTab + TH_PAR + 1,x
+	sta SYSBUF + TN_SLEN + TNT_PAR + 1,y
+	lda threadTab + TH_PAR + 2,x
+	sta SYSBUF + TN_SLEN + TNT_PAR + 2,y
+	lda threadTab + TH_SP,x
+	sta SYSBUF + TN_SLEN + TNT_SP,y
+
+	; TODO: get info from stack
+	lda #0
+	sta SYSBUF + TN_SLEN + TNT_ADDR,y
+	sta SYSBUF + TN_SLEN + TNT_ADDR + 1,y
+
+	tya
+	clc
+	adc #TNT_SLEN
+	tay
+next_thread
+	txa
+	clc
+	adc #TH_SLEN
+	tax
+	cmp #MAXNTHREADS * TH_SLEN
+	bcc thloop 
+
+	; return
 	ldx SYSBUF + TN_PID
 	clc
 done	jmp memtask

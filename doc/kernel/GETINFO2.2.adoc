@@ -50,6 +50,52 @@ length of the name field is TNAMLEN. If the name is longer
 than TNAMLEN-1, the the last characters are cut off, and in
 the table the ending nullbyte is missing.
 
+The task status can be one of the following:
+
+----
+/* note: status affects all threads */
+
+TTS_FREE                =0      /* task not used */
+TTS_RUN                 =1      /* task has running threads */
+TTS_DEAD                =2      /* task is dead, but waiting for CHECKCHILD (NTHREADS=-1) */
+TTS_SUSP                =3      /* task is suspended */
+TTS_SUSP_ACK            =4      /* task is suspended and has been sent to parent */
+TTS_PAUSE               =5      /* task is suspended and waits for a signal */
+----
+
+After the Task info, the Thread info is provided for each thread in the task.
+The number of threads can be determined by the *TN_NTHREADS* field above. If *TN_NTHREADS* is zero (no threads), or $ff (<-1, task is waiting for parent after it ended), this field gives the right number of returned threads.
+The thread structure after *TN_SLEN* is as follows:
+
+----
+NT_ID                  =0      /* thread ID                            */
+NT_ST                  =1      /* thread state (see TS_* above)        */
+NT_SP                  =2      /* thread stack pointer                 */
+NT_ADDR                =3      /* return address from stack            */
+NT_PAR                 =5      /* three byte thread parameter space    */
+
+NT_SLEN                =8      /* length of entry                      */
+----
+
+The thread status can be one of the following:
+
+----
+/*        task (thread) state              */
+
+#define   TS_FREE   0
+#define   TS_ENV    1   /* allocated but not running            */
+#define   TS_IBRK   2   /* task has BRK'd in IRQ routine        */
+#define   TS_BRK    3   /* task has BRK'd                       */
+#define   TS_RDY    4   /* task did YIELD call                  */
+#define   TS_IRQ    5   /* task is interrupted                  */
+#define   TS_WFRX   6   /* waiting for other task to RECEIVE    */
+#define   TS_WFTX   7   /* waiting for other task to SEND       */
+#define   TS_WXTX   8   /* wait for certain task to SEND        */
+#define   TS_WFSEM  9   /* wait for semaphore                   */
+#define   TS_WSIG   10  /* wait for signal                      */
+#define   TS_RUN    11  /* Currently running (GETINFO caller)   */
+----
+ 
 To get the information for all tasks, call *GETINFO2* with *C=0* and *TID_START* in XR, and repeat with the PID of the returned task info in XR until C=1.
 
 == SEE ALSO
