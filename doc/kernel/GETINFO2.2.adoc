@@ -1,0 +1,119 @@
+
+= GETINFO(2)
+:doctype: manpage
+
+== NAME
+GETINFO - get information on the currently running tasks
+
+== SYNOPSIS
+Input::
+	* C=0 
+		** previous task ID in XR, or *TID_START*, to get the information for the task after the given one
+	* C=1
+		** task ID in XR, for which the data is returned
+Call::
+	jsr GETINFO
+Output::
+	* SENDBUF - table with task info
+	* C=0 - data is valid (task has been found for both input modes)
+	* C=1 - end of list reached, or task ID is invalid.
+
+NOTE: before calling *GETINFO*, the *SEM_SENDBUF* must be passed, and after the information has been read from SENDBUF, SEM_SENDBUF must be freed again.
+
+== DESCRIPTION
+Returns a table with information the identified task. 
+
+There is one valid entries in the table, 0 in the TN_NTHREADS field indictaes an unused slot.
+
+----
+		ANZ_ENV		12	number of valid entries in SENDBUF
+
+		TN_PID		0	PID of process in this entry
+		TN_NTHREADS	1	Number of threads for process
+		TN_ENV		2	Environment number for process
+		TN_PARENT	3	Parent process
+		TN_MEM		4	amount of allocated RAM
+		TN_SIGNAL	5	signal handler address
+		TN_STDIN	7	STDIN stream
+		TN_STDOUT	8	STDOUT stream
+		TN_STDERR	9	STDERR stream
+		TN_SIGMASK	10	signal mask value
+		TN_EXECADDR 	11	start of execution address
+		TN_PRIO		13	priority 
+		TN_NAME		11	start of prog name (if available)
+
+		TN_SLEN		21	length of struct
+----
+
+Each field is TN_SLEN bytes long and the
+length of the name field is TNAMLEN. If the name is longer
+than TNAMLEN-1, the the last characters are cut off, and in
+the table the ending nullbyte is missing.
+
+The task status can be one of the following:
+
+----
+/* note: status affects all threads */
+
+TTS_FREE                =0      /* task not used */
+TTS_RUN                 =1      /* task has running threads */
+TTS_DEAD                =2      /* task is dead, but waiting for CHECKCHILD (NTHREADS=-1) */
+TTS_SUSP                =3      /* task is suspended */
+TTS_SUSP_ACK            =4      /* task is suspended and has been sent to parent */
+TTS_PAUSE               =5      /* task is suspended and waits for a signal */
+----
+
+After the Task info, the Thread info is provided for each thread in the task.
+The number of threads can be determined by the *TN_NTHREADS* field above. If *TN_NTHREADS* is zero (no threads), or $ff (<-1, task is waiting for parent after it ended), this field gives the right number of returned threads.
+The thread structure after *TN_SLEN* is as follows:
+
+----
+NT_ID                  =0      /* thread ID                            */
+NT_ST                  =1      /* thread state (see TS_* above)        */
+NT_SP                  =2      /* thread stack pointer                 */
+NT_ADDR                =3      /* return address from stack            */
+NT_PAR                 =5      /* three byte thread parameter space    */
+
+NT_SLEN                =8      /* length of entry                      */
+----
+
+The thread status can be one of the following:
+
+----
+/*        task (thread) state              */
+
+#define   TS_FREE   0
+#define   TS_ENV    1   /* allocated but not running            */
+#define   TS_IBRK   2   /* task has BRK'd in IRQ routine        */
+#define   TS_BRK    3   /* task has BRK'd                       */
+#define   TS_RDY    4   /* task did YIELD call                  */
+#define   TS_IRQ    5   /* task is interrupted                  */
+#define   TS_WFRX   6   /* waiting for other task to RECEIVE    */
+#define   TS_WFTX   7   /* waiting for other task to SEND       */
+#define   TS_WXTX   8   /* wait for certain task to SEND        */
+#define   TS_WFSEM  9   /* wait for semaphore                   */
+#define   TS_WSIG   10  /* wait for signal                      */
+#define   TS_RUN    11  /* Currently running (GETINFO caller)   */
+----
+ 
+To get the information for all tasks, call *GETINFO2* with *C=0* and *TID_START* in XR, and repeat with the PID of the returned task info in XR until C=1.
+
+== SEE ALSO
+link:../scheduler.7.adoc[scheduler(7)],
+link:FORK.2.adoc[FORK(2)],
+link:TERM.2.adoc[TERM(2)],
+link:KILL.2.adoc[KILL(2)],
+link:YIELD.2.adoc[YIELD(2)],
+link:FORKT.2.adoc[FORKT(2)],
+link:DUP.2.adoc[DUP(2)],
+link:GETPID.2.adoc[GETPID(2)],
+link:SLOCK.2.adoc[SLOCK(2)],
+link:RENICE.2.adoc[RENICE(2)],
+link:SETINFO.2.adoc[SETINFO(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

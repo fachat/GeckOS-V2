@@ -235,14 +235,14 @@
 #define   TS_WXTX   8	/* wait for certain task to SEND	*/
 #define   TS_WFSEM  9	/* wait for semaphore			*/
 #define	  TS_WSIG   10	/* wait for signal 			*/
-#define	  TS_SUSP   11	/* task is suspended                    */
+#define	  TS_RUN    11	/* Currently running (GETINFO caller)	*/
 
 /*        task (task) state              */
 
 /* note: status affects all threads */
 
 TTS_FREE		=0	/* task not used */
-TTS_RUN			=1	/* task has threads */
+TTS_RUN			=1	/* task has running threads */
 TTS_DEAD		=2	/* task is dead, but waiting for CHECKCHILD */
 TTS_SUSP		=3	/* task is suspended */
 TTS_SUSP_ACK		=4	/* task is suspended and has been sent to parent */
@@ -260,26 +260,43 @@ JC_PAUSEIFBG		=7	/* pause current task if not foreground */
 
 /*        GETINFO-struct            */
 
-#define   ANZ_ENV   12	/* number of valid entries		*/
+/*
+ The GETINFO return struct starts with some information on the task itself,
+ then follows a list of entries per thread
+*/
 
-#define   TN_PID    0	/* process ID 				*/
-#define   TN_NTHREADS 1	/* task state				*/
-#define	  TN_ENV    2	/* environment number			*/
-#define	  TN_PARENT 3	/* parent task				*/
-#define   TN_MEM    4	/* used amount of memory		*/
-#define   TN_SIGNAL 5	/* interrupt routine address		*/
-#define   TN_STDIN  7	/* stdin stream				*/
-#define   TN_STDOUT 8	/* stdout stream			*/
-#define   TN_STDERR 9	/* stderr stream			*/
-#define   TN_SIGMASK 10	/* signal mask				*/
-#define   TN_EXECADDR 11 /* address where task was started (main) */
-#define   TN_PRIO   13	/* start of program name (if avail.)	*/
-#define   TN_NAME   14	/* start of program name (if avail.)	*/
-#define   TN_SLEN   21	/* length of one entry			*/
+#define	TID_START	<-1
+
+TN_PID    		=0	/* process ID 				*/
+TN_STATUS    		=1	/* task status, see TTS_* above		*/
+TN_NTHREADS 		=2	/* number of threads (or $ff if dead) 	*/
+TN_ENV    		=3	/* environment number			*/
+TN_PARENT 		=4	/* parent task				*/
+TN_MEM    		=5	/* used amount of memory		*/
+TN_SIGNAL 		=6	/* signal routine address		*/
+TN_STDIN  		=8	/* stdin stream				*/
+TN_STDOUT 		=9	/* stdout stream			*/
+TN_STDERR 		=10	/* stderr stream			*/
+TN_SIGMASK 		=11	/* signal mask				*/
+TN_EXECADDR 		=12 	/* address where task was started (main) */
+TN_PRIO   		=14	/* task priorit				*/
+TN_NAME   		=15	/* start of program name (if avail.)	*/
+
+TN_SLEN   		=24	/* length of one entry			*/
 
 /* Note: must be at least 5 or more, to not trigger a bug in 
    mon.a65 and other parts that us "TNAMELEN-5" as length of .dsb filler */
 #define   TNAMLEN   (TN_SLEN-TN_NAME)	/* length of name	*/
+.assert TNAMLEN >= 5, "name too short"
+
+TNT_ID			=0	/* thread ID				*/
+TNT_ST			=1	/* thread state	(see TS_* above) 	*/
+TNT_SP			=2	/* thread stack pointer			*/
+TNT_ADDR		=3	/* return address from stack		*/
+TNT_PAR			=5	/* three byte thread parameter space	*/
+
+TNT_SLEN		=8	/* length of entry			*/
+
 
 /*        Terminal Commands        */
 
