@@ -1313,7 +1313,6 @@ bic_inpipe
 	
 	; echo some output
 bic_echo .(
-	inx
 	txa
 	clc
 	adc #<buf+3
