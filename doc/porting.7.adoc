@@ -8,6 +8,8 @@ porting - how to port GeckOS onto a new architecture
 == DESCRIPTION
 Porting has been made much easier with this kernel version. In general, there is a proto architecture subdirectory that holds some prototype files for a non-MMU system. that can easily be changed to fit own needs.
 
+Note:: the proto files are not fully maintained, so a maintained architecture should be used as basis if possible. 
+
 The kernel needs two files in the arch/*/kernel subdirectory, namely kenv.a65 and kinit.a65. The kinit.a65 file is included in the kernel startup code, i.e. after setting the interrupt flag and clearing the decimal flag this file is executed, and it is expected that the CPU gets out of this file at the end of it.
 
 === kinit.a65
@@ -75,11 +77,80 @@ Also some macros must be defined:
 ----
 The full descriptions can be found in the C64 kenv file for example. This may look complicated, but it isn't. If you have a simple 6502 system without memory management, just copy (or set a link) to the C64 file. If you have a more complicated system, have a look at the CS/A65 file. 
 
+=== Memory setup
+
+One of the first decisions to be made is the memory setup. 
+
+Plain:: 
+	I systems with up to 64k of memory (potentially after re-mapping some ROM), a plain memory map like in the C64 or the PET32k can be used. 
+
+Partial map:: 
+	Other options are with partially mapped memory, similar to the CBM8296 (which actually has two banks of RAM in the upper 32k only). 
+	In this case system tasks are managed in one mapped bank, with only zeropage, lib6502 and kernel in shared memory. The user programs are loaded into the second bank, that, together with the rest of the not-mapped RAM, makes 
+	up a larger linear address space. The kenv.a65 code must switch between the banks appropriately.
+
+Full map::
+	In the CS/A machine, the memory can be re-mapped in blocks of 4k. This means every task can have its own zeropage and stack. The kenv.a65 code above must handle this as well. 
+	In this port, the memtask code for example re-maps all the MMU entries. During processing of the kernel calls, the kernel may even map task memory into the kernel space.
+
+When porting, it may be good to start with a plain setup to get a grip on porting the devices and filesystems, before venturing into more complicated setups. As mentioned above, the C64 implementation is a good start for that (see also build below).
+
+=== Porting Devices
+
+If the system that is ported to has a (linearly) memory mapped screen buffer, the devices/console.a65 console code can be used as starter. It includes architecture-specific code to map from ASCII (the system code table) to a
+system-specific table if needed, and other functions. You can use arch/pet32k/con_pet.a65 as an example. This again includes other files e.g. for keyboard mapping and the blinking cursor.
+
+If there is another type of mapping (e.g. Apple-II with non-linear screen buffer space), or even non-mapped video buffer, a new device needs to be written.
+
+Devices are built into a single block (that comes from the 4k block mapping in GeckOS original CS/A implementation) that is initialized during kernel init. The architecture-specific devices are defined in arch/c64devices/c64dev.a65 or arch/pet32k/devices.a65 for example. 
+
+=== Porting Filesystems
+
+The currently supported filesystems support Commodore IEC/IEEE devices, PC floppy disks with FAT12 format (using a WD1771 controller), and the devices filesystem.
+
+==== Devices
+
+The devices filesystem uses the the kernel *DEVCMD* interface to show device names and handle them. Note: that includes the mapping between device names and numbers. So, this should be relatively generic. On the other hand, if *FSDEV_NOROM* is not set, it also shows the content of the init ROM and allows to access its content. 
+
+Note:: The init ROM access will probably be replaced at some point, so it is recommended to just use *FSDEV_NOROM*.
+
+==== Storage
+
+Depending on the target architecture, the filesystem code needs to be re-writting, if none of the existing code can be re-used.
+
+To implement a new filesystem driver, the API described in include/fdefs.a65 needs to be implemented. Existing filesystems could be used as reference, but note that the codebase is very old and messy.
+
+=== Setting up the build process
+
+Three main components need to be loaded into the target system:
+
+* The kernel
+* lib6502
+* init ROM
+
+The kernel provides the entry points into the system by providing the *OSA2KERNEL* API. The lib6502 provides the lib6502 calls by providing the *LIB6502* API. 
+Note that the kernel and the lib6502 are re-entrant and only need to be in memory once, even if used in multiple tasks.
+
+The Init ROM contains all the extra code to be executed. The first block typically are the devices, then the *init* program and the *fsdev* filesystem. After that come further filesystems and other programs to be started without access to storage. Each ROM entry has a type attached. The kernel starts types PK_DEV and PK_INIT. This is typically only the device block and the *init* program. 
+
+The *init* program then scans the init ROM again, and starts the other tasks (like *PK_PRG*, or *PK_FS* filesystems). For this, the *init* program needs to "see" the init ROM in its memory mapping. Note, that *init* already uses *lib6502*.
+
+In a plain setting, where no memory mapping is involved, all three items can be combined into a single binary, as is the case in the C64 or PET32k architectures. 
+Typically a *rom.o65* is produced that is relocated to the target address, loaded into memory in one blob, potentially re-located by a loader, and then started by calling the KERNEL's *RESET* entry.
+During relocation it must be ensured that the three segments - text, data, bss - do not overlap, by adjusting the options to *reloc65*.
+During the build, the kernel and lib6502 APIs may be located anywhere, but the lib6502 loader automatically relocates the calls from any binary by using the *OSA2KERNEL* and *LIB6502* to the correct address that is "baked into" the lib6502 code.
+
+Note:: for the ROM build the .data segment is not initialized!
+
+In other settings, three binaries for kernel, lib6502, and init ROM can be produced separately, but must be controlled from the build process (Makefile). For example the *OSA2KERNEL* and *LIB6502* addresses should be defined and given to the build using the "-D" option to *xa65*. These can then be loaded separately into memory, moved, and then started by a loader as can be see in the *cbm8x96* architecture.
+
 == SEE ALSO
 link:embedded.7.adoc[embedded(7)],
 link:mmu.7.adoc[mmu(7)],
 link:nommu.7.adoc[nommu(7)],
 link:c64.p.adoc[c64(p)]
+link:cbm8x96.p.adoc[cbm8x96(p)]
+link:kernel/DEVCMD.2.adoc[DEVCMD(p)]
 
 == AUTHOR
 Written by André Fachat.
