@@ -143,6 +143,7 @@ test      bcc tx
           bne tstwater
           jsr rxoff
           jmp tx
+
 tstwater  cmp #E_SEMPTY
           beq wl
           tax
@@ -157,6 +158,12 @@ tstwater  cmp #E_SEMPTY
 wh      ldx #0  
 	jsr rtshi
           jmp tx         ; unbedingt
+
+irqend    lda #E_NOIRQ		; no irq source found
+	  rts
+
+
+
 twl       cmp #E_SLWM
           bne tx
 wl      ldx #0  
@@ -164,23 +171,27 @@ wl      ldx #0
 
 tx        bit status
           bvc irqhs
-          tya
+          tya			; recover ACIA status register
 	and #%00010000		; transmit data register empty?
 	beq irqhs		; no then -> irqhs
 
-	lda #32
+	lda #%00100000
 	bit status
 	bne endsend		; do not send any more to make RTS high.
 
+#ifndef ACIA_IGNORE_DSR
+	; swiftlink does not handle DSR?
 	tya
 	and #%01000000		; DSR high?
 	bne irqhs		; -> irqhs
+#endif
 
           ldx instr		; send new data byte
           jsr GETC
           bcs test2
           sta ACIA
-          bcc irqhs
+          bcc irqhs		; always
+
 test2     cmp #E_EOF
           bne irqhs
           jsr txoff
@@ -188,9 +199,6 @@ test2     cmp #E_EOF
 irqhs     lda ACIA+ACIA_SR
 	  lda #E_OK		; irq source removed
 	  rts
-irqend    lda #E_NOIRQ		; no irq source found
-	  rts
-
 endsend
 	lda ACIA+ACIA_CMD
 	and #%11110011

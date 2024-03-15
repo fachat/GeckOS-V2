@@ -65,6 +65,7 @@
 				/* ACIA 6551 */
 #undef	ACIABASE	$d600
 /* #define ACIABASE	$df00 */
+#define ACIABASE	$de00
 
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
 

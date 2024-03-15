@@ -72,17 +72,20 @@ devstart
 #define	CONSOLE_DEVICE	"devices/con_c64.a65"
 #include  "devices/console.a65"	; video device is merged with OS/A now...
 
+#ifdef ACIABASE
+#print ACIABASE
+#define	ACIA_IGNORE_DSR
+#include  "devices/ser_acia.a65"
+#endif
+
 #include  "devices/nulldev.a65"	; null device
 #include  "devices/spooler.a65"	; spooler device
 
-#ifdef ACIABASE
-#print ACIABASE
-#include  "devices/ser_acia.a65"
-#endif
 
 #ifdef UARTBASE
 #include  "devices/ser_uart.a65"	; standard UART 16550A driver
 #endif
+
           .word $ffff
 
 #if 0

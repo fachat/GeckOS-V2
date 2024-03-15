@@ -8,7 +8,7 @@ RELOC=reloc65
 
 c64 ${TRG}: 
 	(XAINPUT=${XAINPUT}; export XAINPUT;\
-	${XA} -R -bt 36862 -bd 768 -bz 8 -bb 2624 c64rom.a65 -o c64rom.o65 -l c64rom.lab ;\
+	${XA} -R -bt 36862 -bd 768 -bz 8 -bb 2640 c64rom.a65 -o c64rom.o65 -l c64rom.lab ;\
 	${FILE} c64rom.o65;\
 	${RELOC} -xt -o ${TRG} c64rom.o65; \
 	if [ $$? -ne 0 ]; then rm ${TRG}; fi;)
@@ -16,7 +16,7 @@ c64 ${TRG}:
 
 andre: 
 	(XAINPUT=${XAINPUT}; export XAINPUT;\
-	${XA} -DANDRE -R -bt 36862 -bd 768 -bz 8 -bb 2624 c64rom.a65 -o c64rom.o65 -l c64rom.lab ;\
+	${XA} -DANDRE -R -bt 36862 -bd 768 -bz 8 -bb 2640 c64rom.a65 -o c64rom.o65 -l c64rom.lab ;\
 	${FILE} c64rom.o65;\
 	${RELOC} -xt -o ${TRG} c64rom.o65; \
 	if [ $$? -ne 0 ]; then rm ${TRG}; fi;)
