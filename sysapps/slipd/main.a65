@@ -115,13 +115,13 @@
 /**********************************************************************/
 
 
-/* #define	DEBUG */
+;#define	DEBUG
 /* #define	DEBUGMEM*/
-/* #define	DEBUGPKT*/
+;#define	DEBUGPKT
 /* #define	DEBUGTCP*/
 /* #define	DEBUGTCP2*/
 /* #define	DEBUGICMP*/
-/* #define	DEBUGSLIP*/
+;#define	DEBUGSLIP
 /* #define	DEBUGWWW*/
 /* #define	DEBUGUDP*/
 

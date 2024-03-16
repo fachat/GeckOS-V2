@@ -287,7 +287,10 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$1600
+	.bss
+Memstart  =$1800
+;Memstart  =*
+	.text
 Memend	  =ROMSTART
 Zerostart =$70
 

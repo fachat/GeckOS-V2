@@ -67,16 +67,18 @@ devstart
 
 ; moved to first device, to more quickly send data in interrupt
 ; clears interrupt when sent
-#include  "devices/ser_9600.a65" ; fast serial interface by Daniel Dallmann
-
-#define	CONSOLE_DEVICE	"devices/con_c64.a65"
-#include  "devices/console.a65"	; video device is merged with OS/A now...
+;#include  "devices/ser_9600.a65" ; fast serial interface by Daniel Dallmann
 
 #ifdef ACIABASE
 #print ACIABASE
 #define	ACIA_IGNORE_DSR
-#include  "devices/ser_acia.a65"
+;#include  "devices/ser_acia.a65"
+#include  "devices/ser_acia_nmi.a65"
 #endif
+
+#define	CONSOLE_DEVICE	"devices/con_c64.a65"
+#include  "devices/console.a65"	; video device is merged with OS/A now...
+
 
 #include  "devices/nulldev.a65"	; null device
 #include  "devices/spooler.a65"	; spooler device

@@ -3,7 +3,7 @@ CC=gcc
 CFLAGS=-W -Wall -pedantic -ansi
 
 XAINPUT=../../include
-XA=XAINPUT=${XAINPUT} xa
+XA=XAINPUT=${XAINPUT} xa -k
 FILE=file65
 RELOC=reloc65
 

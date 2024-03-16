@@ -32,6 +32,9 @@ c64: clean
 runc64: c64
 	x64 +sound -autostart arch/c64/boot/osa.d64
 
+runc64ip: c64
+	x64 +sound -acia1 -acia1base 0xDE00 -acia1irq 1 -acia1mode 1 -myaciadev 2  -rsdev3 "|socat - PTY,link=/tmp/viceser" -autostart arch/c64/boot/osa.d64
+
 ##########
 
 pet32k: clean

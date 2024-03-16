@@ -40,6 +40,9 @@
  * Also an incoming CTS high immediately disables the transmitter.
  * That's why I use the DSR input for the CTS modem line. This line
  * can be checked independently.
+ *
+ * To improve receive speed and reduce character drop rates,
+ * the actual receive happens in the NMI.
  */
 
 #include "chips/acia6551.i65"
@@ -93,6 +96,8 @@ prgok     pla
           beq devirq
           jmp others
 
+	; --------------------------------
+	; init the device
 devini    
 	  lda #0
           sta status,x
@@ -111,9 +116,23 @@ devini
           bne devx
           LDA ACIA+ACIA_SR		; clear interrupt
 
+	lda #0
+	sta inr
+	sta inw
+	sta outr
+	sta outw
+
+	sec
+	lda #<NMIrx
+	ldy #>NMIrx
+	jsr SETNMI
+
+	; return OK (C=0)
           clc
           rts
 
+	; --------
+	; device (ACIA) was not detected
 devx      lda status,x
           ora #2
           sta status,x
@@ -121,23 +140,28 @@ devx      lda status,x
           sec
           rts
           
+	; --------------------------------
+	; handle interrupt
 devirq    
           .(
-          lda ACIA+ACIA_SR
-          bpl irqend		; not this ACIA
-          tay
           bit status		; check if receiving
           bpl tx		; no -> tx
-          and #%00001000	; Rx data register full?
-          beq nobyt		; no -> nobyt
-          ldx outstr
-          lda ACIA
-          jsr PUTC
-          bcs test
+
+	; outbuf to stream
+nextin	ldy inr
+	cpy inw
+	beq nobyt
+	lda inbuf,y
+	ldx outstr
+        jsr PUTC
+        bcs test
+	inc inr
+	jmp nextin
 
 nobyt     ldx outstr
           lda #SC_STAT
           jsr STRCMD
+
 test      bcc tx
           cmp #E_NUL
           bne tstwater
@@ -159,45 +183,46 @@ wh      ldx #0
 	jsr rtshi
           jmp tx         ; unbedingt
 
-irqend    lda #E_NOIRQ		; no irq source found
-	  rts
-
-
-
 twl       cmp #E_SLWM
           bne tx
 wl      ldx #0  
 	jsr rtslo
 
+	; transmit
 tx        bit status
           bvc irqhs
-          tya			; recover ACIA status register
-	and #%00010000		; transmit data register empty?
-	beq irqhs		; no then -> irqhs
 
 	lda #%00100000
 	bit status
 	bne endsend		; do not send any more to make RTS high.
 
 #ifndef ACIA_IGNORE_DSR
-	; swiftlink does not handle DSR?
+	; swiftlink uses real CTS, not DSR as I do with the ACIA
 	tya
 	and #%01000000		; DSR high?
 	bne irqhs		; -> irqhs
 #endif
 
-          ldx instr		; send new data byte
-          jsr GETC
-          bcs test2
-          sta ACIA
-          bcc irqhs		; always
+nextout	ldy outw
+	iny
+	cpy outr
+	beq outfull
+	dey
+
+        ldx instr		; send new data byte
+        jsr GETC
+        bcs test2
+
+	sta outbuf,y
+	inc outw
+	jmp nextout
 
 test2     cmp #E_EOF
           bne irqhs
           jsr txoff
-
-irqhs     lda ACIA+ACIA_SR
-	  lda #E_OK		; irq source removed
+outfull
+irqhs     
+	  lda #E_NOIRQ		; irq source removed
 	  rts
 endsend
 	lda ACIA+ACIA_CMD
@@ -206,6 +231,117 @@ endsend
 	jmp irqhs
 
           .)
+
+	; --------------------------------
+	; NMI routine
+	.word oldnmi
+	.word ctrlnmi
+NMIrx	.(
+	pha
+	tya
+	pha
+	txa
+	pha
+	cld
+
+	; check ACIA status
+	lda ACIA+ACIA_SR
+	bpl nmiend		; not this ACIA
+
+	; check if byte ready in ACIA
+	tay
+	and #%00001000		; Rx data register full?
+	beq norx		; no -> norx
+
+	; receive a byte and store in buffer
+	lda ACIA
+	ldx inw
+	sta inbuf,x
+
+	inx
+	cpx inr
+	bne store 
+
+	inc $d020		; signal lost byte by changing border color (C64)
+	jmp norx
+store
+	stx inw
+
+norx	tya
+	and #%00010000		; transmit data register empty?
+	beq notx	
+
+	; get byte and send out
+
+	; check if buffer empty
+	ldx outr
+	cpx outw
+	beq notx
+
+	; send out byte
+	lda outbuf,x
+	sta ACIA
+	
+	; update read pointer
+	inc outr
+notx
+	; return from NMI
+nmiend
+	pla
+	tax
+	pla
+	tay
+	pla
+	jmp (oldnmi)
+
+	.)
+
+	.bss
+oldnmi	.word 0
+nmistate .byt 0
+
+inw	.byt 0
+inr	.byt 0
+outw	.byt 0
+outr	.byt 0
+
+inbuf	.dsb 256
+outbuf	.dsb 256
+	.text
+
+	; if the kernel decides to switch off the NMI
+	; this is called
+ctrlnmi .(
+        sta nmistate
+        cmp #NMI_ON
+        bne off
+        lda status
+        and #DC_SW_RXHW
+        bne norts
+        jsr rtslo
+norts   lda status
+        and #%00010000
+        beq nonmi
+	lda ACIA+ACIA_CMD
+	ora #%00000010
+	sta ACIA+ACIA_CMD
+nonmi   rts
+
+off
+	; disables tx interrupt
+        jsr rtshi
+	; disable rx interrupt
+	lda ACIA+ACIA_CMD
+	ora #%00000010
+	sta ACIA+ACIA_CMD
+
+	; disable pending interrupts
+	lda ACIA+ACIA_SR
+        rts
+        .)
+
+	; --------------------------------
+	; handshake
 
 rtshi
 	lda status,x
@@ -224,6 +360,9 @@ rtslo
 	and #%11011111
 	sta status,x
 	rts
+
+	; --------------------------------
+	; other DEVCMD calls
 
 others    cmp #DC_GS
           bne o1

@@ -195,7 +195,6 @@ DB("slot=")
 lda islot:jsr EHexout
 DB("ip=")
 lda ip+1:jsr EHexout: lda ip:jsr EHexout
-lda #":":jsr ECout:lda slotladr:jsr EHexout
 jsr ECrlfout
 pla:tay:pla
 #endif
