@@ -312,11 +312,56 @@ Then, in GeckOS in x64, run
 
 as a minimum slip daemon that uses "a:ser1" as I/O, which is the default RS232 interface on the C64 arch (Swiftlink with NMI or userport 9600 depending on the build)
 
+== Using the internet connectivity
+
+=== remote shell
+
+The full *slipd* or the reduced *sliprshd* provide the abiltiy to login to GeckOS over the internet.
+
+When a process connects, slipd starts a specific login program. By default this is *c:tlogin* which just asks for the username and password. As *tlogin* is just a sample, username and password are hardcoded to "c64" and "guest". Also, the shell to start upon successful login is *c:lsh*.
+
+=== Connecting to the internet
+
+The full *slipd* or the reduced *slipmind* provide the ability for *lib6502* programs to use internet connectivty. A sample *telnet* client is included in GeckOS.
+
+image::telnet.png[] 
+
+=== Running as web server
+
+The full *slipd* or the reduced *slipwwwd* implement a very (very very) simple web server for HTTP 1.0. The best way to connect to is probably by using a telnet client as shown in the following screenshot.
+
+image::www.png[] 
+
+=== Using a server on the internet as file server
+
+Using either the full *slipd* or the reduced *slipfsd* server, GeckOS can use a remote server as fileserver. As protocol the FSTCP GeckOS-specific protocol is used, which is basically the GeckOS internal protcol between clients and file serves.
+
+First you have to run
+----
+	fstcp <directory> <servername>
+----
+where *fstcp* is the host binary compiled from *sysapps/slip/fstcp.c*. The directory is the one to be exported. The *servername* is the IP address the server uses - this is relevant as when using SLIP your server may have multiple IP addresses and the program needs to attach to the correct one. In the above SLIP scenario, servername could be *192.168.0.1*.
+
+Then start *slipfsd* in the background, e.g. using
+----
+	ontty a:video2 slipfsd a:ser1
+----
+Then a new drive *g:* should be available.
+
+Note:: in my latest tests this did not work.
+
 
 == (Known) Bugs
 
    - The WWW server only understands "GET filename" requests. No "http://"
      or host prefixes are allowed. At least with Netscape it seems to work.
+
+   - telnetting into GeckOS seems to echo shell input when it shouldn't
+
+   - When telnetting out, and the connection got a RST, telnet seems to hang.
+     (unclear if that is telnet or lib6502)
+
+   - FSTCP does not seem to work anymore.
 
    - The implementation is bloated, and horribly slow.
 
