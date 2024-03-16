@@ -53,13 +53,53 @@
 #define ACIA	$d600
 #endif
 
-#define	Anzdev	1
+#define	ACIA_DEBUG
+
+/* because of cut-n-paste code from other device we potentially allow for
+   multiple devices, but the code currently only runs on a single ACIA */
+#define	Anzdev	1	
 
           .(
 	  .word devend2
 	  jmp prg1
 	  .asc "ser", sernr ,0
 -sernr += 1
+
+; --------------------------------------------------
+; The ACIA can be in the following states:
+;
+; Receiver:
+;	OFF:	disabled, /RTS hi	- receiving data is ignored
+;	ON:	enabled, /RTS low	- modem can send data
+;	HW:	enabled, /RTS hi	- modem can, but should not send data
+;
+; Transmitter:
+;	OFF:	disabled (without ints)	- no data to be sent
+;	OFF2:	enabled (without ints)	- no data to be sent
+;	ON:	enabled with ints	- data to be sent is in the buffer
+;
+; Note that /RTS and transmitter are linked in the ACIA,
+; so fully disabling the Transmitter (OFF) sets /RTS hi as well.
+; This means using /RTS in the ACIA as flow control does not really
+; work well, as when you want to throttle receives, you also disable
+; the transmitter. 
+;
+; Combining these states we have:
+;
+;	OFF:	rx,tx disabled, /RTS hi	- when no interrupts should occur
+;	RX:	rx enabled, tx disabled / no tx ints, /RTS lo 
+;	RXHW:	rx enabled, tx disabled / no tx ints, /RTS hi
+;	RXTX:	rx,tx enabled w/ tx ints, /RTS lo
+;
+; If we are running into high water situations, but at the same time need
+; to transmit, ... we run into the potential overrun scenarios.
+;
+; Here are the command values for it:
+;
+CMD_OFF		=%00000011
+CMD_RX		=%00001001
+CMD_RXHW	=%00000001
+CMD_RXTX	=%00000101
 
 /*
  * status: Bit 	0 = 1= handshake enabled
@@ -76,6 +116,23 @@ div       .byt 0
 status    .dsb Anzdev
 instr     .dsb Anzdev
 outstr    .dsb Anzdev
+	.text
+
+	; NMI routine handling and communication
+	.bss
+cmd_rx	.byt 0		; ACIA command value when no data is transmitted
+
+oldnmi	.word 0
+nmistate .byt 0
+
+inw	.byt 0
+inr	.byt 0
+outw	.byt 0
+outr	.byt 0
+outc	.byt 0		; count bytes in buffer 
+
+inbuf	.dsb 256
+outbuf	.dsb 256
 	.text
 
 prg1      ldx #0
@@ -109,11 +166,15 @@ devini
           STA ACIA+ACIA_CTRL
           cmp ACIA+ACIA_CTRL
           bne devx
-          LDA #%00000101		; no parity, normal receiver mode,
-					; RTS low, Tx interrupt enabled
+
+       	lda #CMD_RX
+	sta cmd_rx
+
+          LDA #CMD_OFF			
           STA ACIA+ACIA_CMD
           cmp ACIA+ACIA_CMD
           bne devx
+
           LDA ACIA+ACIA_SR		; clear interrupt
 
 	lda #0
@@ -121,6 +182,7 @@ devini
 	sta inw
 	sta outr
 	sta outw
+	sta outc
 
 	sec
 	lda #<NMIrx
@@ -147,6 +209,7 @@ devirq
           bit status		; check if receiving
           bpl tx		; no -> tx
 
+	; --------
 	; outbuf to stream
 nextin	ldy inr
 	cpy inw
@@ -158,39 +221,37 @@ nextin	ldy inr
 	inc inr
 	jmp nextin
 
-nobyt     ldx outstr
-          lda #SC_STAT
-          jsr STRCMD
+	; --------
+	; output stream status
+nobyt	ldx outstr
+	lda #SC_STAT
+	jsr STRCMD
+	bcc tx		; between lo/hi water, so no change
+test      
+	cmp #E_NUL	; stream not open anymore?
+	bne tstwater
+	jsr rxoff	; switch everything off
+	jmp tx
+	
+tstwater
+	cmp #E_SEMPTY	; stream empty?
+	beq wl		; low water - enable rx
+	cmp #E_SFULL
+	beq wh		; full - set RTS
+	cmp #E_SHWM
+	bne twl		; no high water
 
-test      bcc tx
-          cmp #E_NUL
-          bne tstwater
-          jsr rxoff
-          jmp tx
-
-tstwater  cmp #E_SEMPTY
-          beq wl
-          tax
-          lda status
-          and #1
-          bne wh
-          txa
-          cmp #E_SFULL
-          beq wh
-          cmp #E_SHWM
-          bne twl
-wh      ldx #0  
-	jsr rtshi
-          jmp tx         ; unbedingt
-
-twl       cmp #E_SLWM
-          bne tx
-wl      ldx #0  
-	jsr rtslo
-
+wh	jsr rtshi	; set RTS hi
+	jmp tx		; always
+	
+twl	cmp #E_SLWM	; low water?
+	bne tx		; no, continue
+wl	jsr rtslo 	; enable rx again
+	
+	; --------
 	; transmit
-tx        bit status
-          bvc irqhs
+tx      bit status
+        bvc irqhs
 
 	lda #%00100000
 	bit status
@@ -203,37 +264,56 @@ tx        bit status
 	bne irqhs		; -> irqhs
 #endif
 
-nextout	ldy outw
+	; --------
+	; send data to NMI buffer
+nextout	ldy outc
 	iny
-	cpy outr
-	beq outfull
-	dey
+	beq outfull		; check overflow on byte counter
 
         ldx instr		; send new data byte
         jsr GETC
         bcs test2
-
+	
+	ldy outw
 	sta outbuf,y
 	inc outw
+	inc outc
+
 	jmp nextout
 
-test2     cmp #E_EOF
-          bne irqhs
-          jsr txoff
+test2	cmp #E_EOF
+	bne irqhs
+	jsr txoff
 outfull
 irqhs     
-	  lda #E_NOIRQ		; irq source removed
-	  rts
-endsend
-	lda ACIA+ACIA_CMD
-	and #%11110011
-	sta ACIA+ACIA_CMD
-	jmp irqhs
+	; --------
+	; re-configure ACIA
+endsend	lda ACIA+ACIA_CMD
+	cmp #CMD_RXTX
+	beq endirq		; we already do RXTX, so keep it (NMI will change)
 
+	lda nmistate
+	cmp #NMI_ON
+	bne endirq		; if NMI is disabled, leave it
+
+	lda outc
+	bne endrx		; bytes to send? then RXTX	
+
+	lda cmd_rx
+	.byt $2c
+endrx	lda #CMD_RXTX		; enable transmitter
+	sta ACIA+ACIA_CMD
+
+endirq	lda #E_NOIRQ
+	rts
           .)
 
 	; --------------------------------
 	; NMI routine
+	;
+	; roughly modelled after 
+	; http://csbruce.com/cbm/ftp/reference/swiftlink.txt
+	;
 	.word oldnmi
 	.word ctrlnmi
 NMIrx	.(
@@ -243,13 +323,21 @@ NMIrx	.(
 	txa
 	pha
 	cld
-
+;inc $d020
 	; check ACIA status
 	lda ACIA+ACIA_SR
-	bpl nmiend		; not this ACIA
+
+	tay
+	and #%00011000
+	beq nmiend		; not this ACIA
+
+	ldx #CMD_OFF
+	stx ACIA+ACIA_CMD
+
+	; -----------------
+	; receive
 
 	; check if byte ready in ACIA
-	tay
 	and #%00001000		; Rx data register full?
 	beq norx		; no -> norx
 
@@ -260,31 +348,49 @@ NMIrx	.(
 
 	inx
 	cpx inr
+#if 1
 	bne store 
 
 	inc $d020		; signal lost byte by changing border color (C64)
 	jmp norx
 store
+#else
+	beq norx
+#endif
 	stx inw
+norx
+	; -----------------
+	; transmit
 
-norx	tya
+	tya
 	and #%00010000		; transmit data register empty?
 	beq notx	
 
 	; get byte and send out
 
 	; check if buffer empty
-	ldx outr
-	cpx outw
+	lda outc
 	beq notx
 
 	; send out byte
+	ldx outr
 	lda outbuf,x
 	sta ACIA
 	
 	; update read pointer
 	inc outr
+	dec outc		; atomic
 notx
+	; re-enable ACIA
+	; -----------------
+	lda outc
+	bne nexttx		; we do have data to send, so enable TX
+	lda cmd_rx		; otherwise do what RX tells us
+	.byt $2c
+nexttx	lda #CMD_RXTX
+	sta ACIA+ACIA_CMD
+
+	; -----------------
 	; return from NMI
 nmiend
 	pla
@@ -293,105 +399,124 @@ nmiend
 	tay
 	pla
 	jmp (oldnmi)
-
 	.)
 
-	.bss
-oldnmi	.word 0
-nmistate .byt 0
-
-inw	.byt 0
-inr	.byt 0
-outw	.byt 0
-outr	.byt 0
-
-inbuf	.dsb 256
-outbuf	.dsb 256
-	.text
-
-	; if the kernel decides to switch off the NMI
+	; --------------------------------
+	; NMI control
+	; 
+	; if the kernel decides to switch the NMI on or off
 	; this is called
 ctrlnmi .(
         sta nmistate
         cmp #NMI_ON
         bne off
+
+	; -----------------
+	; switch on
         lda status
         and #DC_SW_RXHW
         bne norts
         jsr rtslo
+
 norts   lda status
         and #%00010000
         beq nonmi
-	lda ACIA+ACIA_CMD
-	ora #%00000010
+	lda outc
+	bne rxtx
+	lda cmd_rx
+	.byt $2c
+rxtx	lda #CMD_RXTX
 	sta ACIA+ACIA_CMD
 nonmi   rts
 
+	; -----------------
+	; switch NMI off
+	;
+	; note needs to be save for NMIs occuring in the middle
 off
 	; disables tx interrupt
         jsr rtshi
 	; disable rx interrupt
-	lda ACIA+ACIA_CMD
-	ora #%00000010
-	sta ACIA+ACIA_CMD
+	lda #CMD_OFF
+	sta ACIA+ACIA_CMD	; atomic, so no NMI problem
 
 	; disable pending interrupts
 	lda ACIA+ACIA_SR
-        rts
+
+#if 0 //def ACIA_DEBUG
+	and #%00010000
+	bne ok		; if empty, no further IRQ should occur
+
+	lda nmistate
+	cmp #NMI_ON
+	beq ok
+	inc $d020
+ok
+#endif
+	rts
         .)
 
 	; --------------------------------
 	; handshake
 
-rtshi
-	lda status,x
+rtshi	; try not to receive as our buffers are running full
+	lda status
 	ora #%00100000
-	sta status,x
-	lda ACIA+ACIA_CMD
-	and #%11111011
-	sta ACIA+ACIA_CMD
+	sta status
+	lda #CMD_RXHW
+	sta cmd_rx
 	rts
 
-rtslo
-	lda ACIA+ACIA_CMD
-	ora #%00000100
-	sta ACIA+ACIA_CMD
-	lda status,x
+rtslo	; allow receiver
+	lda #CMD_RX
+	sta cmd_rx
+	lda status
 	and #%11011111
-	sta status,x
+	sta status
 	rts
 
 	; --------------------------------
 	; other DEVCMD calls
 
-others    cmp #DC_GS
+others    ; set input stream
+	  cmp #DC_GS
           bne o1
           lda status,x
           and #DC_SW_TX
-          bne devonx
+          bne devonx		; transmitter active? then error
           tya
           sta instr,x
           jmp ok
+
+          ; jump to E_DON error return
 devonx    jmp devon
+
+          ; set output stream
 o1        cmp #DC_PS
           bne o2
           lda status,x
           and #DC_SW_RX
-          bne devonx
+          bne devonx		; receiver active? then error
           tya
           sta outstr,x
 okx       jmp ok
+
+          ; switch on receiver
 o2        cmp #DC_RX_ON
           bne o3
-	jsr rtslo
+          jsr rtslo
           lda #DC_SW_RX
           bne o2a
+
+          ; switch on transmitter
 o3        cmp #DC_TX_ON
           bne o4
           lda #DC_SW_TX
 o2a       ora status,x
           sta status,x
           bne okx
+
+          ; switch off receiver
 o4        cmp #DC_RX_OFF
           bne o5
 rxoff     ldx dev
@@ -406,13 +531,14 @@ rxoff     ldx dev
           lda status,x
           and #255-DC_SW_RX
           sta status,x
+          jmp okx
 
-rx1off    ;jsr rts1hi
-          ;bcc okx
-	jmp okx
-devoffx   jmp  devoff
+devoffx   jmp devoff
+
+          ; switch on transmitter
 o5        cmp #DC_TX_OFF
           bne o6
+
 txoff     ldx dev
           lda status,x
           and #DC_SW_TX
@@ -426,6 +552,8 @@ txoff     ldx dev
           and #255-DC_SW_TX
           sta status,x
           jmp ok
+
+          ; disable/enable handshake
 o6        cmp #DC_HS
           bne o6a
           lda status,x
@@ -436,6 +564,8 @@ o6        cmp #DC_HS
           ora status,x
           sta status,x
           jmp ok
+
+          ; set the speed
 o6a       cmp #DC_SPD
           bne o7
           tya
@@ -448,8 +578,11 @@ o6a       cmp #DC_SPD
           sta ACIA+ACIA_CTRL
           jmp ok
 
+          ; return status
 o7        cmp #DC_ST
-          beq ok 
+          beq ok
+
+          ; disable the device
           cmp #DC_EXIT
           bne onotimp
           jsr rxoff

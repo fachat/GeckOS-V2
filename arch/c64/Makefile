@@ -1,7 +1,7 @@
 
 TRG=boot/c64rom
 
-XA=xa -k
+XA=xa -k -XMASM
 FILE=file65
 RELOC=reloc65
 
