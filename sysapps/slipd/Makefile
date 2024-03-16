@@ -25,6 +25,10 @@ slipwwwd: $(wildcard *.a65) sltcp.def
 	# can still ping, only web server
 	${XA} -R -LOSA2KERNEL -LLIB6502 -DNO_FSTCP -DNO_TEST -DNO_RSH -DNO_LIBIP main.a65 -o slipwwwd -l slipwwwd.lab 
 
+sliprshd: $(wildcard *.a65) sltcp.def
+	# can still ping, only remote login
+	${XA} -R -LOSA2KERNEL -LLIB6502 -DNO_WWW -DNO_FSTCP -DNO_TEST -DNO_LIBIP main.a65 -o sliprshd -l sliprshd.lab 
+
 fstcp: fstcp.c fstcp.h
 	${CC} ${CFLAGS} fstcp.c -o fstcp
 clean:

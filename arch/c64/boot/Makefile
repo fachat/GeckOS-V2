@@ -7,7 +7,7 @@ APPSDIR=../../../apps
 sysapps = ps kill ontty lsmem
 SYSAPPSDIR=../../../sysapps
 
-slipapps = slipd slipmind slipfsd slipwwwd 
+slipapps = slipd slipmind slipfsd slipwwwd sliprshd
 SLIPAPPSDIR=../../../sysapps/slipd
 
 files = mkdir rmdir rm format chkdsk ls mv
