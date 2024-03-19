@@ -2,7 +2,7 @@
 image::doc/GeckOS-logo2.png[]
 
 = GeckOS Operating System for the 6502 processor
-(c) 1989-2023 A. Fachat (afachat@gmx.de)
+(c) 1989-2024 A. Fachat (afachat@gmx.de)
 
 This repository maintains the GeckOS/A65 source.
 
