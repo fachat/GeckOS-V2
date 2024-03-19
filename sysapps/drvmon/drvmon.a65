@@ -52,12 +52,13 @@
           .word 0
           .word PRG
           .byt /*8,8,9,9,$a,$a,$b,$b,$c,$c,$d,$d,*/ $e,$e,<-1
-          .asc "ibmon",0,0
+          .asc "drvmon",0,0
 #else
 
 #include  "kdefs.i65"
 #include  "kernel.i65"
-#include  "oldlib/stdio.a65"
+#include  "lib6502.i65"
+
 
 #ifdef NOPRG
 
@@ -76,17 +77,6 @@
 
 #endif
 #endif          
-
-#ifndef   NOMMU
--sysblk   =$4000
--sysmem   =$400
--syszp    =$40
-#endif
-
-#echo ibmon:
-#print    sysmem
-#print    syszp
-#print    sysblk
 
 /*************************************************************************/
 
@@ -118,12 +108,18 @@
 
 /*************************************************************************/
 
--sysblk   -=BUFLEN
-buffer    =sysblk
+/* map oldlib code to apps/common.a65 */
+#define	Txtout	strout
+#define	Putc	chrout
+#define	Crlfout	crlfout
 
-LZEI      =sysmem
-IOBUF     =sysmem+1
--sysmem   +=MAXLEN+1
+
+	.bss
+buffer    .dsb 256
+
+IOBUF     .dsb MAXLEN
+LZEI      .byt 0
+	.text
 
 PRG       jsr DINIT
           lda #<M0TXT
@@ -182,11 +178,12 @@ fmtxt     .asc 13,10,"Sind Sie sicher (J/N)?",0
 /**************************************************************************/
 
           .(
-rwfl      =sysmem
-rwpar     =sysmem+1
-rwp2      =sysmem+1+RW_SLEN
-rwp3      =sysmem+1+2*RW_SLEN
--sysmem   +=3*RW_SLEN+1
+	.bss
+rwfl      .byt 0
+rwpar     .dsb RW_SLEN
+rwp2      .dsb RW_SLEN
+rwp3      .dsb RW_SLEN
+	.text
 
 &mread    ldx #0
           .byt $2c
@@ -336,10 +333,11 @@ moe       jmp ERR
 
 /**************************************************************************/
 
-Z1        =syszp
-Z2        =syszp+2
-Z3        =syszp+4
--syszp    +=6
+	.zero
+Z1        .word 0
+Z2        .word 0
+Z3        .word 0
+	.text
 
 MOM       .(
           JSR GET12:BCS MOME:;jsr setout
@@ -662,9 +660,10 @@ CROUT     LDA #13:.BYT $2C
 SSPOUT    LDA #" ":JMP Putc
 */
           .(
-div       =sysmem
-Z0        =sysmem+1
--sysmem   +=3
+	.bss
+div       .byt 0
+Z0        .word 0
+	.text
 
 +CHRGET   inc LZEI
 +CHRGOT   sty div
@@ -781,8 +780,9 @@ thok      clc
 
 +MLINEIN  .(
 #ifndef NOSH
-li1       =sysmem
--sysmem   +=1
+	.bss
+li1       .byt 0
+	.text
 #endif
           LDY #0
 MO1       
@@ -842,24 +842,27 @@ MO2       CLC
 
 #define   ERRCNT    4
 
-zei       =syszp
-zeid      =syszp+2
-divers    =syszp+4
-sect      =syszp+5
-tr        =syszp+6
-errcnt    =syszp+7
-actdrv    =syszp+8
-side      =syszp+9
-cmd       =syszp+10
-data      =syszp+11
-drvst     =syszp+17           ; drivestatus z.b. Step-Zeit
-tracks    =syszp+17+ANZDRV    ; Track, auf dem jeweiliges Laufwerk steht
-hd        =syszp+17+2*ANZDRV  ; High-Density-Flag =bit7 , 6= motor an flag
-                              ; bit0=1 disk changed, bit1=1 double stepping
-mcnt      =syszp+17+3*ANZDRV  ; motor-aus-zaehler
-blen      =syszp+17+4*ANZDRV  ; Anzahl 256-Byte-Bloecke in einem Sektor
-
--syszp    +=5*ANZDRV+17
+	.zero
+zei       .word 0
+zeid      .word 0
+	.bss
+divers    .byt 0
+sect      .byt 0
+tr        .byt 0
+errcnt    .byt 0
+actdrv    .byt 0
+side      .byt 0
+cmd       .byt 0
+	.zero			; data is accessed using ldy zp,x
+data      .dsb 6
+	.bss
+drvst     .dsb ANZDRV          ; drivestatus z.b. Step-Zeit
+tracks    .dsb ANZDRV          ; Track, auf dem jeweiliges Laufwerk steht
+hd        .dsb ANZDRV          ; High-Density-Flag =bit7 , 6= motor an flag
+                               ; bit0=1 disk changed, bit1=1 double stepping
+mcnt      .dsb ANZDRV  	       ; motor-aus-zaehler
+blen      .dsb ANZDRV          ; Anzahl 256-Byte-Bloecke in einem Sektor
+	.text
 
 /*
           jmp DINIT
@@ -880,8 +883,9 @@ blen      =syszp+17+4*ANZDRV  ; Anzahl 256-Byte-Bloecke in einem Sektor
 */
 
 
-rwzei     =syszp
--syszp    +=2
+	.zero
+rwzei     .word 0
+	.text
 
 &&RWSEC
           sta rwzei
@@ -974,8 +978,9 @@ rx        cli
           .)
 
 &DFORMAT  .(
-fpar      =sysmem
--sysmem   +=1
+	.bss
+fpar      .byt 0
+	.text
 
           cmp #ANZFORM
           bcc f1
@@ -1251,8 +1256,9 @@ xini      sec
           .)
 
 &DLOOP    .(
-dcnt      =sysmem
--sysmem   +=1
+	.bss
+dcnt      .byt 0
+	.text
 
           lda VIA2+VIA_DRA
           and #%00000011
@@ -1576,6 +1582,8 @@ q2        bit VIA2+VIA_IFR
           cli
           clc
           rts
+qx	sec
+	rts
 
 qn        lda WD1+WD_ST
           dex
@@ -1603,7 +1611,7 @@ q4        pla
           jmp q
           
 qe        lda #E_Q
-qx        sec
+        sec
           rts
           
 &POT2      .byt 1,2,4
@@ -1937,8 +1945,23 @@ fr        cli
 
 /*************************************************************************/
 
-#print    sysmem
-#print    syszp
+	; see if we got something from the console
+	; TODO - need to check for SIG_BRK
+Serbrk	ldx #STDCIN
+	clc
+	jsr fgetc
+	; invert C
+	bcc nok
+	clc
+	.byt $24
+nok	sec
+	rts
+
+
+Dezbout	lda #0
+	jmp wordout
+
+#include "apps/common.a65"
 
 ende      .)
           

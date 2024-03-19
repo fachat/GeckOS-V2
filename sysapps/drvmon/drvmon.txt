@@ -1,4 +1,8 @@
 
+******** drvmon ******* 19.3.2024, A. Fachat
+
+- Renamed to drvmon
+
 ******** ibmon ******** 17.7.92, A. Fachat
 
 Dieser Diskettenmonitor bedient den Shugart-Bus ueber den WD1770. Er liest 
