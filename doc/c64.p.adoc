@@ -9,7 +9,7 @@ The C64 is a machine that has a single environment with almost 60k usable RAM, a
 
 
 == BUILDING
-To build the program, you have to have my 6502 cross assembler 'xa-2.1.4e'
+To build the program, you have to have the 6502 cross assembler 'xa' in version 2.4.1 or later.
 Current testing takes place on 'VICE' (x64), the versatile Commodore emulator.
 
 In the file c64rom/c64rom.a65, a few options can be set by setting
