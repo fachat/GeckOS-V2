@@ -65,7 +65,7 @@
 	  .byt >$ff-ROMSTART	; shared mem size from upper end
 	  .byt 0		; priority (0=inherit)
           .byt STDNUL, FSIBM_OUTDEV	; stdin, stdout/stderr device number
-          .asc "fsibm",0,0
+          .asc "fsfat",0,0
 
 #else /* ROM */
 
@@ -78,18 +78,18 @@
 #endif /* ROM */
 
 
-#include "sysapps/fs/fsibm/defs.a65"
-#include "sysapps/fs/fsibm/loop.a65"
-#include "sysapps/fs/fsibm/vars.a65"
-#include "sysapps/fs/fsibm/cmd.a65"
-#include "sysapps/fs/fsibm/util.a65"
-#include "sysapps/fs/fsibm/file.a65"
-#include "sysapps/fs/fsibm/cluster.a65"
-#include "sysapps/fs/fsibm/drive.a65"
-#include "sysapps/fs/fsibm/buffer.a65"
-/* #include "sysapps/fs/fsibm/drv_wd1770.a65" */
-/* #include "sysapps/fs/fsibm/drv_ramd1.a65" */
-/* #include "sysapps/fs/fsibm/drv_ramd2.a65" */
+#include "sysapps/fs/fsfat/defs.a65"
+#include "sysapps/fs/fsfat/loop.a65"
+#include "sysapps/fs/fsfat/vars.a65"
+#include "sysapps/fs/fsfat/cmd.a65"
+#include "sysapps/fs/fsfat/util.a65"
+#include "sysapps/fs/fsfat/file.a65"
+#include "sysapps/fs/fsfat/cluster.a65"
+#include "sysapps/fs/fsfat/drive.a65"
+#include "sysapps/fs/fsfat/buffer.a65"
+/* #include "sysapps/fs/fsfat/drv_wd1770.a65" */
+/* #include "sysapps/fs/fsfat/drv_ramd1.a65" */
+/* #include "sysapps/fs/fsfat/drv_ramd2.a65" */
 #include FSIBM_DEVICE_DRV
 
 ende	.)
