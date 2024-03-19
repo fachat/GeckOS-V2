@@ -181,8 +181,17 @@ CBUF:: set the read or write buffer for a channel
 		** AC/YR - address of buffer definition block
 	Output:::
 	* C=0 - success
+		** Iff the buffer given as input to CBUF is re-definable, the buffer information can be replaced with the existing buffer of the channel.
+		** Iff data is already available, the kernel does a CPUSH/CPULL, transferring the data.
 	* C=1 
 		** AC - error code
+	Note: if input channel is STDNUL, a new channel is allocated as in GETCHAN,
+	and the buffer is then set.
+	If the buffer given to CBUF is re-definable, the call could map an existing buffer
+	appropriately and return the mapped buffer information in the struct.
+	If a read buffer is defined, and the stream already contains data, it is automatically
+	transferred to the given buffer. If a write buffer is defined that already contains data
+	(using the extended 8-byte buffer definition), the data is automatically transferred.
 
 CPUSH:: send bytes in buffer to other end
 	Input:::
@@ -214,20 +223,15 @@ Four different buffer types can be used. Each buffer type works differently. The
 The Message buffer is a buffer that does an "all or nothing" approach when sending (CPUSH) or receiving (CPULL). It is used
 to replace the "PCBUF" used for sending and receiving in V1 and V2. 
 
-
-
 === Ring buffers
 
-A Ring buffer allows continuous streaming, using a read and a write pointer that wrap around at the end of the buffer's size.
-
-
+A Ring buffer allows continuous streaming, using a read and a write pointer that wrap around at the end of the buffer's size. (This is the default implementation for a stream buffer the current kernel)
 
 === Uni buffers
 
 An Uni buffer is a unidirectional, single use buffer that is read or written once. After that the channel is either closed, or the buffer
 needs to be re-defined with CBUF.
 This is used for example to load data from a file or store data in a file.
-
 
 
 === Mapped buffers
@@ -252,5 +256,28 @@ for writing.
 
 When the channel is created, an internal ring buffer is allocated and set as read buffers.
 This channel is being used by CPUT and CGET.
+
+== Affected other kernel calls
+
+There are a couple of other kernel calls that use the single PCBUF/SENDBUF to exchange data:
+
+* DEVCMD: uses PCBUF to either take a device name to be translated into a device number or vice versa, return a device name for a device number
+
+* FORK: Necessary information to fork a new task is given to the kernel in PCBUF
+
+* GETINFO: the kernel returns task and thread information in PCBUF
+
+Note, that for DEVCMD, FORK, and GETINFO a stream as replacement would be difficult to use, as they are 
+expected to work in an atomic matter in the kernel. I.e. the information or space in the buffer must
+be available all-or-nothing.
+So, for example, replacing the buffer with a (char-based) stream is not feasible, as the kernel may 
+block if the stream gets emtpy (on reading) or full (on writing).
+
+If these calls could allocate or map the buffer space from a stream, it could be possible to replace the
+PCBUF in these calls as well.
+
+
+
+
 
 
