@@ -153,7 +153,7 @@ checkchild
 	cmp #SIG_CHLD
 	bne chkbrk
 cc	sec		; search for killed tasks
-	jsr CHECKCHLD
+	jsr CHECKCHLD2
 	bcc cc
 l1a	jmp l1
 
@@ -173,7 +173,7 @@ checksus
 
 	; call application signal handler per task
 dochild	sec		; search for dead children
-	jsr CHECKCHLD
+	jsr CHECKCHLD2
 	bcs l1a
 ;.byt 2
 	ldy #0		; high byte PID
@@ -183,7 +183,7 @@ dochild	sec		; search for dead children
 
 	; call application signal handler per task
 docont	clc		; search for suspended children
-	jsr CHECKCHLD
+	jsr CHECKCHLD2
 	bcs l1a
 	ldy #0		; high byte PID
 	jsr jmpzth

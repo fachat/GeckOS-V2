@@ -1,16 +1,16 @@
 
-= CHECKCHLD(2)
+= CHECKCHLD2(2)
 :doctype: manpage
 
 == NAME
-CHECKCHLD - check the status of a child after SIG_CHLD, and release the child's resources
+CHECKCHLD2 - check the status of a child after SIG_CHLD, and release the child's resources
 
 == SYNOPSIS
 Input::
 	* C=0 - search for newly suspended child tasks
 	* C=1 - search for newly killed child tasks
 Call::
-	jsr CHECKCHLD
+	jsr CHECKCHLD2
 Output::
 	* C=0 - found a child
 		** AC - child return code (for killed children; invalid for suspended)

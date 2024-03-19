@@ -1092,7 +1092,8 @@ sigaddr	.(
 	pha
 	txa
 	pha
-	jsr CHECKCHLD
+	sec			; wait for terminated child tasks
+	jsr CHECKCHLD2
 	bcs nochld
 	txa
 	ldy pidn

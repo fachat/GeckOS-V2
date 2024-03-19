@@ -632,7 +632,7 @@ sigaddr	.(
 #endif
 	ldx #0
 sloop	clc
-	jsr CHECKCHLD
+	jsr CHECKCHLD2
 	bcs nocont
 	txa
 	pha
@@ -658,7 +658,7 @@ nocont	tsx
 #endif
 	ldx #0	; start check with PID 0
 loop	sec	; check for died processes
-	jsr CHECKCHLD
+	jsr CHECKCHLD2
 	bcs end
 #ifdef INIT_VERBOSE
 	pha	; error code

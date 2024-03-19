@@ -41,7 +41,6 @@
  * This is a monitor only - we should use NOSH anyway!
  */
 /* #define NOSH */
-#undef MON_USE_STDLIB
 
 /*
  * We have a new kernel...
@@ -70,26 +69,12 @@
 
 #endif	/* ROM */
 
-#ifdef MON_USE_STDLIB
-
-#define	  OUT	    Fputc
-#define	  IN	    Fgetc
-#define	  HEXOUT    Hexout
-#define   SEROUT    Putc
-#define   SERIN     Getc
-#define   SERBRK    Serbrk
-#define   CRLFOUT   Crlfout
-#define   TSERO     Txtout
-#define	  DEZOUT    Dezbout
-
-#else
 
 #define	  Usedir    usedir
 #define	  Chdir	    mchdir
 #define	  Getname   getname
 #define	  Set2name  set2name
 
-#endif	/* MON_USE_STDLIB */
 
           .(
 #ifdef ROM
@@ -1136,7 +1121,6 @@ dtab      .word 1,0
           .)
 #endif
 
-#ifndef MON_USE_STDLIB
 
 	.(
 	.zero
@@ -1531,7 +1515,8 @@ sigaddr	.(
 	pha
 	txa
 	pha
-	jsr CHECKCHLD
+	sec		; search for terminated child processes
+	jsr CHECKCHLD2
 	bcs nochld
 	txa
 	ldy pidn
