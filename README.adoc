@@ -1,6 +1,8 @@
 
+image::doc/GeckOS-logo2.png[]
+
 = GeckOS Operating System for the 6502 processor
-(c) 1989-2020 A. Fachat (afachat@gmx.de)
+(c) 1989-2024 A. Fachat (afachat@gmx.de)
 
 This repository maintains the GeckOS/A65 source.
 
@@ -14,18 +16,27 @@ The link:RELEASE.adoc[RELEASE NOTES] describe what's new in the current release.
 
 In the repository, kernel, lib6502, devices and include are general source directories.
 
-apps holds pure lib6502 applications, like a shell, mkdir, etc.
+The *apps* folder holds pure lib6502 applications, like a shell, mkdir, etc.
 They should also assemble for other lib6502 operating systems.
 
-sysapps holds OS/A65 specific programs, like the slipd, or the
+*sysapps* holds OS/A65 specific programs, like the slipd, or the
 filesystem servers.
 
+== Ports
+
 The previous directories are very independent from the actual system architecture.
-The arch directory holds the architecture specific part. It contains a directory
+The *arch* directory holds the architecture specific parts. It contains a directory
 for each supported architecture. "proto" holds a prototype architecture
 that can be used for porting.
 
+Here you can find the current set of disk images for the currently active ports:
+
+* link:arch/pet32k/boot/osa.d64[PET 32k osa.d64]
+* link:arch/cbm8x96/boot/osa.d64[CBM 8x96 osa.d64]
+* link:arch/csa65/boot/osa.d64[CS/A65 osa.d64]
+* link:arch/c64/boot/osa.d64[C64 osa.d64]
+
 Have fun!
 
-16apr2020 André Fachat
+22sept2023 André Fachat
 

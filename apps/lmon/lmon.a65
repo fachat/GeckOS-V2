@@ -58,7 +58,7 @@
 /*************************************************************************/
 
 
-/*
+#if 0
 #define SHORTMON
 /*#define NOMON*/
 /*#define NOSH*/
@@ -66,41 +66,111 @@
 #define NOPRG
 /*#define STDTST*/
 /*#define SHOW*/
-*/
+#endif
+
 #define	SHORTLINE
 #define NOSH 
 
+	.(
+
+/**********************************************************************/
+#ifdef ROM
+
+#ifndef MON_SHDEV
+#define MON_SHDEV               0
+#endif
+#ifndef MON_SHEXE
+#define MON_SHEXE               $80
+#endif
+
 /*
-#ifdef MON_USE_STDLIB
+ * These have both the same execution start address - works only
+ * with MMU
+ */
+start     .word PRGEND                  ; pointer to end of file in ROM
+          .byt  MON_SHEXE               ; file type = prg + auto-execute bit
+          .word PRG1                    ; execution start
+          .byt  16                      ; RAM size in 256-byte blocks
+          .byt  >$ff-ROMSTART; $ff-start ; shared mem size in 256-byte blocks
+          .byt  0                       ; priority
+          .byt  MON_SHDEV, MON_SHDEV    ; stdin, stdout/stderr device number
+          .asc  "mon",0,0,0,0 ; command line
 
-#define	  OUT	    Fputc
-#define	  IN	    Fgetc
-#define	  HEXOUT    Hexout
-#define   SEROUT    Putc
-#define   SERIN     Getc
-#define   SERBRK    Serbrk
-#define   CRLFOUT   Crlfout
-#define   TSERO     Txtout
-#define	  DEZOUT    Dezbout
+	.(
+        .data
+offs    .byt 0
+s1      .byt 0
+        .text
 
-#else
+&PRG1   ldy #0
+;       .byt $2c
+;&PRG2  ldy #start2-start
+        lda start+2,y
+        and #3
+        cmp #3
+        bne as_stdproc
+;.byt 2
+        sty offs
+        jsr GETSTR
+        bcs nostr1
+        stx s1
+        ldx offs
+        lda start+8,x
+        pha
+        tax
+        ldy s1
+        lda #DC_PS
+        jsr DEVCMD
+        pla
+        tax
+        lda #DC_RX_ON
+        jsr DEVCMD
+        sec
+        ldx #STDIN
+        lda s1
+        jsr DUP
 
-#define	  Usedir    usedir
-#define	  Chdir	    mchdir
-#define	  Getname   getname
-#define	  Set2name  set2name
+        jsr GETSTR
+        bcs nostr1
+        stx s1
+        ldx offs
+        lda start+9,x
+        tax
+        pha
+        ldy s1
+        lda #DC_GS
+        jsr DEVCMD
+        pla
+        tax
+        lda #DC_TX_ON
+        jsr DEVCMD
+        sec
+        ldx #STDOUT
+        lda s1
+        jsr DUP
+        ldx s1
+        lda #SC_REG_WR
+        jsr STRCMD
+        sec
+        ldx #STDERR
+        lda s1
+        jsr DUP
+        jmp as_initproc
+nostr1  jmp xterm
+	.)
 
-#endif	/* MON_USE_STDLIB */
-*/
-          .(
+#else /* ROM ------------------------------------------------------------*/
 
 #include  "kdefs.i65"
 #include  "kernel.i65"
 #include  "fdefs.i65"
 
-#define	RETRTS		/* return from program with RTS */
+#define RETRTS          /* return from program with RTS */
 
-+main	jmp as_stdproc
++main   jmp as_stdproc
+
+#endif /* ROM */
+
 
 /**********************************************************************/
 
@@ -147,7 +217,7 @@ ok	tya
 	;ldx #SEM_SENDBUF
 	;jsr VSEM
 
-as_initproc
+&as_initproc
 
 	jsr initsig
 
@@ -218,7 +288,7 @@ sterm      ;jsr clrpfad
 #else
           jsr MONITOR
 #endif
-xterm
+&xterm
 #ifdef NOPRG
           RTS
 #else
@@ -233,7 +303,7 @@ xterm
 	.text
 
           .)
-#include  "shmon.a65"
+#include  "apps/lmon/shmon.a65"
 
 #ifndef NOSYSFKT 
 /*#include  "sysapps/mon/shdir.a65"*/
@@ -1022,7 +1092,8 @@ sigaddr	.(
 	pha
 	txa
 	pha
-	jsr CHECKCHLD
+	sec			; wait for terminated child tasks
+	jsr CHECKCHLD2
 	bcs nochld
 	txa
 	ldy pidn

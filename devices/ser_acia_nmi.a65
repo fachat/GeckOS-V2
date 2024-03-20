@@ -1,0 +1,608 @@
+/****************************************************************************
+   
+    OS/A65 Version 1.3.3
+    Multitasking Operating System for 6502 Computers
+    ACIA 6551 device
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/*
+ * WARNING! WARNING! WARNING! WARNING! WARNING! WARNING!
+ *
+ * This device lacks the BRKKEY feature of the 1.4 kernel
+ *
+ * It also doesn't handle the broken handshaking of the 6551
+ */
+
+/*
+ * This is a ACIA 6551 serial line driver for CS/A65. It uses the 
+ * hardware installed in my personal C64. The 6551 is at address $d600.
+ *
+ * The ACIA 6551 has a real bad 'feature'. The RTS/CTS lines are not
+ * independent from the transmitter and receiver. Instead, making
+ * RTS high automatically disables receiver _and_ transmitter!
+ * Also an incoming CTS high immediately disables the transmitter.
+ * That's why I use the DSR input for the CTS modem line. This line
+ * can be checked independently.
+ *
+ * To improve receive speed and reduce character drop rates,
+ * the actual receive happens in the NMI.
+ */
+
+#include "chips/acia6551.i65"
+
+#ifdef ACIABASE
+#define	ACIA	ACIABASE
+#else
+#define ACIA	$d600
+#endif
+
+#define	ACIA_DEBUG
+
+/* because of cut-n-paste code from other device we potentially allow for
+   multiple devices, but the code currently only runs on a single ACIA */
+#define	Anzdev	1	
+
+          .(
+	  .word devend2
+	  jmp prg1
+	  .asc "ser", sernr ,0
+-sernr += 1
+
+; --------------------------------------------------
+; The ACIA can be in the following states:
+;
+; Receiver:
+;	OFF:	disabled, /RTS hi	- receiving data is ignored
+;	ON:	enabled, /RTS low	- modem can send data
+;	HW:	enabled, /RTS hi	- modem can, but should not send data
+;
+; Transmitter:
+;	OFF:	disabled (without ints)	- no data to be sent
+;	OFF2:	enabled (without ints)	- no data to be sent
+;	ON:	enabled with ints	- data to be sent is in the buffer
+;
+; Note that /RTS and transmitter are linked in the ACIA,
+; so fully disabling the Transmitter (OFF) sets /RTS hi as well.
+; This means using /RTS in the ACIA as flow control does not really
+; work well, as when you want to throttle receives, you also disable
+; the transmitter. 
+;
+; Combining these states we have:
+;
+;	OFF:	rx,tx disabled, /RTS hi	- when no interrupts should occur
+;	RX:	rx enabled, tx disabled / no tx ints, /RTS lo 
+;	RXHW:	rx enabled, tx disabled / no tx ints, /RTS hi
+;	RXTX:	rx,tx enabled w/ tx ints, /RTS lo
+;
+; If we are running into high water situations, but at the same time need
+; to transmit, ... we run into the potential overrun scenarios.
+;
+; Here are the command values for it:
+;
+CMD_OFF		=%00000011
+CMD_RX		=%00001001
+CMD_RXHW	=%00000001
+CMD_RXTX	=%00000101
+
+/*
+ * status: Bit 	0 = 1= handshake enabled
+ *		1 : 1= no ACIA found
+ * 		5 : 1= set RTS hi
+ *		6 : 1= we are transmitting
+ *	  	7 : 1= we are receiving
+ *
+ */
+
+	.bss
+dev       .byt 0
+div       .byt 0
+status    .dsb Anzdev
+instr     .dsb Anzdev
+outstr    .dsb Anzdev
+	.text
+
+	; NMI routine handling and communication
+	.bss
+cmd_rx	.byt 0		; ACIA command value when no data is transmitted
+
+oldnmi	.word 0
+nmistate .byt 0
+
+inw	.byt 0
+inr	.byt 0
+outw	.byt 0
+outr	.byt 0
+outc	.byt 0		; count bytes in buffer 
+
+inbuf	.dsb 256
+outbuf	.dsb 256
+	.text
+
+prg1      ldx #0
+
+          stx dev
+          cmp #DC_RES
+          beq devini
+          pha
+          lda status,x
+          and #2
+          beq prgok
+          pla
+          lda #E_NOTIMP
+          sec
+          rts
+prgok     pla
+          cmp #DC_IRQ
+          beq devirq
+          jmp others
+
+	; --------------------------------
+	; init the device
+devini    
+	  lda #0
+          sta status,x
+          sta instr,x
+          sta outstr,x
+
+          STA ACIA+ACIA_SR		; programmed reset
+          LDA #%00011000		; 1200 BAUD, 1 stop bit, 8 data bits
+          STA ACIA+ACIA_CTRL
+          cmp ACIA+ACIA_CTRL
+          bne devx
+
+       	lda #CMD_RX
+	sta cmd_rx
+
+          LDA #CMD_OFF			
+          STA ACIA+ACIA_CMD
+          cmp ACIA+ACIA_CMD
+          bne devx
+
+          LDA ACIA+ACIA_SR		; clear interrupt
+
+	lda #0
+	sta inr
+	sta inw
+	sta outr
+	sta outw
+	sta outc
+
+	sec
+	lda #<NMIrx
+	ldy #>NMIrx
+	jsr SETNMI
+
+	; return OK (C=0)
+          clc
+          rts
+
+	; --------
+	; device (ACIA) was not detected
+devx      lda status,x
+          ora #2
+          sta status,x
+          lda #E_NOTIMP
+          sec
+          rts
+          
+	; --------------------------------
+	; handle interrupt
+devirq    
+          .(
+          bit status		; check if receiving
+          bpl tx		; no -> tx
+
+	; --------
+	; outbuf to stream
+nextin	ldy inr
+	cpy inw
+	beq nobyt
+	lda inbuf,y
+	ldx outstr
+        jsr PUTC
+        bcs test
+	inc inr
+	jmp nextin
+
+	; --------
+	; output stream status
+nobyt	ldx outstr
+	lda #SC_STAT
+	jsr STRCMD
+	bcc tx		; between lo/hi water, so no change
+test      
+	cmp #E_NUL	; stream not open anymore?
+	bne tstwater
+	jsr rxoff	; switch everything off
+	jmp tx
+	
+tstwater
+	cmp #E_SEMPTY	; stream empty?
+	beq wl		; low water - enable rx
+	cmp #E_SFULL
+	beq wh		; full - set RTS
+	cmp #E_SHWM
+	bne twl		; no high water
+
+wh	jsr rtshi	; set RTS hi
+	jmp tx		; always
+	
+twl	cmp #E_SLWM	; low water?
+	bne tx		; no, continue
+wl	jsr rtslo 	; enable rx again
+	
+	; --------
+	; transmit
+tx      bit status
+        bvc irqhs
+
+	lda #%00100000
+	bit status
+	bne endsend		; do not send any more to make RTS high.
+
+#ifndef ACIA_IGNORE_DSR
+	; swiftlink uses real CTS, not DSR as I do with the ACIA
+	tya
+	and #%01000000		; DSR high?
+	bne irqhs		; -> irqhs
+#endif
+
+	; --------
+	; send data to NMI buffer
+nextout	ldy outc
+	iny
+	beq outfull		; check overflow on byte counter
+
+        ldx instr		; send new data byte
+        jsr GETC
+        bcs test2
+	
+	ldy outw
+	sta outbuf,y
+	inc outw
+	inc outc
+
+	jmp nextout
+
+test2	cmp #E_EOF
+	bne irqhs
+	jsr txoff
+outfull
+irqhs     
+	; --------
+	; re-configure ACIA
+endsend	lda ACIA+ACIA_CMD
+	cmp #CMD_RXTX
+	beq endirq		; we already do RXTX, so keep it (NMI will change)
+
+	lda nmistate
+	cmp #NMI_ON
+	bne endirq		; if NMI is disabled, leave it
+
+	lda outc
+	bne endrx		; bytes to send? then RXTX	
+
+	lda cmd_rx
+	.byt $2c
+endrx	lda #CMD_RXTX		; enable transmitter
+	sta ACIA+ACIA_CMD
+
+endirq	lda #E_NOIRQ
+	rts
+          .)
+
+	; --------------------------------
+	; NMI routine
+	;
+	; roughly modelled after 
+	; http://csbruce.com/cbm/ftp/reference/swiftlink.txt
+	;
+	.word oldnmi
+	.word ctrlnmi
+NMIrx	.(
+	pha
+	tya
+	pha
+	txa
+	pha
+	cld
+;inc $d020
+	; check ACIA status
+	lda ACIA+ACIA_SR
+
+	tay
+	and #%00011000
+	beq nmiend		; not this ACIA
+
+	ldx #CMD_OFF
+	stx ACIA+ACIA_CMD
+
+	; -----------------
+	; receive
+
+	; check if byte ready in ACIA
+	and #%00001000		; Rx data register full?
+	beq norx		; no -> norx
+
+	; receive a byte and store in buffer
+	lda ACIA
+	ldx inw
+	sta inbuf,x
+
+	inx
+	cpx inr
+#if 1
+	bne store 
+
+	inc $d020		; signal lost byte by changing border color (C64)
+	jmp norx
+store
+#else
+	beq norx
+#endif
+	stx inw
+norx
+	; -----------------
+	; transmit
+
+	tya
+	and #%00010000		; transmit data register empty?
+	beq notx	
+
+	; get byte and send out
+
+	; check if buffer empty
+	lda outc
+	beq notx
+
+	; send out byte
+	ldx outr
+	lda outbuf,x
+	sta ACIA
+	
+	; update read pointer
+	inc outr
+	dec outc		; atomic
+notx
+	; re-enable ACIA
+	; -----------------
+	lda outc
+	bne nexttx		; we do have data to send, so enable TX
+	lda cmd_rx		; otherwise do what RX tells us
+	.byt $2c
+nexttx	lda #CMD_RXTX
+	sta ACIA+ACIA_CMD
+
+	; -----------------
+	; return from NMI
+nmiend
+	pla
+	tax
+	pla
+	tay
+	pla
+	jmp (oldnmi)
+	.)
+
+	; --------------------------------
+	; NMI control
+	; 
+	; if the kernel decides to switch the NMI on or off
+	; this is called
+ctrlnmi .(
+        sta nmistate
+        cmp #NMI_ON
+        bne off
+
+	; -----------------
+	; switch on
+        lda status
+        and #DC_SW_RXHW
+        bne norts
+        jsr rtslo
+
+norts   lda status
+        and #%00010000
+        beq nonmi
+	lda outc
+	bne rxtx
+	lda cmd_rx
+	.byt $2c
+rxtx	lda #CMD_RXTX
+	sta ACIA+ACIA_CMD
+nonmi   rts
+
+	; -----------------
+	; switch NMI off
+	;
+	; note needs to be save for NMIs occuring in the middle
+off
+	; disables tx interrupt
+        jsr rtshi
+	; disable rx interrupt
+	lda #CMD_OFF
+	sta ACIA+ACIA_CMD	; atomic, so no NMI problem
+
+	; disable pending interrupts
+	lda ACIA+ACIA_SR
+
+#if 0 //def ACIA_DEBUG
+	and #%00010000
+	bne ok		; if empty, no further IRQ should occur
+
+	lda nmistate
+	cmp #NMI_ON
+	beq ok
+	inc $d020
+ok
+#endif
+	rts
+        .)
+
+	; --------------------------------
+	; handshake
+
+rtshi	; try not to receive as our buffers are running full
+	lda status
+	ora #%00100000
+	sta status
+	lda #CMD_RXHW
+	sta cmd_rx
+	rts
+
+rtslo	; allow receiver
+	lda #CMD_RX
+	sta cmd_rx
+	lda status
+	and #%11011111
+	sta status
+	rts
+
+	; --------------------------------
+	; other DEVCMD calls
+
+others    ; set input stream
+	  cmp #DC_GS
+          bne o1
+          lda status,x
+          and #DC_SW_TX
+          bne devonx		; transmitter active? then error
+          tya
+          sta instr,x
+          jmp ok
+
+          ; jump to E_DON error return
+devonx    jmp devon
+
+          ; set output stream
+o1        cmp #DC_PS
+          bne o2
+          lda status,x
+          and #DC_SW_RX
+          bne devonx		; receiver active? then error
+          tya
+          sta outstr,x
+okx       jmp ok
+
+          ; switch on receiver
+o2        cmp #DC_RX_ON
+          bne o3
+          jsr rtslo
+          lda #DC_SW_RX
+          bne o2a
+
+          ; switch on transmitter
+o3        cmp #DC_TX_ON
+          bne o4
+          lda #DC_SW_TX
+o2a       ora status,x
+          sta status,x
+          bne okx
+
+          ; switch off receiver
+o4        cmp #DC_RX_OFF
+          bne o5
+rxoff     ldx dev
+          lda status,x
+          and #DC_SW_RX
+          beq devoffx
+          lda outstr,x
+          tax
+          lda #SC_EOF
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_RX
+          sta status,x
+          jmp okx
+
+devoffx   jmp devoff
+
+          ; switch on transmitter
+o5        cmp #DC_TX_OFF
+          bne o6
+
+txoff     ldx dev
+          lda status,x
+          and #DC_SW_TX
+          beq devoffx
+          lda instr,x
+          tax
+          lda #SC_NUL
+          jsr STRCMD
+          ldx dev
+          lda status,x
+          and #255-DC_SW_TX
+          sta status,x
+          jmp ok
+
+          ; disable/enable handshake
+o6        cmp #DC_HS
+          bne o6a
+          lda status,x
+          and #255-1
+          sta status,x
+          tya
+          and #1
+          ora status,x
+          sta status,x
+          jmp ok
+
+          ; set the speed
+o6a       cmp #DC_SPD
+          bne o7
+          tya
+          and #%00001111
+          sta div
+
+          lda ACIA+ACIA_CTRL
+          and #%11110000
+          ora div
+          sta ACIA+ACIA_CTRL
+          jmp ok
+
+          ; return status
+o7        cmp #DC_ST
+          beq ok
+
+          ; disable the device
+          cmp #DC_EXIT
+          bne onotimp
+          jsr rxoff
+          jsr txoff
+          ldx dev 
+          lda status,x
+          ora #2
+          sta status,x
+          sta ACIA+ACIA_SR	; programmed reset
+	  bne ok
+          
+ok        lda #E_OK
+          .byt $2c
+devon     lda #E_DON
+          .byt $2c
+devoff    lda #E_DOFF
+          .byt $2c
+onotimp   lda #E_NOTIMP
+          cmp #1
+          rts
+
+devend2   .)
+

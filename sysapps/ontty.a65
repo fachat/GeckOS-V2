@@ -107,16 +107,6 @@ gotname
 	jsr flib2osa_r
 	stx instr
 
-	; register second writer for outstr (STDERR)
-	ldx outstr
-	lda #SC_REG_WR
-	jsr STRCMD
-
-	; register second reader for instr (STDCIN)
-	ldx instr 
-	lda #SC_REG_RD
-	jsr STRCMD
-
 	; dup our STDCIN, as it is copied to the forked task
 	lda instr
 	ldx #STDCIN
@@ -136,8 +126,8 @@ gotname
 	; re-dup our STDCIN
 	lda owncin
 	ldx #STDCIN
+	sec
 	jsr DUP
-
 	pla
 	plp
 	bcs _parerr2
@@ -180,8 +170,8 @@ dofork	; re-do some of the lib6502 forkto code, as we have to set the
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	; store comms stream as parameter
 	pla
@@ -193,6 +183,16 @@ dofork	; re-do some of the lib6502 forkto code, as we have to set the
 	lda outstr
 	sta PCBUF+FORK_STDOUT
 	sta PCBUF+FORK_STDERR
+
+        ldx PCBUF+FORK_STDIN
+        lda #SC_REG_RD
+        jsr STRCMD
+        ldx PCBUF+FORK_STDOUT
+        lda #SC_REG_WR
+        jsr STRCMD
+        ldx PCBUF+FORK_STDERR
+        lda #SC_REG_WR
+        jsr STRCMD
 
 	lda namep
 	clc

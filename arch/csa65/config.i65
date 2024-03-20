@@ -21,7 +21,8 @@
 
 ****************************************************************************/
 
-#ifndef   ANZSTRM
+#ifndef   CONFIG_I
+#define   CONFIG_I
 
 #include "csa65.i65"
 

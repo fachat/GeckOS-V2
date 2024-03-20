@@ -4,6 +4,7 @@
 == GeckOS 2.1
 
 === Documentation
+* GeckOS got its official Logo!
 * rewrote all documentation in asciidoc
 
 === Applications
@@ -14,15 +15,27 @@
 * Grand shell unification: *lsh(1)* graduated, *sh* is now officially deprecated and *mon* becomes *lmon(1)*
 
 === Devices
-* Fix handshake handling of C64 userport 9600 baud interface
+* Fix handshake handling of C64 userport 9600 baud interface (still work to be done in VICE)
 
 === Kernel
-* Use of STDCIN to enable *more(1)* to read key presses from console, add *ontty(1)* for that
+* Use of STDCIN to enable *more(1)* to read key presses from console, add *ontty(1)* to redirect that
 
 === Ports
-* improve keyboard mapping on c64
-* On C64, use raster interrupt as main system interrupt to free a timer
-* improve keyboard mapping on pet32k
+
+==== C64
+* improve keyboard mapping
+* use raster interrupt as main system interrupt to free a timer
+
+==== PET
+* improve keyboard mapping on pet32k, cbm8x96 and csa
+* console switcher is SHIFT-REV resp. SHIFT-TAB
+
+==== CBM 8x96
+* Optimized memory layout, so that more memory is available for user tasks (by moving system tasks completely into the second upper 32k)
+* console switcher is SHIFT-REV resp. SHIFT-TAB
+
+==== CS/A65
+* Re-enabled this port since the 1.x series. 
 
 === Contributors
 * André Fachat

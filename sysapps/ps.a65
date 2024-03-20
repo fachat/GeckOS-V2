@@ -53,7 +53,7 @@ nohelp
 	jsr strout
 noname	lda #<it2
 	ldy #>it2
-	jsr strout
+n1	jsr strout
 	bit optlong
 	bpl noenv
 	lda #<it3
@@ -62,90 +62,143 @@ noname	lda #<it2
 noenv	lda #<it4
 	ldy #>it4
 	jsr strout
-	.)
+	bit optlong
+	bpl noexec
+	lda #<itexec
+	ldy #>itexec
+	jsr strout
+noexec	jsr crlfout
+	bit optthr
+	bpl nothr
+	lda #<itthr
+	ldy #>itthr
+	jsr strout
+nothr	.)
 
 info	.(
 #if 1 /* fdef NOMMU */
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif
-	  jsr GETINFO
-infoloop  
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-	  bne print
-	  bit optall
-	  bmi print
-	  jmp next
+	ldx #TID_START
+infoloop  clc		; loop over items
+	  jsr GETINFO2
+	bcc print
+	jmp done
 print
-	  lda PCBUF+TN_PID,x
-          jsr hexout
-          jsr spout
+	ldx #0
+	lda PCBUF+TN_PID,x
+        jsr hexout
+        jsr spout
+
 	bit optlong
 	bmi skipfrontname
+	; print name and exec addr
 	jsr printname
-i2        jsr spout
-skipfrontname
-          ldx zei
-	lda PCBUF+TN_EXECADDR+1,x
-	jsr hexout
-	lda PCBUF+TN_EXECADDR,x
-	jsr hexout
+skipfrontname	
+	
+	lda PCBUF + TN_STATUS
+	jsr print_tsstat
 	jsr spout
 
-          lda PCBUF+TN_NTHREADS,x
+          lda PCBUF+TN_NTHREADS
 	  jsr hexout
 	  jsr spout
 
 	bit optlong
 	bpl noenv
-          lda PCBUF+TN_ENV,x
+          lda PCBUF+TN_ENV
 	  jsr hexout
 	  jsr spout
-          ldx zei
-          lda PCBUF+TN_MEM,x
+          lda PCBUF+TN_MEM
           jsr hexout
           jsr spout
 noenv
-	  lda PCBUF+TN_PARENT,x
+	  lda PCBUF+TN_PARENT
 	  jsr hexout
           jsr spout
-	  lda PCBUF+TN_SIGMASK,x
+	  lda PCBUF+TN_SIGMASK
           jsr hexout
           jsr spout
-	  lda PCBUF+TN_SIGNAL+1,x
+	  lda PCBUF+TN_SIGNAL+1
 	  jsr hexout
-	  lda PCBUF+TN_SIGNAL,x
+	  lda PCBUF+TN_SIGNAL
 	  jsr hexout
 	  jsr spout
-          lda PCBUF+TN_STDIN,x
+          lda PCBUF+TN_STDIN
           jsr hexout
           jsr spout
-          lda PCBUF+TN_STDOUT,x
+          lda PCBUF+TN_STDOUT
           jsr hexout
           jsr spout
-          lda PCBUF+TN_STDERR,x
+          lda PCBUF+TN_STDERR
           jsr hexout
-          jsr spout
 	bit optlong
 	bpl nextline
+          jsr spout
 	jsr spout
 	jsr spout
+	jsr spout
+	lda PCBUF+TN_EXECADDR+1
+	jsr hexout
+	lda PCBUF+TN_EXECADDR
+	jsr hexout
 	jsr spout
 	jsr printname
 nextline
 	jsr crlfout
-next	  lda zei
-	  clc
-	  adc #TN_SLEN
-	  sta zei
-          inc cnt
-          lda cnt
-          cmp #ANZ_ENV
-          bcs ie
-          jmp infoloop
-ie        
+	bit optthr
+	bpl next
+
+	lda PCBUF + TN_NTHREADS
+	beq next
+	cmp #<-1
+	beq next
+
+	;jsr crlfout
+
+        ; init thread loop
+        ldx #0
+        ldy #0
+        ; display thread infos
+thloop  jsr spout
+	jsr spout
+	jsr spout
+	lda PCBUF + TN_PID
+	jsr hexout
+	lda #"/"
+	jsr chrout
+        lda PCBUF + TN_SLEN + TNT_ID,x
+        jsr hexout
+        jsr spout
+        lda PCBUF + TN_SLEN + TNT_ST,x
+        jsr print_thstat
+        jsr spout
+        lda PCBUF + TN_SLEN + TNT_SP,x
+        jsr hexout
+        jsr spout
+        lda PCBUF + TN_SLEN + TNT_PAR,x
+        jsr hexout
+        jsr spout
+        lda PCBUF + TN_SLEN + TNT_PAR + 1,x
+        jsr hexout
+        jsr spout
+        lda PCBUF + TN_SLEN + TNT_PAR + 2,x
+        jsr hexout
+        jsr crlfout
+        ; next thread
+	txa
+        clc
+        adc #TNT_SLEN
+        tax
+        iny
+        cpy PCBUF + TN_NTHREADS
+        bcc thloop
+
+next	  ldx PCBUF + TN_PID
+	jmp infoloop
+done        
 #if 1 /* def NOMMU */
 	  ldx #SEM_SENDBUF
 	  jsr VSEM
@@ -155,14 +208,7 @@ ie
 	.)
 
 printname .(
-          ldx zei
-          lda PCBUF+TN_NTHREADS,x
-          bne name
-          ldx #TNAMLEN
-i1        jsr spout
-          dex
-          bne i1
-          beq i2
+	ldx #0
 name      ldy #0
 i4        lda PCBUF+TN_NAME,x
           beq i3
@@ -179,29 +225,117 @@ i3        cpy #TNAMLEN
 i2	rts
 	.)
 
+print_tsstat .(
+        cmp #TTS_PAUSE+1
+        bcs range
+        asl
+        asl
+        tay
+        ldx #4
+loop    lda tstat,y
+        jsr chrout
+        iny
+        dex
+        bne loop
+        rts
+range   jsr hexout
+        jsr spout
+        jmp spout
+
+	.data
+tstat   .assert TTS_FREE == 0, "value coded in table position"
+        .asc "FREE"
+        .assert TTS_RUN == 1, "value coded in table position"
+        .asc "RUN "
+        .assert TTS_DEAD == 2, "value coded in table position"
+        .asc "DEAD"
+        .assert TTS_SUSP == 3, "value coded in table position"
+        .asc "SUSP"
+        .assert TTS_SUSP_ACK == 4, "value coded in table position"
+        .asc "SUSA"
+        .assert TTS_PAUSE == 5, "value coded in table position"
+        .asc "PAUS"
+	.text
+        .)
+
+print_thstat .(
+        stx cnt
+        cmp #TS_RUN+1
+        bcs range
+        asl
+        asl
+        tay
+        ldx #4
+loop    lda th_free,y
+        jsr chrout
+        iny
+        dex
+        bne loop
+        ldx cnt
+        rts
+range   jsr hexout
+        jsr spout
+        jmp spout
+
+	.data
+        .assert TS_FREE == 0, "value coded in table position"
+th_free .asc "FREE"
+        .assert TS_ENV == 1, "value coded in table position"
+th_env  .asc "ENV "
+        .assert TS_IBRK == 2, "value coded in table position"
+th_ibrk .asc "IBRK"
+        .assert TS_BRK == 3, "value coded in table position"
+th_brk  .asc "BRK "
+        .assert TS_RDY == 4, "value coded in table position"
+th_rdy  .asc "RDY "
+        .assert TS_IRQ == 5, "value coded in table position"
+th_irq  .asc "IRQ "
+        .assert TS_WFRX == 6, "value coded in table position"
+th_wfrx .asc "WFRX"
+        .assert TS_WFTX == 7, "value coded in table position"
+th_wftx .asc "WFTX"
+        .assert TS_WXTX == 8, "value coded in table position"
+th_wxtx .asc "WXTX"
+        .assert TS_WFSEM == 9, "value coded in table position"
+th_wsem .asc "WSEM"
+        .assert TS_WSIG == 10, "value coded in table position"
+th_wsig .asc "WSIG"
+        .assert TS_RUN == 11, "value coded in table position"
+        .asc "RUN "
+	.text
+        .)
+
+	.data
 	; references used by getopts
-	; same order and len as optall/optlong/... option bytes above
-optslst	.asc "al",0 
+	; same order and len as optall/optlong/... option bytes below
+optslst	.asc "alt",0 
 	; option list in same order/len as option args
 optsflg
 optall	.byt 0
 optlong .byt 0
+optthr 	.byt 0
 
+	; ps data
 it0     .asc 13,10,"PID",0
 it1	.asc " Name"
-	.dsb TNAMLEN-4, 32
+	.dsb TNAMLEN-5, 32
 	.byt 0
-it2	.asc "Exec Th", 0
+it2	.asc "Stat Th", 0
 it3	.asc " En Me", 0
-it4	.asc " Pa Sm SigA In OutErr^M^J",0
+it4	.asc " Pa Sm SigA In OutEr",0
+itexec	.asc "    Exec ",0
+itthr	.asc "   TS/TH Stat SP PAR 0-3  ADDR",13,10,0
 
 helpstr	.asc 13,10
 	.asc "ps [opts]",13,10
 	.asc "Display the list of processes",13,10
 	.asc "Options:",13,10
-	.asc " -a     show all entries",13,10
+	.asc " -a     show all entries (deprecated)",13,10
 	.asc " -l     show all fields",13,10
+	.asc " -t     include thread info",13,10
 	.asc 0
+
+	.text
 
 #include "../apps/common.a65"
 

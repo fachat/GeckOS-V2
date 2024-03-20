@@ -51,13 +51,13 @@
 #define		FORKT	  OSA2KERNEL+$2a
 #define		SBRK	  OSA2KERNEL+$2d
 
-#define		GETINFO   OSA2KERNEL+$30
+#define		GETINFO2  OSA2KERNEL+$30
 
 #define		DUP       OSA2KERNEL+$33
 
 #define		GETSEM    OSA2KERNEL+$36
 #define		FRESEM    OSA2KERNEL+$39
-#define		PSEM      OSA2KERNEL+$3c
+#define		PSEM2     OSA2KERNEL+$3c
 #define		VSEM      OSA2KERNEL+$3f
 
 #define		SEND      OSA2KERNEL+$42
@@ -76,10 +76,12 @@
 
 #define		SLOCK	  OSA2KERNEL+$5d
 #define		RENICE	  OSA2KERNEL+$60
-#define		CHECKCHLD OSA2KERNEL+$63
+#define		CHECKCHLD2 OSA2KERNEL+$63
 
 #define		SETINFO	  OSA2KERNEL+$66
 #define		LOCKSEM	  OSA2KERNEL+$69
+
+#define		JOBCMD	  OSA2KERNEL+$6c
 
 #endif
 
@@ -100,18 +102,18 @@ jmp frestr
 jmp putc
 jmp getc
 jmp ungetc
-jmp gets
+jmp strcmd
 
 jmp devcmd
 
 jmp fork
 jmp kterm
 jmp kkill
-jmp suspend
+jmp kyield
 jmp forkt
 jmp sbrk
 
-jmp getinfo
+jmp getinfo2
 
 jmp kdup
 
@@ -140,6 +142,8 @@ jmp checkchld
 
 jmp setinfo
 jmp locksem
+
+jmp jobcmd
 
 #endif
 

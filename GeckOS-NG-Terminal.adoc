@@ -1,0 +1,62 @@
+
+= GeckOS Next Generation
+(c) 2023 A. Fachat (afachat@gmx.de)
+
+== High Level Goal
+
+Establish the concept of a controlling terminal, that receives
+signals like Ctrl-C or Ctrl-Z from devices. This would also enable job control in the
+shell - that at this point can only wait for a child to end, or send it
+in the background altogether. In addition, an (optional) terminal process will be established that allows windowing of shells - similar to Linux tmux as an example.
+
+
+== Concepts
+
+
+
+1) MORE:
+    STDCIN 
+        per process, inherited from parent
+        DUP can change it, to be used in
+        TTY command to switch to another console
+   -> DONE
+       
+ 
+2) TTY handling
+    Tasks get a PROCESS GROUP (PGRP), inherited from parent(?)
+    Fork can create new/use PGRP so tasks can be grouped into jobs by shell
+    STREAMS get an optional "line discipline"
+        if set
+            STREAM gets a PGRP attached
+            On GETC, if PGRP does not match block
+            On PUTC, 
+                if Ctrl-C -> signal (all) PGRP tasks SIGTERM
+                if Ctrl-D -> EOF
+
+   -> This will be deferred to a point when FSDEV and devices will get the ability to process OPEN options. In such a case, the serial devices could send Ctrl-D/Ctrl-C/Ctrl-Z as well, if setup this way. 
+
+3) Job Control
+    STREAMS "line discipline"
+            On PUTC,
+                if Ctrl-Z -> SIGSTP to PGRP tasks, send SIGCHLD to parent
+    Shell manages jobs (PGRP)
+        SIGCONT to children on fg/bg
+
+   -> DONE: just without specific "line discipline". A signal sent to a stream will be sent to the foreground PID of the stream, if so attached. The console can send appropriate Ctrl-Z/Ctrl-C signals at this time.
+            
+
+                    
+1a) followup:
+        XARGS
+        
+   -> ???
+
+4) Terminal server
+    This implements a terminal sharing task that works similar to e.g. tmux or screen on Linux/Unix machines.
+    It requires a defined protocol between shell and terminal, that may be defined/enabled by an environment variable.
+ 
+        
+
+== APIs
+
+

@@ -65,6 +65,7 @@
 				/* ACIA 6551 */
 #undef	ACIABASE	$d600
 /* #define ACIABASE	$df00 */
+#define ACIABASE	$de00
 
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
 
@@ -286,7 +287,10 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$1600
+	.bss
+Memstart  =$1800
+;Memstart  =*
+	.text
 Memend	  =ROMSTART
 Zerostart =$70
 

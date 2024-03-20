@@ -33,6 +33,7 @@
 
 #include "kernel.i65"
 #include "lib6502.i65"
+#include "fdefs.i65"
 
 ; make sure the actual jump table is assembled
 #define	LIB6502BIN
@@ -42,12 +43,12 @@
 #include "lib6502/libzmem.a65"
 #include "lib6502/libmem.a65"
 #include "lib6502/libsem.a65"
-#include "lib6502/libsig.a65"
 #include "lib6502/libfile.a65"
 #include "lib6502/libexec.a65"
 #include "lib6502/libloader.a65" 
 #include "lib6502/libnet.a65" 
 #include "lib6502/libenv.a65" 
+#include "lib6502/libsig.a65"
 
 notimp  lda #E_NOTIMP
         sec
@@ -65,10 +66,18 @@ notimp  lda #E_NOTIMP
 #print LIB6502BINADDR
 #print *
 
-#if * < LIB6502BINADDR
-          .dsb LIB6502BINADDR-*,<-1
-#else
-#echo "Warning: lib6502 too large!"
+        .dsb LIB6502BINADDR-*,<-1
+
+#ifdef LIB6502
+	.assert * == LIB6502-3*LIBOSACALLS, "LIB6502 address mismatch"
+#endif
+
+#else /* STDIOADDR */
+/****************************************/
+
+#ifdef LIB6502
+//#print LIB6502-5*3-*
+        .dsb LIB6502-(*+5*3)
 #endif
 
 #endif /* STDIOADDR */

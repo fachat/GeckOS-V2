@@ -9,7 +9,11 @@ STRCMD - various stream commands
 Input::
 	* AC - command to execute on stream
 	* XR - stream number (except for SC_GET)
-	* YR - bits to set/clear in SC_SSTAT/SC_CSTAT
+	* YR - 
+		** bits to set/clear in SC_SSTAT/SC_CSTAT
+		** foreground PID in SC_FGPID
+		** signal mask in SC_FGSIG
+
 Call::
 	jsr STRCMD
 Output::
@@ -40,18 +44,23 @@ Possible commands (as defined in link:../../include/kdefs.i65[kdefs.i65] are:
 					counter.
 		SC_FRE		6	same as FRESTR
 		SC_STAT		7	read stream status into ac
-		SC_GANZ		8	returns number of bytes in stream in a
+		SC_NUMBYTES	8	returns number of bytes in stream in AC
 		SC_RWANZ	9	returns the stream write pointer in
-					a and the stream read pointer in y
+					AC and the stream read pointer in YR
 
-		SC_ESTAT	10	Get the error code byte in yr,
+		SC_ESTAT	10	Get the error code byte in YR,
 					and the normal (i.e. what you get
-					with SC_STAT) stream state in ac.
+					with SC_STAT) stream state in AC.
 		SC_SSTAT	11	Set bits in the error code byte
-					each bit set in yr is set in error byte
+					each bit set in YR is set in error byte
 		SC_CSTAT	12	Clear bits in the error code byte
-					each bit set in yr is cleared in error 
+					each bit set in YR is cleared in error 
 					byte
+		SC_FGPID	13	Attach a foreground process to the stream.
+					Reads from other processes block/return empty
+		SC_FGSIG	14	Send a signal to the currently attached foreground
+					process
+		SC_GETFGPID	15	Return the foreground PID of a stream in YR (if C=0)
 ----
 
 The error code byte has the following bits:

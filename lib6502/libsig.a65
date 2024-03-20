@@ -45,7 +45,7 @@ l0	sta (zta),y
 	ldy #>rxsig
 	sec
 	jsr SETSIG
-	lda #SIG_USR1 | SIG_USR2 | SIG_USR3 | SIG_USR4 | SIG_CHLD
+	lda #SIG_USR1 | SIG_USR2 | SIG_CONT | /*SIG_SUSPEND |*/ SIG_BRK | SIG_CHLD
 	clc
 	jmp SETSIG
 	.)
@@ -136,31 +136,67 @@ doit
 	sta zth
 	iny
 	ora (zta),y
-	beq checkchild	; l1
+	beq checkchild	; no application signal handler set - use our own
 	lda (zta),y
 	sta zth+1
 	pla		; signal mask
 	cmp #SIG_CHLD
-	beq dochild
-	jsr jmpzth
+	beq dochild	; if child signal - handle per task
+	cmp #SIG_CONT
+	beq docont
+	jsr jmpzth	; otherwise just call application signal handler
 	jmp l1
+
+	; use the library signal handler
 checkchild
 	pla
 	cmp #SIG_CHLD
-	bne l1a
-cc	jsr CHECKCHLD
+	bne chkbrk
+cc	sec		; search for killed tasks
+	jsr CHECKCHLD2
 	bcc cc
 l1a	jmp l1
 
-dochild	jsr CHECKCHLD
+chkbrk	cmp #SIG_BRK
+	bne checksus
+	jmp Term
+
+checksus=l1a
+#if 0		/* is now done in kernel */
+checksus
+	cmp #SIG_SUSPEND
+	bne l1a
+	lda #JC_SUSPEND	; suspend own task (all threads)
+	jsr JOBCMD
+	jmp l1
+#endif
+
+	; call application signal handler per task
+dochild	sec		; search for dead children
+	jsr CHECKCHLD2
+	bcs l1a
+;.byt 2
+	ldy #0		; high byte PID
+	jsr jmpzth
+	ldy #CHLDIDX
+	jmp doit	; no loop to dochild, as handler may call lib, which in turn uses zth
+
+	; call application signal handler per task
+docont	clc		; search for suspended children
+	jsr CHECKCHLD2
 	bcs l1a
 	ldy #0		; high byte PID
 	jsr jmpzth
-	jmp dochild
+	ldy #CONTIDX
+	jmp doit	; no loop to dochild, as handler may call lib, which in turn uses zth
 	.)
 
 jmpzth	jmp (zth)
 
 	; SIG_CHLD must be the last one, it cannot be sent.
-sigtab	.byt SIG_USR1, SIG_USR2, SIG_USR3, SIG_USR4, SIG_CHLD
+sigtab	.byt SIG_SUSPEND, SIG_BRK, SIG_USR1, SIG_USR2, SIG_CONT, SIG_CHLD
+CHLDIDX	=5
+CONTIDX	=4
+
+	.assert sigtab + NUMOFSIG == *, "number of handled signals inconsistent"
 

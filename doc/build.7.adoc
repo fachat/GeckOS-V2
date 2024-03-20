@@ -9,7 +9,7 @@ build - a description how to build GeckOS
 
 Building the object files for use on an OS/A65 machine should really
 be only a 'make', as long as my cross assembler xa
-http://www.tu-chemnitz.de/~fachat/8bit/cross/index.html"
+http://www.floodgap.com/retrotech/xa/
 is in the path.
 If there weren't these many options one can change.
 

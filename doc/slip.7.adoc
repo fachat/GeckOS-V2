@@ -239,25 +239,29 @@ To run the program, do the following steps:
     - You should have a shell prompt (">") with a binking cursor.
       Now start the slip.obj program by typing
 ----
-          c:slipd a:video3 c: c:tlogin <a:ser1 >a:ser1 &
+          slipd a:ser1
 ----
 
 This starts the slip client from drive c: (usually Commodore serial 
-      IEC device #8, the floppy disk), piping the STDIO
-      to the C64 serial line ser1 (in standard C64 OS/A65 it's Daniel 
-      Dallmanns 9600 baud interface). STDERR is sent to the 3rd virtual
-      console (first command line parameter). The second parameter
-      is the drive to use as WWW server file source. The third parameter
-      is the program to start at a remote login on the telnet port.
-      The ampersand makes the slip program running in the background.
-      The slip program receives and sends its SLIP data via STDIO.
-      STDERR prints (currently a horrible lot of) debugging output.
+      IEC device #8, the floppy disk), using device *ser1* as 
+      SLIP I/O device (in standard C64 OS/A65 it's now the swiftlink
+      RS232 interface, see below; Daniel Dallmanns 9600 baud interface
+      can alternatively be used but needs to be built into the system). 
+      
+    - Log output can be sent to another file or terminal using the *-l* parameter.
 
-You can also start the slipd program directly from the C64
-      ROM, see c64rom.a65
+    - With the *-w* parameter the drive to use as WWW server file source is set. 
 
-    - If enabled, the slip client registers a filesystem with one drive. 
+    - Use *-n* to set the program to run when someone telnets into the system.
+
+    - *-i* defines the local IP address.
+      
+image::slipd.png[] 
+
+    - If enabled with *-f*, the slip client registers an *fstcp* filesystem with one drive. 
       On a standard C64 OS/A65 system, it will be drive g:.
+      This connects to a server on the internet, whose address and port
+      can be given with *-s* and *-p* options.
       If a connection to the server cannot be found, or breaks
       later, the fstcp tries to reconnect in periodic intervals.
 
@@ -277,17 +281,99 @@ You can also start the slipd program directly from the C64
       drive g: This drive will be the contents of the directory given to 
       the fstcp server, i.e. on your Unix machine!
 
+== Running the program in VICE
+
+You can use VICE using this command line to start with "socat" as serial device, creating
+a Pseudo TTY for this slattach to use.
+
+In the x64 emulator the userport 9600 baud interface does not 
+work well enough with GeckOS, 
+so the swiftlink emulation should be used (as a:ser2 in GeckOS):
+
+----
+       x64 -acia1 -acia1base 0xDE00 -acia1irq 2 -acia1mode 1 -myaciadev 2  -rsdev3 "|socat - PTY,link=/tmp/viceser"  -autostart osa.d64
+----
+
+Then run this script as
+
+       sudo ./csaip -d /tmp/viceser
+
+(where the *-d /tmp/viceser* is optional if you don't change the above VICE setting) and to debug you can use 
+
+       sudo tcpdump -i sl0 -XX -tttt -v
+
+Alternatively use
+
+       sudo ./csaip -l
+
+Then, in GeckOS in x64, run
+
+       slipd a:ser1 
+
+as a minimum slip daemon that uses "a:ser1" as I/O, which is the default RS232 interface on the C64 arch (Swiftlink with NMI or userport 9600 depending on the build)
+
+== Using the internet connectivity
+
+=== remote shell
+
+The full *slipd* or the reduced *sliprshd* provide the abiltiy to login to GeckOS over the internet.
+
+When a process connects, slipd starts a specific login program. By default this is *c:tlogin* which just asks for the username and password. As *tlogin* is just a sample, username and password are hardcoded to "c64" and "guest". Also, the shell to start upon successful login is *c:lsh*.
+
+=== Connecting to the internet
+
+The full *slipd* or the reduced *slipmind* provide the ability for *lib6502* programs to use internet connectivty. A sample *telnet* client is included in GeckOS.
+
+image::telnet.png[] 
+
+=== Running as web server
+
+The full *slipd* or the reduced *slipwwwd* implement a very (very very) simple web server for HTTP 1.0. The best way to connect to is probably by using a telnet client as shown in the following screenshot.
+
+image::www.png[] 
+
+=== Using a server on the internet as file server
+
+Using either the full *slipd* or the reduced *slipfsd* server, GeckOS can use a remote server as fileserver. As protocol the FSTCP GeckOS-specific protocol is used, which is basically the GeckOS internal protcol between clients and file serves.
+
+First you have to run
+----
+	fstcp <directory> <servername>
+----
+where *fstcp* is the host binary compiled from *sysapps/slip/fstcp.c*. The directory is the one to be exported. The *servername* is the IP address the server uses - this is relevant as when using SLIP your server may have multiple IP addresses and the program needs to attach to the correct one. In the above SLIP scenario, servername could be *192.168.0.1*.
+
+Then start *slipfsd* in the background, e.g. using
+----
+	ontty a:video2 slipfsd a:ser1
+----
+Then a new drive *g:* should be available.
+
+Note:: in my latest tests this did not work.
+
 
 == (Known) Bugs
 
    - The WWW server only understands "GET filename" requests. No "http://"
      or host prefixes are allowed. At least with Netscape it seems to work.
 
+   - telnetting into GeckOS seems to echo shell input when it shouldn't
+
+   - When telnetting out, and the connection got a RST, telnet seems to hang.
+     (unclear if that is telnet or lib6502)
+
+   - FSTCP does not seem to work anymore.
+
    - The implementation is bloated, and horribly slow.
 
    - Tons of others, I'm sure
 
    - lib6502 binding seems to bug. 
+
+   - in VICE, the 9600 baud interface does not work well enough with GeckOS' implementation. Use the following command line if you want to test it (you have to build the userport 9600 baud interface into the system by modifying *arch/c64/devices/c64dev.a65*.:
+----
+       x64 -rsuser -rsuserdev 2 -rsuserbaud 9600 -rsdev3 "|socat - PTY,link=/tmp/viceser"  -autostart osa.d64
+----
+
 
 == SEE ALSO
 link:c64.p.adoc[c64(p)]

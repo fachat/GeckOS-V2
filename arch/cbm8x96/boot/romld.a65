@@ -1,0 +1,186 @@
+
+START	=$7000
+
+ZP	=$02
+LFNL	=1	; LIB
+LFNR	=2	; ROM
+LFNK	=3	; KERNEL
+ST	=$96
+
+CTRL	=$fff0
+
+MAPSYS	=%11100000	; screen/io peek through, banks 0/0, no wp
+MAPUSR	=%10001100	; full RAM mapping, banks 1/1, no wp
+MAPPET	=%00000000	; disable RAM, use ROM
+
+
+CHKIN	=$ffc6
+CHRIN	=$ffcf
+CLOSE	=$f2e0		; $ffc3 - calls into BASIC.... 
+CLRCH	=$ffcc
+
+	.word start
+	*= START
+
+start	jsr loadlib
+	jsr loadrom
+	jsr loadkern	; leaves load start address in startp
+
+	sei
+
+	jsr dupkern	; takes kernel start address from startp
+
+	lda #MAPSYS
+	sta CTRL
+	jmp ($fffc)	; RESET
+
+	;------------------
+dupkern	; ensure kernel is in both RAM banks
+
+	lda startp
+	sta ZP
+	lda startp+1
+	sta ZP+1
+
+	ldy #0
+loopdup	ldx #MAPSYS
+	stx CTRL
+	lda (ZP),y
+	ldx #MAPUSR
+	stx CTRL
+	sta (ZP),y
+
+incdl	inc ZP
+	beq incdh
+	lda ZP
+	cmp #$f0
+	bne loopdup
+	ldx ZP+1
+	inx
+	bne loopdup
+	; skip $fff0
+	beq incdl
+
+incdh	inc ZP+1
+	bne loopdup
+	rts
+
+	;------------------
+
+libname	.asc "LIB.BIN"
+libnlen	=*-libname
+
+kernname .asc "KERN.BIN"
+kernnlen =*-kernname
+
+romname	.asc "ROM.BIN"
+romnlen	=*-romname
+
+
+loadlib	lda #libnlen
+	ldx #<libname
+	ldy #>libname
+	jmp do_load
+
+loadrom	lda #romnlen
+	ldx #<romname
+	ldy #>romname
+	jmp do_load
+
+loadkern lda #kernnlen
+	ldx #<kernname
+	ldy #>kernname
+	;jsr do_load
+
+do_load	jsr SETNAM
+	lda #1		; LFN
+	ldx $d4		; current device (from where loader has been loaded)
+	ldy #0		; SEC = load
+	jsr SETLFS
+
+	jsr OPEN	
+
+	;------------------
+	; load and store in 8x96 extra memory banks
+
+load	ldx #1		; LFN
+	jsr CHKIN
+
+	lda #0
+	sta ST
+
+	jsr CHRIN
+	sta ZP
+	sta startp
+	jsr CHRIN
+	sta ZP+1
+	sta startp+1
+
+l1	jsr CHRIN
+	ldy #0
+
+	php
+	sei
+	ldx #MAPSYS
+	stx CTRL
+
+	sta (ZP),y
+
+	ldx #MAPPET
+	stx CTRL
+	plp
+
+	lda ST
+	bne endload
+
+incl	inc ZP
+	beq inch
+	lda ZP
+	cmp #$f0
+	bne l1
+	ldx ZP+1
+	inx
+	bne l1
+	; $fff0 after increase
+	jsr CHRIN	; skip a byte
+	jmp incl
+inch	inc ZP+1
+	bne l1
+
+endload	
+	jsr CLRCH
+	lda #1		; LFN
+	jmp CLOSE
+
+	;----------------------------------
+	; C64 kernal jump table adapters for the PET ROM
+
+SETLFS  ; SETLFS        set logical/first/second address
+        .(
+        sta $d2         ; logical file no
+        stx $d4         ; unit address
+        sty $d3         ; secondary address
+        rts
+        .)
+
+SETNAM  ; SETNAM        set filename
+        .(
+        sta $d1         ; filename length
+        stx $da         ; address low
+        sty $db         ; address high
+        rts
+        .)
+
+LOAD    ; LOAD          load
+        .(
+        stx $fb         ; start lo
+        sty $fc         ; start hi
+        sta $9d         ; load/verify flag
+        jmp $f356
+        .)
+
+OPEN	=$f563
+
+	; -----------------------------
+startp	.word 0
+

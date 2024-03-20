@@ -22,9 +22,9 @@ NOTE: all registers are modified
 
 == DESCRIPTION
 If C=1 when called, locks a semaphore to the current task. I.e. only threads of the current
-task may pass the *PSEM(2)* call.
+task may pass the *PSEM2(2)* call.
 
-If C=0 when called, unlock the semaphore. I.e. any thread may pass the *PSEM(2)* call.
+If C=0 when called, unlock the semaphore. I.e. any thread may pass the *PSEM2(2)* call.
 If the semaphore is not held, the call wakes a thread that is waiting for the semaphore.
 
 == RETURN CODES
@@ -34,10 +34,10 @@ E_SEMSET:: semaphore is already locked
 
 == SEE ALSO
 link:../semaphores.7.adoc[semaphores(7)], 
+link:GETSEM.2.adoc[GETSEM(2)], 
 link:FRESEM.2.adoc[FRESEM(2)], 
-link:PSEM.2.adoc[PSEM(2)], 
+link:PSEM2.2.adoc[PSEM2(2)], 
 link:VSEM.2.adoc[VSEM(2)], 
-link:PSEM.2.adoc[PSEM(2)]
 
 == AUTHOR
 Written by André Fachat.

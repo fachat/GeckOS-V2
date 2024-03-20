@@ -100,8 +100,8 @@
 
 /************* init process 				*/
 
-#undef	INIT_VERBOSE
-#define	INIT_RESTART
+#define	INIT_VERBOSE
+#undef	INIT_RESTART
 #define	INIT_MERGE
 #define	INIT_LIB6502
 /* #define	INIT_USE_STDLIB */
@@ -187,7 +187,9 @@ end_auto
 
 /************* Constants for lib6502 memory handling	*/
 
-Memstart  =$5380
+;Memstart  =$5380
+;Memstart  =$5500
+Memstart  =*
 Memend	  =$7800
 Zerostart =$94		/* PET ROM irq vectors at $90-$93 */
 

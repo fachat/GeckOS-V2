@@ -21,13 +21,13 @@
 
 ****************************************************************************/
 
+#include "env.i65"
 
 /***************************************************************************/
 /*			These defines control the ROM build		   */ 
 /*									   */ 
 
-#define   ROM
-#undef   EMUTEST
+//#define PET_KEYB_GRAPHICS
 
 /* These are necessary for PET kernel **************************************/
 
@@ -38,24 +38,16 @@
 #define	  VIDPAGE 8
 #undef	  SHORTLINE		/* prepare for 80 col screen */
 
-#define	  RAMTEST
-#define	  RAMSTART 128
-#define	  RAMEND $e8
-#define	  NOMIRRORMEM
+#undef	  RAMTEST
 
 #define   MIN_MEM $e8		/* RAM up to I/O -> 8x96 */
 
 #undef    NMIDEV		/* there is no NMI in the PET machine */
-#define   EOK_NOFILL		/* do not fill kernel to end of mem */
+#undef   EOK_NOFILL		/* do not fill kernel to end of mem */
 
 #define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
 
-#define	  OSA_CPU	"6502"
-#define   OSA_ARCH	"PET"
-
 /* These are changeable ****************************************************/
-
-#define ROMSTART        2905   /* where the ROM starts */
 
 #define	MEMINIVAL	$0	/* Clear memory to 0 on boot */
 
@@ -76,6 +68,8 @@
 
 #define ROOTPATH        "c:"    /* where lsh chdirs into on boot */
 
+//#define	UARTBASE	$e818
+
 
 /***************************************************************************
  * 
@@ -93,8 +87,7 @@
 #undef  SEM_SERIEC
 #undef  SEM_PARIEC
 
-          .word *+2		/* load address */
-	  jmp RESET
+	.word *+2
 	  ; ROMSTART is here!
 #if ROMSTART-*
 	.x
@@ -105,51 +98,87 @@
 
 /************* devices	 				*/
 
+#echo start of devices: 
+#print *
+s_dev
+
 #include  "devices/devices.a65"
+
+#print *-s_dev
 
 /************* init process 				*/
 
+#echo start of init:
+#print *
+s_init
 
 #define	INIT_VERBOSE
 #define	INIT_RESTART
 #define	INIT_MERGE
 #define	INIT_LIB6502
-/* #define	INIT_USE_STDLIB */
 /* #define	INIT_OUTDEV	2*/
 #include  "sysapps/init/init.a65"
 
+#print *-s_init
 
 /************* fsdev - converts devices into files 	*/
 
+#echo start of fsdev:
+#print *
+s_fsdev
 
+/* #define	FSDEV_AS_INIT */
 #include  "sysapps/fs/fsdev.a65"
 
+#print *-s_fsdev
 
 /************* fsiec - IEEE488/IEC bus filesystem 	*/
+
+#echo start of fsiec:
+#print *
+s_fsiec
 
 /* both, the parallel and serial iec bus use the same timer */
 #define	SEM_CIA2TB	SEM_SERIEC
 #undef SEM_PARIEC
 #undef SEM_SERIEC
 
+/* #define	FSIEC_AS_INIT */
+
 #define	NOLOOP
 #define	FSIEC_DEVICE	"devices/piec_pet.a65"
 #include  "sysapps/fs/fsiec.a65"
 #undef	FSIEC_DEVICE
-#print *
+
+#print *-s_fsiec
 
 
 /************* mon - OS/A 1 old style monitor/shell	*/
 
+#echo start of mon:
+#print *
+s_mon
+
 #define	MON_SHEXE $c0		/* ROM executable flag */
 #define	MON_MONEXE 0		/* ROM executable flag */
 #define	MON_SHDEV 1		/* start on device 0 = video1 */
+
+;#undef	SHORTMON		/* no assembler/disassembler */
+;#define	NOSH
+;#include  "apps/lmon/lmon.a65"
+; actually the old shell
 #define	SHORTMON		/* no assembler/disassembler */
 #undef	NOSH
 #include  "sysapps/mon/mon.a65"
 
+#print *-s_mon
+
 
 /************* boot lsh from BOOTDRV			*/
+
+#echo start of boot entries:
+#print *
+s_boots
 
 #if 1
 	/* add autostart of lib6502 program 'lsh' */
@@ -168,23 +197,11 @@ end_auto
 
 #endif
 
+#print *-s_boots
+
 /************* end of ROM executables			*/
 
           .word -1
-
-/************* lib6502 code				*/
-
-#include  "lib6502/lib6502.a65"
-
-/************* Kernel					*/
-
-#include  "kernel\kernel.a65"
-
-/************* Constants for lib6502 memory handling	*/
-
-Memstart  =$6500
-Memend	  =$f000
-Zerostart =$70
 
 .)
 

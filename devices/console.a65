@@ -206,8 +206,10 @@ nocheck
 	bcs notact
 	cpy #SWITCHKEY
 	bne gotchar
+#ifndef SWITCHNOSHIFT
 	dex
 	bmi gotchar	; ignore switch key without shift/ctrl
+#endif
 	jsr crsroff	; must preserve xr
 	jsr do_switch
 	jmp notact
@@ -219,10 +221,23 @@ gotchar
         beq notact
 	lda zei2
 	cmp brkkey,y
+	beq dobrk
+	cmp #"^Z"
 	bne nobrk
+	; send suspend signal
+	lda #SIG_SUSPEND
+	bne sendsig
+dobrk
 	ldx outstr,y
 	lda #SC_SSTAT
 	ldy #SCE_BRK
+	jsr STRCMD
+	; send BRK signal to foreground process
+	lda #SIG_BRK
+sendsig	ldy screen
+	ldx outstr,y
+	tay
+	lda #SC_FGSIG
 	jsr STRCMD
 nobrk
 	ldx zei2
@@ -289,9 +304,9 @@ end1
 
 do_switch .(
           dex
-          bmi sw_mode    ; with shift
+          bmi sw_next    ; with shift
 	  dex
-	  bmi sw_next	 ; with ctrl
+	  bmi sw_mode	 ; with ctrl
 	  bpl sw_close
 
 	; next screen

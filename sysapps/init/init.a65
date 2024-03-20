@@ -36,9 +36,6 @@
  * If you define INIT_OUTDEV with the device number, this device is used
  * to print the info, otherwise device 0 is used.
  * 
- * If INIT_USE_STDLIB is defined, init uses the (old) STDIO library, otherwise
- * it will include its own printing routines if INIT_VERBOSE is defined.
- *
  * If INIT_MERGE is defined, then files can be started with their STDOUT/STDERR
  * sent to the same device as the init process.
  *
@@ -61,6 +58,8 @@
 
 #include "kernel.i65"
 #include "kdefs.i65"
+
+#define	INIT_VERBOSE
 
 #ifdef INIT_LIB6502
 #echo init uses lib6502
@@ -173,12 +172,12 @@ no_out
 	jsr itout
 #endif
 #ifdef INIT_RESTART
-	lda #<sigadr
-	ldy #>sigadr
+	lda #<sigaddr
+	ldy #>sigaddr
 	sec
 	jsr SETSIG
 
-	lda #SIG_CHLD
+	lda #SIG_CHLD | SIG_CONT
 	clc
 	jsr SETSIG
 
@@ -417,9 +416,9 @@ ifs
 iprg	  jsr getstrs
 	  bcs slx2a
 ifs1      
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM		; alloc PCBUF - also does serializing, as
+	  jsr PSEM2		; alloc PCBUF - also does serializing, as
 				; forked process releases it
 	  lda s2
           sta PCBUF+FORK_STDOUT
@@ -519,27 +518,28 @@ end
 
 	.(
 
-m0	.asc "Init V1.0 booting^M^J",0
+m0	.asc "Init V1.0 booting",13,10, 0
 m1	.asc "Start ",34,0
 m2=0
 m3	.asc 34,":",0
-m4	.asc " failed!^M^J",0
-m5	.asc " ok!^M^J",0
-m6	.asc "Couldn't alloc streams!^M^J",0
+m4	.asc " failed!",13,10,0
+m5	.asc " ok!",13,10,0
+m6	.asc "Couldn't alloc streams!",13,10,0
 #ifdef INIT_RESTART
-m7	.asc "^M^JReceived sigchld from ",0
+m7	.asc 13,10, "Received sigchld from ",0
 m8 	=m7-3	; CRLF
-m9	.asc "Prepared restart!^M^J",0
-m10	.asc "Could not set device stream!^M^J",0
+m9	.asc "Prepared restart!",13,10,0
+m10	.asc "Could not set device stream!",13,10,0
+m11	.asc 13,10, "Received sigcont from ",0
 #endif
 
 haddr	.byt >m0, >m1, >m2, >m3, >m4, >m5, >m6
 #ifdef INIT_RESTART
-	.byt >m7, >m8, >m9, >m10
+	.byt >m7, >m8, >m9, >m10, >m11
 #endif
 laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
 #ifdef INIT_RESTART
-	.byt <m7, <m8, <m9, <m10
+	.byt <m7, <m8, <m9, <m10, <m11
 #endif
 
 &itout	.(
@@ -556,9 +556,15 @@ laddr	.byt <m0, <m1, <m2, <m3, <m4, <m5, <m6
 #ifdef INIT_RESTART
 
 restarts .(
-	jsr YIELD
+	; make check if we have received a signal and pause for signal atomic
+	sei
 	ldx kpid
-	beq restarts
+	bne gotsig
+	; pause and only wake on signals
+	lda #JC_PAUSE
+	jsr JOBCMD
+	jmp restarts
+gotsig	cli
 
 	lda killed
 	ldx #0
@@ -608,16 +614,51 @@ ok	sta pid,y
 	jmp rmpid
 	.)
 
-sigadr	.(
+sigaddr	.(
+	pha
 	txa
 	pha
-	tya 
+	tya
 	pha
+
+	tsx
+	lda $0103,x
+	and #SIG_CONT
+	beq nocont
+
+#ifdef INIT_VERBOSE
+	ldx #11
+	jsr itout
+#endif
+	ldx #0
+sloop	clc
+	jsr CHECKCHLD2
+	bcs nocont
+	txa
+	pha
+#ifdef INIT_VERBOSE
+	jsr hexout
+#endif
+	lda #E_INT
+	jsr KILL	; will trigger a SIG_CHILD
+
+	pla
+	tax
+
+	jmp sloop
+
+nocont	tsx
+	lda $0103,x
+	and #SIG_CHLD
+	beq end
+
 #ifdef INIT_VERBOSE
 	ldx #7
 	jsr itout
 #endif
-loop	jsr CHECKCHLD
+	ldx #0	; start check with PID 0
+loop	sec	; check for died processes
+	jsr CHECKCHLD2
 	bcs end
 #ifdef INIT_VERBOSE
 	pha	; error code
@@ -637,14 +678,15 @@ loop	jsr CHECKCHLD
 	pla
 	txa
 #endif
+	txa		; PID to store
 	php
 	sei
-	ldx kpid
-	sta killed,x
-	inx
-	cpx #INIT_MAXRESTART
+	ldy kpid
+	sta killed,y
+	iny
+	cpy #INIT_MAXRESTART
 	bcs l1
-	stx kpid
+	sty kpid
 l1	plp			/* TODO: give message if overflow */
 	jmp loop
 end
@@ -656,7 +698,8 @@ end
 	tay
 	pla
 	tax
-	pla
+	pla		; signal mask, ignore here
+	pla		; AC to be restored as prep'd by the kernel signal code
 	rti
 	.)
 
@@ -679,8 +722,8 @@ noend2
 	pha
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 	
 	pla
 	sta PCBUF+FORK_PAR	; stream number where environment is sent

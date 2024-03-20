@@ -54,6 +54,9 @@
 
 #define	VICE
 ;#define	RTSINVERT
+;#define	CTSINVERT
+;#define	RXINVERT
+;#define	TXINVERT
 
           .(
 	  .word devend2
@@ -167,12 +170,20 @@ l0	lsr
 	lda #%01010001		; start timer A, force load, cont mode, SR out
 	sta C64CIA1+CIA_CRA
 
+#ifdef TXINVERT
+	lda #$20
+#else
 	lda #$df
+#endif
 	sta C64CIA1+CIA_SDR	; send byte $ff
 #ifdef VICE
 	jsr delay
 #endif
+#ifdef TXINVERT
+	lda #$00
+#else
 	lda #$ff
+#endif
 	sta C64CIA1+CIA_SDR	; 
 
 	lda C64CIA1+CIA_ICR		; clear actual irqs
@@ -233,7 +244,11 @@ notmyirq
 	bvc endtx		; we don't send (DC_SW_TX)
 
 	bit C64CIA2+CIA_PRB
+#ifdef CTSINVERT
+	bvc endtx
+#else
 	bvs endtx		; CTS hi
+#endif
 
 	bit prevalid		; prefetched byte is valid
 	bmi valid
@@ -249,11 +264,17 @@ valid
 	ldx prefetch
 	lda bytetab,x
 	lsr
+#ifdef TXINVERT
+	eor #$ff
+#endif
 	sta C64CIA1+CIA_SDR	; 7 data bits, 1 start bit
 	ror
 	ora #$7f
 #ifdef VICE
 	jsr delay
+#endif
+#ifdef TXINVERT
+	eor #$ff
 #endif
 	sta C64CIA1+CIA_SDR	; 1 data bit, 7 stop bits
 
@@ -390,7 +411,9 @@ databyte
 	lda C64CIA2+CIA_SDR	; only SDR NMI should be set
 
 	bit C64CIA2+CIA_ICR	; clear NMI bit
-
+#ifdef RXINVERT
+	eor #$ff
+#endif
 	ldx inp
 	sta inbuf,x
 	inc inp

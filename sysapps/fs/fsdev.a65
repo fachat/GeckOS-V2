@@ -104,9 +104,9 @@ p1        jsr setzei
           bcc p1
 
 	  ; we now inherit PCBUF from the FORK call (if PK_FS)
-	  ; clc
+	  ; sec
 	  ; ldx #SEM_SENDBUF
-	  ; jsr PSEM
+	  ; jsr PSEM2
 
           lda #ANZDRV         ; 2 Drives
           sta PCBUF+FM_REG_DRVS
@@ -342,9 +342,9 @@ loadbuf   .(
           jmp loadirnam
 
 ldr0      
-	clc
+	sec
 	ldx #SEM_SENDBUF
-	jsr PSEM
+	jsr PSEM2
 
 	  ldy #F_DRV
           lda (fzei),y

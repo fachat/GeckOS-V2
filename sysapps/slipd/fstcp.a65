@@ -39,22 +39,59 @@ fsqueue	.dsb MAXQUEUE
 fsnq	.byt 0
 fsconn	.byt 0
 fscnt	.byt 0
-	.text
 
+	.data
 fstcp_srv 
         .byte FSTCP_SERVER_IP, >FSTCP_SERVER_PORT, <FSTCP_SERVER_PORT, 0,0, 0
         .word fstcp_open-1, fstcp_queue-1, fstcp_loop-1, fstcp_signal-1
 
+msg	.asc "Connecting to fstcp at ",0
+
+	.text
 fstcp_open
 	rts
 
-&fstcp_init .(		; carry set on return -> could not register as filed
+&&&fstcp_setaddr .(
+	sta fstcp_srv,x
+	rts
+	.)
+
+&&&fstcp_init .(		; carry set on return -> could not register as filed
+	lda #<msg
+	ldy #>msg
+	jsr strout
+
+	lda fstcp_srv
+	ldy #0
+	jsr wordout
+	lda #"."
+	jsr chrout
+	lda fstcp_srv+1
+	ldy #0
+	jsr wordout
+	lda #"."
+	jsr chrout
+	lda fstcp_srv+2
+	ldy #0
+	jsr wordout
+	lda #"."
+	jsr chrout
+	lda fstcp_srv+3
+	ldy #0
+	jsr wordout
+	lda #":"
+	jsr chrout
+	lda fstcp_srv+5
+	ldy fstcp_srv+4
+	jsr wordout
+	jsr crlfout
+
 	lda #<-2
 	sta fsconn
 
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
 	lda #1
 	sta PCBUF+FM_REG_DRVS
@@ -333,7 +370,7 @@ l0d
 	tax
 	lda #SC_STAT
 	jsr STRCMD
-pha:DB("STAT gives "):pla:pha:jsr EHexout:jsr ECrlfout:pla
+/*pha:DB("STAT gives "):pla:pha:jsr EHexout :jsr ECrlfout:pla*/
 	cmp #E_SFULL
 	beq sendx
 	cmp #E_SHWM
@@ -367,7 +404,7 @@ wrl	jsr GETC
 	bcc wrl
 	lda #E_OK
 wrle	pha
-tya:pha:DB("GETC gives "):tsx:lda $102,x:jsr EHexout:jsr ECrlfout:pla:tay
+/*tya:pha:DB("GETC gives "):tsx:lda $102,x:jsr EHexout:jsr ECrlfout:pla:tay*/
 	lda pd
 	sec
 	sbc #FSP_DATA

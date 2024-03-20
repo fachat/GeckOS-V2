@@ -41,7 +41,6 @@
  * This is a monitor only - we should use NOSH anyway!
  */
 /* #define NOSH */
-#undef MON_USE_STDLIB
 
 /*
  * We have a new kernel...
@@ -70,26 +69,12 @@
 
 #endif	/* ROM */
 
-#ifdef MON_USE_STDLIB
-
-#define	  OUT	    Fputc
-#define	  IN	    Fgetc
-#define	  HEXOUT    Hexout
-#define   SEROUT    Putc
-#define   SERIN     Getc
-#define   SERBRK    Serbrk
-#define   CRLFOUT   Crlfout
-#define   TSERO     Txtout
-#define	  DEZOUT    Dezbout
-
-#else
 
 #define	  Usedir    usedir
 #define	  Chdir	    mchdir
 #define	  Getname   getname
 #define	  Set2name  set2name
 
-#endif	/* MON_USE_STDLIB */
 
           .(
 #ifdef ROM
@@ -354,18 +339,19 @@ tbok1     sty LZEI
           ldx bef
 tbx       rts
 
-anzbef    =23
+&anzbef    =23
 
 #ifndef ROM
 	 .data
 #endif
 
-beftab    .asc "DIR^@TYPE^@DEL^@FORMAT^@CHKDSK^@RENAME^@"
-          .asc "B^@BATCH^@"
-          .asc "LOGOFF^@"
-          .asc "COPYCON^@DUP^@CD^@DEVCMD^@COPY^@"
-          .asc "GETSTR^@FRESTR^@SETMEM^@"
-          .asc "INFO^@KILL^@MKDIR^@RMDIR^@CHDIR^@"
+&beftab   .asc "DIR",0,"TYPE",0,"DEL",0,"FORMAT",0,"CHKDSK",0,"RENAME",0
+          .asc "B",0,"BATCH",0
+          .asc "LOGOFF",0
+          .asc "COPYCON",0,"DUP",0,"CD",0,"DEVCMD",0,"COPY",0
+          .asc "GETSTR",0,"FRESTR",0,"SETMEM",0
+          .asc "INFO",0,"KILL",0,"MKDIR",0,"RMDIR",0,"CHDIR",0
+	  .asc "HELP",0
 
 befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word RENAME-1,BATCH-1,BATCH-1
@@ -373,12 +359,13 @@ befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word PDEVCMD-1,COPY-1,PGETSTR-1,PFRESTR-1
           .word SETMEM-1,PINFO-1,PKILL-1
           .word MKDIR-1,RMDIR-1,CD-1
+	  .word HELP-1
 
-initxt    .asc "^M^JSHELL V"
+initxt    .asc 13,10,"SHELL V"
           .byt VSA+"0",".",VSB+"0"
-          .asc "^M^J(C) 1990-97 BY A.FACHAT^M^J^@"
-errtxt    .asc " ?^M^J^@"
-metxt     .asc "^M^J"
+          .asc 13,10,"(C) 1990-97 BY A.FACHAT",13,10,0
+errtxt    .asc " ?",13,10,0
+metxt     .asc 13,10
           .byt MESSAGE,0
 
 	.text
@@ -387,6 +374,24 @@ metxt     .asc "^M^J"
 #ifndef NOSYSFKT 
 #include  "sysapps/mon/shdir.a65"
 #endif
+
+HELP	.(
+	jsr CRLFOUT
+	ldy #0
+	ldx #anzbef
+loop	lda beftab,y
+	beq next
+	jsr SEROUT
+	iny
+	bne loop
+next	lda #" "
+	jsr SEROUT
+	iny
+	dex
+	bne loop
+	clc
+	rts
+	.)
 
 PINFO     .(
 	.data
@@ -403,74 +408,79 @@ i0        lda it,y
           
 info      .(
 #ifdef NOMMU
-	  clc
+	  sec
 	  ldx #SEM_SENDBUF
-	  jsr PSEM
+	  jsr PSEM2
 #endif
-	  jsr GETINFO
-          ldx #0
-          stx cnt
-	  stx zei
+	ldx #TID_START
 infoloop  
-          ldx zei
+	clc
+	  jsr GETINFO2
+	bcc ok
+	jmp ie
+ok	ldx #0
 	  lda PCBUF+TN_PID,x
           jsr HEXOUT
           jsr SSPOUT
-          ldx zei
           lda PCBUF+TN_NTHREADS,x
           bne name
+
+	  ; task not active, print spaces (should not be needed in GETINFO2)
           ldx #TNAMLEN
 i1        jsr SSPOUT
           dex
           bne i1
           beq i2
-name      ldy #0
-          ldx zei
+
+	  ; print name
+name      ldx #0
 i4        lda PCBUF+TN_NAME,x
           beq i3
           jsr SEROUT
-          iny
           inx
-          cpy #TNAMLEN
+          cpx #TNAMLEN
           bcc i4
-i3        cpy #TNAMLEN
+
+	  ; fill name with spaces
+i3        cpx #TNAMLEN
           bcs i2
           jsr SSPOUT
-          iny
+          inx
           bne i3
 i2        jsr SSPOUT
 
-          ldx zei
+          ldx #0
+	; task status
+          lda PCBUF+TN_STATUS,x
+	jsr print_tsstat
+	  jsr SSPOUT
+	; number of threads
           lda PCBUF+TN_NTHREADS,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+	; env number
           lda PCBUF+TN_ENV,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+	; parent task
 	  lda PCBUF+TN_PARENT,x
 	  jsr HEXOUT
-;          asl
-;          asl
-;          tax
-;          ldy #4
-;i5        lda st,x
-;          jsr SEROUT
-;          inx
-;          dey
-;          bne i5
           jsr SSPOUT
-          ldx zei
+	; available memory for task
           lda PCBUF+TN_MEM,x
           jsr HEXOUT
           jsr SSPOUT
+	; signal mask
 	  lda PCBUF+TN_SIGMASK,x
           jsr HEXOUT
           jsr SSPOUT
+	; signal address
 	  lda PCBUF+TN_SIGNAL+1,x
 	  jsr HEXOUT
 	  lda PCBUF+TN_SIGNAL,x
 	  jsr HEXOUT
 	  jsr SSPOUT
+	; std streams
           lda PCBUF+TN_STDIN,x
           jsr HEXOUT
           jsr SSPOUT
@@ -481,15 +491,47 @@ i2        jsr SSPOUT
           jsr HEXOUT
           jsr SSPOUT
           jsr CRLFOUT
-	  lda zei
-	  clc
-	  adc #TN_SLEN
-	  sta zei
-          inc cnt
-          lda cnt
-          cmp #ANZ_ENV
-          bcs ie
-          jmp infoloop
+	; check thread infos
+	lda PCBUF + TN_NTHREADS
+	beq next
+	cmp #<-1
+	beq next
+	; init thread loop
+	ldx #0
+	ldy #0
+	; display thread infos
+thloop	jsr SSPOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_ID,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_ST,x
+	jsr print_thstat
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_SP,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_PAR,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_PAR + 1,x
+	jsr HEXOUT
+	jsr SSPOUT
+	lda PCBUF + TN_SLEN + TNT_PAR + 2,x
+	jsr HEXOUT
+	jsr CRLFOUT
+	; next thread
+	txa
+	clc
+	adc #TNT_SLEN
+	tax
+	iny
+	cpy PCBUF + TN_NTHREADS
+	bcc thloop
+next	
+	; next task
+	ldx PCBUF + TN_PID
+	jmp infoloop
 ie        
 #ifdef NOMMU
 	  ldx #SEM_SENDBUF
@@ -497,12 +539,89 @@ ie
 #endif
 	  clc
           rts
-	  .)
-          
+         .)
+ 
 ; st        .asc "FRE ENV IBRKBRK RDY IRQ WFRXWFTXWSEMWTRM"
 it        .asc "^M^JPID Name"
 	  .dsb TNAMLEN-5, 32
-	  .asc " Th En Pa Me Sm SigA In OutErr^M^J",0
+	  .asc " ST   Th En Pa Me Sm SigA In OutErr^M^J",0
+
+print_tsstat .(
+	cmp #TTS_PAUSE+1
+	bcs range
+	asl
+	asl
+	tay
+	ldx #4
+loop	lda tstat,y
+	jsr SEROUT
+	iny
+	dex
+	bne loop
+	rts
+range	jsr HEXOUT
+	jsr SSPOUT
+	jmp SSPOUT
+
+tstat	.assert TTS_FREE == 0, "value coded in table position"
+	.asc "FREE"
+	.assert TTS_RUN == 1, "value coded in table position"
+	.asc "RUN "
+	.assert TTS_DEAD == 2, "value coded in table position"
+	.asc "DEAD"
+	.assert TTS_SUSP == 3, "value coded in table position"
+	.asc "SUSP"
+	.assert TTS_SUSP_ACK == 4, "value coded in table position"
+	.asc "SUSA"
+	.assert TTS_PAUSE == 5, "value coded in table position"
+	.asc "PAUS"
+	.)
+
+print_thstat .(
+	stx cnt
+	cmp #TS_RUN+1
+	bcs range
+	asl
+	asl
+	tay
+	ldx #4
+loop	lda th_free,y
+	jsr SEROUT
+	iny
+	dex
+	bne loop
+	ldx cnt
+	rts
+range	jsr HEXOUT
+	jsr SSPOUT
+	jmp SSPOUT
+
+	.assert TS_FREE == 0, "value coded in table position"
+th_free	.asc "FREE"
+	.assert TS_ENV == 1, "value coded in table position"
+th_env	.asc "ENV "
+	.assert TS_IBRK == 2, "value coded in table position"
+th_ibrk	.asc "IBRK"
+	.assert TS_BRK == 3, "value coded in table position"
+th_brk	.asc "BRK "
+	.assert TS_RDY == 4, "value coded in table position"
+th_rdy	.asc "RDY "
+	.assert TS_IRQ == 5, "value coded in table position"
+th_irq	.asc "IRQ "
+	.assert TS_WFRX == 6, "value coded in table position"
+th_wfrx	.asc "WFRX"
+	.assert TS_WFTX == 7, "value coded in table position"
+th_wftx	.asc "WFTX"
+	.assert TS_WXTX == 8, "value coded in table position"
+th_wxtx	.asc "WXTX"
+	.assert TS_WFSEM == 9, "value coded in table position"
+th_wsem	.asc "WSEM"
+	.assert TS_WSIG == 10, "value coded in table position"
+th_wsig	.asc "WSIG"
+	.assert TS_RUN == 11, "value coded in table position"
+	.asc "RUN "
+	.)
+
 
 &PKILL    jsr GETADR
           bcs pke
@@ -1022,7 +1141,6 @@ dtab      .word 1,0
           .)
 #endif
 
-#ifndef MON_USE_STDLIB
 
 	.(
 	.zero
@@ -1417,7 +1535,8 @@ sigaddr	.(
 	pha
 	txa
 	pha
-	jsr CHECKCHLD
+	sec		; search for terminated child processes
+	jsr CHECKCHLD2
 	bcs nochld
 	txa
 	ldy pidn

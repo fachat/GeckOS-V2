@@ -1,0 +1,54 @@
+
+= fopen(1)
+:doctype: manpage
+
+== NAME
+fclose - close a file. 
+
+== SYNOPSIS
+Input::
+	* X - file mode
+Call::
+	jsr fclose
+Output::
+	* C=0
+	* C=1
+		** AC - error code 
+
+NOTE: may modify any register
+
+== DESCRIPTION
+Closes a file. Pushes all remaining data to the receiver and waits until it is written.
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOFILE:: 
+	invalid file number
+E_WERROR::
+	error writing data
+E_NUL::
+	Other end of file has been closed already
+
+
+== SEE ALSO
+link:../lib6502.7.adoc[lib6502(7)],
+link:fclose.1.adoc[fopen(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fread.1.adoc[fread(1)]
+link:fwrite.1.adoc[fwrite(1)]
+link:fseek.1.adoc[fseek(1)]
+link:pipe.1.adoc[pipe(1)]
+link:flock.1.adoc[flock(1)]
+link:fcntl.1.adoc[fcntl(1)]
+link:fcmd.1.adoc[fcmd(1)]
+link:stddup.1.adoc[stddup(1)]
+link:dup.1.adoc[dup(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

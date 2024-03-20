@@ -176,9 +176,9 @@ p1        jsr setzei
 
 #ifndef NOFS
 	  ; we now inherit PCBUF from FORK - if started as PK_FS, not PK_INIT
-	  ; clc
+	  ; sec
 	  ; ldx #SEM_SENDBUF
-	  ; jsr PSEM
+	  ; jsr PSEM2
 
           lda #FSIEC_ANZDRV         ; 2 Drives
           sta PCBUF+FM_REG_DRVS

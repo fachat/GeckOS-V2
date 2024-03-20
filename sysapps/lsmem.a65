@@ -591,14 +591,13 @@ found	tya
 
 	; get the task information
 	ldx #SEM_SENDBUF
-	clc
-	jsr PSEM
+	sec
+	jsr PSEM2
 
-	jsr GETINFO
-		
 	ldx #0
+ptl
 	stx tmp
-ptl 	cpx numtask
+ 	cpx numtask
 	bcs done
 
 	txa
@@ -616,53 +615,47 @@ novfl	jsr chrout
 	jsr hexout
 	jsr spout
 
-	lda #TN_PID
-chkloop	tay
-	lda PCBUF,y
-	cmp tasks,x
-	bne notthis
+	ldy tmp
+	ldx tasks,y
+	sec
+	jsr GETINFO2
+	bcs noinfo
 
 	; found name
-	tya
-	clc
-	adc #TNAMLEN
-	sta tmp2
+	ldy #0
 
 nameout	lda PCBUF+TN_NAME,y
 	beq end
 	jsr chrout
 	iny
-	cpy tmp2
+	cpy #TNAMLEN
 	bcc nameout
 	bcs nexttask
+
 end	jsr spout
 	iny
-	cpy tmp2
+	cpy #TNAMLEN
 	bcc end
 	bcs nexttask
 
-notthis	tya
-	clc
-	adc #TN_SLEN
-	bcc chkloop
-
-	lda #"-"
+noinfo	lda #"-"
 	jsr chrout
 	ldy #8
 spo	jsr spout
 	dey
 	bne spo	
+
 nexttask
 	jsr spout
+
 	inc tmp	
-	lda tmp	
+	lda tmp
+	and #3	
 	cmp #3
 	bne nocrlf
-	lda #0
-	sta tmp
 	jsr crlfout
 nocrlf
-	inx
+	ldx tmp
 	bne ptl
  
 done	; free semaphore / sendbuf

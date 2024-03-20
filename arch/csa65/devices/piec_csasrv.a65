@@ -23,7 +23,6 @@
 
 
 #define   VIA1      $e840
-#define   PIA1      $e820
 
 #include "chips/via6522.i65"
 #include "chips/pia6521.i65"
@@ -33,117 +32,12 @@
 #define	ASSIGN	Assign
 #endif
 
-	.data
-byte      .byt 0
-bytfl     .byt 0
-eoifl     .byt 0
-	.text
 
 #ifndef NOLOOP
 	.data
 filetab   .dsb FT_SLEN*ANZ_FT
 	.text
-#endif
 
-&getif  clc
-	ldx #SEM_VIAE840_T1
-	jmp PSEM
-&freif	ldx #SEM_VIAE840_T1
-	jmp VSEM
- 
-&IECINIT  .(
-#ifdef INVERT
-          lda #%00110000
-          sta PIA1+PIA_CRA
-          lda #0
-          sta PIA1+PIA_PA
-          cmp PIA1+PIA_PA
-          bne inix
-          lda #%00110100
-          sta PIA1+PIA_CRA
-          
-          lda #%00110000
-          sta PIA1+PIA_CRB
-          lda #$ff
-          sta PIA1+PIA_PB
-          cmp PIA1+PIA_PB
-          bne inix
-          lda #%00110100
-          sta PIA1+PIA_CRB
-          lda #0
-          sta PIA1+PIA_PB
-
-          lda #%00111100
-          sta VIA1+VIA_DDRB
-          cmp VIA1+VIA_DDRB
-          bne inix
-
-          lda #0
-          sta VIA1+VIA_DRB
-
-          lda VIA1+VIA_ACR
-          and #%00111101
-          sta VIA1+VIA_ACR
-          lda VIA1+VIA_PCR
-          ora #%11100000      ; cb2 hi out
-          sta VIA1+VIA_PCR
-          lda #%01011000
-          sta VIA1+VIA_IER
-          lda #0
-          sta byte
-          sta bytfl
-          sta eoifl
-          clc
-          rts
-inix      sec
-          rts
-#else
-          lda #%00111000
-          sta PIA1+PIA_CRA
-          lda #0
-          sta PIA1+PIA_PA          ; DDRA
-          cmp PIA1+PIA_PA
-          bne inix
-          lda #%00111100           ; DAV hi
-          sta PIA1+PIA_CRA
-          
-          lda #%00111000
-          sta PIA1+PIA_CRB
-          lda #$ff
-          sta PIA1+PIA_PB          ; DDRB
-          cmp PIA1+PIA_PB
-          bne inix
-          lda #%00111100           ; NRFD hi
-          sta PIA1+PIA_CRB
-          lda #<-1                 ; DRB
-          sta PIA1+PIA_PB
-
-          lda #%00111100
-          sta VIA1+VIA_DDRB
-          cmp VIA1+VIA_DDRB
-          bne inix
-          sta VIA1+VIA_DRB         ; alle ausgaenge hi
-
-          lda VIA1+VIA_ACR
-          and #%00111101           ; PB2 Latch off, T1 timed IRQ
-          sta VIA1+VIA_ACR
-          lda VIA1+VIA_PCR
-          ora #%11100000           ; cb2 hi out (Piezo)
-          sta VIA1+VIA_PCR
-          lda #%01011000           ; T1, CB1, CB2 -IRQ off 
-          sta VIA1+VIA_IER
-          lda #0
-          sta byte
-          sta bytfl
-          sta eoifl
-          clc
-          rts
-inix      sec
-          rts
-#endif
-          .)
-
-#ifndef NOLOOP          
           .(
           
 &&&iniftab .(
@@ -1799,93 +1693,10 @@ no1       rts
 #endif /* FSIEC_USE_STDLIB */
           .)
 
-#endif	/* NOLOOP */
 
-/* Blocktiefe 2 */
-
-#ifndef NOFS
-
-aout	=atnout
-/*
-aout      pha
-          lda #0
-          sta status
-          jsr nrfdhi
-          jsr ndachi
-         
-          lda bytfl
-          beq oo1
-          sec
-          ror eoifl
-          jsr iecout
-          lda #0
-          sta bytfl
-
-oo1       pla
-          sta byte
-*/
-iec0out   sei
-          jsr waitdavhi
-          jsr atnlo
-
-iecout    .(
-          sei
-jsr nrfdhi
-jsr ndachi
-          jsr davhi
-          jsr tstdev     ;nrfdhi & ndachi = z
-          beq devnotpr
-          lda byte
-          jsr out
-ox1       JSR setti
-ox1a      JSR fragti
-          BNE XTO
-          lda VIA1+VIA_DRB
-          bpl ox1a       ; wait nrfd hi
-          lda eoifl
-          bpl o0
-          jsr eoilo
-o0        jsr davlo
-          jsr setti
-o1        jsr fragti
-          bne timeout
-          jsr fragndac   ; wait ndac hi
-          bcc o1
-          jsr davhi
-          jsr eoihi
-          lsr eoifl
-          jsr clrdata    ; alle data hi
-ox2       lda VIA1+VIA_DRB
-          lsr
-          bcs ox2        ; wait ndaclo
-          clc
-;          cli
-          rts
-          
-XTO       JSR YIELD
-          SEI
-          JMP ox1
-          .)
-          
-&seclisten sta byte
-          jsr iecout
-          jsr atnhi
-          cli
-          rts
-#endif
-
-timeout   lda #1
-          .byt $2c
-devnotpr  lda #128
-          jsr seterr
-          jsr eoihi
-          jsr davhi
-          jsr ndachi
-          sec
-          cli
-          rts
-          
-#ifndef NOLOOP
+devnotprx
+	jmp devnotpr
+        
 tiecout   .(
           ldy filenr
           lda filetab+ANZ_FT*FT_ST,y
@@ -1911,7 +1722,7 @@ to1       txa
           sei
           jsr davhi
           jsr tstdev     ;nrfdhi & ndachi = z
-          beq devnotpr
+          beq devnotprx
           lda byte
           jsr out
 ox1       jsr fragatn
@@ -2039,89 +1850,9 @@ s         sec
           rts
           .)
           .)
-#endif
 
-#ifndef NOFS
-
-&sectalk   sta byte
-          jsr iecout
-          jsr nrfdlo
-          jsr ndaclo    
-          jsr atnhi
-	  cli
-          rts
-
-&UNTALK   jsr atnlo
-          lda #95
-          .byt $2c
-&UNLISTEN lda #63
-          jsr aout
-          jsr atnhi
-          cli
-          rts
-          
-timeoutx  jmp timeout
-
-&IECIN    .(
-          sei
-          jsr ndaclo
-          jsr nrfdhi
-i1        lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne i1
-          asl
-          bcc i1
-          jsr setti
-o11       jsr fragti
-          bne timeoutx    ; c= abgelaufen
-          jsr fragdav    ; wait dav lo
-          bcs o11
-          jsr nrfdlo
-          jsr frageoi
-          bcs o12
-          lda #64
-          jsr seterr
-o12       jsr bytin
-          pha
-          jsr ndachi
-o12a      jsr fragdav
-          bcc o12a 
-          jsr ndaclo
-          lda status
-          bne o12c
-          pla
-          clc
-          cli
-          rts
-o12c      pla
-          sec
-          cli
-          rts
-          .)
-
-#ifdef INVERT          
-atnlo     lda VIA1+VIA_DRB
-          ora #%00100100
-          sta VIA1+VIA_DRB
-          rts
-atnhi     lda VIA1+VIA_DRB
-          and #%11011011
-          sta VIA1+VIA_DRB
-          rts
-#else
-atnhi     lda VIA1+VIA_DRB
-          ora #%00100100
-          sta VIA1+VIA_DRB
-          rts
-atnlo     lda VIA1+VIA_DRB
-          and #%11011011
-          sta VIA1+VIA_DRB
-          rts
-#endif
-#endif
 
 #ifdef INVERT
-#ifndef NOLOOP
 atnalo    lda VIA1+VIA_DRB
           ora #%00100000
           sta VIA1+VIA_DRB
@@ -2130,41 +1861,9 @@ atnahi    lda VIA1+VIA_DRB
           and #%11011111
           sta VIA1+VIA_DRB
           rts
-#endif
 
-eoilo     lda VIA1+VIA_DRB
-          ora #%00010000
-          sta VIA1+VIA_DRB
-          rts
-eoihi     lda VIA1+VIA_DRB
-          and #%11101111
-          sta VIA1+VIA_DRB
-          rts
-
-ndaclo    lda VIA1+VIA_DRB
-          ora #%00001000
-          sta VIA1+VIA_DRB
-          rts
-ndachi    lda VIA1+VIA_DRB
-          and #%11110111
-          sta VIA1+VIA_DRB
-          rts
-
-nrfdlo    lda #60
-          sta PIA1+PIA_CRB
-          rts
-nrfdhi    lda #52
-          sta PIA1+PIA_CRB
-          rts
-
-davlo     lda #60
-          sta PIA1+PIA_CRA
-          rts
-davhi     lda #52
-          sta PIA1+PIA_CRA
-          rts
 #else
-#ifndef NOLOOP
+
 atnahi    lda VIA1+VIA_DRB
           ora #%00100000
           sta VIA1+VIA_DRB
@@ -2175,116 +1874,7 @@ atnalo    lda VIA1+VIA_DRB
           rts
 #endif
 
-eoihi     lda VIA1+VIA_DRB
-          ora #%00010000
-          sta VIA1+VIA_DRB
-          rts
-eoilo     lda VIA1+VIA_DRB
-          and #%11101111
-          sta VIA1+VIA_DRB
-          rts
+#endif	/* NOLOOP */
 
-ndachi    lda VIA1+VIA_DRB
-          ora #%00001000
-          sta VIA1+VIA_DRB
-          rts
-ndaclo    lda VIA1+VIA_DRB
-          and #%11110111
-          sta VIA1+VIA_DRB
-          rts
-
-nrfdhi    lda #60
-          sta PIA1+PIA_CRB
-          rts
-nrfdlo    lda #52
-          sta PIA1+PIA_CRB
-          rts
-
-davhi     lda #60
-          sta PIA1+PIA_CRA
-          rts
-davlo     lda #52
-          sta PIA1+PIA_CRA
-          rts
-#endif
-
-waitdavhi lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne waitdavhi
-          and #$40
-          beq waitdavhi
-          rts
-
-tstdev    lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne tstdev
-          and #%10000001
-          cmp #%10000001
-          rts
-
-#ifdef INVERT
-clrdata   lda #0
-          sta PIA1+PIA_PB
-          rts
-
-out       sta PIA1+PIA_PB
-          rts
-#else
-clrdata   lda #<-1
-          sta PIA1+PIA_PB
-          rts
-
-out       eor #$ff
-          sta PIA1+PIA_PB
-          rts
-#endif
-
-waitnrfdhi
-          lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne waitnrfdhi
-          asl
-          bcc waitnrfdhi
-          rts
-
-fragndac  lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne fragndac
-          lsr
-          rts
-
-fragdav   lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne fragdav
-          asl
-          asl
-          rts
-
-seterr    ora status
-          sta status
-          rts
-
-bytin     lda PIA1+PIA_PA
-          eor #$ff
-          rts
-
-&setti    lda #<65000
-          sta VIA1+VIA_T1CL
-          lda #>65000     
-          sta VIA1+VIA_T1CH
-          rts
-&fragti   lda VIA1+VIA_IFR
-          and #%01000000
-          rts
-
-frageoi   lda VIA1+VIA_DRB
-          cmp VIA1+VIA_DRB
-          bne frageoi
-          lsr
-          lsr
-          rts
-
-
-#undef PIA1
 #undef VIA1
 

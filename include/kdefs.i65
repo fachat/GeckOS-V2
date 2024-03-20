@@ -125,6 +125,8 @@
 
 #define	  E_NOTHREAD  	<-26	/* no more free thread */
 
+#define	  E_SYNTAX  	<-27	/* syntax error */
+
 /* file handling errors */
 
 #define   E_FNODRV  	<-32	/* illegal drive number			*/
@@ -156,19 +158,22 @@
 /**************************************************************************/
 /*        Stream-Commands          */
 
-#define   SC_GET    0
-#define   SC_REG_RD 1
-#define   SC_REG_WR 2
-#define   SC_CLR    3
-#define   SC_EOF    4
-#define   SC_NUL    5
-#define   SC_FRE    6
-#define   SC_STAT   7
-#define   SC_GANZ   8
-#define   SC_RWANZ  9
+#define   SC_GET    0		/* get a new stream (reader = writer counter = 1) */
+#define   SC_REG_RD 1		/* register a new reader for a stream (reader counter ++) */
+#define   SC_REG_WR 2		/* register a new writer for a stream (writer counter ++) */
+#define   SC_CLR    3		/* empty a stream */
+#define   SC_EOF    4		/* send an EOF (writer counter --) */
+#define   SC_NUL    5		/* notify that (reader counter --) */
+#define   SC_FRE    6		/* free a stream (reader & writer counter --) */
+#define   SC_STAT   7		/* return stream status byte */
+#define   SC_NUMBYTES 8		/* get current number of data bytes in stream */
+#define   SC_RWANZ  9		/* return the reader counter in YR and the writer counter in AC */
 #define	  SC_ESTAT  10		/* get error state */
 #define   SC_SSTAT  11		/* set error state */
 #define   SC_CSTAT  12		/* clear error state */
+#define   SC_FGPID  13		/* attach the PID of the foreground process */
+#define   SC_FGSIG  14		/* send a signal to the PID of the attached foreground process */
+#define   SC_GETFGPID 15	/* get the foreground PID attached to a stream (returned in YR) */
 
 #define	  SCE_PULL  %10000000	/* reader pulls */
 #define	  SCE_PUSH  %01000000	/* writer pushes */
@@ -177,6 +182,10 @@
 			        /* %00 = no error, != $00 error, to be def'd */ 
 #define	  SCE_WERRM %00000011	/* writer has error condition (read error,..)*/
 			        /* %00 = no error, != $00 error, to be def'd */ 
+
+#define   LM_NONE	0
+#define	  LM_TERM	1
+#define	  LM_KEEP	$ff
 
 /*        Device-Commands          */
 
@@ -213,7 +222,7 @@
 #define	NMI_ON     	0	/* beq */
 #define	NMI_OFF		1
 
-/*        task state              */
+/*        task (thread) state              */
 
 #define   TS_FREE   0
 #define   TS_ENV    1	/* allocated but not running		*/
@@ -226,29 +235,68 @@
 #define   TS_WXTX   8	/* wait for certain task to SEND	*/
 #define   TS_WFSEM  9	/* wait for semaphore			*/
 #define	  TS_WSIG   10	/* wait for signal 			*/
+#define	  TS_RUN    11	/* Currently running (GETINFO caller)	*/
+
+/*        task (task) state              */
+
+/* note: status affects all threads */
+
+TTS_FREE		=0	/* task not used */
+TTS_RUN			=1	/* task has running threads */
+TTS_DEAD		=2	/* task is dead, but waiting for CHECKCHILD */
+TTS_SUSP		=3	/* task is suspended */
+TTS_SUSP_ACK		=4	/* task is suspended and has been sent to parent */
+TTS_PAUSE		=5	/* task is suspended and waits for a signal */
+
+/* 	  job commands			*/
+
+JC_BACKGROUND		=1	/* send given task into background */
+JC_FOREGROUND		=2	/* pull given task into foreground */
+JC_SUSPEND		=3	/* suspend current task */
+JC_SUSPIFBG		=4	/* suspend current task if not foreground */
+JC_PAUSE		=5	/* pause current task and wait for signal */
+JC_INFO			=6	/* return # of threads in Y and TTS_* status in AC for a task given in X */
+JC_PAUSEIFBG		=7	/* pause current task if not foreground */
 
 /*        GETINFO-struct            */
 
-#define   ANZ_ENV   12	/* number of valid entries		*/
+/*
+ The GETINFO return struct starts with some information on the task itself,
+ then follows a list of entries per thread
+*/
 
-#define   TN_PID    0	/* process ID 				*/
-#define   TN_NTHREADS 1	/* task state				*/
-#define	  TN_ENV    2	/* environment number			*/
-#define	  TN_PARENT 3	/* parent task				*/
-#define   TN_MEM    4	/* used amount of memory		*/
-#define   TN_SIGNAL 5	/* interrupt routine address		*/
-#define   TN_STDIN  7	/* stdin stream				*/
-#define   TN_STDOUT 8	/* stdout stream			*/
-#define   TN_STDERR 9	/* stderr stream			*/
-#define   TN_SIGMASK 10	/* signal mask				*/
-#define   TN_EXECADDR 11 /* address where task was started (main) */
-#define   TN_PRIO   13	/* start of program name (if avail.)	*/
-#define   TN_NAME   14	/* start of program name (if avail.)	*/
-#define   TN_SLEN   21	/* length of one entry			*/
+#define	TID_START	<-1
+
+TN_PID    		=0	/* process ID 				*/
+TN_STATUS    		=1	/* task status, see TTS_* above		*/
+TN_NTHREADS 		=2	/* number of threads (or $ff if dead) 	*/
+TN_ENV    		=3	/* environment number			*/
+TN_PARENT 		=4	/* parent task				*/
+TN_MEM    		=5	/* used amount of memory		*/
+TN_SIGNAL 		=6	/* signal routine address		*/
+TN_STDIN  		=8	/* stdin stream				*/
+TN_STDOUT 		=9	/* stdout stream			*/
+TN_STDERR 		=10	/* stderr stream			*/
+TN_SIGMASK 		=11	/* signal mask				*/
+TN_EXECADDR 		=12 	/* address where task was started (main) */
+TN_PRIO   		=14	/* task priorit				*/
+TN_NAME   		=15	/* start of program name (if avail.)	*/
+
+TN_SLEN   		=24	/* length of one entry			*/
 
 /* Note: must be at least 5 or more, to not trigger a bug in 
    mon.a65 and other parts that us "TNAMELEN-5" as length of .dsb filler */
 #define   TNAMLEN   (TN_SLEN-TN_NAME)	/* length of name	*/
+.assert TNAMLEN >= 5, "name too short"
+
+TNT_ID			=0	/* thread ID				*/
+TNT_ST			=1	/* thread state	(see TS_* above) 	*/
+TNT_SP			=2	/* thread stack pointer			*/
+TNT_ADDR		=3	/* return address from stack		*/
+TNT_PAR			=5	/* three byte thread parameter space	*/
+
+TNT_SLEN		=8	/* length of entry			*/
+
 
 /*        Terminal Commands        */
 
@@ -313,11 +361,12 @@
 
 #define	SIG_INTABLE	%10000000	/* interruptable system call mask */
 #define	SIG_CHLD	%01000000	/* child has terminated */
-#define	SIG_KILL	%00100000	/* process shall terminate */
+#define	SIG_KILL	%00100000	/* process shall terminate (ctrl-D) */
 #define	SIG_BRK		%00010000	/* ctrl-C received */
+#define	SIG_SUSPEND	%00001000	/* ctrl-Z received */
+#define	SIG_CONT	%00000100	/* child task got suspended */
 
-#define	SIG_USR4	%00001000	/* 4 user signals */
-#define	SIG_USR3	%00000100
+/* 2 user signals */
 #define	SIG_USR2	%00000010
 #define	SIG_USR1	%00000001
 

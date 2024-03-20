@@ -1,0 +1,26 @@
+
+= GeckOS Next Generation
+(c) 2023 A. Fachat (afachat@gmx.de)
+
+== High Level Goal
+
+The current operating system suffers from a a number of deficiencies during build and boot time:
+
+1. There is no consistent build process for kernel, lib6502, and the "ROM image". It is different by architecture, and hand-crafted for each architecture, e.g. when distributing segments into available memory.
+2. The "ROM image tasks" are special in that they are single-instance (at least without MMU) and rely on the "ROM" being mapped into the memory map of the process. This is highly architecture-specific
+
+These new concepts will help improve the build and load process:
+
+== Concepts
+
+- a linker, that allows simple build-time linking of o65 files (e.g. merge segments, relocation, resolving of undefined labels)
+
+- fsdev looses its ability as ROM directory, into an "fsmap" process, that uses architecture-specific modules to map memory
+- an fsromdisk/fsramdsk/fscache process can use ROM/RAM for normal file storage. arch-specific modules provide the storage (e.g. C64 RAM expansion)
+- "build time modular" sysfs, that includes the hardware-specific filesystems (fsmap, fsdev, fsromdsk/fsramdsk/fscache), and potentially locd into a single task (to save entries in task table)
+
+- build tool that allows automatic distribution and re-location of o65 input files into appropriate kernel, lib, and rom images
+
+== APIs
+
+

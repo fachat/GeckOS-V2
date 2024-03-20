@@ -91,20 +91,20 @@
 #define	ROMSTART	$8000
 #endif
 
-#include  "arch/config.i65"
+#include  "config.i65"
 #include  "kdefs.i65"
 
 #endif	/* ROM */
 
 /***************************************************************************/
 
-#define   VA        1
-#define   VB        4
+#define   VA        2
+#define   VB        2
 #define   VC        0
 
-#define   D_Y       21
-#define   D_M       04
-#define   D_D       20
+#define   D_Y       24
+#define   D_M       03
+#define   D_D       01
 
 #define   SYSTEM
 

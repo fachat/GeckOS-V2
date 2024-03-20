@@ -27,7 +27,7 @@
 
 &&getc		=notimp
 &&putc		=notimp
-&&gets		=notimp
+&&strcmd	=notimp
 &&ungetc	=notimp
 &&getstr	=notimp
 &&frestr	=notimp
@@ -41,7 +41,8 @@
 #define   S_CNTW    2*ANZSTRM      /* number of Writer         */
 #define   S_CNTR    3*ANZSTRM      /* number of Reader         */
 #define   S_ESTAT   4*ANZSTRM      /* error state byte	       */
-#define   S_SLEN    5*ANZSTRM      /* Length of struct         */
+#define   S_FGPID   5*ANZSTRM      /* Length of struct         */
+#define   S_SLEN    6*ANZSTRM      /* Length of struct         */
 
 /*
  * The stream buffer length must be a power of two, 64 or 128 (tested).
@@ -89,7 +90,8 @@ l1        sta STRM,x
           clc
           rts       ;          jmp inifstr
           .)
-          
+
+setstdstr jsr teststd          
 #if S_AMAX = $80
 setstream .(
           cpx #ANZSTRM
@@ -141,8 +143,7 @@ ssok
           php
           sei
           sty SYR
-          jsr teststd
-          jsr setstream
+          jsr setstdstr
           bcs putnostr
           lda STRM+S_IO,x
           cmp STRM+S_II,x
@@ -185,9 +186,8 @@ xx
           php
           sei
           sty SYR
-          jsr teststd
           sta SAC
-          jsr setstream
+          jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
           beq snul            ; NUL-Status dann ende
@@ -222,12 +222,11 @@ full      lda #E_SFULL
           php
           sei
           sty SYR
-          jsr teststd
           sta SAC
-          jsr setstream
+          jsr setstdstr
           bcs putnostr
           lda STRM+S_CNTR,x
-          beq snul            ; NUL-Status dann ende
+          beq snul            ; NUL-Status then end
           lda STRM+S_IO,x
           sec
           sbc #1
@@ -257,26 +256,28 @@ full      lda #E_SFULL
           .byt $2c
 &&frestr   lda #SC_FRE
 
-&&gets    
+&&strcmd    
           jsr memsys
 	  php
           sei
 
           sty SYR
-          
+
+	  ; -------------
           cmp #SC_GET
           bne a0
           jmp findnew
 
-a0        jsr teststd
-          sta SAC
-          jsr setstream
+	  ; -------------
+a0        sta SAC
+          jsr setstdstr
           bcs putnostr
           ldy SYR
           lda SAC
 
+	  ; -------------
           cmp #SC_STAT
-          bne andere	
+          bne others	
 sc_stat
           lda STRM+S_CNTR,x
           beq nul
@@ -315,8 +316,9 @@ retx
           cmp #1
 	  jmp memtask
 
-andere
-	  cmp #SC_GANZ
+	  ; -------------
+others
+	  cmp #SC_NUMBYTES
           bne a00
           sec
           lda STRM+S_IO,x
@@ -326,6 +328,7 @@ andere
           and #S_AMASK
           jmp ret
 
+	  ; -------------
 a00       cmp #SC_EOF
           bne a1   
           lda STRM+S_CNTW,x
@@ -333,14 +336,17 @@ a00       cmp #SC_EOF
           dec STRM+S_CNTW,x
           jmp ok
 
+	  ; -------------
 a1        cmp #SC_CLR
           bne a2
-clrstr    lda #0
+clrstr    
+	  lda #0
           sta STRM+S_II,x
           sta STRM+S_IO,x
           sta STRM+S_ESTAT,x
           beq ok1
 
+	  ; -------------
 a2        cmp #SC_FRE
           bne a3
           lda STRM+S_CNTW,x
@@ -348,16 +354,19 @@ a2        cmp #SC_FRE
           dec STRM+S_CNTW,x
 a2a       jmp frer
 
+	  ; -------------
 a3        cmp #SC_REG_RD
           bne a4
           inc STRM+S_CNTR,x
           bne ok1
 
+	  ; -------------
 a4        cmp #SC_REG_WR
           bne a5
           inc STRM+S_CNTW,x
           bne ok1
 
+	  ; -------------
 a5        cmp #SC_NUL
           bne a6;   illcode
 frer      lda STRM+S_CNTR,x
@@ -365,35 +374,74 @@ frer      lda STRM+S_CNTR,x
           dec STRM+S_CNTR,x
 ok1       jmp ok
 
+	  ; -------------
 a6        cmp #SC_RWANZ
           bne estat
           ldy STRM+S_CNTR,x
           lda STRM+S_CNTW,x
           jmp retx
 
+	  ; -------------
 nofrex    lda #E_NOSTR
-	  bne ret
+	  bne ret2
 
+	  ; -------------
 estat          
 	  cmp #SC_ESTAT		; get error stat byte in yr
 	  bne sestat
 	  lda STRM+S_ESTAT,x
 	  sta SYR
 	  jmp sc_stat
+	  ; -------------
 sestat	  cmp #SC_SSTAT		; set error stat byte
 	  bne cestat
 	  tya
 	  ora STRM+S_ESTAT,x
 	  sta STRM+S_ESTAT,x
-	  jmp ret
+ret2	  jmp ret
+	  ; -------------
 cestat	  cmp #SC_CSTAT		; clear error stat byte
-	  bne illcode1
+	  bne fgpid
 	  tya
 	  eor #$ff
 	  and STRM+S_ESTAT,x
 	  sta STRM+S_ESTAT,x
 	  jmp ret
 
+	  ; -------------
+fgpid	  cmp #SC_FGPID
+	  bne gfgpid
+	  lda STRM+S_FGPID,x
+	  cmp #<-1		; only set the fg pid when it is either not set 
+	  beq notsetyet
+	  cmp actTask		; or we currently are the fg pid (typically assigning to parent)
+	  bne ignore
+notsetyet lda SYR
+	  sta STRM+S_FGPID,x
+ignore 	  jmp ok
+	
+
+gfgpid	  cmp #SC_GETFGPID
+	  bne fgsig
+	  lda STRM+S_FGPID,x
+	  tay
+	  lda #E_OK
+	  jmp retx		; keep YR
+
+	  ; -------------
+fgsig     cmp #SC_FGSIG
+	  bne illcode1
+	  lda STRM+S_FGPID,x
+	  cmp #<-1
+;.byt 2
+	  beq ignore
+	  tax
+	  lda SYR
+	  sec
+	  jsr sendsig
+	  jmp ret
+
+	  ; -------------
 illcode1  jmp illcode
 
 findnew   ldx #0
@@ -406,198 +454,19 @@ lx        lda STRM+S_CNTW,x
           bcs nofrex
 ly        inc STRM+S_CNTR,x
           inc STRM+S_CNTW,x
+	  lda #<-1
+	  sta STRM+S_FGPID,x
           jmp clrstr      
           .)
 
-#if 0
-	  .(
-&&getb    .(
-          jsr memsys
-          php
-          sei
-          sty SYR
-          jsr teststd
+	; set foreground PID from signal handler
+	; X is stream number
+	; A is PID
+&sig_fgpid .(
+	sta STRM+S_FGPID,x
+	rts
+	.)
 
-          sta SAC
-
-          jsr setstream
-          bcs putnostr3
-
-	  lda STRM+S_II,x
-	  cmp STRM+S_IO,x
-	  beq empty3
-
-#ifndef NO_MMU
-	  lda #0
-	  jsr setmmu1
-	  ldy SYR
-	  lda BLKSIZ,y
-	  sec
-	  sbc STRM+S_IO,x
-	  sta BZEI
-	  php
-	  lda BLKSIZ+1,y
-	  sta BZEI+1
-	  lsr
-	  lsr
-	  lsr
-	  lsr
-	  jsr setmmu1
-	  lda BZEI+1
-	  and #$0f
-	  ora #$01
-	  plp
-	  sbc #0
-	  sta BZEI+1
-#else
-	  ldy SYR
-	  sec
-	  lda 0,y
-	  sbc STRM+S_IO,x
-	  sta BZEI
-	  lda 1,y
-	  sbc #0
-	  sta BZEI+1
-#endif
-	  lda SAC
-	  sta SYR
-
-          ldy STRM+S_IO,x
-l0
-	  lda (SZEI),y
-	  sta (BZEI),y
-	  iny
-	  tya
-	  bpl l1		; this heavily depends on Streamsize = 128!!
-	  clc
-	  adc BZEI
-	  sta BZEI
-	  lda #0
-	  bcc l1
-	  inc BZEI+1	  
-l1	  tay
-	  cmp STRM+S_II,x
-	  beq end
-l2 	  dec SYR
-	  bne l0
-end
-	  tya
-	  sta STRM+S_IO,x
-	  lda SAC
-	  sec
-	  sbc SYR
-	  clc
-
-          plp
-          clc
-          jmp memtask
-	  ;jsr memtask
-          ;rts
-          .)
-
-snul3     lda #E_NUL
-          .byt $2c
-putnostr3 lda #E_NOSTR
-          .byt $2c
-full3     lda #E_SFULL
-          .byt $2c
-empty3    lda #E_SEMPTY
-          jmp xerr
-
-&&putb    .(
-          jsr memsys
-          php
-          sei
-          sty SYR
-          jsr teststd
-
-          sta SAC
-
-          jsr setstream
-          bcs putnostr3
-          lda STRM+S_CNTR,x
-          beq snul3            ; NUL-Status dann ende
-
-	  ldy STRM+S_II,x
-	  iny
-	  tya
-	  and #$7f
-	  cmp STRM+S_IO,x
-	  beq full3
-
-#ifndef NO_MMU
-	  lda #0
-	  jsr setmmu1
-	  ldy SYR
-	  lda BLKSIZ,y
-	  sec
-	  sbc STRM+S_II,x
-	  sta BZEI
-	  php
-	  lda BLKSIZ+1,y
-	  sta BZEI+1
-	  lsr
-	  lsr
-	  lsr
-	  lsr
-	  jsr setmmu1
-	  lda BZEI+1
-	  and #$0f
-	  ora #$01
-	  plp
-	  sbc #0
-	  sta BZEI+1
-#else
-	  ldy SYR
-	  sec
-	  lda 0,y
-	  sbc STRM+S_II,x
-	  sta BZEI
-	  lda 1,y
-	  sbc #0
-	  sta BZEI+1
-#endif
-
-	  lda SAC
-	  sta SYR
-
-          ldy STRM+S_II,x
-l0
-	  lda (BZEI),y
-	  sta (SZEI),y
-	  iny
-	  tya
-	  bpl l1		; this heavily depends on Streamsize = 128!!
-	  clc
-	  adc BZEI
-	  sta BZEI
-	  lda #0
-	  bcc l1
-	  inc BZEI+1	  
-l1	  tay
-	  cmp STRM+S_IO,x
-	  bne l2
-	  dey
-	  jmp end
-l2 	  dec SYR
-	  bne l0
-end
-	  tya
-	  sta STRM+S_II,x
-	  lda SAC
-	  sec
-	  sbc SYR
-	  clc
-
-          plp
-          clc
-          jmp memtask
-	  ;jsr memtask
-          ;rts
-          .)
-
-	  .)
-#endif		/* endif 0 to disable getb/putb */
           .)
 
 #endif	/* NO_STREAMS */

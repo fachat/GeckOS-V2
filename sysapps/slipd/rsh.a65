@@ -65,13 +65,31 @@
 #define	RSR_WR		2
 #define	RSR_CLOSING	3
 
+	.data
 &&rsh_srv 
         .byte 0,0,0,0, 0,0, RSH_PORT, 0, SFL_MULT
         .word rsh_lopen-1, rsh_queue-1, rsh_loop-1, rsh_signal-1
 
+msg	.asc "Starting TCP srv ",0
+atmsg	.asc " at port ",0
+	.text
+
 #ifndef NO_RSH
-&rsh_init .(
-DB("rsh_init^m^j")
+&&&rsh_init .(
+	lda #<msg
+	ldy #>msg
+	jsr strout
+	lda #<lname
+	ldy #>lname
+	jsr strout
+	lda #<atmsg
+	ldy #>atmsg
+	jsr strout
+	lda rsh_srv+6
+	ldy rsh_srv+7
+	jsr wordout
+	jsr crlfout
+
 	lda #0
 	sta thstate
         lda #<rsh_srv
@@ -624,7 +642,7 @@ stdo	.byt 0,0	; stdout file numbers
 stde	.byt 0
 pid	.word 0
 forkb	.dsb MAXBUF
-lname	.dsb MAXBUF
+&lname	.dsb MAXBUF
 	.text
 
 &rsh_open .(
@@ -805,9 +823,6 @@ noin
 realname
 	sta name
 	sty name+1
-
-DB("loginprg set to ")
-lda name:ldy name+1:jsr ETxtout:jsr ECrlfout
 
 	ldy #0
 l0	lda (name),y

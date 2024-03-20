@@ -1,11 +1,14 @@
 
-MANPAGES=../../../*/*/*.1.adoc
+#MANPAGES=../../../*/*/*.1.adoc
 
 apps = lsh lmon
 APPSDIR=../../../apps
 
-sysapps = slipd ps kill ontty lsmem basic
+sysapps = ps kill ontty lsmem basic
 SYSAPPSDIR=../../../sysapps
+
+slipapps = slipd slipmind slipfsd slipwwwd sliprshd
+SLIPAPPSDIR=../../../sysapps/slipd
 
 files = mkdir rmdir rm format chkdsk ls mv
 FILESDIR=../../../apps/file
@@ -13,7 +16,7 @@ FILESDIR=../../../apps/file
 filter = cat wc more hexdump
 FILTERDIR=../../../apps/filter
 
-inet = tlogind telnet httpd
+inet = tlogin telnet httpd
 INETDIR=../../../apps/inet
 
 XA=xa
@@ -29,7 +32,7 @@ boot: boot.a65
 	${XA} boot.a65 -o boot
 
 clean:
-	rm -f c64rom boot osa.d64 osa.x64
+	rm -f c64rom boot osa.x64
 	rm -f ${sysapps}
 	rm -f vice.trace reltest
 
@@ -45,15 +48,15 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} c64rom boot loader index.html test.bat
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat
+osa.d64: ${files} ${filter} ${sysapps} ${slipapps} ${apps} ${inet} c64rom boot loader index.html test.bat
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${SLIPAPPSDIR}/, ${slipapps}} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat semlock semwait sigrecv sigsend
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
 	${X64} -autostart osa.d64
 
-emuslip: all
-	x64+rs232 -kernal ~/csa/tmp/kernalb -speed 200
+emuslip: osa.d64
+	${X64} -rsuser -rsuserdev 2 -rsuserbaud 9600 -rsdev3 "|socat - PTY,link=/tmp/viceser" -autostart osa.d64
 
 ##############################################################################
 #
@@ -67,6 +70,9 @@ ${apps}:
 ${sysapps}: 
 	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
 	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
+
+${slipapps}: 
+	(cd ${SLIPAPPSDIR}; make $@;)
 
 ${files}:
 	(cd ${FILESDIR}; make $@;)

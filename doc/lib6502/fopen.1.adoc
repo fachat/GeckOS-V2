@@ -1,0 +1,75 @@
+
+= fopen(1)
+:doctype: manpage
+
+== NAME
+fopen - open a file
+
+== SYNOPSIS
+Input::
+	* A/Y - address of null-terminated filename
+	* X - file mode
+Call::
+	jsr fopen
+Output::
+	* C=0
+		** XR - return the file number
+	* C=1
+		** AC - error code 
+
+NOTE: may modify any register
+
+== DESCRIPTION
+Opens a file. Files are named as: "Device:directory/filename", where Device depends on the OS. There might be OSes where it's a single character (like A: or 8:), others might have a real name. The lib needs to be able to parse its own, implementation dependent namespace only. And the application should not assume anything about the length of the device name. Directory separator is "/". Escape sequence for the directory separator is "\/". For the filename interpretation see the beginning of the directory section. Character set is ASCII (i.e. all codes between 0x20 and 0x7f must be useable, others are not allowed).
+
+The filesystem might imply other limitations on filename length, if there are directories at all, or the allowed characters. Wildcards are "*" that match any string and "?" that match exacly one character. The interpretation might depend on the filesystem, i.e. may not even be the same on the same system, but on different devices. Escape sequences are "\*" and "\?". Escape sequence for "\" is "\\". 
+
+The mode byte can be one of the abovementioned, which map to
+
+OPEN_RD::         0	- read only
+OPEN_WR::         1	- write only
+OPEN_RW::         2	- read/write
+OPEN_AP::         3	- append
+
+Append means, that before any write to the file, the file pointer is positioned at the end of the file. The mode can be or'd with some other bits, like
+
+OPEN_TRUNC::      $80 -    If the file already exists, it will be truncated (when writing).
+OPEN_EXCL::       $40 -    Only one process may have this file open at one time.
+OPEN_NOCREAT::    $20 -    Do not automatically create when writing (OPEN_WR, _RW, _AP).
+
+Default is to automatically create the file when it does not exist and it is opened for writing. 
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOTFOUND:: 
+	file not found
+E_PERMISSION::
+	operation not allowed on file
+E_FNAMELEN::
+	file name too long
+E_DIRECTORY::
+	path is a directory, not a file
+
+
+== SEE ALSO
+link:../lib6502.7.adoc[lib6502(7)],
+link:fclose.1.adoc[fclose(1)]
+link:fgetc.1.adoc[fgetc(1)]
+link:fputc.1.adoc[fputc(1)]
+link:fread.1.adoc[fread(1)]
+link:fwrite.1.adoc[fwrite(1)]
+link:fseek.1.adoc[fseek(1)]
+link:pipe.1.adoc[pipe(1)]
+link:flock.1.adoc[flock(1)]
+link:fcntl.1.adoc[fcntl(1)]
+link:fcmd.1.adoc[fcmd(1)]
+link:stddup.1.adoc[stddup(1)]
+link:dup.1.adoc[dup(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

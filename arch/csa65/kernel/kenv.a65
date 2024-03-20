@@ -165,10 +165,18 @@ setthread .(
 newThread .byt 0
         .text
 
+; note - should in theory not conflict with mempage from memsys, as setthread is interruptible and memsys would mangle it
+; therefore now setting a new thread is interrupt-protected
+; note - mempage=3 is kernal memsys/memtask; mempage=4 is video device (map video during interrupt)
+mempage	=3		
+
         cmp actThread
         bne doit
         rts
 doit
+	php
+	sei
+
         sta newThread
 
         ldx actThread
@@ -177,21 +185,21 @@ doit
 
 	ldy actEnv
 	lda envTab + TE_MMU,y
-	sta MMU+3
+	sta MMU+mempage
 
-        lda BLKSIZ*3 + THREADSAVE
+	; save thread
+        lda BLKSIZ*mempage + THREADSAVE
         sta threadTab + TH_LIBSAVE,x
-        lda BLKSIZ*3 + THREADSAVE+1
+        lda BLKSIZ*mempage + THREADSAVE+1
         sta threadTab + TH_LIBSAVE+1,x
 
-;savetask
+	; save task - is this actually needed when we have 1 task/env?
         ldy threadTab + TH_TASK,x
-        lda BLKSIZ*3 + TASKSAVE
+        lda BLKSIZ*mempage + TASKSAVE
         sta taskTab + TT_LIBSAVE,y
-        lda BLKSIZ*3 + TASKSAVE + 1
+        lda BLKSIZ*mempage + TASKSAVE + 1
         sta taskTab + TT_LIBSAVE + 1,y
 nosave
-;loadtask
         ldx newThread
         stx actThread
         cpx #<-1
@@ -206,21 +214,23 @@ load
 	sta actEnv
 	tay
 	lda envTab + TE_MMU,y
-	sta MMU+3
-;loadtask
+	sta MMU+mempage
+
+	;load task
 	ldy actTask
         lda taskTab + TT_LIBSAVE,y
-        sta BLKSIZ*3 + TASKSAVE
+        sta BLKSIZ*mempage + TASKSAVE
         lda taskTab + TT_LIBSAVE + 1,y
-        sta BLKSIZ*3 + TASKSAVE + 1
+        sta BLKSIZ*mempage + TASKSAVE + 1
 
-;loadthread
+	;load thread
         lda threadTab + TH_LIBSAVE,x
-        sta BLKSIZ*3 + THREADSAVE
+        sta BLKSIZ*mempage + THREADSAVE
         lda threadTab + TH_LIBSAVE+1,x
-        sta BLKSIZ*3 + THREADSAVE+1
+        sta BLKSIZ*mempage + THREADSAVE+1
 noload
-endset  rts
+endset  plp
+	rts
         .)
 
 initsp	.(
@@ -230,6 +240,7 @@ initsp	.(
 	rts
 	.)
 
+	; note: works for the active thread only
 pull	.(
 	MAPSYSBUF
 	ldx actThread
@@ -240,6 +251,7 @@ pull	.(
 	rts
 	.)
 
+	; note: works for the active thread only
 push	.(
 	pha
 	MAPSYSBUF
@@ -396,7 +408,7 @@ msys
           pla		; y/a hold the return address now
 
           tsx
-          stx BLKSIZ*mempage + mmu
+          stx BLKSIZ*mempage + mmu	; temporary storage for stack ptr
           ldx #SYSPAGE
           stx MMU
           ldx SSP
@@ -409,7 +421,7 @@ msys
           tya
           pha
 #endif
-	  lda mmu
+	  lda mmu	; save stack ptr
 	  ldy actThread
 	  sta threadTab + TH_SP,y
 
@@ -538,13 +550,18 @@ l2	jsr getmem
 	dec gdiv
 	bne l2
 
+	php
+	sei			; protect region where MMU is used
+
 	ldx gdiv3
 
 	lda envTab + TE_MMU,x	; needs to work with MAPSYSBUF of current
-	sta MMU+3		; thread -> not page 1
+	sta MMU+4		; thread -> not page 1
 	lda #0
-	sta ENVSAVE+(3*BLKSIZ)
-	sta ENVSAVE+(3*BLKSIZ)+1
+	sta ENVSAVE+(4*BLKSIZ)
+	sta ENVSAVE+(4*BLKSIZ)+1
+
+	plp
 
 	lda #1
 	sta envTab + TE_NTASKS,x

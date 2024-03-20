@@ -19,113 +19,132 @@ application.
 Most kernel routines return an error code in the accumlator (a), if the
 carry flag is reset upon return. Otherwise the ac might contain data.
 
-Please note that, while the addresses here are given as starting with $f000, 
-in the real system the address could be basically anywhere depending on the
-architecture. The loader relocates them on the basis of the "OSA2KERNEL"
+Please note that, in the real system the address could be basically anywhere depending on the
+architecture. The loader relocates them on the basis of the *OSA2KERNEL*
 label: the file contains it as undefined label, and the loader relocates
 the kernel addresses that are stored as offset to this base as appropriate.
+In this table only the offsets to the kernel jump table label *OSA2KERNEL* are given.
 
 === GENERIC CALLS
 
-$f000  	link:kernel/RESET.2.adoc[RESET]::	System reset
++$00  	link:kernel/RESET.2.adoc[RESET]::	System reset
 
 === MEMORY MANAGEMENT / MMU CALLS
 For more information on MMU memory management handling see
 link:mmu.7.adoc[MMU].
 
-$f003	link:kernel/ENMEM.2.adoc[ENMEM]::	Enable 4k memory block, no in xr, for memory management - MMU version only
++$03	link:kernel/ENMEM.2.adoc[ENMEM]::	Enable 4k memory block, no in xr, for memory management - MMU version only
 
-$f006	link:kernel/SETBLK.2.adoc[SETBLK]:: 	set memory block ac at MMU entry yr - returns old entry in ac. MMU version only
++$06	link:kernel/SETBLK.2.adoc[SETBLK]:: 	set memory block ac at MMU entry yr - returns old entry in ac. MMU version only
 
-$f02d	link:kernel/SBRK.2.adoc[SBRK]::		sets the freely available RAM area in the active environment
++$2d	link:kernel/SBRK.2.adoc[SBRK]::		sets the freely available RAM area in the active environment
 
 === STREAM HANDLING
 The stream handling is described further in section
 link:streams.7.adoc[Streams].
 
-$f009	link:kernel/GETSTR.2.adoc[GETSTR]::	Get a free stream. increase read and write task counter
++$09	link:kernel/GETSTR.2.adoc[GETSTR]::	Get a free stream. increase read and write task counter
 
-$f00c	link:kernel/FRESTR.2.adoc[FRESTR]::	decreases read and write task counter, thus freeing the stream, if both result in zero. 
++$0c	link:kernel/FRESTR.2.adoc[FRESTR]::	decreases read and write task counter, thus freeing the stream, if both result in zero. 
 
-$f00f	link:kernel/PUTC.2.adoc[PUTC]::		puts a byte on the stream.
++$0f	link:kernel/PUTC.2.adoc[PUTC]::		puts a byte on the stream.
 
-$f012	link:kernel/GETC.2.adoc[GETC]::		Get a byte from the stream.
++$12	link:kernel/GETC.2.adoc[GETC]::		Get a byte from the stream.
 
-$f015	link:kernel/UNGETC.2.adoc[UNGETC]::	Gives byte from stream back. 
++$15	link:kernel/UNGETC.2.adoc[UNGETC]::	Gives byte from stream back. 
 
-$f018	link:kernel/STRCMD.2.adoc[STRCMD]::	executes a stream command. 
++$18	link:kernel/STRCMD.2.adoc[STRCMD]::	executes a stream command. 
 
 === DEVICE HANDLING
 Device handling is further described in section
 link:devices.7.adoc[Devices].
 
-$f01b	link:kernel/DEVCMD.2.adoc[DEVCMD]::	executes device commands.
++$1b	link:kernel/DEVCMD.2.adoc[DEVCMD]::	executes device commands.
 
 === SCHEDULER CALLS
 The scheduler is further described in section
 link:scheduler.7.adoc[Scheduler].
 
-$f01e	link:kernel/FORK.2.adoc[FORK]::		start a new task.
++$1e	link:kernel/FORK.2.adoc[FORK]::		start a new task.
 
-$f021	link:kernel/TERM.2.adoc[TERM]::		ends the current thread. 
++$21	link:kernel/TERM.2.adoc[TERM]::		ends the current thread. 
 
-$f024	link:kernel/KILL.2.adoc[KILL]::		ends a complete task, with all threads in them. 
++$24	link:kernel/KILL.2.adoc[KILL]::		ends a complete task, with all threads in them. 
 
-$f027	link:kernel/YIELD.2.adoc[YIELD]::	just give control back to the scheduler.
++$27	link:kernel/YIELD.2.adoc[YIELD]::	just give control back to the scheduler.
 
-$f02a	link:kernel/FORKT.2.adoc[FORKT]::	forks a new thread in the current task.
++$2a	link:kernel/FORKT.2.adoc[FORKT]::	forks a new thread in the current task.
 
-$f030	link:kernel/GETINFO.2.adoc[GETINFO]::	returns process information about all (up to 16) running tasks
++$30	link:kernel/GETINFO2.2.adoc[GETINFO2]::	returns process information about all (up to 16) running tasks
 
-$f033	link:kernel/DUP.2.adoc[DUP]::		set new STD* stream
++$33	link:kernel/DUP.2.adoc[DUP]::		set new STD* stream
 
-$f05a	link:kernel/GETPID.2.adoc[GETPID]::	returns the current task ID in x and the current thread ID
++$5a	link:kernel/GETPID.2.adoc[GETPID]::	returns the current task ID in x and the current thread ID
 
-$f05d	link:kernel/SLOCK.2.adoc[SLOCK]::	locks scheduler to actual task. 
++$5d	link:kernel/SLOCK.2.adoc[SLOCK]::	locks scheduler to actual task. 
 
-$f060	link:kernel/RENICE.2.adoc[RENICE]::	changes the priority of the current task.
++$60	link:kernel/RENICE.2.adoc[RENICE]::	changes the priority of the current task.
 
-$f063	link:kernel/CHECKCHLD.2.adoc[CHECKCHLD]:: returns status of terminates children (if SIG_CHLD is set)
++$63	link:kernel/CHECKCHLD.2.adoc[CHECKCHLD]:: returns status of terminates children (if SIG_CHLD is set)
 
-$f066	link:kernel/SETINFO.2.adoc[SETINFO]::	setinfo updates the task table
++$66	link:kernel/SETINFO.2.adoc[SETINFO]::	setinfo updates the task table
 
 === SEMAPHORES
 Semaphores are further described in section
 link:semaphores.7.adoc[Semaphores].
 
-$f036	link:kernel/GETSEM.2.adoc[GETSEM]::	gets a free semaphore.
++$36	link:kernel/GETSEM.2.adoc[GETSEM]::	gets a free semaphore.
 
-$f039	link:kernel/FRESEM.2.adoc[FRESEM]::	frees a semaphore. 
++$39	link:kernel/FRESEM.2.adoc[FRESEM]::	frees a semaphore. 
 
-$f03c	link:kernel/PSEM.2.adoc[PSEM]::		'PSEM' operation on a given semaphore. task waits till semaphore is freed. 
++$3c	link:kernel/PSEM2.2.adoc[PSEM2]::		'PSEM' operation on a given semaphore. task waits till semaphore is freed. 
 
-$f03f	link:kernel/VSEM.2.adoc[VSEM]::		'VSEM' operation on semaphore, allows other tasks to grab the semaphore.
++$3f	link:kernel/VSEM.2.adoc[VSEM]::		'VSEM' operation on semaphore, allows other tasks to grab the semaphore.
 
 === MESSAGING
 The interprocess communication using *SEND* and *RECEIVE* is further described in section
 link:sendreceive.7.adoc[SEND/RECEIVE].
 
-$f042	link:kernel/SEND.2.adoc[SEND]::		send a message to another task
++$42	link:kernel/SEND.2.adoc[SEND]::		send a message to another task
 
-$f045	link:kernel/RECEIVE.2.adoc[RECEIVE]::	receives a message.
++$45	link:kernel/RECEIVE.2.adoc[RECEIVE]::	receives a message.
 
-$f04e	link:kernel/TDUP.2.adoc[TDUP]::		register a task for a (negative) system message destination number.
++$4e	link:kernel/TDUP.2.adoc[TDUP]::		register a task for a (negative) system message destination number.
 
-$f051	link:kernel/XRECEIVE.2.adoc[XRECEIVE]:: receives a message from a specified task only. 
++$51	link:kernel/XRECEIVE.2.adoc[XRECEIVE]:: receives a message from a specified task only. 
 
 === SIGNALS
 Signals are further described in section
 link:signals.7.adoc[Signals].
 
-$f048	link:kernel/SETSIG.2.adoc[SETSIG]::	sets the signal address and the signal mask
++$48	link:kernel/SETSIG.2.adoc[SETSIG]::	sets the signal address and the signal mask
 
-$f04b	link:kernel/SENDSIG.2.adoc[SENDSIG]::	send a signal to another task ID 
++$4b	link:kernel/SENDSIG.2.adoc[SENDSIG]::	send a signal to another task ID 
 
 === NMI HANDLING
 
-$f054	link:kernel/SETNMI.2.adoc[SETNMI]::	in systems without MMU, set/add a system NMI routine address.
++$54	link:kernel/SETNMI.2.adoc[SETNMI]::	in systems without MMU, set/add a system NMI routine address.
 
-$f057	link:kernel/CTRLNMI.2.adoc[CTRLNMI]::	Send NMI ON/OFF command in AC to all currently chained NMI ctrl routines
++$57	link:kernel/CTRLNMI.2.adoc[CTRLNMI]::	Send NMI ON/OFF command in AC to all currently chained NMI ctrl routines
+
+=== Further extensions
+
++$5a	link:kernel/GETPID.2.adoc[GETPID]::	Get thread and task IDs for the current thread.
+
++$5d	link:kernel/SLOCK.2.adoc[SLOCK]::	Lock the scheduler to the own thread (deprecated)
+
++$60	link:kernel/RENICE.2.adoc[RENICE]::	Change the task priority
+
++$63	link:kernel/CHECKCHLD.2.adoc[CHECKCHLD]:: Check the status of terminated or suspended child tasks
+
++$66	link:kernel/SETINFO.2.adoc[SETINFO]::	Set fields in the task table
+
++$69	link:kernel/LOCKSEM.2.adoc[LOCKSEM]::	Lock a semaphore to the current task (even after doing VSEM)
+
++$6c	link:kernel/JOBCMD.2.adoc[JOBCMD]::	Job control functions
+
+
+
 
 === ERROR CODES
 Error codes are described in section

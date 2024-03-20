@@ -25,9 +25,6 @@ NOTE: XR and YR are preserved.
 Sends a signal to another task. In this process the bit corresponding to the signal is set in the
 pending signal bitmap of the receiving task.
 
-NOTE: to protect the SENDBUF resource, the *SEM_SENDBUF* semaphore must be held. The ownership of the SENDBUF
-semaphore changes to the receiving task.
-
 == RETURN CODES
 Error return codes are given when at return, C=1.
 

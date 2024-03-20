@@ -26,13 +26,20 @@
 #define   PIO       $e810
 #define   VIA1      $e840
 #define   vdc       $e880
+
+#define	SCRBUF		$8800
+
 #define   VIDPAGE   4
 
-#define	MAX_SCREEN	4		/* hard limit for tables */
+#define	MAX_SCREEN	3		/* hard limit for tables */
 
-#define	MAX_ASCREEN	#4		/* soft limit */
+#define	MAX_ASCREEN	#3		/* soft limit */
 
-#define	SWITCHKEY	39		/* Tab on business keyboard */
+#ifdef PET_KEYB_GRAPHICS
+#define SWITCHKEY       79              /* graphics keyboard REV/OFF key */
+#else
+#define SWITCHKEY       39              /* business keyboard Tab key */
+#endif
 
 #define	SET_MMU		
 
@@ -48,14 +55,14 @@
 
 				/* screen# -> hi byte of base address in AC */
 /* #define HI_VID        asl:asl:bit freq:bpl l1:asl:l1 clc:adc #VIDPAGE<<4 */
-#define	HI_VID	        asl:asl:asl:clc:adc #$90
+#define	HI_VID	        asl:asl:asl:clc:adc #>SCRBUF
 
 #define	ACT_HI_VID      .(			:\
 			lda screen		:\
 			cmp actscr		:\
 			beq orig		:\
 			asl:asl:asl		:\
-			clc:adc #$90		:\
+			clc:adc #>SCRBUF	:\
 			.byt $2c		:\
 orig			lda #$80		:\
 			.)
@@ -164,7 +171,6 @@ ix
 
 &setact   .(
 
-scrbuf	=$9000
 
 	.zero
 p1	.word 0
@@ -211,9 +217,9 @@ getp1
 	asl
 	asl
 	clc
-	adc #>scrbuf
+	adc #>SCRBUF
 	tay
-	lda #<scrbuf
+	lda #<SCRBUF
 	rts
 
 	  .)

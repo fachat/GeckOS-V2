@@ -50,9 +50,15 @@ listenp	.word 0
 	.byt SFL_MULT
 	.word libip_lopen-1, libip_lqueue-1, libip_lloop-1, libip_lsignal-1
 
+msg	.asc "Enabling lib6502 sockets",13,10,0
+
 	.text
 
-&libip_init .(
+&&&libip_init .(
+        lda #<msg
+        ldy #>msg
+        jsr strout
+
 	lda #LIS_INACTIVE
 	sta lipstate
 

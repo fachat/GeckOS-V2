@@ -90,8 +90,6 @@ i1
 	cpx #MAXCONN
 	bcc i1
 
-	jsr user_init
-
 	clc
 	rts
 	.)
@@ -451,17 +449,17 @@ found
 ttab	.word tclosed, tlisten, tsynrxd, tsyntxd, testab, tfinw1, tfinw2
 	.word tclosew, tlastack, tclosing, ttimew
 
-tclosed	.asc "Closed:^m^j",0
-tlisten	.asc "Listen:^m^j",0
-tsynrxd .asc "SynRXd:^m^j",0
-tsyntxd .asc "SynTXd:^m^j",0
-testab 	.asc "Established:^m^j",0
-tfinw1	.asc "FinW1:^m^j",0
-tfinw2	.asc "FinW2:^m^j",0
-tclosew	.asc "CloseWait:^m^j",0
-tlastack .asc "LastAck:^m^j",0
-tclosing .asc "Closing:^m^j",0
-ttimew	.asc "TimeWait^m^j",0
+tclosed	.asc "Closed:",13,10,0
+tlisten	.asc "Listen:",13,10,0
+tsynrxd .asc "SynRXd:",13,10,0
+tsyntxd .asc "SynTXd:",13,10,0
+testab 	.asc "Established:",13,10,0
+tfinw1	.asc "FinW1:",13,10,0
+tfinw2	.asc "FinW2:",13,10,0
+tclosew	.asc "CloseWait:",13,10,0
+tlastack .asc "LastAck:",13,10,0
+tclosing .asc "Closing:",13,10,0
+ttimew	.asc "TimeWait",13,10,0
 
 noout
 #endif

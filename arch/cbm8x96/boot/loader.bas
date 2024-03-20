@@ -4,8 +4,9 @@
    10 on a goto 50
    15 poke59468,14
    20 a=1
-   30 print "Load GeckOS/A65 Image"
-   40 load"rom",8
-   50 print "Start GeckOS"
-   60 sys 2902
+   30 print "Loading bootloader"
+   40 load"romld.bin",8
+   50 print "Loading GeckOS/A65 images"
+   90 sys 7*4096:rem call bootloader
+
 

@@ -65,11 +65,14 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 
 
 &inienv .(
-	lda #<-1
-	sta actThread
-	sta actTask
-	lda #1
-	sta Syscnt
+	ldx #<-1
+	stx actThread
+	stx actTask
+	inx		; 0
+	stx ENVSAVE
+	stx ENVSAVE+1
+	inx		; 1
+	stx Syscnt
 	clc
 	rts
 	.)
@@ -95,7 +98,12 @@ doit
 	sta threadTab + TH_LIBSAVE+1,x
 
 #ifdef STACKCOPY
-	txa		; stack is 8 * TH_SLEN = 64
+	.assert STACKSIZE == 8 * TH_SLEN, "algo computing stack offset from thread ID"
+
+	; XR has the thread ID, which is a multiple of TH_SLEN = 8
+	; stack is 8 * TH_SLEN = 64
+	; so, we multiply by 8 here
+	txa		
 	ldy #0
 	sty zp+1
 	asl 

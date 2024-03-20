@@ -24,7 +24,7 @@ loader: loader.bas
 	petcat -w40 -o loader loader.bas
 
 clean:
-	rm -f rom osa.d64 osam.d64 osa.x64 loader
+	rm -f rom osam.d64 loader
 	rm -f ${sysapps}
 	rm -f vice.trace reltest
 
@@ -42,8 +42,7 @@ tar ../boot.tgz: rom loader howto.boot
 
 osa.d64: ${files} ${filter} ${sysapps} ${apps} rom loader 
 	./mkdisk loader  ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${MANPAGES} rom 
-	dd if=osa.x64 of=osa.d64 bs=64 skip=1
-	rm osa.x64 ${apps} ${sysapps}
+	rm ${apps} ${sysapps}
 
 emurun: osa.d64
 	xpet -model 4032 -autostart osa.d64

@@ -1,11 +1,12 @@
 
 
-XA=xa #-2.1.4h
+XA=xa -k -XMASM 
 
 FILE=file65
 RELOC=reloc65
 
 PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_lmon.o65 csa_lsh.o65 csa_end.o65
+#PARTS=csa_init.o65 csa_fsdev.o65 csa_fsiec.o65 csa_mon.o65 csa_lsh.o65 csa_end.o65
 
 all: csarom.bin csakernel.bin csalib.bin csakernel_romtest.bin
 
@@ -17,8 +18,9 @@ csarom_romtest.bin: ${PARTS} csa_devices_romtest.o65 mkcsarom.sh
 
 csakernel.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
-	${XA} -I../.. -I../../include -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
-		-DSPLIT1K=61440 \
+	${XA} -I../.. -I../../include -P $@.lst -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
+		-DROMTEST \
+		-DSPLITKENV=61440 \
 		-l csakernel.lab \
 		-o csakernel.o65 \
 		csakernel.a65
@@ -29,7 +31,7 @@ csakernel_romtest.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
 	${XA} -I../.. -I../../include -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
 		-DROMTEST \
-		-DSPLIT1K=61440 \
+		-DSPLITKENV=61440 \
 		-l csakernel_romtest.lab \
 		-o csakernel_romtest.o65 \
 		csakernel.a65
@@ -44,6 +46,7 @@ csalib.bin: ../../lib6502/*.a65 csalib.a65
 	# note: ROMSTART here is shared ROM, so start of lib6502
 	${XA} -I../.. -I../../include -R -bt 51200 -bz 8 -bd 768 -bb 1536 \
 		-DOSA2KERNEL=58368 \
+		-DLIB6502=58233 \
 		-DROMSTART=51200 \
 		-l csalib.lab \
 		-o csalib.o65 \
@@ -76,6 +79,7 @@ csa_devices.o65: ../../devices/* devices/* csa_devices.a65
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 200 -bd 1800 -bb 3300 \
 		-DOSA2KERNEL=58368 \
 		-DROMSTART=32768 \
+		-l csa_devices.lab \
 		-o csa_devices.o65 \
 		csa_devices.a65
 	${FILE} $@
@@ -122,6 +126,22 @@ csa_lmon.o65: csa_lmon.a65
 		csa_lmon.a65
 	${FILE} $@
 
+csa_mon.o65: csa_mon.a65
+	@echo "Building mon at 0x8000"
+	${XA} -I../.. -I../../include -I../../apps/lmon -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
+		-DOSA2KERNEL=58368 \
+		-DROMSTART=32768 \
+		-o csa_mon.o65 \
+		csa_mon.a65
+	${FILE} $@
+
+csa_ps.o65: csa_ps.a65
+	@echo "Building ps at 0x8000"
+	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
+		-o csa_ps.o65 \
+		csa_ps.a65
+	${FILE} $@
+
 csa_end.o65: csa_end.a65
 	@echo "Building lsh at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
@@ -131,7 +151,7 @@ csa_end.o65: csa_end.a65
 
 
 clean:
-	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin
+	rm -f csakernel csakernel.o65 csakernel.lab csakernel.bin csa_devices.lab
 	rm -f csakernel_romtest csakernel_romtest.o65 csakernel_romtest.lab csakernel_romtest.bin
 	rm -f csalib csalib.o65 csalib.lab csalib.bin
 	rm -f csarom csarom_romtest
@@ -144,6 +164,8 @@ clean:
 	rm -f csa_fsiec csa_fsiec.o65 
 	rm -f csa_lsh csa_lsh.o65 
 	rm -f csa_lmon csa_lmon.o65 
+	rm -f csa_mon csa_mon.o65 
+	rm -f csa_ps csa_ps.o65 
 	rm -f csa_end csa_end.o65 
 	rm -f csa*-reloc.o65
 	(cd boot; ${MAKE} clean ;)

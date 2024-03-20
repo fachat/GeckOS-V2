@@ -4,7 +4,7 @@ XA=xa
 
 all: osa.d64 prom prom_romtest
 
-MANPAGES=../../../*/*/*.1.adoc
+#MANPAGES=../../../*/*/*.1.adoc
 
 apps = lsh lmon
 APPSDIR=../../../apps
@@ -18,7 +18,7 @@ FILESDIR=../../../apps/file
 filter = cat wc more hexdump
 FILTERDIR=../../../apps/filter
 
-inet = tlogind telnet httpd
+inet = tlogin telnet httpd
 INETDIR=../../../apps/inet
 
 prom: rom kernel lib
@@ -29,7 +29,7 @@ prom_romtest: rom kernel_romtest lib
 
 osa.d64: rom rom_romtest kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
 	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csarom_romtest csakernel csakernel_romtest csalib boot index.html 
-	rm -f ${sysapps} ${apps} # csarom csakernel csalib
+	#rm -f ${sysapps} ${apps} # csarom csakernel csalib
 
 osa_romtest.d64: osa.d64
 	cp osa.d64 osa_romtest.d64
@@ -42,7 +42,7 @@ loader: loader.bas
 rom:
 	(cd ..; ${MAKE} csarom.bin;)
 	ln -sf ../csarom.bin
-	echo "00 00 10" | xxd -r > csarom
+	echo "00 00 08" | xxd -r > csarom
 	cat csarom.bin >> csarom
 
 rom_romtest:
@@ -81,8 +81,8 @@ inirom: inirom.a65
 	if [ $$? -ne 0 ]; then rm -f inirom; fi)
 
 clean:
-	rm -f csarom csakernel csalib boot inirom osa.d64 loader
-	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa.d64 osa_romtest.d64
+	rm -f csarom csakernel csalib boot inirom loader
+	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa_romtest.d64
 	rm -f csakernel_romtest prom prom_romtest
 	rm -f csarom_romtest csarom_romtest.bin
 

@@ -209,33 +209,13 @@ badpid
 
 ;binary PID in pid, check if valid PID number
 validpid .(
-  clc
-  ldx #SEM_SENDBUF
-  jsr PSEM
-  jsr GETINFO
-  ldx #0  ;index into GETINFO table
-  ldy #0  ;count of GETINFO entries
-valpid
-  lda PCBUF+TN_PID,x
-  cmp pid
-  bne nxtinf
-  clc  ;valid PID
-  php
-  bcc endpid
-nxtinf
-  iny
-  cpy #ANZ_ENV
-  bne nxtinf2
   sec
+  ldx #SEM_SENDBUF
+  jsr PSEM2
+  ldx pid
+  sec
+  jsr GETINFO2
   php
-  bcs endpid
-nxtinf2
-  txa
-  clc
-  adc #TN_SLEN
-  tax
-  bne valpid
-endpid
   ldx #SEM_SENDBUF
   jsr VSEM
   plp
@@ -285,9 +265,9 @@ nothex
 usage    .asc $0a,$0d,"Usage: kill [signal] PID",$0a,$0d
          .asc "(PID must be in hex)",$0a,$0d,0
 args     .asc "-9",0  ;kill -9
-         .asc "-SIG_KILL",0,"-SIG_BRK",0,"-SIG_USR1",0,"-SIG_USR2",0
-         .asc "-SIG_USR3",0,"-SIG_USR4",0,0
-signals  .byt SIG_KILL,SIG_KILL,SIG_BRK, SIG_USR1,SIG_USR2,SIG_USR3,SIG_USR4
+         .asc "-KILL",0,"-BRK",0,"-USR1",0,"-USR2",0
+         .asc "-CONT",0,"-SUSPEND",0,0
+signals  .byt SIG_KILL,SIG_KILL,SIG_BRK, SIG_USR1,SIG_USR2,SIG_CONT,SIG_SUSPEND
 ;               $20      $20      $10      $01      $02      $04      $08
 illsig   .asc $0a,$0d,"Illegal signal: ",0
 illpid   .asc $0a,$0d,"Illegal PID: ",0
