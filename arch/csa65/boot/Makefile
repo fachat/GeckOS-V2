@@ -9,8 +9,11 @@ all: osa.d64 prom prom_romtest
 apps = lsh lmon
 APPSDIR=../../../apps
 
-sysapps = slipd ps kill ontty lsmem
+sysapps = ps kill ontty lsmem basic
 SYSAPPSDIR=../../../sysapps
+
+slip = slipd slipmind slipfsd slipwwwd sliprshd   
+SLIPDIR=../../../sysapps/slipd
 
 files = mkdir rmdir rm format chkdsk ls mv
 FILESDIR=../../../apps/file
@@ -27,8 +30,15 @@ prom: rom kernel lib
 prom_romtest: rom kernel_romtest lib
 	((cat csarom_romtest.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel_romtest.bin) > prom_romtest
 
-osa.d64: rom rom_romtest kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet}
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} csarom csarom_romtest csakernel csakernel_romtest csalib boot index.html 
+osa.d64: rom rom_romtest kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet} ${slip}
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  \
+			${addprefix ${FILTERDIR}/, ${filter}} \
+			${sysapps} \
+			${apps} \
+			${addprefix ${SLIPDIR}/, ${slip}} \
+			${addprefix ${INETDIR}/, ${inet}} \
+			${MANPAGES} \
+			csarom csarom_romtest csakernel csakernel_romtest csalib boot index.html 
 	#rm -f ${sysapps} ${apps} # csarom csakernel csalib
 
 osa_romtest.d64: osa.d64
@@ -99,6 +109,9 @@ ${apps}:
 ${sysapps}:
 	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
 	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
+
+${slip}:
+	(cd ${SLIPDIR}; make $@;)
 
 ${files}:
 	(cd ${FILESDIR}; make $@;)
