@@ -339,18 +339,19 @@ tbok1     sty LZEI
           ldx bef
 tbx       rts
 
-anzbef    =23
+&anzbef    =23
 
 #ifndef ROM
 	 .data
 #endif
 
-beftab    .asc "DIR",0,"TYPE",0,"DEL",0,"FORMAT",0,"CHKDSK",0,"RENAME",0
+&beftab   .asc "DIR",0,"TYPE",0,"DEL",0,"FORMAT",0,"CHKDSK",0,"RENAME",0
           .asc "B",0,"BATCH",0
           .asc "LOGOFF",0
           .asc "COPYCON",0,"DUP",0,"CD",0,"DEVCMD",0,"COPY",0
           .asc "GETSTR",0,"FRESTR",0,"SETMEM",0
           .asc "INFO",0,"KILL",0,"MKDIR",0,"RMDIR",0,"CHDIR",0
+	  .asc "HELP",0
 
 befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word RENAME-1,BATCH-1,BATCH-1
@@ -358,6 +359,7 @@ befadr    .word DIRECTORY-1,TYPE-1,DELETE-1,FORMAT-1,CHKDSK-1
           .word PDEVCMD-1,COPY-1,PGETSTR-1,PFRESTR-1
           .word SETMEM-1,PINFO-1,PKILL-1
           .word MKDIR-1,RMDIR-1,CD-1
+	  .word HELP-1
 
 initxt    .asc 13,10,"SHELL V"
           .byt VSA+"0",".",VSB+"0"
@@ -372,6 +374,24 @@ metxt     .asc 13,10
 #ifndef NOSYSFKT 
 #include  "sysapps/mon/shdir.a65"
 #endif
+
+HELP	.(
+	jsr CRLFOUT
+	ldy #0
+	ldx #anzbef
+loop	lda beftab,y
+	beq next
+	jsr SEROUT
+	iny
+	bne loop
+next	lda #" "
+	jsr SEROUT
+	iny
+	dex
+	bne loop
+	clc
+	rts
+	.)
 
 PINFO     .(
 	.data
