@@ -53,7 +53,7 @@ usagetxt
 	.asc 13,10,"Run MS BASIC2 with additions"
 	.asc 13,10,"Options:"
 	.asc 13,10," -m <n>"
-	.asc 13,10,"      Using <n> kB or BASIC memory"
+	.asc 13,10,"      Using <n> kB for BASIC memory"
 	.asc 13,10,"      Defaults to 4k."
 	.asc 13,10,"-?    Print this help."
 	.asc 13,10,0
@@ -941,21 +941,30 @@ drnoname  bit STRINGFL
 
 IN        ldx stream
           jmp lcc1
+
+	;-------------------------
+	; loop for reading directory entries
           
-drnloop   jsr lffe1
+drnloop   ; check stop key
+	  jsr lffe1
           beq drend
+	  ; read directory entry from file ...
           ldy #0
 drl1      jsr IN
           bcs drend
           sta buf,y
           iny
+	  ; ... up to the file name
           cpy #FS_DIR_NAME
           bcc drl1
-          
+         
+	  ; --------
+	  ; check type of directory entry 
           lda buf+FS_DIR_MODE
           cmp #FS_DIR_MOD_NAM
           bne drl2
-          
+         
+	  ; device name 
           lda #<dnamtxt
           ldy #>dnamtxt
           jsr xstrout
@@ -964,12 +973,14 @@ drl1      jsr IN
           
 drl2      cmp #FS_DIR_MOD_FIL
           bne drl3
+	  ; print entry for file
           jsr dnout
           jsr sizdatim
           jmp drle
 
 drl3      cmp #FS_DIR_MOD_FRE
           bne drl4
+	  ; print free bytes
           jsr sizeout
           lda #<bytfre
           ldy #>bytfre
@@ -978,13 +989,15 @@ drl3      cmp #FS_DIR_MOD_FRE
           
 drl4      cmp #FS_DIR_MOD_DIR
           bne drle
+	  ; print DIR directory entry
           jsr dnout
           lda #<ddirtxt
           ldy #>ddirtxt
           jsr xstrout
           jmp drle
 
-drle      jsr laad7
+	  ; next entry
+drle      jsr laad7	; crlfout
           jmp drnloop
 
 drend     ldx stream
@@ -1002,6 +1015,8 @@ dnout     jsr dirname
           jsr DPOUT
           jmp SSPOUT
 
+	; --------
+	; print name for dir entry
 dirname   ldy #0
           lda #34
 drn1      jsr lffd2
@@ -1018,7 +1033,9 @@ drn2      jsr lffd2
           cpy #23
           bcc drn2 
           rts
-          
+
+	; --------
+	; print size, date and time          
 sizdatim  jsr sizeout
           jsr DPOUT
           lda PCBUF+FS_DIR_DAY
@@ -3453,7 +3470,8 @@ le0f9 cmp #$f0:bne le104:
           .word $fff3,lfff3
           .word 0
 
- lsave jsr le1d4:ldx VARANF:ldy VARANF+1:lda #$2b:jsr lffd8
+ lsave jsr le1d4:ldx VARANF:ldy VARANF+1:lda #BASANF; indirect pointer to start address in zp
+jsr lffd8
  896 bcc lef09x:jmp le0f9:lef09x rts 
  lverify lda #$01:.byt $2c
  lload lda #0:sta LOADFL
