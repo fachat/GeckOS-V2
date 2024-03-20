@@ -21,6 +21,8 @@
 #include  "kdefs.i65"
 #include  "kernel.i65"
 #include  "fdefs.i65"
+
+; needed for malloc and fputc from common
 #include  "lib6502.i65"
 
 /*#define   SHOW*/
