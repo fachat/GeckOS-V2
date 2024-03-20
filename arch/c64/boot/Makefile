@@ -1,13 +1,22 @@
 
+# Note:
+# including "basic" _and_ the different optimized slip
+# daemons is to much for a D64 image. As basic is basically
+# not very useful anyway with the restricted amount of available
+# memory, I left it out (add it to "sysapp= ... " if needed)
+#
+# slipmind is included as it allows using lib6502 networking
+# programs like "httpd" or "telnet".
+
 #MANPAGES=../../../*/*/*.1.adoc
 
-apps = lsh lmon
+apps = lsh lmon 
 APPSDIR=../../../apps
 
 sysapps = ps kill ontty lsmem basic
 SYSAPPSDIR=../../../sysapps
 
-slipapps = slipd slipmind slipfsd slipwwwd sliprshd
+slipapps = slipd slipmind # slipfsd slipwwwd sliprshd
 SLIPAPPSDIR=../../../sysapps/slipd
 
 files = mkdir rmdir rm format chkdsk ls mv
@@ -49,7 +58,7 @@ tar ../boot.tgz: boot c64rom loader index.html slip howto.boot
 #
 
 osa.d64: ${files} ${filter} ${sysapps} ${slipapps} ${apps} ${inet} c64rom boot loader index.html test.bat
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${SLIPAPPSDIR}/, ${slipapps}} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} c64rom boot index.html test.bat semlock semwait sigrecv sigsend
+	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  ${addprefix ${FILTERDIR}/, ${filter}} ${sysapps} ${apps} ${addprefix ${SLIPAPPSDIR}/, ${slipapps}} ${addprefix ${INETDIR}/, ${inet}} c64rom boot index.html test.bat semlock semwait sigrecv sigsend
 	rm -f ${sysapps} ${apps}
 
 emurun: osa.d64
