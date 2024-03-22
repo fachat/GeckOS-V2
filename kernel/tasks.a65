@@ -203,16 +203,16 @@ l0	tay
 /* memory management related, but architecture specific parts
  */
 
+KENV=*
+#print KENV
+
+#include "kernel/kenv.a65"
+
 #ifdef SPLITKENV
 #print *
 #print SPLITKENV
 	.dsb SPLITKENV-*,$ff
 #endif
-
-KENV=*
-#print KENV
-
-#include "kernel/kenv.a65"
 
 /************************************************************************/
 
@@ -1557,17 +1557,21 @@ remap	.(
 	bcs rtaskx
 	plp
 	bcc unlock
+
+	; lock owner
 	lda SEMLOCK,x
-	bne locked
+	bne locked	; if already locked, return E_SEMSET
 	lda actTask
-	;sec		; c=1 from above
-	adc #0		
-	sta SEMLOCK,x
+	adc #0		; c=1 from above
+	sta SEMLOCK,x	; lock to owner
 	bne rtask
-unlock	lda #0
+
+	; unlock owner
+unlock	; TODO check that only owner can unlock
+	lda #0
 	sta SEMLOCK,x
-	lda SEMOWN,x
-	bne ok
+	lda SEMOWN,x	; is semaphore free
+	bne ok		; if no, return; if free, check if a task waits for it
 	jsr vsemint	; search for tasks to release
 ok	lda #E_OK
 	clc
@@ -1584,39 +1588,43 @@ rtask	jmp memtask
 &&kpsem .(  
         jsr memsys
 	php
+	; map from system sem
 	jsr remap
 	bcs rtaskx
 	plp
 	bcs ps1
-        jsr tstnset
+
+	; non-blocking call
+        jsr tstnset	; return success with C=0
 	jmp memtask
 
-ps1
-	  jsr tstnset
-	  bcc rtask
+	; blocking call
+ps1 	jsr tstnset	; test (if locked, only lock owner passes)
+	bcc rtask	; got it - then return
 
+	; setup current thread to wait for semaphore
 	sty div
-          ldy actThread
-          txa
-          sta threadTab+TH_PAR,y      ; Semaphor-Number, translated, to check for wakeup
+	ldy actThread
+	txa
+	sta threadTab+TH_PAR,y      ; Semaphor-Number, translated, to check for wakeup
 	lda div
 	sta threadTab+TH_PAR+1,y	; YR after wakeup
-          ldy actThread
-          lda #TS_WFSEM
-          sta threadTab+TH_ST,y
-          jmp nexttask
-          .)
+	ldy actThread
+	lda #TS_WFSEM
+	sta threadTab+TH_ST,y
+	jmp nexttask
+	.)
 
 	; release semaphore in X and wake one thread waiting for it
 	; note destroys all registers
 vsemint	.(
-	  ldy actThread
-l0	  lda threadTab + TH_ST,y
-	  cmp #TS_WFSEM	; wait for semaphore?
-	  bne next
-	  txa
-	  cmp threadTab + TH_PAR,y
-	  bne next	; wait for _this_ semaphore?
+	ldy actThread
+l0	lda threadTab + TH_ST,y
+	cmp #TS_WFSEM	; wait for semaphore?
+	bne next
+	txa
+	cmp threadTab + TH_PAR,y
+	bne next	; wait for _this_ semaphore?
 
 	; check lock (if lock is set, only the lock owner may pass the semaphore)
 	lda SEMLOCK,x
@@ -1626,9 +1634,9 @@ l0	  lda threadTab + TH_ST,y
 	cmp threadTab + TH_TASK,y
 	beq gotone	; locked by thread of same task
 
-next	  jsr ynextthread
-	  cpy actThread
-	  bne l0
+next	jsr ynextthread
+	cpy actThread
+	bne l0
 
 	lda #0		; free the actual semaphore
 	sta SEMOWN,x
@@ -1647,13 +1655,14 @@ gotone	lda threadTab + TH_TASK,y
 	rts
 	.)
 
-&&kvsem    .(
-	  jsr memsys
-	  ; x has semaphore number
+&&kvsem .(
+	jsr memsys
+	; x has semaphore number
 	jsr remap
 	bcc noillp
 illp	jmp illpar
-&noillp	  tax
+	; valid semaphore
+&noillp	tax
 	lda SEMOWN,x
 	beq ok		; ignore if it was not set
 	sec
@@ -1662,10 +1671,10 @@ illp	jmp illpar
 	bne illp
 	jsr vsemint
 ok
-	  lda #E_OK
-	  clc
-	  jmp memtask
-          .)
+	lda #E_OK
+	clc
+	jmp memtask
+	.)
 
 /* Semaphore administration (alloc, free) */
 
@@ -1753,22 +1762,22 @@ tstnset   .(
 	sec
 	sbc #1
 	cmp actTask
-	bne set		; not locked by own task
+	bne seterr		; not locked by own task
 notlocked 	
 	lda SEMOWN,x
-          bne set
+	bne seterr
 	lda actTask
 	sta SEMOWN,x
 	inc SEMOWN,x
 
-          lda #E_OK
-          .byt $2c
-illpar1	  lda #E_NOSEM
-	  .byt $2c
-set       lda #E_SEMSET
-          cmp #1
-          rts
-	  .)
+	lda #E_OK
+	.byt $2c
+illpar1	lda #E_NOSEM
+	.byt $2c
+seterr	lda #E_SEMSET
+	cmp #1
+	rts
+	.)
 
 	; clear semaphores when a task is killed
 	; task ID in yr
@@ -1777,16 +1786,19 @@ set       lda #E_SEMSET
 	iny
 	tya
 	pha
-cls1	cmp SEMLOCK,x	
+cls1	; check if ending task has locked the ownership?
+	cmp SEMLOCK,x	
 	bne nolock
 	lda #0
 	sta SEMLOCK,x
-nolock	pla
+nolock	; check if the ending task has the semaphore (PSEM)
+	pla
 	pha
 	cmp SEMOWN,x
 	bne noown
 	jsr vsemint
-noown	pla
+noown	; next
+	pla
 	pha
 	dex
 	bpl cls1
@@ -1798,9 +1810,16 @@ noown	pla
 	; of the message
 	; needs to preserve XR, YR
 &sendbufowner .(
+	pha
+	lda SEMOWN+SYSSEM-1
+	beq notowned		; ... which is actually a bug in the caller
+	pla
 	clc
 	adc #1
 	sta SEMOWN+SYSSEM-1	; assume SEM_SENDBUF is -1
+	.byt $24
+notowned
+	pla
 	rts
 	.)
 

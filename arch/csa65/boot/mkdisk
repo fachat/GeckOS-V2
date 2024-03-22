@@ -10,10 +10,10 @@ files="$*"
 
 echo "files=$files"
 
-echo "format geckos,65 d64 osa.d64" > $tmpfile
+echo "format geckos,65 d80 osa.d80" > $tmpfile
 
 for i in $files; do
-  if test "$i" != "mkdisk" -a "$i" != "osa.d64" ; then
+  if test "$i" != "mkdisk" -a "$i" != "osa.d80" ; then
     echo "write $i" >> $tmpfile
   fi
 done

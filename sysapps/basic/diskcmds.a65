@@ -1,0 +1,370 @@
+
+
+	.text
+
+	.(
+
+&lmkdir    lda #FS_MKDIR
+          .byt $2c
+&lrmdir    lda #FS_RMDIR
+          .byt $2c
+&lscratch   lda #FS_DELETE
+          .byt $2c
+&lformat   lda #FS_FORMAT
+
+          sta loadfl
+          jsr le1d4
+
+	jsr getsem
+
+          lda mode
+          sta PCBUF+FS_CMD_PFAD
+          lda loadfl
+          sta mode
+          jsr copen
+          bcc cmdok
+          ldx #24
+          jmp la437
+
+cmdok     jmp fresem
+          
+&lrename   jsr le257      ; filenamen holen
+
+	jsr getsem
+
+          ldx #FS_CMD_NAME
+          ldy fnlen
+          beq syntaxer
+          ldy #0
+lr1       lda (fnadr),y
+          sta PCBUF,x
+          iny
+          inx
+          cpy fnlen
+          bcc lr1
+          lda #0
+          sta PCBUF,x
+          inx
+          stx loadfl
+          jsr CHRGOT
+          cmp #$a4       ; "to"-TokenCode
+          bne syntaxer
+          jsr CHRGET
+          jsr le257
+          ldy fnlen
+          beq syntaxer
+          ldy #0
+          ldx loadfl
+lr2       lda (fnadr),y
+          sta PCBUF,x
+          inx
+          iny
+          cpy fnlen
+          bcc lr2
+          lda #0
+          sta PCBUF,x
+          inx
+          stx loadfl
+          jsr le200
+          stx PCBUF+FS_CMD_DRV
+          lda #0
+          sta PCBUF+FS_CMD_PFAD
+          lda #FS_RENAME
+          ldy loadfl
+          jmp ropen
+
+syntaxer  jsr fresem
+syntaxerx jmp syntax
+
+illq      jsr fresem
+	  jmp illquant
+
+	.data
+buf       .dsb FS_DIR_NAME
+	.text
+
+&ldir      beq syntaxerx
+          lda #0
+          jsr lffbd
+
+	jsr getsem
+
+          jsr lad9e
+          bit STRINGFL
+          bpl drnoname
+          jsr lb6a3
+          ldx l0022
+          ldy l0022+1
+          jsr lffbd
+          jsr le20e
+          jsr lad9e
+drnoname  bit STRINGFL
+          bmi syntaxer
+          jsr lb1b8
+          ldx FAC+3
+          bne illq
+          ldx FAC+4
+          stx drive
+          lda #FS_OPEN_DR
+          sta mode
+          jsr xopen
+          bcc drnloop
+
+          jmp fresem
+
+IN        ldx stream
+          jmp lcc1
+
+	;-------------------------
+	; loop for reading directory entries
+          
+drnloop   ; check stop key
+	  jsr lffe1
+          beq drend
+	  ; read directory entry from file ...
+          ldy #0
+drl1      jsr IN
+          bcs drend
+          sta buf,y
+          iny
+	  ; ... up to the file name
+          cpy #FS_DIR_NAME
+          bcc drl1
+         
+	  ; --------
+	  ; check type of directory entry 
+          lda buf+FS_DIR_MODE
+          cmp #FS_DIR_MOD_NAM
+          bne drl2
+         
+	  ; device name 
+          lda #<dnamtxt
+          ldy #>dnamtxt
+          jsr xstrout
+          jsr dirname
+          jmp drle
+          
+drl2      cmp #FS_DIR_MOD_FIL
+          bne drl3
+	  ; print entry for file
+          jsr dnout
+          jsr sizdatim
+          jmp drle
+
+drl3      cmp #FS_DIR_MOD_FRE
+          bne drl4
+	  ; print free bytes
+          jsr sizeout
+          lda #<bytfre
+          ldy #>bytfre
+          jsr xstrout
+          jmp drle
+          
+drl4      cmp #FS_DIR_MOD_DIR
+          bne drle
+	  ; print DIR directory entry
+          jsr dnout
+          lda #<ddirtxt
+          ldy #>ddirtxt
+          jsr xstrout
+          jmp drle
+
+	  ; next entry
+drle      jsr laad7	; crlfout
+          jmp drnloop
+
+drend     ldx stream
+          lda #SC_NUL
+          jsr STRCMD
+
+	jsr fresem
+
+          clc
+          rts
+          
+dnout     jsr dirname
+          lda #","
+          jsr lffd2
+          ldx drive
+          lda #0
+          jsr adrout
+          jsr DPOUT
+          jmp SSPOUT
+
+	; --------
+	; print name for dir entry
+dirname   ldy #0
+          lda #34
+drn1      jsr lffd2
+          jsr IN
+          bcs drlne
+          cmp #0
+          beq drlne
+          iny
+          bne drn1
+drlne     lda #34
+drn2      jsr lffd2
+          lda #" "
+          iny
+          cpy #23
+          bcc drn2 
+          rts
+
+	; --------
+	; print size, date and time          
+sizdatim  jsr sizeout
+          jsr DPOUT
+          lda PCBUF+FS_DIR_DAY
+          jsr DEZOUT
+          jsr PNTOUT
+          lda PCBUF+FS_DIR_MONTH
+          jsr DEZOUT
+          jsr PNTOUT
+          lda PCBUF+FS_DIR_YEAR
+          jsr DEZOUT
+          jsr SSPOUT
+          lda PCBUF+FS_DIR_HOUR
+          jsr DEZOUT
+          jsr DPOUT
+          lda PCBUF+FS_DIR_MIN
+          jmp DEZOUT
+
+DPOUT     lda #":"
+          .byt $2c
+SSPOUT    lda #" "
+          .byt $2c
+PNTOUT    lda #"."
+          jmp lffd2
+          
+sizeout   lda #<buf+FS_DIR_LEN
+          ldy #>buf+FS_DIR_LEN
+          ldx #" "
+          jmp ldezout
+
+ddirtxt   .asc ":<dir>",0
+dnamtxt   .asc "Diskettenname:",0
+bytfre    .asc "Bytes free",0
+
+
+          .(
+	.zero
+da        .word 0
+	.data
+lb        .byt 0
+lo        .byt 0
+w         .dsb 4, 0
+out       .byt 0
+cnt       .byt 0
+	.text
+
+&ldezout  .(
+          sta da
+          sty da+1
+          stx lb
+          ldx #39
+
+l1        ldy #3
+l1c       lda dtab,x
+          sta w,y
+          dex
+          dey
+          bpl l1c
+          stx lo
+          iny
+          sty out
+          sty cnt
+l2a       ldy #3
+l2        lda (da),y
+          cmp w,y
+          bcc sloop
+          bne shift
+          dey
+          bpl l2
+          bmi xsub
+shift     ldy #0
+          ldx #4
+          clc
+h1        lda w,y
+          rol
+          sta w,y
+          iny
+          dex
+          bne h1
+          bcs ende
+          inc cnt
+          bne l2a
+
+sloop     dec cnt
+          bmi endx
+          ldy #3
+          clc
+s0        lda w,y
+          ror
+          sta w,y
+          dey
+          bpl s0
+
+xsub      ldy #3
+x0        lda (da),y
+          cmp w,y
+          bcc d0
+          bne d1
+          dey
+          bpl x0
+d1        ldy #0
+          ldx #4
+          sec
+d1a       lda (da),y
+          sbc w,y
+          sta (da),y
+          iny
+          dex
+          bne d1a
+          sec
+          .byt $24
+d0        clc
+          rol out
+          jmp sloop
+         
+endx      lda out
+          beq e3
+          ldx #0
+          stx lb
+          beq e1
+e3        bit lo
+          bmi e1
+          lda lb
+          bne e2
+e1        ora #"0"
+e2        jsr lffd2
+          
+          ldx lo
+          bmi l1b
+          jmp l1
+l1b ende  rts
+
+dtab      .word 1,0
+          .word 10,0
+          .word 100,0
+          .word 1000,0
+          .word 10000,0
+          .word 34464,1
+          .word 16960,15
+          .word 38528,152
+          .word 57600,1525
+          .word 51712,15258
+          .)
+
+&DEZOUT ldy #0
+	jmp wordout  
+
+          .)
+
+getsem	ldx #SEM_SENDBUF
+	sec
+	jmp PSEM2
+fresem	ldx #SEM_SENDBUF
+	jmp VSEM
+
+	.)
+

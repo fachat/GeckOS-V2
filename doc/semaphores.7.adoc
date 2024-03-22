@@ -24,7 +24,7 @@ Once passed, no other thread may pass the semaphore (even threads from the ownin
 A thread that calls *PSEM(2)* can decide whether it wants to block until it gets the semaphore,
 or whether the call immediately returns.
 
-Only when a thread of the owning task has called *VSEM(2)*, one of the threads waiting on the
+Only when a thread of the task that has the semaphore has called *VSEM(2)*, one of the threads waiting on the
 semaphore (having called the blocking variant of *PSEM(2)*) is woken up and its task is declared
 owner of the semaphore.
 
@@ -54,6 +54,23 @@ SEM_SENDBUF::
 	kernel calls like *FORK(2)* or *GETINFO(2)*
 
 Other semaphores may be defined by the architecture port. See there for more information.
+
+=== Special considerations
+
+When a semaphore is aquired with *PSEM*, the kernel notes which task did this.
+Only this task is allowed to do a *VSEM* on this semaphore.
+
+Therefore, when a task dies, the semaphore it owns are freed, and potentially waiting
+tasks are released (one of them passes the blocking *PSEM*).
+
+The *SEM_SENDBUF* semaphore is used to protect the *PCBUF* buffer used by multiple kernel calls.
+The kernel notes which task has this semaphore:
+
+- On a FORK, the semaphore moves to the forked task, as the forked task needs to read its command line from the PCBUF. The forked task should then do a *VSEM*.
+- During SEND/RECEIVE, the semaphore ownership moves to the receiver. 
+
+Note:: a filesystem will not release *SEM_SENDBUF*, as it typically replies back with a new message, which transfers the semaphore back).
+
 
 == RESOURCE MANAGEMENT
 Semaphores are "unlocked" and "disowned" when a task dies, i.e. its last thread dies.

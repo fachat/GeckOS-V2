@@ -1,10 +1,10 @@
 
-MANPAGES=../../../*/*/*.1.adoc
+#MANPAGES=../../../*/*/*.1.adoc
 
 apps = lsh lmon
 APPSDIR=../../../apps
 
-sysapps = slipd ps kill ontty lsmem
+sysapps = ps kill ontty lsmem
 SYSAPPSDIR=../../../sysapps
 
 files = mkdir rmdir rm format chkdsk ls mv

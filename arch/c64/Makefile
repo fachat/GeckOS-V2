@@ -10,7 +10,7 @@ c64 ${TRG}:
 	${FILE} c64rom.o65;
 	${RELOC} -xt -o ${TRG} c64rom.o65; 
 	if [ $$? -ne 0 ]; then rm ${TRG}; fi;
-	cat c64rom.lab | sed -e 's/ 0x/ /g' | cut -d , -f 1,2,3 | tr -d , | awk '{print "al "$$2" ."$$1"_"$$3;}' > c64rom.l
+	cat c64rom.lab | sed -e 's/ 0x/ /g' | cut -d , -f 1,2,3 | tr -d , | awk '{print "al "$$2" ."$$1"_"$$3;}' > osa.l
 
 andre: 
 	(XAINPUT=${XAINPUT}; export XAINPUT;\
@@ -18,7 +18,7 @@ andre:
 	${FILE} c64rom.o65;\
 	${RELOC} -xt -o ${TRG} c64rom.o65; \
 	if [ $$? -ne 0 ]; then rm ${TRG}; fi;)
-	cat c64rom.lab | sed -e 's/ 0x/ /g' | cut -d , -f 1,2,3 | tr -d , | awk '{print "al "$$2" ."$$1"_"$$3;}' > c64rom.l
+	cat c64rom.lab | sed -e 's/ 0x/ /g' | cut -d , -f 1,2,3 | tr -d , | awk '{print "al "$$2" ."$$1"_"$$3;}' > osa.l
 	
 
 clean:

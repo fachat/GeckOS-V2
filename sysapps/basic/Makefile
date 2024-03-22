@@ -3,11 +3,10 @@
 XAINPUT=../../include,../../arch,../..
 XA=xa
 
-basic4.o65: basic4.a65
-	(XAINPUT=${XAINPUT}; export XAINPUT;\
-	${XA} -DOSA2KERNEL=61440 -P- -R -c basic4.a65 -o basic4.o65 ;\
-	if [ $$? -ne 0 ]; then rm -f basic4.o65; fi; )
+basic: basic2.a65 *.a65
+	${XA} -R -LOSA2KERNEL -LLIB6502 -I../../include -I../.. basic2.a65 -o basic ;
+	file65 basic
 
 clean:
-	rm -f basic4.o65
+	rm -f basic
 

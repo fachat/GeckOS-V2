@@ -17,59 +17,15 @@
 
 
 .(
-#ifdef ROM
-
-#ifndef BASICEXE
-#define	BASICEXE $80
-#endif
-#ifndef BASICDEV
-#define	BASICDEV 0
-#endif
-
-          .word endofbasic
-          .byt PK_PRG+BASICEXE
-          .byt 2
-          .byt BASICDEV, BASICDEV
-          .word BASIC
-#ifndef ROMTEST
-          .byt 8,8,9,9,$a,$a,$b,$b,$c,$c,$d,$d,$e,$e,<-1
-#else
-          .byt 8,$18,9,$19,$a,$1a,$b,$1b,$c,$1c,$d,$1d,$e,$1e,<-1
-#endif
-          .asc "basic",0,0
-
-#else	/* ROM */
 
 #include  "kdefs.i65"
 #include  "kernel.i65"
 #include  "fdefs.i65"
 
-          ;.word $800
-          *=$8000
-          .word 0
-          .byt PK_PRG
-          .byt 16
-          .word 0
-          .word BASIC
-          .byt 8,0,9,0,$a,0,$b,0,<-1
-
-;          *=$8000
-
-#endif /* ROM */
+; needed for malloc and fputc from common
+#include  "lib6502.i65"
 
 /*#define   SHOW*/
-
-#ifndef BASICEND
-#define	BASICEND $4000
-#endif
-#ifndef BASICSTART
-#define	BASICSTART $800
-#endif
-
-RAMEND    =BASICEND
-RAMANF    =BASICSTART
-#print RAMANF
-#print RAMEND
 
 
 #define   E_OPEN         2
@@ -79,26 +35,128 @@ RAMANF    =BASICSTART
 #define   E_NOTOPEN      3
 #define   E_NOTFND       4
 
-/*#ifndef NOMMU*/
-oldsyszp =syszp
--syszp    =$90		/* watch out - may not work on every ROM */
-/*#endif*/
 
 #echo oabasic:
-#print    syszp
 
-status    =syszp
-;directfl  =syszp+1
-filenr    =syszp+2
-drive     =syszp+3
-mode      =syszp+4
-fnlen     =syszp+5
-fnadr     =syszp+6  ;.w
-actin     =syszp+8
-&actout    =syszp+9
-&stream    =syszp+10
-dx        =syszp+11
--syszp    +=12
+	.data
+optslst	.asc "m",0
+optsflg	.byt 0		; unused for option 'm'
+optsadl	.byt <optm-1
+optsadh	.byt >optm-1
+
+basmem	.word 0
+baslen	.word 4096
+
+stackp	.byt 0		; initial stack pointer
+
+usagetxt 
+	.asc 13,10,"Usage:"
+	.asc 13,10,"  basic -m <n>"
+	.asc 13,10,"Run MS BASIC2 with additions"
+	.asc 13,10,"Options:"
+	.asc 13,10," -m <n>"
+	.asc 13,10,"      Using <n> kB for BASIC memory"
+	.asc 13,10,"      Defaults to 4k."
+	.asc 13,10,"-?    Print this help."
+	.asc 13,10,0
+
+	.text
+
+	; TODO use exestart to run a command on startup
+
+BASIC     jsr getopts
+	  bcc ok
+	  ; usage
+	lda #<usagetxt
+	ldy #>usagetxt
+	jsr strout
+	lda #E_OK
+	rts
+
+ok
+	; alloc
+	lda baslen
+	ldy baslen+1
+	jsr malloc
+	bcs erroptm2
+	sta basmem
+	sty basmem+1
+
+	tsx
+	stx stackp
+
+	  jsr inifiles
+          jsr inidup
+          jsr lffcc
+          jmp le394
+
+optm	.(
+	lda #0
+	sta INT
+	lda (argp),y
+oloop	; times 10
+	pha
+	asl INT		; x2
+	lda INT		
+	asl INT		; x4
+	asl INT		; x8
+	clc
+	adc INT		; x8 + x2 = x10
+	sta INT
+	pla
+	bcs erroptm
+	; add digit
+	cmp #$30
+	bcc erroptm
+	cmp #$3a
+	bcs erroptm
+	and #$0f
+	adc INT
+	sta INT
+	bcc o1
+	inc INT+1
+o1	; next digit
+	iny
+	lda (argp),y
+	bne oloop
+	; INT contains mem size in K
+	lda INT
+	asl		; x2
+	bcs erroptm
+	asl		; x4
+	bcs erroptm
+	tay		; as high byte
+	lda #0		; low byte
+	; now a/y contain mem size in byte
+	sta baslen
+	sty baslen+1
+	clc
+	rts
+erroptm	lda #E_ILLPAR
+	.byt $2c
+&erroptm2
+	lda #E_NOMEM
+	sec
+	rts
+	.)
+
+
+
+	.zero
+fnadr     .word 0
+argp	=fnadr
+
+	.data
+status    .byt 0
+filenr    .byt 0
+drive     .byt 0
+mode      .byt 0
+fnlen     .byt 0
+actin     .byt 0
+&actout   .byt 0
+&stream   .byt 0
+dx        .byt 0
+	.text
 
 #define   MAXFILE   10
 #define   F_FNR     0
@@ -107,16 +165,11 @@ dx        =syszp+11
 #define   F_DRV     3
 #define   F_SLEN    4
 
-
-BASIC     jsr inifiles
-          jsr inidup
-          jsr lffcc
-          jmp le394
-
           .(
-anzfile   =syszp
-FTAB      =syszp+1
--syszp    +=1+MAXFILE*F_SLEN
+	.data
+anzfile   .byt 0
+FTAB      .dsb MAXFILE*F_SLEN
+	.text
 
 &inifiles ldx #0
           stx anzfile
@@ -337,11 +390,12 @@ lcce      ldx dx
           .(
 #define   MAXDUP    5
 
-intab     =syszp
-outab     =syszp+MAXDUP
-inpnt     =syszp+2*MAXDUP
-outpnt    =syszp+2*MAXDUP+1
--syszp    +=2*MAXDUP+2
+	.data
+intab     .dsb MAXDUP
+outab     .dsb MAXDUP
+inpnt     .byt 0
+outpnt    .byt 0
+	.text
 
 &inidup   lda #0
           sta inpnt
@@ -481,10 +535,12 @@ ld2e      ldx dx
           pla
           rts
 
-anfadr    =syszp
-endadr    =syszp+2
-loadfl    =syszp+4  ;.w!
--syszp    +=6
+	.zero
+anfadr    .word 0
+	.data
+endadr    .word 0
+loadfl    .word 0
+	.text
           
 lffd5     ;load
           stx anfadr
@@ -623,13 +679,20 @@ lffb7     lda status
           rts
           
 lff99     ;bcc set
-          ldx #<RAMEND
-          ldy #>RAMEND
+	pha
+	lda basmem
+	clc
+	adc baslen
+	tax
+	lda basmem+1
+	adc baslen+1
+	tay
+	pla
           rts
 
 lff9c     ;bcc set
-          ldx #<RAMANF
-          ldy #>RAMANF
+          ldx basmem
+          ldy basmem+1
           rts
           
 lffba     sta filenr
@@ -672,1148 +735,122 @@ lfff3     =$fff3
 */
 
 romanf    =*
+
+
+	.zero
+INT       .word 0	; =$14      ;.w
+
+STRSTCK   .dsb 9,0	; =$19     ; [0,+8]
+STRSTCK_END =STRSTCK+9	; =$22
+
+l0022     .word 0	; =$22
+l0023     =l0022+1	; =$23
+l0024     .word 0	; =$24
+l0025     =l0024+1	; =$25
           
-l0003     =$03      ;.w
-l0005     =$05      ;.w
 
-SUCHCHAR  =$07
-HKFL      =$08
-TABSPAL   =$09
-LOADFL    =$0a
-DIM       =$0b
-DIMFL     =$0c
-STRINGFL  =$0d
-INTFL     =$0e
-LISTHKFL  =$0f
-FNFL      =$10
-INPUTFL   =$11
-ATNSIGN   =$12
-ACTIO     =$13
+BASANF    .word 0	; =$2b      ;.w
+STRANF    .word 0	; =$33      ;.w
+l0035     .word 0	; =$35      ;.w
+l0043     .word 0	; =$43      ;.w
+VARADR    .word 0	; =$47      ;.w
+FORVAR    .word 0	; =$49      ;.w 
 
-INT       =$14      ;.w
+l004e     .word 0	; =$4e
+l004f     =l004e+1	; =$4f
+l0050     .word 0	; =$50
+l0051     =l0050+1	; =$51
 
-STRPTR    =$16
-STRZEI    =$17     ;.w
-STRSTCK   =$19     ; [0,+8]
+; unfortunately the accumulators are being mis-used for zp ptr
+akku3     .dsb 5, 0	; =$57      ; [0,+4]
+akku4     .dsb 5, 0	; =akku3+5  ; [0,+4]
+FAC       .dsb 8, 0	; =akku4+5  ; [0,+7]
+ARG       .dsb 8, 0	; =FAC+8    ; [0,+7]
+NEWPTR	  =akku4+3
 
-l0022     =$22
-l0023     =$23
-l0024     =$24
-l0025     =$25
+l0071     .word 0	; =$71
 
-REG       =$26      ; [0,+3]
+REG       .dsb 4, 0	; =$26      ; [0,+3]
 
-BASANF    =$2b      ;.w
-VARANF    =$2d      ;.w
-ARRANF    =$2f      ;.w
-ARREND    =$31      ;.w
-STRANF    =$33      ;.w
-l0035     =$35      ;.w
-BASEND    =$37      ;.w
-ZEINR     =$39      ;.w
-PRVZEINR  =$3b      ;.w
-NEXTSTAT  =$3d      ;.w
-DZEINR    =$3f      ;.w
-NEXTDATA  =$41      ;.w
-l0043     =$43      ;.w
-VARNAME   =$45      ;.w
-VARADR    =$47      ;.w
-FORVAR    =$49      ;.w 
-l004b     =$4b      ;.w
+CHRGET	.dsb $1d, 0	; =$73; [0, +$1c]
+CHRGOT	=CHRGET+6	; =$79
+BASZEI	=CHRGET+7	; =$7a
+l0080   =CHRGET+$d	; =$80
 
-l004d     =$4d
-l004e     =$4e
-l004f     =$4f
-l0050     =$50
-l0051     =$51
 
-l0053     =$53
-l0054     =$54
-l0055     =$55      ;.w
+	.data
+l0003     .word 0	; =$03      ;.w
+l0005     .word 0	; =$05      ;.w
 
-akku3     =$57      ; [0,+4]
-akku4     =akku3+5  ; [0,+4]
-FAC       =akku4+5  ; [0,+7]
-ARG       =FAC+8    ; [0,+7]
+SUCHCHAR  .byt 0	; =$07
+HKFL      .byt 0	; =$08
+TABSPAL   .byt 0	; =$09
+LOADFL    .byt 0	; =$0a
+DIM       .byt 0	; =$0b
+DIMFL     .byt 0	; =$0c
+STRINGFL  .byt 0	; =$0d
+INTFL     .byt 0	; =$0e
+LISTHKFL  .byt 0	; =$0f
+FNFL      .byt 0	; =$10
+INPUTFL   .byt 0	; =$11
+ATNSIGN   .byt 0	; =$12
+ACTIO     .byt 0	; =$13
 
-l0071     =$71
 
-CHRGET    =$73
-CHRGOT    =$79
-BASZEI    =$7a
+STRPTR    .byt 0	; =$16
+STRZEI    .word 0	; =$17     ;.w
 
-l0080     =$80
 
-l008b     =$8b
 
-l0100     =$100     ; [-1,+13]
+VARANF    .word 0	; =$2d      ;.w
+ARRANF    .word 0	; =$2f      ;.w
+ARREND    .word 0	; =$31      ;.w
+BASEND    .word 0	; =$37      ;.w
+ZEINR     .word 0	; =$39      ;.w
+PRVZEINR  .word 0	; =$3b      ;.w
+NEXTSTAT  .word 0	; =$3d      ;.w
+DZEINR    .word 0	; =$3f      ;.w
+NEXTDATA  .word 0	; =$41      ;.w
+VARNAME   .word 0	; =$45      ;.w
+l004b     .word 0	; =$4b      ;.w
+
+l004d     .byt 0	; =$4d
+
+l0053     .byt 0	; =$53
+l0054     .byt 0	; =$54
+l0055     .word 0	; =$55      ;.w
+
+
+
+l008b     .dsb 5, 0	; =$8b; last random
+
+tmp0100	.dsb 14, 0
+l0100	=tmp0100+1	; [-1,+13]
+
 stack     =$100
 
-#ifdef TESTC64
-l0200     =$200     ; [-5,+88]
-#else
-l0200     =$340     
-#endif
-
-l0300     =$300     ;.w
-l0302     =$302     ;.w
-l0304     =$304     ;.w
-l0306     =$306     ;.w
-l0308     =$308     ;.w
-l030a     =$30a     ;.w
-
-SYSAC     =$030c
-SYSXR     =$030d
-SYSYR     =$030e
-SYSST     =$030f
-
-lusr      =$0310    ; [0,+2]
-
-lmkdir    lda #FS_MKDIR
-          .byt $2c
-lrmdir    lda #FS_RMDIR
-          .byt $2c
-lscratch   lda #FS_DELETE
-          .byt $2c
-lformat   lda #FS_FORMAT
-          sta loadfl
-          jsr le1d4
-          lda mode
-          sta PCBUF+FS_CMD_PFAD
-          lda loadfl
-          sta mode
-          jsr copen
-          bcc cmdok
-          ldx #24
-          jmp la437
-cmdok     rts
-          
-lrename   jsr le257      ; filenamen holen
-          ldx #FS_CMD_NAME
-          ldy fnlen
-          beq syntaxer
-          ldy #0
-lr1       lda (fnadr),y
-          sta PCBUF,x
-          iny
-          inx
-          cpy fnlen
-          bcc lr1
-          lda #0
-          sta PCBUF,x
-          inx
-          stx loadfl
-          jsr CHRGOT
-          cmp #$a4       ; "to"-TokenCode
-          bne syntaxer
-          jsr CHRGET
-          jsr le257
-          ldy fnlen
-          beq syntaxer
-          ldy #0
-          ldx loadfl
-lr2       lda (fnadr),y
-          sta PCBUF,x
-          inx
-          iny
-          cpy fnlen
-          bcc lr2
-          lda #0
-          sta PCBUF,x
-          inx
-          stx loadfl
-          jsr le200
-          stx PCBUF+FS_CMD_DRV
-          lda #0
-          sta PCBUF+FS_CMD_PFAD
-          lda #FS_RENAME
-          ldy loadfl
-          jmp ropen
-syntaxer  jmp syntax
-illq      jmp illquant
-
-buf       =syszp
--syszp    +=FS_DIR_NAME
-
-ldir      beq syntaxer
-          lda #0
-          jsr lffbd
-          jsr lad9e
-          bit STRINGFL
-          bpl drnoname
-          jsr lb6a3
-          ldx l0022
-          ldy l0022+1
-          jsr lffbd
-          jsr le20e
-          jsr lad9e
-drnoname  bit STRINGFL
-          bmi syntaxer
-          jsr lb1b8
-          ldx FAC+3
-          bne illq
-          ldx FAC+4
-          stx drive
-          lda #FS_OPEN_DR
-          sta mode
-          jsr xopen
-          bcc drnloop
-          rts
-
-IN        ldx stream
-          jmp lcc1
-          
-drnloop   jsr lffe1
-          beq drend
-          ldy #0
-drl1      jsr IN
-          bcs drend
-          sta buf,y
-          iny
-          cpy #FS_DIR_NAME
-          bcc drl1
-          
-          lda buf+FS_DIR_MODE
-          cmp #FS_DIR_MOD_NAM
-          bne drl2
-          
-          lda #<dnamtxt
-          ldy #>dnamtxt
-          jsr strout
-          jsr dirname
-          jmp drle
-          
-drl2      cmp #FS_DIR_MOD_FIL
-          bne drl3
-          jsr dnout
-          jsr sizdatim
-          jmp drle
-
-drl3      cmp #FS_DIR_MOD_FRE
-          bne drl4
-          jsr sizeout
-          lda #<bytfre
-          ldy #>bytfre
-          jsr strout
-          jmp drle
-          
-drl4      cmp #FS_DIR_MOD_DIR
-          bne drle
-          jsr dnout
-          lda #<ddirtxt
-          ldy #>ddirtxt
-          jsr strout
-          jmp drle
-
-drle      jsr laad7
-          jmp drnloop
-
-drend     ldx stream
-          lda #SC_NUL
-          jsr STRCMD
-          clc
-          rts
-          
-dnout     jsr dirname
-          lda #","
-          jsr lffd2
-          ldx drive
-          lda #0
-          jsr adrout
-          jsr DPOUT
-          jmp SSPOUT
-
-dirname   ldy #0
-          lda #34
-drn1      jsr lffd2
-          jsr IN
-          bcs drlne
-          cmp #0
-          beq drlne
-          iny
-          bne drn1
-drlne     lda #34
-drn2      jsr lffd2
-          lda #" "
-          iny
-          cpy #23
-          bcc drn2 
-          rts
-          
-sizdatim  jsr sizeout
-          jsr DPOUT
-          lda PCBUF+FS_DIR_DAY
-          jsr DEZOUT
-          jsr PNTOUT
-          lda PCBUF+FS_DIR_MONTH
-          jsr DEZOUT
-          jsr PNTOUT
-          lda PCBUF+FS_DIR_YEAR
-          jsr DEZOUT
-          jsr SSPOUT
-          lda PCBUF+FS_DIR_HOUR
-          jsr DEZOUT
-          jsr DPOUT
-          lda PCBUF+FS_DIR_MIN
-          jmp DEZOUT
-
-DPOUT     lda #":"
-          .byt $2c
-SSPOUT    lda #" "
-          .byt $2c
-PNTOUT    lda #"."
-          jmp lffd2
-          
-sizeout   lda #<buf+FS_DIR_LEN
-          ldy #>buf+FS_DIR_LEN
-          ldx #" "
-          jmp ldezout
-
-ddirtxt   .asc ":<dir>",0
-dnamtxt   .asc "Diskettenname:",0
-bytfre    .asc "Bytes free",0
+inbuf	.dsb 93, 0
+l0200   =inbuf+5     ; [-5,+88]
 
 
-          .(
-da        =syszp
-lb        =syszp+2
-lo        =syszp+3
-w         =syszp+4
-out       =syszp+8
-cnt       =syszp+9
--syszp    +=10
+l0300     .word 0	; =$300     ;.w
+l0302     .word 0	; =$302     ;.w
+l0304     .word 0	; =$304     ;.w
+l0306     .word 0	; =$306     ;.w
+l0308     .word 0	; =$308     ;.w
+l030a     .word 0	; =$30a     ;.w
 
-&ldezout  .(
-          sta da
-          sty da+1
-          stx lb
-          ldx #39
+SYSAC     .byt 0	; =$030c
+SYSXR     .byt 0	; =$030d
+SYSYR     .byt 0	; =$030e
+SYSST     .byt 0	; =$030f
 
-l1        ldy #3
-l1c       lda dtab,x
-          sta w,y
-          dex
-          dey
-          bpl l1c
-          stx lo
-          iny
-          sty out
-          sty cnt
-l2a       ldy #3
-l2        lda (da),y
-          cmp w,y
-          bcc sloop
-          bne shift
-          dey
-          bpl l2
-          bmi xsub
-shift     ldy #0
-          ldx #4
-          clc
-h1        lda w,y
-          rol
-          sta w,y
-          iny
-          dex
-          bne h1
-          bcs ende
-          inc cnt
-          bne l2a
+lusr      .dsb 3, 0	; =$0310    ; [0,+2]
 
-sloop     dec cnt
-          bmi endx
-          ldy #3
-          clc
-s0        lda w,y
-          ror
-          sta w,y
-          dey
-          bpl s0
+	.text
 
-xsub      ldy #3
-x0        lda (da),y
-          cmp w,y
-          bcc d0
-          bne d1
-          dey
-          bpl x0
-d1        ldy #0
-          ldx #4
-          sec
-d1a       lda (da),y
-          sbc w,y
-          sta (da),y
-          iny
-          dex
-          bne d1a
-          sec
-          .byt $24
-d0        clc
-          rol out
-          jmp sloop
-         
-endx      lda out
-          beq e3
-          ldx #0
-          stx lb
-          beq e1
-e3        bit lo
-          bmi e1
-          lda lb
-          bne e2
-e1        ora #"0"
-e2        jsr lffd2
-          
-          ldx lo
-          bmi l1b
-          jmp l1
-l1b ende  rts
-
-dtab      .word 1,0
-          .word 10,0
-          .word 100,0
-          .word 1000,0
-          .word 10000,0
-          .word 34464,1
-          .word 16960,15
-          .word 38528,152
-          .word 57600,1525
-          .word 51712,15258
-          .)
-
-&DEZOUT   .(
-l1        tay
-          sec
-          sbc #100
-          bcs l1
-          lda #0
-          sta da
-          tya
-l2        tay
-          sec
-          sbc #10
-          bcc l3
-          inc da
-          bcs l2
-l3        asl da
-          asl da
-          asl da
-          asl da
-          tya
-          ora da
-&&HEXOUT
-          pha
-          lsr
-          lsr
-          lsr
-          lsr
-          jsr NIBOUT
-          pla
-          and #$0f
-NIBOUT    clc  
-          adc #"0"
-          cmp #"9"+1
-          bcc nout
-          adc #6
-nout      jmp lffd2
-          .)
-
-          .)
-
-          .(
-l00fb     =syszp
-l00fd     =syszp+2
-l00c8     =syszp+4
--syszp    +=5
-
-&parlist  .(
-          bcc a1
-          beq a1
-          cmp #$ab
-          bne delerr1
-a1        jsr la96b
-          jsr la613
-          jsr CHRGOT
-          beq a2
-          cmp #$ab
-delerr1   bne delerr
-          jsr CHRGET
-          jsr la96b
-          bne delerr
-a2        rts
-&delerr   jmp syntax
-          .)
-
-&ldump    .(
-          bne delerr
-          lda VARANF
-          ldy VARANF+1
-du1       cpy ARRANF+1
-          bne du2
-          cmp ARRANF
-du2       bcs duvend
-          sta INT
-          sty INT+1
-          jsr laad7      ; crlfout
-          jsr getstop
-          jsr dumpvar
-          lda INT
-          ldy INT+1
-          clc
-          adc #7
-          bcc du1
-          iny
-          bne du1
-
-dumpvar   jsr duname
-          bcs dustrbin
-          lda INT
-          adc #2
-          ldy INT+1
-          bcc du3
-          iny
-du3       cpx #128
-          bcs dufunk
-          pha
-          lda #" "
-          jsr duglout
-          pla
-          jsr lbba2      ; fliesskommavar holen
-du4       jsr lbddd      ; in ASC
-          jmp strout      ; ausgeben
-duvend    jmp duarr
-dustrbin  txa
-          bpl dustr      
-          lda #"%"       ; integervar
-          jsr duglout
-          ldy #2
-          lda (INT),y
-          tax
-          iny
-          lda (INT),y
-          tay
-          txa
-          jsr lb395
-          jmp du4
-dustr     lda #"$"       ; stringvar
-          jsr duglout
-          jsr duhkout
-          ;lda #4
-          ;jsr setfla
-          ldy #2
-          lda (INT),y    ; laenge
-          beq dustrr
-          sta l00c8
-          iny
-          lda (INT),y
-          sta l0022
-          iny
-          lda (INT),y
-          sta l0022+1
-          ldy #0
-dust1     lda (l0022),y
-          jsr lffd2
-          iny
-          cpy l00c8
-          bne dust1
-dustrr    
-duhkout   lda #34
-          jmp lffd2
-dufunk    ldy #2         ;funktion
-          lda (INT),y
-          sta akku4+3
-          iny
-          lda (INT),y
-          sta akku4+4
-          iny
-          lda (INT),y
-          sec
-          sbc #2
-          sta l0022
-          iny
-          lda (INT),y
-          sbc #0
-          sta l0022+1
-          lda #"("
-          jsr lffd2
-          ldy #0         ; argument
-          lda (l0022),y
-          jsr lffd2
-          iny
-          lda (l0022),y
-          beq duf1
-          jsr lffd2
-duf1      lda #")"
-          jsr duglout
-          jsr dumplist
-          rts
-duend     jmp laad7
-duarr     lda ARRANF     ; arrayvariable
-          ldy ARRANF+1
-dua1      cpy ARREND+1
-          bne dua2
-          cmp ARREND
-dua2      bcs duend
-          sta INT
-          sty INT+1
-          jsr laad7
-          jsr getstop
-          jsr duname
-          bcc duafk
-          txa
-          bmi duaint
-          lda #"$"
-          .byt $2c
-duaint    lda #"%"
-          .byt $2c
-duafk     lda #" "
-          jsr lffd2
-          lda #"("
-          jsr lffd2
-          ldy #4
-          lda (INT),y
-          sta l00fb      ; Anzahl Dimensionen
-          clc
-          lda #5
-          adc INT
-          sta l00fd
-          lda INT+1
-          adc #0
-          sta l00fd+1
-          jmp dua4
-dua3      dec l00fb
-          beq duaadd
-          lda #","
-          jsr lffd2
-dua4      lda l00fb
-          asl
-          tay
-          dey
-          lda (l00fd),y
-          sec
-          sbc #1
-          pha
-          dey
-          lda (l00fd),y
-          sbc #0
-          tay
-          pla
-          tax
-          tya
-          jsr adrout
-          jmp dua3
-duaadd    lda #")"
-          jsr lffd2
-          ldy #2
-          lda (INT),y
-          clc
-          adc INT
-          pha
-          iny
-          lda (INT),y
-          adc INT+1
-          tay
-          pla
-          jmp dua1
-
-duname    ldy #0
-          lda (INT),y
-          tax
-          and #127
-          jsr lffd2
-          iny
-          lda (INT),y
-          tay
-          and #127
-          beq dun1
-          jsr lffd2
-dun1      tya
-          asl
-          rts
-
-duglout   jsr lffd2
-          lda #"="
-          jmp lffd2
-          .)
-
-&lfind    .(
-          lda BASANF+1
-          sta l00fd+1
-          lda BASANF
-          sta l00fd
-          bne d1
-          dec l00fd+1
-d1        dec l00fd
-          ;jsr d10
-d2        ldy #0
-          lda (l00fd),y
-          bne d5
-          iny            ; zeilenende
-          iny
-          lda (l00fd),y  ; hibyte verkettungsadr
-          beq fiend      ; prgende
-          lda l00fd
-          sta akku4+3
-          lda l00fd+1
-          sta akku4+4
-          lda l00fd      ; 5 fuer anfang text addieren
-          clc
-          adc #5
-          sta l00fd
-          bcc d4
-          inc l00fd+1
-d4        jsr getstop
-          jmp d2
-fiend     pla
-          pla
-          jmp ready
-d5        cmp (BASZEI),y ; mit erstem Byte des zu suchenden Textes vergleichen
-          bne d8
-;          lda l00fd
-;          sta l00fb
-;          lda l00fd+1
-;          sta l00fb+1
-d6        iny
-          lda (BASZEI),y ; cpy l00c8
-          beq d9         ; listen
-          lda (l00fd),y
-          beq d7         ; ende der Zeile dann nicht gefunden
-          cmp (BASZEI),y
-          beq d6
-d7;        lda l00fb
-;          sta l00fd
-;          lda l00fb+1
-;          sta l00fd+1
-d8        inc l00fd
-          bne d2
-          inc l00fd+1
-          bne d2
-
-d9        inc akku4+3
-          bne d09
-          inc akku4+4
-d09       ldy #2
-          lda (akku4+3),y
-          tax
-          iny
-          lda (akku4+3),y
-          jsr listline
-          jsr laad7
-          ldy #<-1
-d13       iny
-          lda (l00fd),y
-          bne d13
-          tya
-          clc
-          adc l00fd
-          sta l00fd
-          bcc d14
-          inc l00fd+1
-d14       jmp d2
-/*
-d10       ldy #<-1
-d11       iny
-          lda (BASZEI),y
-          bne d11
-          sty l00c8
-          rts  */
-          .)
-                    
-&ldelete  .(
-          jsr parlist
-          lda INT:ora INT+1
-          bne a3
-          ldy #0              ; hier alles bis ende loeschen
-          tya
-          sta (akku4+3),y
-          iny
-          sta (akku4+3),y
-          jmp a9
-a3        lda akku4+3
-          ldy akku4+4
-          sta l0022
-          sty l0022+1
-          jsr la613
-          bcc a5
-          ldy #0
-          lda (akku4+3),y
-          pha
-          iny
-          lda (akku4+3),y
-          sta akku4+4
-          pla
-          sta akku4+3
-a5        lda l0022+1
-          cmp akku4+4
-          bcc a5a
-          bne a9
-          lda l0022
-          cmp akku4+3
-          bcs a9
-a5a       ldy #0
-          ldx #3
-a6        lda (akku4+3),y
-          sta (l0022),y
-          cmp #0
-          bne a7
-          dex
-          beq a9
-          bne a8
-a7        ldx #3
-a8        iny
-          bne a6
-          inc l0022+1
-          inc akku4+4
-          jmp a6
-&a9       jsr bindbas
-          lda #2
-          clc
-          adc l0022
-          sta VARANF
-          lda l0022+1
-          adc #0
-          sta VARANF+1
-          jmp la663
-
-&&lrenew  bne renewerr
-          ldy #1
-          tya
-          sta (BASANF),y
-          jsr a9
-          jmp ready
-          .)
-
-renewerr  jmp syntax
-&GETINT   jsr frmnum
-          jmp getadr
-          
-paraut    .(
-          lda #0
-          sta l00fb+1
-          sta l00fd+1
-          lda #10
-          sta l00fb
-          lda #100
-          sta l00fd
-          jsr weitzei
-          cmp #","
-          beq paraut1
-          jsr CHRGOT
-          jsr GETINT
-          sty l00fd
-          sta l00fd+1
-          jsr weitzei
-          cmp #","
-          beq paraut1
-          jmp syntax
-paraut1   jsr CHRGET
-          jsr weitzei
-          cmp #","
-          beq paraut2
-          jsr GETINT
-          sty l00fb
-          sta l00fb+1
-paraut2   rts
-          .)
-          
-          .(
-rsyn      lda #11
-          .byt $2c
-rend      lda #128
-          .byt $2c
-rillq     lda #14
-          .byt $2c
-rmemer    lda #16
-          sta l00c8
-          jsr a9
-          ldx l00c8
-          jmp la437
-          
-&&lrenumber
-          jsr paraut
-          lda l00fb
-          ora l00fb+1
-          bne r00
-          jmp illquant
-r00       ldy #1
-          lda (BASANF),y
-          beq rend
-          jsr a9
-          jsr CHRGOT
-          beq r0a
-          cmp #","
-          bne rsyn
-          jsr CHRGET
-r0a       jsr parlist
-          lda INT
-          ora INT+1
-          bne r01
-          ldx #<-1
-          ldy #<-1
-          bne r02
-r01       ldx INT
-          ldy INT+1
-r02       stx l0022
-          sty l0022+1
-          jmp r03
-riq1      bcs rillq
-r1        stx akku4+3
-          sty akku4+4
-r03       ldy #1
-          lda (akku4+3),y
-          beq r4
-          ldy #3
-          lda (akku4+3),y
-          cmp l0022+1
-          bcc rrr
-          bne r4
-          dey
-          lda (akku4+3),y
-          cmp l0022
-          bcc rrr
-          bne r4
-rrr       lda STRANF
-          sec
-          sbc #4
-          sta STRANF
-          tax
-          lda STRANF+1
-          sbc #0
-          sta STRANF+1
-          cmp VARANF+1
-          bcc rmemer
-          bne r1a
-          cpx VARANF
-          bcc rmemer
-r1a       ldy #3              ; alte Zeilennummer speichern
-          lda (akku4+3),y
-          sta (STRANF),y
-          dey
-          lda (akku4+3),y
-          sta (STRANF),y
-          dey
-          lda l00fd+1         ; und neue dazu
-          sta (STRANF),y
-          tax
-          dey
-          lda l00fd
-          sta (STRANF),y
-          ldy #2
-          sta (akku4+3),y
-          iny
-          txa
-          sta (akku4+3),y
-          lda l00fd           ; neue Zeilennr erhoehen
-          clc
-          adc l00fb
-          sta l00fd
-          lda l00fd+1
-          adc l00fb+1
-          sta l00fd+1
-          bcs riq1
-          ldy #0              ; naechste Zeile suchen
-          lda (akku4+3),y
-          tax
-          iny
-          lda (akku4+3),y
-          tay
-          bne r1
-r4        jsr la68e           ; start Zeilennr im Text aendern
-r5        ldy #0
-          lda (BASZEI),y
-          bne r6
-          iny
-          lda (BASZEI),y
-          bne r7
-          iny
-          lda (BASZEI),y
-          bne r7
-          jmp rend
-r7        lda BASZEI
-          clc
-          adc #5
-          sta BASZEI
-          bcc r5
-          inc BASZEI+1
-          bne r5
-r6        cmp #$a7
-          beq rthen
-r8        cmp #$89       ; goto-Code
-          beq rgot
-          cmp #$8d       ; gosub-Code
-          beq rgot
-          cmp #$cb       ; go-Code
-          beq rgo
-          cmp #34        ; Hochkomma
-          beq rhoko
-r9        inc BASZEI
-          bne r5
-          inc BASZEI+1
-          bne r5
-rhoko     ldy #1         ; Text in Hochkomma ueberspringen
-rho1      lda (BASZEI),y
-          beq rho3
-          cmp #34        ; Ende mit Hochkomma
-          beq rho2
-          iny
-          bne rho1
-rho2      iny
-rho3      tya
-          clc
-          adc BASZEI
-          sta BASZEI
-          bcc r5
-          inc BASZEI+1
-          bne r5
-rthen     jsr CHRGET
-          beq r9
-          bcs r8
-          bcc r10
-rgo       jsr CHRGET
-          cmp #$a4       ; to-Code
-          bne r5
-rgot      jsr CHRGET
-          bcs r5
-r10       lda BASZEI
-          sta l00fd
-          lda BASZEI+1
-          sta l00fd+1
-          jsr GETINT
-          sec
-          lda BASZEI
-          sbc l00fd
-          sta akku3
-
-          ; neue Zeilennr finden
-
-          lda STRANF
-          sta l0035
-          lda STRANF+1
-          sta l0035+1
-r11       ldy #3
-          lda (l0035),y
-          cmp INT+1
-          bne r12
-          dey
-          lda (l0035),y
-          cmp INT
-          beq r13
-r12       lda #4
-          clc
-          adc l0035
-          sta l0035
-          tax
-          bcc r12a
-          inc l0035+1
-r12a      lda l0035+1
-          cmp BASEND+1
-          bcc r11
-          bne r11a
-          cpx BASEND
-          bcc r11
-r11a      lda INT+1
-          ldx INT
-          jmp r14
-r13       dey            ; ZNr in Tabelle gefunden
-          lda (l0035),y
-          pha
-          dey
-          lda (l0035),y
-          tax
-          pla
-r14       jsr rfacasc    ; und nach ASC wandeln
-          ldy #<-1
-r15       iny
-          lda stack,y
-          bne r15
-          lda l00fd
-          sta akku4+3
-          lda l00fd+1
-          sta akku4+4
-          tya
-          sec
-          sbc akku3
-          sta akku3
-          beq r16        ; Zahlen im Text gleich lang
-          bcc r17        ; neue < alte -> kleinere Adresse
-          lda VARANF
-          sta akku3+3
-          clc
-          adc akku3
-          sta akku3+1
-          sta VARANF
-          lda VARANF+1
-          sta akku3+4
-          adc #0
-          sta akku3+2
-          sta VARANF+1
-          
-          cmp STRANF+1
-          bcc r18
-          beq r18a
-r18b      jmp rmemer
-r18a      lda VARANF
-          cmp STRANF
-          bcs r18b
-r18       jsr la3bf
-          jmp r16
-          
-r17       lda BASZEI          ; neue Zahl kleiner als alte
-          sta akku4+3
-          clc
-          adc akku3
-          sta l00fb
-          lda BASZEI+1
-          sta akku4+4
-          sbc #0
-          sta l00fb+1
-r20       ldy #0
-          lda (akku4+3),y
-          sta (l00fb),y
-          inc l00fb
-          bne r20a
-          inc l00fb+1
-r20a      inc akku4+3
-          bne r20b
-          inc akku4+4
-r20b      lda akku4+3
-          cmp VARANF
-          bne r20
-          lda akku4+4
-          cmp VARANF+1
-          bne r20
-r16       lda l00fd      ; ZNr gleich lang
-          sta BASZEI
-          lda l00fd+1
-          sta BASZEI+1
-          ldy #0
-r21       lda stack,y
-          beq r22
-          sta (BASZEI),y
-          iny
-          bne r21
-r22       tya
-          clc
-          adc BASZEI
-          sta BASZEI
-          bcc r23
-          inc BASZEI+1
-r23       jsr CHRGOT
-          cmp #","       ; test auf on x goto/gosub
-          bne r24
-          jsr CHRGET
-          bcs r24
-          jmp r10
-r24       jmp r5
-
-rfacasc   sta FAC+1
-          stx FAC+2
-          ldx #$90
-          sec
-          jsr lbc49
-          jmp lbddf
-          .)
-          .)
+#include "diskcmds.a65"
+#include "newcmds.a65"
 
 quit      .(
           jsr lffe7      ; clall
@@ -1822,44 +859,8 @@ quit      .(
           .)
           
           .(
-&lomem    .(
-          jsr GETINT
-          lda INT+1
-          cmp #>RAMEND
-          bne lmh
-          lda INT
-          cmp #<RAMEND
-lmh       bcc lmok
-&lmerr    jmp la435
-lmok      lda INT
-          sta BASANF
-          clc 
-          adc #<-1
-          sta INT
-          lda INT+1
-          sta BASANF+1
-          adc #<-1
-          sta INT+1
-          lda #0
-          tay
-          sta (INT),y
-          jmp la644
-          .)
-
-&himem    .(
-          jsr GETINT
-          lda VARANF+1
-          cmp INT+1
-          bne hmt
-          lda VARANF
-          cmp INT
-hmt       bcs lmerr
-          lda INT
-          sta BASEND
-          lda INT+1
-          sta BASEND+1
-          jmp la663
-          .)
+&lomem
+&himem	jmp syntax
           .)
           
 la00c     .word lend-1,lfor-1,lnext-1,ldata-1,linputf-1,linput-1
@@ -2035,46 +1036,98 @@ la38a tsx
  105 cmp #$81:bne la3b7:lda FORVAR+1:bne la3a4:lda stack+2,x
  106 sta FORVAR:lda stack+3,x:sta FORVAR+1:la3a4 cmp stack+3,x:bne la3b0
  107 lda FORVAR:cmp stack+2,x:beq la3b7:la3b0 txa :clc 
- 108 adc #$12:tax :bne la38f:la3b7 rts :la3b8 jsr la408
- 109 sta ARREND:sty ARREND+1:la3bf sec :lda akku3+3:sbc akku4+3
- 110 sta l0022:tay :lda akku3+4:sbc akku4+4:tax 
+ 108 adc #$12:tax :bne la38f:la3b7 rts :
+
+; block move to create space
+la3b8 jsr la408
+ 109 sta ARREND:sty ARREND+1:la3bf sec :lda akku3+3:sbc NEWPTR
+ 110 sta l0022:tay :lda akku3+4:sbc NEWPTR+1:tax 
  111 inx :tya :beq la3f3:lda akku3+3:sec 
  112 sbc l0022:sta akku3+3:bcs la3dc:dec akku3+4:sec 
  113 la3dc lda akku3+1:sbc l0022:sta akku3+1:bcs la3ec:dec akku3+2
  114 bcc la3ec:la3e8 lda (akku3+3),y:sta (akku3+1),y:la3ec dey :bne la3e8
  115 lda (akku3+3),y:sta (akku3+1),y:la3f3 dec akku3+4:dec akku3+2:dex 
- 116 bne la3ec:rts :la3fb asl :adc #$3e:bcs la435
- 117 sta l0022:tsx :cpx l0022:bcc la435:rts 
- 118 la408 cpy STRANF+1:bcc la434:bne la412:cmp STRANF:bcc la434
- 119 la412 pha :ldx #$09:tya :la416 pha :lda akku3,x
- 120 dex :bpl la416:jsr lb526:ldx #$f7:la421 pla 
- 121 sta FAC,x:inx :bmi la421:pla :tay 
- 122 pla :cpy STRANF+1:bcc la434:bne la435:cmp STRANF
- 123 bcs la435:la434 rts :la435 ldx #$10:la437 jmp (l0300):la43a txa 
+ 116 bne la3ec:rts
+; check for space on CPU stack
+; in AC has half the number of needed bytes
+la3fb 
+	asl
+	; adds lower bound of CPU stack (for use of 0x00ff buffer)
+	; and the used memory on stack, then compares with actual
+	; stack ptr. If clash - out of memory
+	; in GeckOS we either don't have the limit, or can use
+	; down to $0100 as we moved the buffer
+	;adc #$3e
+	;bcs la435	; oom
+ 	sta l0022
+	tsx 		; take stack
+	cpx l0022	; compare
+	bcc la435	; stack lower, then oom
+	rts 
+
+; find place in memory
+; a/y address up to which memory is needed
+la408 	cpy STRANF+1	; compare with start of string ptr	
+	bcc la434	; lower? then done
+	bne la412
+	cmp STRANF
+	bcc la434	; done
+	; requested memory higher than start of strings
+	; (that are stored at end of memory, so STRANF is lower
+	; bound of used string memory)
+la412 	pha 
+	; save YR, [akku3+9,akku3+1] on stack
+	; i.e. almost all of akku3 and akku4
+	; $60, $5f, ..., $58
+	ldx #$09:tya
+la416 	pha :lda akku3,x
+ 	dex :bpl la416
+
+	jsr lb526	; call garbage collection
+
+	; restore [FAC-9,FAC-1] from stack
+	; $58, $57, ..., $60
+	; restore [akku3+10-9,akku3+10-1] from stack
+	; relies on sta FAC,x not overflowing into page 1
+	ldx #$f7
+la421 	pla 
+	sta akku3+10,x:inx :bmi la421
+
+	pla :tay 
+	pla
+	cpy STRANF+1
+	bcc la434; done
+	bne la435; oom
+	cmp STRANF
+	bcs la435; oom
+la434 	rts
+	; out of memory
+la435 ldx #$10:la437 jmp (l0300)
+la43a txa 
  124 asl :tax :lda la328-2,x:sta l0022:lda la328-1,x
  125 sta l0022+1:jsr lffcc:lda #$00:sta ACTIO:jsr laad7
  126 jsr lab45:ldy #$00:la456 lda (l0022),y:pha :and  #$7f
  127 jsr basout:iny :pla :bpl la456:jsr la67a
- 128 lda #<lerror:ldy #>lerror:la469 jsr strout:ldy ZEINR+1:iny 
- 129 beq ready:jsr lbdc2:ready lda #<lready:ldy #>lready:jsr strout
+ 128 lda #<lerror:ldy #>lerror:la469 jsr xstrout:ldy ZEINR+1:iny 
+ 129 beq ready:jsr lbdc2:ready lda #<lready:ldy #>lready:jsr xstrout
  130 lda #$80:jsr lff90:la480 jmp (l0302)
  la483 jsr linein:stx BASZEI
  131 sty BASZEI+1:exestart jsr CHRGET:;la48d: tax :beq la480:ldx #$ff
  132 stx ZEINR+1:bcc la49c:jsr la579:jmp la7e1:la49c jsr la96b
  133 jsr la579:sty DIM:jsr la613:bcc la4ed:ldy #$01
- 134 lda (akku4+3),y:sta l0023:lda VARANF:sta l0022:lda akku4+4
- 135 sta l0025:lda akku4+3:dey :sbc (akku4+3),y:clc 
+ 134 lda (NEWPTR),y:sta l0023:lda VARANF:sta l0022:lda NEWPTR+1
+ 135 sta l0025:lda NEWPTR:dey :sbc (NEWPTR),y:clc 
  136 adc VARANF:sta VARANF:sta l0024:lda VARANF+1:adc #$ff
- 137 sta VARANF+1:sbc akku4+4:tax :sec :lda akku4+3
+ 137 sta VARANF+1:sbc NEWPTR+1:tax :sec :lda NEWPTR
  138 sbc VARANF:tay :bcs la4d7:inx :dec l0025
  139 la4d7 clc :adc l0022:bcc la4df:dec l0023:clc 
  140 la4df lda (l0022),y:sta (l0024),y:iny :bne la4df:inc l0023
  141 inc l0025:dex :bne la4df:la4ed jsr la659:jsr bindbas
- 142 lda l0200:beq la480:clc :lda VARANF:sta akku3+3
+ 142 lda l0200:bne la480a:jmp la480:la480a:clc :lda VARANF:sta akku3+3
  143 adc DIM:sta akku3+1:ldy VARANF+1:sty akku3+4:bcc la508
  144 iny :la508 sty akku3+2:jsr la3b8:lda INT:ldy INT+1
  145 sta l0200-2:sty l0200-1:lda ARREND:ldy ARREND+1:sta VARANF
- 146 sty VARANF+1:ldy DIM:dey :la522 lda l0200-4,y:sta (akku4+3),y
+ 146 sty VARANF+1:ldy DIM:dey :la522 lda l0200-4,y:sta (NEWPTR),y
  147 dey :bpl la522:;la52a: jsr la659:jsr bindbas:jmp la480
  148 bindbas 
      lda BASANF:ldy BASANF+1:sta l0022:sty l0023:clc 
@@ -2090,10 +1143,10 @@ MO1       JSR lffcf      ; le112
           bcc mo1a
 /*     pha
      lda #"E"
-     jsr SEROUT
+     jsr xSEROUT
      pla
      pha
-     jsr HEXOUT
+     jsr xHEXOUT
      pla*/
           cmp #E_NOTOPEN
           bne MO1
@@ -2191,11 +1244,11 @@ MO2       jmp laaca
           dec BASZEI+1
 #endif
  lda #<l0200-1:sta BASZEI:rts 
- 171 la613 lda BASANF:ldx BASANF+1:la617 ldy #$01:sta akku4+3:stx akku4+4
- 172 lda (akku4+3),y:beq la640:iny :iny :lda INT+1
- 173 cmp (akku4+3),y:bcc la641:beq la62e:dey :bne la637
- 174 la62e lda INT:dey :cmp (akku4+3),y:bcc la641:beq la641
- 175 la637 dey :lda (akku4+3),y:tax :dey :lda (akku4+3),y
+ 171 la613 lda BASANF:ldx BASANF+1:la617 ldy #$01:sta NEWPTR:stx NEWPTR+1
+ 172 lda (NEWPTR),y:beq la640:iny :iny :lda INT+1
+ 173 cmp (NEWPTR),y:bcc la641:beq la62e:dey :bne la637
+ 174 la62e lda INT:dey :cmp (NEWPTR),y:bcc la641:beq la641
+ 175 la637 dey :lda (NEWPTR),y:tax :dey :lda (NEWPTR),y
  176 bcs la617:la640 clc :la641 rts 
  lnew bne la641:la644 lda #$00
  177 tay :sta (BASANF),y:iny :sta (BASANF),y:lda BASANF
@@ -2204,14 +1257,20 @@ MO2       jmp laaca
  lclr bne la68d:la660 jsr lffe7
  180 la663 lda BASEND:ldy BASEND+1:sta STRANF:sty STRANF+1:lda VARANF
  181 ldy VARANF+1:sta ARRANF:sty ARRANF+1:sta ARREND:sty ARREND+1
- 182 la677 jsr la81d:la67a ldx #$19:stx STRPTR:pla :tay 
- 183 pla :ldx #$fa:txs :pha :tya 
+ 182 la677 jsr la81d:la67a ldx #STRSTCK:stx STRPTR:pla :tay 
+ 183 pla 
+	;ldx #$fa
+	ldx stackp
+	dex
+
+	txs :pha :tya 
  184 pha :lda #$00:sta NEXTSTAT+1:sta FNFL:la68d rts 
  185 la68e clc :lda BASANF:adc #$ff:sta BASZEI:lda BASANF+1
  186 adc #$ff:sta BASZEI+1:rts 
 
-listfl    =syszp
--syszp    +=1
+	.data
+listfl    .byt 0
+	.text
 
  enter    .(
           beq ll1
@@ -2274,15 +1333,15 @@ listfl    =syszp
           pla :pla :lda INT:ora INT+1
  190 bne la6c9:lda #$ff:sta INT:sta INT+1:la6c9 jsr laad7
  ldy #$01
- 191 sty LISTHKFL:lda (akku4+3),y:beq la714:jsr lffe1:bne lok
+ 191 sty LISTHKFL:lda (NEWPTR),y:beq la714:jsr lffe1:bne lok
  jsr clout:lda #0:jmp lstop:lok ;jsr laad7
- 192 iny :lda (akku4+3),y:tax :iny :lda (akku4+3),y
+ 192 iny :lda (NEWPTR),y:tax :iny :lda (NEWPTR),y
  193 cmp INT+1:bne la6e6:cpx INT:beq la6e8:la6e6 bcs la714
  194 la6e8 ;sty FORVAR
           jsr listline
           bcs la714
-          tay :lda (akku4+3),y:tax 
-          iny :lda (akku4+3),y:stx akku4+3:sta akku4+4:bne la6c9
+          tay :lda (NEWPTR),y:tax 
+          iny :lda (NEWPTR),y:stx NEWPTR:sta NEWPTR+1:bne la6c9
  la714    jsr clout
           jmp le386
           .)
@@ -2307,7 +1366,7 @@ listfl    =syszp
  la6f6    jsr basout:cmp #$22:bne la700
           lda LISTHKFL:eor  #$ff:sta LISTHKFL
  la700    iny :beq la714n
- la703    lda (akku4+3),y:beq la707n;bne la717
+ la703    lda (NEWPTR),y:beq la707n;bne la717
  ;la717   : jmp (l0306)
  la71a    bpl la6f3:cmp #$ff:beq la6f3
           bit LISTHKFL:bmi la6f3:sec :sbc #$7f:tax 
@@ -2396,7 +1455,7 @@ listfl    =syszp
  239 lda ZEINR:sbc INT:lda ZEINR+1:sbc INT+1:bcs la8bc
  240 tya :sec :adc BASZEI:ldx BASZEI+1:bcc la8c0
  241 inx :bcs la8c0:la8bc lda BASANF:ldx BASANF+1:la8c0 jsr la617
- 242 bcc la8e3:lda akku4+3:sbc #$01:sta BASZEI:lda akku4+4
+ 242 bcc la8e3:lda NEWPTR:sbc #$01:sta BASZEI:lda NEWPTR+1
  243 sbc #$00:sta BASZEI+1:la8d1 rts 
  lreturn bne la8d1:lda #$ff
  244 sta FORVAR+1:jsr la38a:txs :cmp #$8d:beq la8eb
@@ -2461,7 +1520,7 @@ listfl    =syszp
  298 sty TABSPAL:jsr lb79b:cmp #$29:bne lab5f:plp 
  299 bcc lab0f:txa :sbc TABSPAL:bcc lab13:lab0e tax 
  300 lab0f inx :lab10 dex :bne lab19:lab13 jsr CHRGET:jmp laaa2
- 301 lab19 jsr lab3b:bne lab10:strout jsr lb487:lab21 jsr lb6a6:tax 
+ 301 lab19 jsr lab3b:bne lab10:xstrout jsr lb487:lab21 jsr lb6a6:tax 
  302 ldy #$00:inx :lab28 dex :beq laae7:lda (l0022),y
  303 jsr basout:iny :cmp #$0d:bne lab28:jsr laae5
  304 jmp lab28:lab3b lda ACTIO:beq lab42:lda #$20:.byt $2c 
@@ -2469,7 +1528,7 @@ listfl    =syszp
  306 rts :lab4d lda INPUTFL:beq lab62:bmi lab57:ldy #$ff
  307 bne lab5b:lab57 lda DZEINR:ldy DZEINR+1:lab5b sta ZEINR:sty ZEINR+1
  308 lab5f jmp syntax:lab62 lda ACTIO:beq lab6b:ldx #$18:jmp la437
- 309 lab6b lda #<lad0c:ldy #>lad0c:jsr strout:lda NEXTSTAT:ldy NEXTSTAT+1
+ 309 lab6b lda #<lad0c:ldy #>lad0c:jsr xstrout:lda NEXTSTAT:ldy NEXTSTAT+1
  310 sta BASZEI:sty BASZEI+1:rts 
  lget jsr lb3a6:cmp #$23
  311 bne lab92:jsr CHRGET:jsr getbyt:lda #$2c:jsr laeff
@@ -2508,7 +1567,7 @@ listfl    =syszp
  342 cpx #$83:bne lacb8:jmp lac51:lacdf lda l0043:ldy l0043+1
  343 ldx INPUTFL:bpl lacea:jmp la827:lacea ldy #$00:lda (l0043),y
  344 beq lacfb:lda ACTIO:bne lacfb:lda #<lacfc:ldy #>lacfc
- 345 jmp strout:lacfb rts
+ 345 jmp xstrout:lacfb rts
  lacfc    .asc "?EXTRA IGNORED",13,0
  lad0c    .asc "?REDO FROM START",13,0
  lnext bne lad24:ldy #$00:beq lad27:lad24 jsr lb08b
@@ -2704,10 +1763,10 @@ listfl    =syszp
  443 lda #$80:sta INTFL:ora VARNAME:sta VARNAME:lb0d4 txa 
  444 ora #$80:tax :jsr CHRGET:lb0db stx VARNAME+1:sec 
  445 ora FNFL:sbc #$28:bne lb0e7:jmp lb1d1:lb0e7 ldy #$00
- 446 sty FNFL:lda VARANF:ldx VARANF+1:lb0ef stx akku4+4:lb0f1 sta akku4+3
+ 446 sty FNFL:lda VARANF:ldx VARANF+1:lb0ef stx NEWPTR+1:lb0f1 sta NEWPTR
  447 cpx ARRANF+1:bne lb0fb:cmp ARRANF:beq lb11d:lb0fb lda VARNAME
- 448 cmp (akku4+3),y:bne lb109:lda VARNAME+1:iny :cmp (akku4+3),y
- 449 beq lb185a:dey :lb109 clc :lda akku4+3:adc #$07
+ 448 cmp (NEWPTR),y:bne lb109:lda VARNAME+1:iny :cmp (NEWPTR),y
+ 449 beq lb185a:dey :lb109 clc :lda NEWPTR:adc #$07
  450 bcc lb0f1:inx :bne lb0ef
 
  lb113 cmp #"A":bcc lb11c:cmp #"Z"+1:bcc lb1cs
@@ -2720,22 +1779,22 @@ listfl    =syszp
  453 rts :lb128 lda VARNAME:ldy VARNAME+1:cmp #$54:bne lb13b
  454 cpy #$c9:beq lb123:cpy #$49:bne lb13b:lb138 jmp syntax
  455 lb13b cmp #$53:bne lb143:cpy #$54:beq lb138:lb143 lda ARRANF
- 456 ldy ARRANF+1:sta akku4+3:sty akku4+4:lda ARREND:ldy ARREND+1
+ 456 ldy ARRANF+1:sta NEWPTR:sty NEWPTR+1:lda ARREND:ldy ARREND+1
  457 sta akku3+3:sty akku3+4:clc :adc #$07:bcc lb159
  458 iny :lb159 sta akku3+1:sty akku3+2:jsr la3b8:lda akku3+1
  459 ldy akku3+2:iny :sta ARRANF:sty ARRANF+1:ldy #$00
- 460 lda VARNAME:sta (akku4+3),y:iny :lda VARNAME+1:sta (akku4+3),y
- 461 lda #$00:iny :sta (akku4+3),y:iny :sta (akku4+3),y
- 462 iny :sta (akku4+3),y:iny :sta (akku4+3),y:iny 
- 463 sta (akku4+3),y:lb185 lda akku4+3:clc :adc #$02:ldy akku4+4
+ 460 lda VARNAME:sta (NEWPTR),y:iny :lda VARNAME+1:sta (NEWPTR),y
+ 461 lda #$00:iny :sta (NEWPTR),y:iny :sta (NEWPTR),y
+ 462 iny :sta (NEWPTR),y:iny :sta (NEWPTR),y:iny 
+ 463 sta (NEWPTR),y:lb185 lda NEWPTR:clc :adc #$02:ldy NEWPTR+1
  464 bcc lb18f:iny :lb18f sta VARADR:sty VARADR+1:rts 
- 465 lb194 lda DIM:asl :adc #$05:adc akku4+3:ldy akku4+4
+ 465 lb194 lda DIM:asl :adc #$05:adc NEWPTR:ldy NEWPTR+1
  466 bcc lb1a0:iny :lb1a0 sta akku3+1:sty akku3+2:rts 
  lb1a5    .byt $90,$80,$00,$00,$00
  lb1aa    jsr lb1bf
  468 lda FAC+3:ldy FAC+4:rts :lb1b2 jsr CHRGET:jsr lad9e
  469 lb1b8 jsr lad8d:lda FAC+5:bmi lb1cc:lb1bf lda FAC:cmp #$90
- 470 bcc lb1ce:lda #<lb1a5:ldy #>lb1a5:jsr lbc5b:lb1cc bne illquant
+ 470 bcc lb1ce:lda #<lb1a5:ldy #>lb1a5:jsr lbc5b:lb1cc beq lb1ce:jmp illquant
  471 lb1ce jmp lbc9b:lb1d1 lda DIMFL:ora INTFL:pha :lda STRINGFL
  472 pha :ldy #$00:lb1db tya :pha :lda VARNAME+1
  473 pha :lda VARNAME:pha :jsr lb1b2:pla 
@@ -2744,42 +1803,43 @@ listfl    =syszp
  476 lda FAC+3:sta stack+2,x:lda FAC+4:sta stack+1,x:iny 
  477 jsr CHRGOT:cmp #$2c:beq lb1db:sty DIM:jsr laef7
  478 pla :sta STRINGFL:pla :sta INTFL:and  #$7f
- 479 sta DIMFL:ldx ARRANF:lda ARRANF+1:lb21c stx akku4+3:sta akku4+4
+ 479 sta DIMFL:ldx ARRANF:lda ARRANF+1:lb21c stx NEWPTR:sta NEWPTR+1
  480 cmp ARREND+1:bne lb228:cpx ARREND:beq lb261:lb228 ldy #$00
- 481 lda (akku4+3),y:iny :cmp VARNAME:bne lb237:lda VARNAME+1
- 482 cmp (akku4+3),y:beq lb24d:lb237 iny :lda (akku4+3),y:clc 
- 483 adc akku4+3:tax :iny :lda (akku4+3),y:adc akku4+4
+ 481 lda (NEWPTR),y:iny :cmp VARNAME:bne lb237:lda VARNAME+1
+ 482 cmp (NEWPTR),y:beq lb24d:lb237 iny :lda (NEWPTR),y:clc 
+ 483 adc NEWPTR:tax :iny :lda (NEWPTR),y:adc NEWPTR+1
  484 bcc lb21c:lb245 ldx #$12:.byt $2c :illquant ldx #$0e:lb24a jmp la437
  485 lb24d ldx #$13:lda DIMFL:bne lb24a:jsr lb194:lda DIM
- 486 ldy #$04:cmp (akku4+3),y:bne lb245:jmp lb2ea:lb261 jsr lb194
+ 486 ldy #$04:cmp (NEWPTR),y:bne lb245:jmp lb2ea:lb261 jsr lb194
  487 jsr la408:ldy #$00:sty l0071+1:ldx #$05:lda VARNAME
- 488 sta (akku4+3),y:bpl lb274:dex :lb274 iny :lda VARNAME+1
- 489 sta (akku4+3),y:bpl lb27d:dex :dex :lb27d stx l0071
- 490 lda DIM:iny :iny :iny :sta (akku4+3),y
+ 488 sta (NEWPTR),y:bpl lb274:dex :lb274 iny :lda VARNAME+1
+ 489 sta (NEWPTR),y:bpl lb27d:dex :dex :lb27d stx l0071
+ 490 lda DIM:iny :iny :iny :sta (NEWPTR),y
  491 lb286 ldx #$0b:lda #$00:bit DIMFL:bvc lb296:pla 
  492 clc :adc #$01:tax :pla :adc #$00
- 493 lb296 iny :sta (akku4+3),y:iny :txa :sta (akku4+3),y
+ 493 lb296 iny :sta (NEWPTR),y:iny :txa :sta (NEWPTR),y
  494 jsr lb34c:stx l0071:sta l0071+1:ldy l0022:dec DIM
  495 bne lb286:adc akku3+2:bcs lb30b:sta akku3+2:tay 
  496 txa :adc akku3+1:bcc lb2b9:iny :beq lb30b
  497 lb2b9 jsr la408:sta ARREND:sty ARREND+1:lda #$00:inc l0071+1
  498 ldy l0071:beq lb2cd:lb2c8 dey :sta (akku3+1),y:bne lb2c8
  499 lb2cd dec akku3+2:dec l0071+1:bne lb2c8:inc akku3+2:sec 
- 500 lda ARREND:sbc akku4+3:ldy #$02:sta (akku4+3),y:lda ARREND+1
- 501 iny :sbc akku4+4:sta (akku4+3),y:lda DIMFL:bne lb34b
- 502 iny :lb2ea lda (akku4+3),y:sta DIM:lda #$00:sta l0071
+ 500 lda ARREND:sbc NEWPTR:ldy #$02:sta (NEWPTR),y:lda ARREND+1
+ 501 iny :sbc NEWPTR+1:sta (NEWPTR),y:lda DIMFL:bne lb34b
+ 502 iny :lb2ea lda (NEWPTR),y:sta DIM:lda #$00:sta l0071
  503 lb2f2 sta l0071+1:iny :pla :tax :sta FAC+3
- 504 pla :sta FAC+4:cmp (akku4+3),y:bcc lb30e:bne lb308
- 505 iny :txa :cmp (akku4+3),y:bcc lb30f:lb308 jmp lb245
- 506 lb30b jmp la435:lb30e iny :lb30f lda l0071+1:ora l0071:clc 
+ 504 pla :sta FAC+4:cmp (NEWPTR),y:bcc lb30e:bne lb308
+ 505 iny :txa :cmp (NEWPTR),y:bcc lb30f:lb308 jmp lb245
+ 506 lb30b 
+	jmp la435:lb30e iny :lb30f lda l0071+1:ora l0071:clc 
  507 beq lb320:jsr lb34c:txa :adc FAC+3:tax 
  508 tya :ldy l0022:lb320 adc FAC+4:stx l0071:dec DIM
  509 bne lb2f2:sta l0071+1:ldx #$05:lda VARNAME:bpl lb331
  510 dex :lb331 lda VARNAME+1:bpl lb337:dex :dex 
  511 lb337 stx REG+2:lda #$00:jsr lb355:txa :adc akku3+1
  512 sta VARADR:tya :adc akku3+2:sta VARADR+1:tay 
- 513 lda VARADR:lb34b rts :lb34c sty l0022:lda (akku4+3),y:sta REG+2
- 514 dey :lda (akku4+3),y:lb355 sta REG+3:lda #$10:sta akku4+1
+ 513 lda VARADR:lb34b rts :lb34c sty l0022:lda (NEWPTR),y:sta REG+2
+ 514 dey :lda (NEWPTR),y:lb355 sta REG+3:lda #$10:sta akku4+1
  515 ldx #$00:ldy #$00:lb35f txa :asl :tax 
  516 tya :rol :tay :bcs lb30b:asl l0071
  517 rol l0071+1:bcc lb378:clc :txa :adc REG+2
@@ -2830,7 +1890,7 @@ listfl    =syszp
  551 lb4a8 clc :lb4a9 sty FAC:tya :adc ARG+6:sta l0071
  552 ldx ARG+7:bcc lb4b5:inx :lb4b5 stx l0071+1:lda ARG+7
  553 beq lb4bf:cmp #>l0200:bne lb4ca:lb4bf tya :jsr lb475
- 554 ldx ARG+6:ldy ARG+7:jsr lb688:lb4ca ldx STRPTR:cpx #$22
+ 554 ldx ARG+6:ldy ARG+7:jsr lb688:lb4ca ldx STRPTR:cpx #STRSTCK_END
  555 bne lb4d5:ldx #$19:lb4d2 jmp la437:lb4d5 lda FAC:sta $00,x
  556 lda FAC+1:sta $01,x:lda FAC+2:sta $02,x:ldy #$00
  557 stx FAC+3:sty FAC+4:sty ARG+7:dey :sty STRINGFL
@@ -2842,7 +1902,7 @@ listfl    =syszp
  563 rts :lb516 ldx #$10:lda LISTHKFL:bmi lb4d2:jsr lb526
  564 lda #$80:sta LISTHKFL:pla :bne lb4f6:lb526 ldx BASEND
  565 lda BASEND+1:lb52a stx STRANF:sta STRANF+1:ldy #$00:sty l004f
- 566 sty l004e:lda ARREND:ldx ARREND+1:sta akku4+3:stx akku4+4
+ 566 sty l004e:lda ARREND:ldx ARREND+1:sta NEWPTR:stx NEWPTR+1
  567 lda #<STRSTCK:ldx #>STRSTCK:sta l0022:stx l0023:lb544 cmp STRPTR
  568 beq lb54d:jsr lb5c7:beq lb544:lb54d lda #$07:sta l0053
  569 lda VARANF:ldx VARANF+1:sta l0022:stx l0023:lb559 cpx ARRANF+1
@@ -2860,13 +1920,13 @@ listfl    =syszp
  581 lda (l0022),y:bpl lb5f6:iny :lb5c7 lda (l0022),y:beq lb5f6
  582 iny :lda (l0022),y:tax :iny :lda (l0022),y
  583 cmp STRANF+1:bcc lb5dc:bne lb5f6:cpx STRANF:bcs lb5f6
- 584 lb5dc cmp akku4+4:bcc lb5f6:bne lb5e6:cpx akku4+3:bcc lb5f6
- 585 lb5e6 stx akku4+3:sta akku4+4:lda l0022:ldx l0023:sta l004e
+ 584 lb5dc cmp NEWPTR+1:bcc lb5f6:bne lb5e6:cpx NEWPTR:bcc lb5f6
+ 585 lb5e6 stx NEWPTR:sta NEWPTR+1:lda l0022:ldx l0023:sta l004e
  586 stx l004f:lda l0053:sta l0055:lb5f6 lda l0053:clc 
  587 adc l0022:sta l0022:bcc lb601:inc l0023:lb601 ldx l0023
  588 ldy #$00:rts :lb606 lda l004f:ora l004e:beq lb601
  589 lda l0055:and  #$04:lsr :tay :sta l0055
- 590 lda (l004e),y:adc akku4+3:sta akku3+3:lda akku4+4:adc #$00
+ 590 lda (l004e),y:adc NEWPTR:sta akku3+3:lda NEWPTR+1:adc #$00
  591 sta akku3+4:lda STRANF:ldx STRANF+1:sta akku3+1:stx akku3+2
  592 jsr la3bf:ldy l0055:iny :lda akku3+1:sta (l004e),y
  593 tax :inc akku3+2:lda akku3+2:iny :sta (l004e),y
@@ -3043,24 +2103,37 @@ listfl    =syszp
  747 lda FAC+2:sta (l0022),y:dey :lda FAC+5:ora #$7f
  748 and  FAC+1:sta (l0022),y:dey :lda FAC:sta (l0022),y
  749 sty ARG+7:rts :lbbfc lda ARG+5:lbbfe sta FAC+5:ldx #$05
- 750 lbc02 lda FAC+7,x:sta akku4+4,x:dex :bne lbc02:stx ARG+7
- 751 rts :lbc0c jsr lbc1b:lbc0f ldx #$06:lbc11 lda akku4+4,x:sta FAC+7,x
+ 750 lbc02 lda ARG-1,x:sta FAC-1,x:dex :bne lbc02:stx ARG+7
+ 751 rts :lbc0c jsr lbc1b:lbc0f ldx #$06:lbc11 lda FAC-1,x:sta ARG-1,x
  752 dex :bne lbc11:stx ARG+7:lbc1a rts :lbc1b lda FAC
  753 beq lbc1a:asl ARG+7:bcc lbc1a:lbc23 jsr lb96f:bne lbc1a
- 754 jmp lb938:lbc2b lda FAC:beq lbc38:lbc2f lda FAC+5:lbc31 rol 
- 755 lda #$ff:bcs lbc38:lda #$01:lbc38 rts 
- lsgn jsr lbc2b
- 756 lbc3c sta FAC+1:lda #$00:sta FAC+2:ldx #$88:lbc44 lda FAC+1
- 757 eor  #$ff:rol :lbc49 lda #$00:sta FAC+4:sta FAC+3
- 758 lbc4f stx FAC:sta ARG+7:sta FAC+5:jmp lb8d2:
- labs lsr FAC+5
- 759 rts: lbc5b sta l0024:lbc5d sty l0025:ldy #$00:lda (l0024),y
+ 754 jmp lb938
+
+lbc2b 	lda FAC:beq lbc38
+lbc2f 	lda FAC+5
+lbc31 	rol 
+	lda #$ff:bcs lbc38:lda #$01:lbc38 rts 
+
+lsgn 	jsr lbc2b
+lbc3c 	sta FAC+1:lda #$00:sta FAC+2:ldx #$88:lbc44 lda FAC+1
+	eor  #$ff:rol :lbc49 lda #$00:sta FAC+4:sta FAC+3
+lbc4f 	stx FAC:sta ARG+7:sta FAC+5:jmp lb8d2:
+
+labs 	lsr FAC+5
+	rts 
+
+	; compare FAC with constant pointed to by y/a
+lbc5b 	sta l0024
+lbc5d 	sty l0025:ldy #$00:lda (l0024),y
  760 iny :tax :beq lbc2b:lda (l0024),y:eor  FAC+5
  761 bmi lbc2f:cpx FAC:bne lbc92:lda (l0024),y:ora #$80
  762 cmp FAC+1:bne lbc92:iny :lda (l0024),y:cmp FAC+2
  763 bne lbc92:iny :lda (l0024),y:cmp FAC+3:bne lbc92
  764 iny :lda #$7f:cmp ARG+7:lda (l0024),y:sbc FAC+4
- 765 beq lbcba:lbc92 lda FAC+5:bcc lbc98:eor  #$ff:lbc98 jmp lbc31
+ 765 beq lbcba:
+lbc92 lda FAC+5:bcc lbc98:eor  #$ff:
+lbc98 jmp lbc31
+
  766 lbc9b lda FAC:beq lbce9:sec :sbc #$a0:bit FAC+5
  767 bpl lbcaf:tax :lda #$ff:sta FAC+7:jsr lb94d
  768 txa :lbcaf ldx #FAC:cmp #$f9:bpl lbcbb:jsr lb999
@@ -3078,17 +2151,17 @@ listfl    =syszp
  778 lbd0d bcc lbd6a:lbd0f cmp #$2e:beq lbd41:cmp #$45:bne lbd47
  779 jsr CHRGET:bcc lbd33:cmp #$ab:beq lbd2e:cmp #$2d
  780 beq lbd2e:cmp #$aa:beq lbd30:cmp #$2b:beq lbd30
- 781 bne lbd35:lbd2e ror  akku4+4:lbd30 jsr CHRGET:lbd33 bcc lbd91:lbd35 bit akku4+4
+ 781 bne lbd35:lbd2e ror  NEWPTR+1:lbd30 jsr CHRGET:lbd33 bcc lbd91:lbd35 bit NEWPTR+1
  782 bpl lbd47:lda #$00:sec :sbc akku4+2:jmp lbd49
- 783 lbd41 ror  akku4+3:bit akku4+3:bvc lbd0a:lbd47 lda akku4+2:lbd49 sec 
+ 783 lbd41 ror  NEWPTR:bit NEWPTR:bvc lbd0a:lbd47 lda akku4+2:lbd49 sec 
  784 sbc akku4+1:sta akku4+2:beq lbd62:bpl lbd5b:lbd52 jsr lbafe
  785 inc akku4+2:bne lbd52:beq lbd62:lbd5b jsr lbae2:dec akku4+2
  786 bne lbd5b:lbd62 lda FAC+6:bmi lbd67:rts :lbd67 jmp lbfb4
- 787 lbd6a pha :bit akku4+3:bpl lbd71:inc akku4+1:lbd71 jsr lbae2
+ 787 lbd6a pha :bit NEWPTR:bpl lbd71:inc akku4+1:lbd71 jsr lbae2
  788 pla :sec :sbc #$30:jsr lbd7e:jmp lbd0a
  789 lbd7e pha :jsr lbc0c:pla :jsr lbc3c:lda ARG+5
  790 eor  FAC+5:sta ARG+6:ldx FAC:jmp lb86a:lbd91 lda akku4+2
- 791 cmp #$0a:bcc lbda0:lda #$64:bit akku4+4:bmi lbdae
+ 791 cmp #$0a:bcc lbda0:lda #$64:bit NEWPTR+1:bmi lbdae
  792 jmp lb97e:lbda0 asl :asl :clc :adc akku4+2
  793 asl :clc :ldy #$00:adc (BASZEI),y:sec 
  794 sbc #$30:lbdae sta akku4+2:jmp lbd30
@@ -3097,7 +2170,7 @@ listfl    =syszp
  lbdbd    .byt $9e,$6e,$6b,$28,$00
  lbdc2 lda #<la371:ldy #>la371:jsr lbdda
  797 lda ZEINR+1:ldx ZEINR:adrout sta FAC+1:stx FAC+2:ldx #$90
- 798 sec :jsr lbc49:jsr lbddf:lbdda jmp strout:lbddd ldy #$01
+ 798 sec :jsr lbc49:jsr lbddf:lbdda jmp xstrout:lbddd ldy #$01
  799 lbddf lda #$20:bit FAC+5:bpl lbde7:lda #$2d:lbde7 sta l0100-1,y
  800 sta FAC+5:sty l0071:iny :lda #$30:ldx FAC
  801 bne lbdf8:jmp lbf04:lbdf8 lda #$00:cpx #$80:beq lbe00
@@ -3182,11 +2255,6 @@ listfl    =syszp
  lexp lbfed lda #<lbfbf:ldy #>lbfbf:jsr lba28:lda ARG+7:adc #$50
  861 bcc lbffd:jsr lbc23
  lbffd 
-#ifdef ORIGINAL
-          jmp le000
-          *=$e000
- le000  
-#endif
  sta l0055+1:jsr lbc0f
  862 lda FAC:cmp #$88:bcc le00e:le00b jsr lbad4:le00e jsr lbccc
  863 lda SUCHCHAR:clc :adc #$81:beq le00b:sec 
@@ -3213,16 +2281,21 @@ listfl    =syszp
  883 sta FAC+4:stx FAC+1:ldx FAC+2:lda FAC+3:sta FAC+2
  884 stx FAC+3:le0e3 lda #$00:sta FAC+5:lda FAC:sta ARG+7
  885 lda #$80:sta FAC:jsr lb8d7:ldx #$8b:ldy #$00
- 886 le0f6 jmp lbbd4:le0f9 cmp #$f0:bne le104:sty BASEND+1:stx BASEND
+ 886 le0f6 jmp lbbd4:
+le0f9 cmp #$f0:bne le104:
+	.byt 2	; should not set BASEND like this?
+	sty BASEND+1:stx BASEND
  887 jmp la663:le104 tax :bne le109:ldx #$1e:le109 jmp la437
  888 le10c jsr lffd2:bcs le0f9:rts :/* le112 jsr lffcf:bcs le0f9
  889 rts :*/ le118 jsr le4ad:bcs le0f9:rts :le11e jsr lffc6
  890 bcs le0f9:rts :le124 jsr lffe4:bcs le0f9:rts
 
           .(
- strlen   =syszp
- stradr   =syszp+1
- -syszp   +=3          
+	.data
+ strlen   .byt 0
+	.zero
+ stradr   .word 0
+	.text
 
 &gets     jsr GETINT
           sty stradr
@@ -3334,14 +2407,15 @@ listfl    =syszp
           .word $fff3,lfff3
           .word 0
 
- lsave jsr le1d4:ldx VARANF:ldy VARANF+1:lda #$2b:jsr lffd8
+ lsave jsr le1d4:ldx VARANF:ldy VARANF+1:lda #BASANF; indirect pointer to start address in zp
+jsr lffd8
  896 bcc lef09x:jmp le0f9:lef09x rts 
  lverify lda #$01:.byt $2c
  lload lda #0:sta LOADFL
  897 jsr le1d4:lda LOADFL:ldx BASANF:ldy BASANF+1:jsr lffd5
  898 bcs le1d1:lda LOADFL:beq le195:ldx #$1c:jsr lffb7
  899 and  #$10:bne le19e:lda BASZEI+1:cmp #>l0200:beq le194
- 900 lda #<la364:ldy #>la364:jmp strout:le194 rts 
+ 900 lda #<la364:ldy #>la364:jmp xstrout:le194 rts 
  le195 jsr lffb7
      and  #$bf:beq le1a1:ldx #$1d:le19e jmp la437
  le1a1 lda BASZEI+1
@@ -3420,53 +2494,84 @@ listfl    =syszp
           .byt $7f,$aa,$aa,$aa,$13
           .byt $81,$00,$00,$00,$00
 
- le37b jsr lffcc
-       lda #$00:sta ACTIO:jsr la67a:cli :le386 ldx #$80
-       jmp (l0300)
- le38b txa :bmi le391:jmp la43a:le391 jmp ready
- le394 jsr le453:jsr le3bf:jsr le422:ldx #$fb:txs 
+ le37b 	jsr lffcc
+       	lda #$00
+	sta ACTIO
+	jsr la67a
+	cli
+ le386 	ldx #$80
+       	jmp (l0300)	; $e38b
 
-       ldy #<-1
- lexe1 iny
-       lda PCBUF,y
-       beq le386
-       cmp #" "
-       bne lexe1
-       ldx #<-1
- lexe2 iny
-       inx
-       lda PCBUF,y
-       sta l0200,x
-       bne lexe2
-       lda #<l0200-1
-       sta BASZEI
-       lda #>l0200-1
-       sta BASZEI+1
-       jmp exestart
-       
-       ;bne le386
+ le38b 	txa 
+	bmi le391
+	jmp la43a
+ le391 	jmp ready
 
- le3a2 inc BASZEI:bne le3a8:inc BASZEI+1:le3a8 lda $ea60
+ le394 	jsr le453
+	jsr le3bf
+	jsr le422
+
+	jmp le386
+
+	; CHRGET routine ROM copy (to be copied to actual CHRGET)
+le3a2 inc BASZEI:bne le3a8:inc BASZEI+1:le3a8 lda $ea60
  952 cmp #$3a:bcs le3b9:cmp #$20
  953 beq le3a2:sec :sbc #$30:sec :sbc #$d0
  954 le3b9 rts :.byt $80 :.byt $4f :.byt $c7 :.byt $52 
- 955 cli :le3bf lda #$4c:sta l0054:sta lusr:lda #<illquant
- 956 ldy #>illquant:sta lusr+1:sty lusr+2:lda #<lb391:ldy #>lb391
- 957 sta l0005:sty l0005+1:lda #<lb1aa:ldy #>lb1aa:sta l0003
- 958 sty l0003+1:ldx #$1c:le3e2 lda le3a2,x:sta CHRGET,x:dex 
- 959 bpl le3e2:lda #$03:sta l0053:lda #$00:sta FAC+7
- 960 sta ACTIO:sta STRZEI+1:ldx #$01:stx l0200-3:stx l0200-4
- 961 ldx #$19:stx STRPTR:sec :jsr lff9c:stx BASANF
- 962 sty BASANF+1:sec :jsr lff99:stx BASEND:sty BASEND+1
- 963 stx STRANF:sty STRANF+1:ldy #$00:tya :sta (BASANF),y
- 964 inc BASANF:bne le421:inc BASANF+1:le421 rts :le422 lda BASANF
- 965 ldy BASANF+1:jsr la408:lda #<le473:ldy #>le473:jsr strout
- 966 lda BASEND:sec :sbc BASANF:tax :lda BASEND+1
- 967 sbc BASANF+1:jsr adrout:lda #<le460:ldy #>le460:jsr strout
- 968 jmp la644
+ 955 cli :
+
+	; BASIC init
+le3bf lda #$4c:sta l0054:sta lusr:
+	lda #<illquant
+	ldy #>illquant:
+	sta lusr+1:sty lusr+2:
+	lda #<lb391:ldy #>lb391
+	sta l0005:sty l0005+1:
+	lda #<lb1aa:ldy #>lb1aa:
+	sta l0003
+	sty l0003+1:
+	; copy over CHRGET
+	ldx #$1c:le3e2 lda le3a2,x:sta CHRGET,x:dex 
+	bpl le3e2:
+
+	lda #$03:sta l0053:
+	lda #$00:sta FAC+7
+	sta ACTIO:sta STRZEI+1:
+	ldx #$01:stx l0200-3:stx l0200-4
+	ldx #STRSTCK:stx STRPTR:
+	; set BASIC memory limits
+	sec :jsr lff9c:stx BASANF
+	sty BASANF+1:
+	sec :jsr lff99:
+	stx BASEND:sty BASEND+1
+	stx STRANF:sty STRANF+1
+
+	; clear BASIC program
+	ldy #$00:tya :sta (BASANF),y
+	inc BASANF:bne le421:inc BASANF+1:
+le421 	rts
+
+	; further init
+le422 	lda BASANF
+ 	ldy BASANF+1
+	jsr la408
+	lda #<le473:ldy #>le473
+	jsr xstrout		; print COMMODORE BASIC message
+
+	lda BASEND:sec :sbc BASANF:tax :lda BASEND+1
+	sbc BASANF+1
+	jsr adrout		; print bytes free
+
+	lda #<le460:ldy #>le460
+	jsr xstrout		; print BYTES FREE text
+
+	jmp la644
+
  le447    .word le38b,la483,la57c,la71a,la7e4,lae86 
+
  le453 ldx #$0b
  le455 lda le447,x:sta l0300,x:dex :bpl le455:rts
+
           .byt 0
  le460    .byt " BASIC BYTES FREE",13,10,0
  le473    .byt TC_FF,13,"    **** COMMODORE 64 BASIC V2 ****",13,10,10
@@ -3478,8 +2583,6 @@ romend    =*
 
 #ifdef SHOW
           .(
-dxr       =syszp
--syszp    +=1
 
 &SERIN    stx dxr
           ldx #STDIN
@@ -3495,45 +2598,18 @@ s1b       sec
 s1a       ldx dxr
           rts
       
-+SEROUT   stx dxr
-          ldx #STDOUT
-o0 s2     pha
-          jsr PUTC
-          pla
-          bcc s2a
-          jsr YIELD
-          jmp s2
-s2a       ldx dxr
-          cmp #0
-          rts
++SEROUT   =chrout
+
           .)
 
-+xHEXOUT   .(
-          pha
-          lsr
-          lsr
-          lsr
-          lsr
-          jsr NIBOUT
-          pla
-          and #$0f
-NIBOUT    clc  
-          adc #"0"
-          cmp #"9"+1
-          bcc nout
-          adc #6
-nout      jmp SEROUT
-          .)
++xHEXOUT  =hexout 
 
-+SPOUT    lda #32
-          jmp SEROUT
-+CRLFOUT  lda #13
-          jsr SEROUT
-          lda #10
-          jmp SEROUT
-          
-          .)
++SPOUT    =spout
++CRLFOUT  =crlfout
+
 #endif
+
+#include "../../apps/common.a65"
 
 x1   =(la9a5^laf28)&$00ff
 x2   =(lac15^laf28)&$00ff
@@ -3551,10 +2627,6 @@ x4   =(lb3c0^laf28)&$00ff
 stx,x
 #endif
 
-#print    syszp
--syszp    =oldsyszp		/* watch out - may not work on every ROM */
-#echo returned to
-#print 	  syszp
 
 endofbasic =*
 .)
