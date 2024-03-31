@@ -4,58 +4,61 @@
 
 == High Level Goal
 
-Establish the concept of a controlling terminal, that receives
+1. Establish the concept of a controlling terminal, that receives
 signals like Ctrl-C or Ctrl-Z from devices. This would also enable job control in the
 shell - that at this point can only wait for a child to end, or send it
-in the background altogether. In addition, an (optional) terminal process will be established that allows windowing of shells - similar to Linux tmux as an example.
+in the background altogether. 
+
+2. In addition, an (optional) terminal process will be established that allows windowing of shells - similar to Linux tmux as an example.
+
+3. Establish a standard way of controlling the terminal, like moving cursor, defining sub-windows, ...
+
 
 
 == Concepts
 
 
 
-1) MORE:
-    STDCIN 
-        per process, inherited from parent
-        DUP can change it, to be used in
-        TTY command to switch to another console
-   -> DONE
-       
- 
-2) TTY handling
-    Tasks get a PROCESS GROUP (PGRP), inherited from parent(?)
-    Fork can create new/use PGRP so tasks can be grouped into jobs by shell
-    STREAMS get an optional "line discipline"
-        if set
-            STREAM gets a PGRP attached
-            On GETC, if PGRP does not match block
-            On PUTC, 
-                if Ctrl-C -> signal (all) PGRP tasks SIGTERM
-                if Ctrl-D -> EOF
+1) STDCIN 
 
-   -> This will be deferred to a point when FSDEV and devices will get the ability to process OPEN options. In such a case, the serial devices could send Ctrl-D/Ctrl-C/Ctrl-Z as well, if setup this way. 
+1. per process, inherited from parent
+2. DUP can change it, to be used in
+3. TTY command to switch to another console
+
+ -> DONE
+       
+2) TTY handling (Streams)
+
+1. Streams get a Controlling Task, inherited from parent
+2. If a task sends a signal to a stream, the Controlling Task receives the signal
+3. If a task wants to read the stream, but is not the Controlling Task, the read blocks.
+
+ -> DONE (except for 3. Blocking on read, which will be done in the new buffer/channel code))
+ 
+2) TTY handling (Devices)
+    Devices get an optional "line discipline". if set:
+
+1. if Ctrl-C -> signal (all) PGRP tasks SIGTERM
+2. if Ctrl-D -> EOF
+
+ -> DONE for the console. Other devices (like serials) need to wait until FSDEV and devices can process file open options
 
 3) Job Control
-    STREAMS "line discipline"
-            On PUTC,
-                if Ctrl-Z -> SIGSTP to PGRP tasks, send SIGCHLD to parent
-    Shell manages jobs (PGRP)
-        SIGCONT to children on fg/bg
 
-   -> DONE: just without specific "line discipline". A signal sent to a stream will be sent to the foreground PID of the stream, if so attached. The console can send appropriate Ctrl-Z/Ctrl-C signals at this time.
+1. On PUTC, if Ctrl-Z -> *SIGSTP* to Controlling Task, send SIGCHLD to parent
+2. Shell manages jobs (PGRP), e.g *SIGCONT* to children on fg/bg
+
+ -> DONE
             
-
-                    
-1a) followup:
-        XARGS
-        
-   -> ???
-
 4) Terminal server
-    This implements a terminal sharing task that works similar to e.g. tmux or screen on Linux/Unix machines.
-    It requires a defined protocol between shell and terminal, that may be defined/enabled by an environment variable.
+
+This implements a terminal sharing task that works similar to e.g. tmux or screen on Linux/Unix machines.
+    It requires a defined protocol between shell and terminal, that may be defined/enabled by an environment variable. (See 5. in below).
  
-        
+5) An API similar to *curses* so that programs have a standardized way of moving the cursor, defining sub-windows etc.
+
+1. A new "term.a65" source code library implementing this API
+2. An improved console (and associated stream protocol) that is more flexible, like defining sub-windows, returning screen geo on request etc.
 
 == APIs
 
