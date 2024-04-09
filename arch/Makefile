@@ -4,5 +4,9 @@
 clean:
 	(for i in *; do \
 	(if test -d $$i; then cd $$i; ${MAKE} clean; fi;) \
-	done;)
+	done;)	
+	rm -f reloclabels
+
+reloclabels: reloclabels.c
+	gcc -o $@ $<
 
