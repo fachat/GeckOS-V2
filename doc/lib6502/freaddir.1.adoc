@@ -1,0 +1,133 @@
+
+= freaddir(1)
+:doctype: manpage
+
+== NAME
+freaddir - read a directory entry
+
+== SYNOPSIS
+Input::
+	* X - stream number
+	* A/Y address of buffer
+Call::
+	jsr freaddir
+Output::
+	* C=0
+		** struct given in A/Y is updated with new buffer address and reduced length of at least FD_NAME+MAX_FILENAME bytes.
+	* C=1
+		** AC - error code 
+
+NOTE: modifies all registers
+
+== DESCRIPTION
+Reads a single directory entry into the given buffer.
+
+reads _one_ directory entry into the buffer, which is
+of length (FD_NAME + MAX_FILENAME)
+One entry consists of a directory struct:
+
+----
+
+                .word   0               ; valid bits
+                .word   0               ; owner ID
+                .word   0               ; group ID
+                .word   0               ; permissions (drwxrwxrwx) (2 byte)
+                .word   0,0             ; file length in byte (4 byte)
+                .byt    0,0,0,0,0,0     ; last modification date
+                                        ; (year-1990, month, day, hr, min, sec)
+----
+
+The valid bit say, which entry in the struct is valid.
+bit 0 is for the permissions, bit 1 for the file length, bit 2
+for the date. The file length, if not zero, is an
+approximate value (like the blocks *254 in a vc1541)
+this struct is followed by the null-terminated filename.
+The valid bits are:
+
+----
+                FDV_PERM        1
+                FDV_LENGTH      2
+                FDV_MDATE       4
+                FDV_OWNER       8
+                FDV_GROUP       16
+----
+
+If permissions are valid, but not group/owner, then
+the permissions for user and group are invalid, and the
+permissions for others should be taken.
+
+The directory entry struct definitions are:
+
+----
+                FD_VALID        0       /* 1 byte */
+                FD_PERM         1       /* 2 byte */
+                FD_LENGTH       3       /* 4 byte */
+                FD_MDATE        7       /* 6 byte */
+                FD_NAME         13      /* null-terminated */
+
+                The permission bits are actually a copy from the Linux
+                man pages...:
+
+                S_ISUID         $800    /* set user ID on execution */
+                S_ISGID         $400    /* set group ID on execution */
+                S_ISVTX         $200    /* -- (sticky bit) */
+
+                S_IRWXU         $1c0    /* rwx mask for user */
+                S_IRUSR         $100    /* read by owner */
+                S_IWUSR         $080    /* write by owner */
+                S_IXUSR         $040    /* exexute by owner */
+
+                S_IRWXG         $038    /* rwx mask for group */
+                S_IRGRP         $020    /* read by group */
+                S_IWGRP         $010    /* write by group */
+                S_IXGRP         $008    /* execute by group */
+
+                S_IRWXO         $007    /* rwx mask for others */
+                S_IROTH         $004    /* read by others */
+                S_IWOTH         $002    /* write by others */
+                S_IXOTH         $001    /* execute by others */
+
+                S_IFMT          $f000   /* file type mask */
+                S_IFSOCK        $c000   /* socket */
+                S_IFLNK         $a000   /* symbolic link */
+                S_IFREG         $8000   /* regular file */
+                S_IFBLK         $6000   /* block device */
+                S_IFDIR         $4000   /* directory */
+                S_IFCHR         $2000   /* character device */
+                S_IFIFO         $1000   /* fifo */
+
+                S_IFMNAME       $3000   /* media name */
+                S_IFMFREE       $5000   /* free are on media */
+                S_IFMSIZE       $7000   /* media size */
+----
+
+Most of the file types are probably not implemented
+on a 6502 system. But before defining new types, one
+should keep the already defined values save.
+That's for the last three entries, which are not
+Posix standards.
+
+The length field can be an approximate if it is not zero
+and the length is not valid (For VC1541 block lengths).
+
+== RETURN CODES
+Error return codes are given when at return, C=1.
+
+E_NOFILE:: 
+	file not open
+E_EMPTY::
+	if non-blocking, when no bytes are available
+E_EOF::
+	end of file
+
+
+== SEE ALSO
+link:../lib6502.7.adoc[lib6502(7)],
+link:fopendir.1.adoc[fclose(1)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+

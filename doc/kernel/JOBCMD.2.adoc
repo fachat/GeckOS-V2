@@ -1,0 +1,70 @@
+
+= JOBCMD(2)
+:doctype: manpage
+
+== NAME
+JOBCMD - job control functions
+
+== SYNOPSIS
+Input::
+	* AC - command number (see below)
+	* XR - affected task number (depending on command)
+Call::
+	jsr JOBCMD
+Output::
+	* C=0 - success
+		** AC=E_OK
+	* C=1 - error
+		** AC - error code
+	* YR - number of threads for a task for *JC_INFO*, preserved otherwise
+
+NOTE: YR is preserved except for *JC_INFO*, XR and AC are used/modified.
+
+== DESCRIPTION
+
+This call implements various job control functions as follows. The JC number is the command number to be given
+in AC to the call:
+
+JC_BACKGROUND:: send the task given in XR into the background (if caller is parent)
+
+JC_FOREGROUND:: send the task given in XR into the foreground (if caller is parent). I.e. the foreground task of the *STDCIN* stream is set to the given task number, so that job control signals are sent to it.
+
+JC_SUSPEND:: suspend the current task. If the current task is running in the foreground, the parent is becoming the foreground task (i.e. attached to the *STDCIN* stream). Also, sends a *SIG_CONT* to the parent.
+
+JC_SUSPIFBG:: suspend the current task if it is not running in the foreground. Note, this avoids race conditions if a task forks another task and wants to background itself - but the child has already ended.
+
+JC_PAUSE:: pause the current task. The task will be resumed on *JC_BACKGROUND* or *JC_FOREGROUND*, or when a signal is received.
+
+JC_PAUSEIFBG:: pause the current task, if it is not running in the foreground, to avoid race conditions. Task resumes as in *JC_PAUSE*.
+
+JC_INFO:: For the task given in XR, return the number of threads in YR and the TTS status in AC.
+
+
+----
+	TN_EXECADDR	- change the execution address entry, replace with value from AC/YR
+----
+
+== ERROR CODES
+
+E_ILLPAR::
+	wrong modifier specified
+
+== SEE ALSO
+link:../scheduler.7.adoc[scheduler(7)],
+link:FORK.2.adoc[FORK(2)],
+link:TERM.2.adoc[TERM(2)],
+link:KILL.2.adoc[KILL(2)],
+link:YIELD.2.adoc[YIELD(2)],
+link:FORKT.2.adoc[FORKT(2)],
+link:GETINFO.2.adoc[GETINFO(2)],
+link:DUP.2.adoc[DUP(2)],
+link:GETPID.2.adoc[GETPID(2)],
+link:SLOCK.2.adoc[SLOCK(2)],
+link:RENICE.2.adoc[RENICE(2)]
+
+== AUTHOR
+Written by André Fachat.
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
