@@ -1,13 +1,10 @@
 
-Howto Boot the GeckOS/A65 on 8x96 
--------------------------------------
+Howto Boot the GeckOS/A65
+-------------------------
 
-1) transfer all files in this directory to a (1541) disk. (osa.d64)
+1) put the geckos.d64 disk image onto a disk and put it into a CBM2031/CBM4040 or other IEEE488 disk drive 
+   connected with to the computer
 
-2) put this disk to a CBM2031/CBM4040 or other IEEE488 disk drive 
-   connected with to the 8x96.
-
-3) load the file "loader" on the 8x96 and run it
+2) load the file "loader" on the computer and run it
    After a while the new OS should come up and running
-   (Repeat switches between virtual terminals)
 

@@ -1,24 +1,26 @@
 #!/bin/sh
 
-echo "set tmpfile"
 tmpfile=/tmp/mkdisk.$user.$$
+echo "set tmpfile to $tmpfile"
 
 #echo "get files"
 #files=`ls *` 
 
+outfile=$1
+shift
+
 files="$*"
 
+echo "outfile=$outfile"
 echo "files=$files"
 
-echo "format osa,65 d64 osa.d64" > $tmpfile
+echo "format osa,65 d64 $outfile" > $tmpfile
 
 for i in $files; do
   if test "$i" != "mkdisk" -a "$i" != "osa.d64" ; then
     echo "write $i" >> $tmpfile
   fi
 done
-
-cat $tmpfile
 
 cat $tmpfile | c1541 > /dev/null
 

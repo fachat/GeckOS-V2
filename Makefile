@@ -4,6 +4,7 @@ version="2.1.1"
 all:
 	(cd apps; ${MAKE};)
 	(cd sysapps; ${MAKE};)
+	(cd dist; ${MAKE};)
 
 clean:
 	(cd arch; ${MAKE} clean;)
@@ -11,6 +12,7 @@ clean:
 	(cd sysapps; ${MAKE} clean;)
 	(cd kernel; ${MAKE} clean;)
 	(cd lib6502; ${MAKE} clean;)
+	(cd dist; ${MAKE} clean;)
 
 #####################################################
 

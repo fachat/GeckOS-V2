@@ -322,7 +322,7 @@ When a process connects, slipd starts a specific login program. By default this 
 
 === Connecting to the internet
 
-The full *slipd* or the reduced *slipmind* provide the ability for *lib6502* programs to use internet connectivty. A sample *telnet* client is included in GeckOS.
+The full *slipd* or the reduced *slipmind* provide the ability for *lib6502* programs to use internet connectivty. A sample *telnet* client is included in GeckOS. Also, there is a *httpd* HTTP server based on the lib6502 binding (and thus not integrated into *slipd* that servers files from a GeckOS disk.
 
 image::telnet.png[] 
 
