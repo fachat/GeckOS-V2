@@ -281,7 +281,7 @@ end_auto
           
 #print *
 
-#include  "kernel\kernel.a65"
+#include  "kernel/kernel.a65"
 
 #print *
 

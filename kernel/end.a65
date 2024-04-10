@@ -36,6 +36,6 @@ eok_addr =*
 #endif
 
           .byt D_D,D_M,D_Y,VA,VB,VC
-          .word pnmi /*NMI*/,RESET,pirq
+          .word pnmi, preset, pirq
 
 
