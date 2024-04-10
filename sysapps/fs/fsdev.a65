@@ -32,7 +32,8 @@ start     .word ende		; pointer to end of file in ROM
 #endif
           .word PRG		; execution start
           .byt  16		; RAM size in 256-byte blocks
-	  .byt  >$ff-ROMSTART; $ff-start ; shared mem size in 256-byte blocks
+	  ;.byt  >$ff-ROMSTART; $ff-start ; shared mem size in 256-byte blocks
+	  .byt $80              ; fixed shared mem size due to missing o65 functionality
 	  .byt  0		; priority
           .word 0		; stdin, stdout/stderr device number
           .asc  "fsdev",0,0	; command line

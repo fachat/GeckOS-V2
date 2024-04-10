@@ -76,7 +76,8 @@ start     .word ende            ; pointer to end of file in ROM
           .byt  PK_INIT+$80     ; file type = init task + auto-execute bit
           .word main            ; execution start
           .byt  3               ; RAM size needed, in 256-byte blocks
-          .byt  >$ff-ROMSTART	; shared mem size in 256-byte blocks
+          ;.byt  >$ff-ROMSTART	; shared mem size in 256-byte blocks
+	  .byt $80		; fixed shared mem size due to missing o65 functionality
           .byt  0               ; priority
           .word 0               ; stdin, stdout/stderr device number (ignored)
           .asc  "init",0,0      ; command line

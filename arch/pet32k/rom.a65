@@ -48,7 +48,6 @@
 
 /* These are changeable ****************************************************/
 
-#define ROMSTART        4940+5   /* where the ROM starts */
 
 #define	STACKCOPY		/* if defined, save stack area in memory
 				   when context switching, otherwise divide
@@ -84,12 +83,25 @@
 #undef  SEM_SERIEC
 #undef  SEM_PARIEC
 
-          .word *+2		/* load address */
+	; ----------------------------------------------------------
+	; start of boot rom image
+
+	; load address
+          .word *+2
+
+	; jmp to reset as used by loader
 	  jmp RESET
+
+	; ----------------------------------------------------------
+	; start of actual init rom image
+ROMSTART=*
+
 	  ; ROMSTART is here!
 .(
 
-/************* ROM entries 				*/
+	; ----------------------------------------------------------
+	; here follow the entries in the init rom that are started
+	; by the init process
 
 /************* devices	 				*/
 
@@ -176,21 +188,39 @@ end_auto
 
           .word -1
 
-/************* lib6502 code				*/
+	; ----------------------------------------------------------
+	; lib6502 code
+	;
+	; lib6502.a65 defines the LIB6502 label that is used for the 
+	; relocation.
 
 #define	LIB6502_NONET
 #include  "lib6502/lib6502.a65"
 
-/************* Kernel					*/
+	; ----------------------------------------------------------
+	; kernel
+	;
+	; The kernel jump table defines the OSA2KERNEL label that is
+	; used for the relocation
+
 
 #include  "kernel\kernel.a65"
 
-/************* Constants for lib6502 memory handling	*/
+	; ----------------------------------------------------------
+	; Constants for lib6502 memory handling	
 
-;Memstart  =$5380
-;Memstart  =$5500
+	.bss
+	; as bss is the end of the "rom" image that is loaded from 
+	; $0300, the current bss address counter (=last used bss
+	; location plus 1) is used as start of allocatable memory.
+	; This way the init rom image can shrink and grow with
+	; changes without the need to adapt the value here
 Memstart  =*
+
+	; end of allocatable memory (+1)
 Memend	  =$7800
+
+	; start of zeropage allocatable area (up until $ff)
 Zerostart =$94		/* PET ROM irq vectors at $90-$93 */
 
 .)

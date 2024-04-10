@@ -1,0 +1,107 @@
+
+START	=$7000
+
+ZP	=$02
+ST	=$96
+
+CHKIN	=$ffc6
+CHRIN	=$ffcf
+CLOSE	=$f2e0		; $ffc3 - calls into BASIC.... 
+CLRCH	=$ffcc
+
+	.word start
+	*= START
+
+start	jsr loadrom
+
+	sei
+
+	jmp (startp)	; RESET
+
+	;------------------
+
+romname	.asc "ROM.BIN"
+romnlen	=*-romname
+
+
+loadrom	lda #romnlen
+	ldx #<romname
+	ldy #>romname
+	;jsr do_load
+
+do_load	jsr SETNAM
+	lda #1		; LFN
+	ldx $d4		; current device (from where loader has been loaded)
+	ldy #0		; SEC = load
+	jsr SETLFS
+
+	jsr OPEN	
+
+	;------------------
+	; load and store in 8x96 extra memory banks
+
+load	ldx #1		; LFN
+	jsr CHKIN
+
+	lda #0
+	sta ST
+
+	; load start address
+	jsr CHRIN
+	sta ZP
+	sta startp
+	jsr CHRIN
+	sta ZP+1
+	sta startp+1
+
+	; byte loop
+l1	jsr CHRIN
+	ldy #0
+	sta (ZP),y
+
+	lda ST
+	bne endload
+
+	; inc address
+incl	inc ZP
+	bne l1
+	inc ZP+1
+	bne l1
+
+endload	
+	jsr CLRCH
+	lda #1		; LFN
+	jmp CLOSE
+
+	;----------------------------------
+	; C64 kernal jump table adapters for the PET ROM
+
+SETLFS  ; SETLFS        set logical/first/second address
+        .(
+        sta $d2         ; logical file no
+        stx $d4         ; unit address
+        sty $d3         ; secondary address
+        rts
+        .)
+
+SETNAM  ; SETNAM        set filename
+        .(
+        sta $d1         ; filename length
+        stx $da         ; address low
+        sty $db         ; address high
+        rts
+        .)
+
+LOAD    ; LOAD          load
+        .(
+        stx $fb         ; start lo
+        sty $fc         ; start hi
+        sta $9d         ; load/verify flag
+        jmp $f356
+        .)
+
+OPEN	=$f563
+
+	; -----------------------------
+startp	.word 0
+
