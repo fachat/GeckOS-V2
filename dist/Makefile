@@ -1,5 +1,5 @@
 
-IMGS=osabase.d64 osanonet.d64
+IMGS=osabase.d64 osanonet.d64 osabase.d80
 
 all: $(IMGS)
 
@@ -10,11 +10,14 @@ INET=httpd telnet tlogin index.html
 SLIP=slipd slipmind 
 TEST=sample.bat
 
+osabase.d80: $(APPS) $(SYS) $(DISK) $(INET) $(SLIP) $(TEST)
+	./mkdisk d80 $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)
+
 osabase.d64: $(APPS) $(SYS) $(DISK) $(INET) $(SLIP) $(TEST)
-	./mkdisk $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)
+	./mkdisk d64 $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)
 
 osanonet.d64: $(APPS) $(SYS) $(DISK) $(TEST)
-	./mkdisk $@ place4loader $(APPS) $(SYS) $(DISK) 
+	./mkdisk d64 $@ place4loader $(APPS) $(SYS) $(DISK) 
 
 clean:
 	rm -f $(IMGS)

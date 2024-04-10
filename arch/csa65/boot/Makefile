@@ -1,28 +1,13 @@
 
+BASE=../../../dist/osabase.d80
+TRG=geckoscsa.d80
+
 XAINPUT=../../../include
 XA=xa
 
-all: osa.d80 prom prom_romtest
+all: $(TRG) prom prom_romtest
 
 #MANPAGES=../../../*/*/*.1.adoc
-
-apps = lsh lmon 
-APPSDIR=../../../apps
-
-sysapps = ps kill ontty lsmem basic
-SYSAPPSDIR=../../../sysapps
-
-slip = slipd slipmind slipfsd slipwwwd sliprshd   
-SLIPDIR=../../../sysapps/slipd
-
-files = mkdir rmdir rm format chkdsk ls mv
-FILESDIR=../../../apps/file
-
-filter = cat wc more hexdump
-FILTERDIR=../../../apps/filter
-
-inet = tlogin telnet httpd
-INETDIR=../../../apps/inet
 
 prom: rom kernel lib
 	((cat csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel.bin) > prom
@@ -30,21 +15,13 @@ prom: rom kernel lib
 prom_romtest: rom kernel_romtest lib
 	((cat csarom_romtest.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel_romtest.bin) > prom_romtest
 
-osa.d80: rom rom_romtest kernel kernel_romtest lib boot loader ${files} ${filter} ${sysapps} ${apps} ${inet} ${slip}
-	./mkdisk loader ${addprefix ${FILESDIR}/, ${files}}  \
-			${addprefix ${FILTERDIR}/, ${filter}} \
-			${sysapps} \
-			${apps} \
-			${addprefix ${SLIPDIR}/, ${slip}} \
-			${addprefix ${INETDIR}/, ${inet}} \
-			${MANPAGES} \
-			csarom csarom_romtest csakernel csakernel_romtest csalib boot index.html 
-	#rm -f ${sysapps} ${apps} # csarom csakernel csalib
+$(TRG): $(BASE) rom rom_romtest kernel kernel_romtest lib boot loader 
+	c1541 -attach $@ -delete place4loader
+	c1541 -attach $@ -write loader -write csarom -write csakernel -write csalib -write boot
 
-osa_romtest.d80: osa.d80
-	cp osa.d80 osa_romtest.d80
-	c1541 -attach osa_romtest.d80 -delete csakernel -rename csakernel_romtest csakernel
-	#c1541 -attach osa_romtest.d64 -delete csarom -rename csarom_romtest csarom
+romtest.d80: $(TRG)
+	cp $(TRG) $@
+	c1541 -attach $@ -delete csarom -write csarom_romtest 
 
 loader: loader.bas
 	petcat -w40 -o loader loader.bas
@@ -96,30 +73,5 @@ clean:
 	rm -f csakernel_romtest prom prom_romtest
 	rm -f csarom_romtest csarom_romtest.bin
 
-
-##############################################################################
-#
-# lib6502 programs
-#
-
-${apps}:
-	(if test -d ${APPSDIR}/$@; then ln -sf ${APPSDIR}/$@/$@; cd ${APPSDIR}/$@; make $@; fi)
-	(if test -f ${APPSDIR}/$@.a65; then ln -sf ${APPSDIR}/$@;cd ${APPSDIR}; make $@;  fi)
-
-${sysapps}:
-	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
-	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
-
-${slip}:
-	(cd ${SLIPDIR}; make $@;)
-
-${files}:
-	(cd ${FILESDIR}; make $@;)
-
-${filter}:
-	(cd ${FILTERDIR}; make $@;)
-
-${inet}:
-	(cd ${INETDIR}; make $@;)
 
 

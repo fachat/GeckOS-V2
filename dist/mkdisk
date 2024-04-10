@@ -6,6 +6,9 @@ echo "set tmpfile to $tmpfile"
 #echo "get files"
 #files=`ls *` 
 
+format=$1
+shift
+
 outfile=$1
 shift
 
@@ -14,12 +17,10 @@ files="$*"
 echo "outfile=$outfile"
 echo "files=$files"
 
-echo "format osa,65 d64 $outfile" > $tmpfile
+echo "format osa,65 $format $outfile" > $tmpfile
 
 for i in $files; do
-  if test "$i" != "mkdisk" -a "$i" != "osa.d64" ; then
-    echo "write $i" >> $tmpfile
-  fi
+  echo "write $i" >> $tmpfile
 done
 
 cat $tmpfile | c1541 > /dev/null
