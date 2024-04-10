@@ -6,8 +6,8 @@ all: $(IMGS)
 APPS=cat hexdump lmon lsh basic wc
 SYS=kill lsmem ontty ps
 DISK=chkdsk format mkdir ls more mv rm rmdir 
-INET=httpd telnet tlogin
-SLIP=slipd slipmind
+INET=httpd telnet tlogin index.html
+SLIP=slipd slipmind 
 
 osabase.d64: $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)
 	./mkdisk $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)

@@ -1,5 +1,5 @@
 
-TRG=rom.bin
+TRG=petrom.bin
 
 XAINPUT=../../include,..,../..
 XA=xa -k
@@ -23,5 +23,5 @@ pet ${TRG}:
 	
 clean:
 	rm -f ${TRG} rom.lab rom.o65 rom reloc.lst rom.l
-	(cd boot; ${MAKE} clean;)
+	make -C boot clean
 

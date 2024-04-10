@@ -1,41 +1,18 @@
 
-#MANPAGES=../../../*/*/*.1.adoc
+BASE=../../../dist/osabase.d64
 
-apps = lsh lmon
-APPSDIR=../../../apps
-
-sysapps = ps kill ontty lsmem basic
-SYSAPPSDIR=../../../sysapps
-
-files = mkdir rmdir rm format chkdsk ls mv
-FILESDIR=../../../apps/file
-
-filter = cat wc more hexdump
-FILTERDIR=../../../apps/filter
-
-inet = # tlogin telnet httpd
-INETDIR=../../../apps/inet
+ROM=../kern.bin ../lib.bin ../rom.bin
 
 XA=xa
 
-#all: rom ${files} ${apps} ${sysapps} ${inet}
-all: osa.d64
+TRG=geckos8x96.d64
 
-rom:
-	(cd ..; ${MAKE};)
+all: $(TRG)
 
-clean:
-	rm -f rom romld.bin osa.x64
-	rm -f ${sysapps} 
-	rm -f vice.trace reltest
-	rm -f monitor.log
-
-topclean:
-	# convenience
-	(cd ../../../; make clean);
-
-tar ../boot.tgz: rom loader howto.boot
-	tar czvf ../boot.tgz rom loader howto.boot
+##############################################################################
+#
+# dependencies
+#
 
 romld.bin: romld.a65
 	xa romld.a65 -o romld.bin
@@ -43,38 +20,41 @@ romld.bin: romld.a65
 loader: loader.bas romld.bin
 	petcat -l 0401 -w40 -o loader loader.bas
 
+$(ROM):
+	make -C .. all
+
+$(BASE):
+	make -C ../../.. all
+
 ##############################################################################
 #
 # d64 emulator disk image + run
 #
 
-osa.d64: ${files} ${filter} ${sysapps} ${apps} ${inet} rom loader romld.bin
-	./mkdisk loader ${sysapps} ${addprefix ${FILESDIR}/, ${files}} ${addprefix ${FILTERDIR}/, ${filter}} ${apps} ${addprefix ${INETDIR}/, ${inet}} ${MANPAGES} rom.bin lib.bin kern.bin romld.bin
-	rm -f ${sysapps} ${apps}
+$(TRG): $(BASE) $(ROM) loader romld.bin
+	cp $(BASE) $@
+	c1541 -attach $@ -delete place4loader
+	c1541 -attach $@ -write loader -write romld.bin
+	sh -c "for i in $(ROM); do\
+		c1541 -attach $@ -write \$$i; \
+	done;"
 
-emurun: osa.d64
-	xpet -model 8296 -drive8type 2031 -autostart osa.d64
+
+emurun: $(TRG)
+	xpet -model 8296 -drive8type 2031 -autostart $(TRG)
 
 
 ##############################################################################
 #
-# lib6502 programs
+# clean up
 #
 
-${apps}:
-	(if test -d ${APPSDIR}/$@; then ln -sf ${APPSDIR}/$@/$@; cd ${APPSDIR}/$@; make $@; fi)
-	(if test -f ${APPSDIR}/$@.a65; then ln -sf ${APPSDIR}/$@;cd ${APPSDIR}; make $@;  fi)
+clean:
+	rm -f rom romld.bin loader
+	rm -f monitor.log
 
-${sysapps}: 
-	(if test -d ${SYSAPPSDIR}/$@; then ln -sf ${SYSAPPSDIR}/$@/$@; cd ${SYSAPPSDIR}/$@; make $@; fi)
-	(if test -f ${SYSAPPSDIR}/$@.a65; then ln -sf ${SYSAPPSDIR}/$@;cd ${SYSAPPSDIR}; make $@;  fi)
+topclean:
+	# convenience
+	(cd ../../../; make clean);
 
-${files}:
-	(cd ${FILESDIR}; make $@;)
-
-${filter}:
-	(cd ${FILTERDIR}; make $@;)
-
-${inet}:
-	(cd ${INETDIR}; make $@;)
 	

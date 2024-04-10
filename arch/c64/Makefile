@@ -24,5 +24,4 @@ andre:
 clean:
 	rm -f ${TRG} c64rom.lab c64rom.l c64rom.o65 boot.tgz
 	(cd boot; ${MAKE} clean;)
-	(cd apps; ${MAKE} clean;)
 

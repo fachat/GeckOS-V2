@@ -1,7 +1,9 @@
 
 
 BASE=../../../dist/osanonet.d64
-ROM=../rom.bin
+ROM=../petrom.bin
+
+XA=xa
 
 TRG=geckospet.d64
 
@@ -13,7 +15,7 @@ all: $(TRG)
 #
 
 romld.bin: romld.a65
-	xa -o $@ $<
+	$(XA) -o $@ $<
 
 loader: loader.bas
 	petcat -w40 -o loader loader.bas
@@ -47,8 +49,8 @@ emurun: $(TRG)
 
 clean:
 	rm -f loader romld.bin
-	rm -f ${sysapps}
-	rm -f vice.trace reltest
+	# vice default monitor log output
+	rm -f monitor.log
 
 topclean:
 	# convenience

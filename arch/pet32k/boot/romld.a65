@@ -20,7 +20,7 @@ start	jsr loadrom
 
 	;------------------
 
-romname	.asc "ROM.BIN"
+romname	.asc "PETROM.BIN"
 romnlen	=*-romname
 
 
