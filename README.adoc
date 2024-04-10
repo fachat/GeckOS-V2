@@ -32,7 +32,7 @@ that can be used for porting.
 Here you can find the current set of disk images for the currently active ports:
 
 * link:arch/pet32k/boot/geckospet.d64[PET 32k geckospet.d64]
-* link:arch/cbm8x96/boot/osa.d64[CBM 8x96 osa.d64]
+* link:arch/cbm8x96/boot/geckos8x96.d64[CBM 8x96 osa.d64]
 * link:arch/csa65/boot/osa.d64[CS/A65 osa.d64]
 * link:arch/c64/boot/osa.d64[C64 osa.d64]
 
