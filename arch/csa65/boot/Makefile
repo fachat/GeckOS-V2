@@ -65,11 +65,17 @@ inirom: inirom.a65
 	${XA} -DOSA2KERNEL=61440 inirom.a65 -o inirom;\
 	if [ $$? -ne 0 ]; then rm -f inirom; fi)
 
+#########################################################################
+#
+# clean up
+#
+
 clean:
 	rm -f csarom csakernel csalib boot inirom loader
 	rm -f csakernel_romtest.bin csakernel.bin csarom.bin csalib.bin osa_romtest.d64
 	rm -f csakernel_romtest prom prom_romtest
 	rm -f csarom_romtest csarom_romtest.bin
 
-
+topclean:
+	make -C ../../.. clean
 
