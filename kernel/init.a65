@@ -523,32 +523,16 @@ pb1
 	  SAVEMEM
 taski
 #endif
-          
-#ifndef NOSYSPORT
-          lda SYSPORT    ; save timer-irq state
-          pha
-#endif
-
+        
+	; check if we have a timer interrupt
+	; and clear timer interrupt  
+	CHECKTIMER()
+	; here C=1 when it's an interval timer interrupt
+	; if C=0 it's another interrupt
+	; TODO: run separate interrupt paths here
 il       
 #ifndef NO_DEVICE 
 	jsr irqdev
-#endif
-
-#ifndef NOSYSPORT
-          pla
-          ora SYSPORT    ; no timer-irq?
-          pha            ; save it
-          
-	  CLRTIMER()
-
-          jsr testirq    ; irq line still set?
-          beq il         ; yes, than back to loop
-
-          pla
-          bpl endirq2     ; no timer-irq -> no task switch!
-#else
-
-	  CLRTIMER()
 #endif
 
 	  KERNELIRQ()

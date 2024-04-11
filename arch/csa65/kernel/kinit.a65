@@ -77,7 +77,7 @@ res1    txa		;lda mmu,x
 	.)
 
 /*
- * CSA65 specific irq timer init, 50 Hz irq (well, i.e. line freq. irq)
+ * CSA65 specific irq timer init, 50 Hz irq (well, i.e. video retrace interrupt)
  * We assume that the reset - or a loader program has disabled all irq
  *
  * Note that the SYSPORT 50Hz is not used anymore, but the PET-alike VSYNC
@@ -86,6 +86,13 @@ res1    txa		;lda mmu,x
 	lda #SYS_EXTIO
 	sta SYSPORT
 
+	; this sets:
+	; %00111101
+	;    \|/|\|
+	;     | | +--- CB1 negative edge input (video retrace input)
+	;     | +----- Access data register PB
+	;     +------- CB2 high output
+	; 
 	lda #$3d
 	sta $e813
 
@@ -138,40 +145,6 @@ x1
 
 #define	STARTMEM()	jsr startmem
 
-#if 0
-/*
- * determine the speed the CPU is running with. We use the 50 Hz toggle
- * line for it.
- */
-getfreq	  .(        
-          sei
-          lda #SYS_IRQEN
-          sta SYSPORT
-gf1       lda SYSPORT
-          bpl gf1
-          sta SYSPORT
-          bit SYSPORT
-          bmi gf1
-          lda #0
-          tay
-          tax
-gf2       bit SYSPORT
-          bmi gfe
-          clc
-          adc #1
-          bne gf2
-          inx
-          bne gf2
-          iny
-          bne gf2
-gfe       cpx #8	; more, then 2 MHZ
-          bcc gf3
-          lda #128	; 2 MHz
-          rts
-gf3	  lda #0	; 1 MHz
-	  rts
-	  .) 
-#else
 /*
  * determine the speed the CPU is running with. We use the 50/60 Hz 
  * screen retrace for it.
@@ -200,7 +173,6 @@ l4      bit $e840
 fast	lda #$80
         rts
 	.)
-#endif
 
 
 #define	GETFREQ()	jsr getfreq
@@ -217,7 +189,11 @@ fast	lda #$80
  * clear the scheduler preemption timer
  */
 ;#define	CLRTIMER()	lda SYSPORT:sta SYSPORT
-#define	CLRTIMER()	lda $e812
+;#define	CLRTIMER()	lda $e812
+#define	CHECKTIMER()	\
+	lda $e813	:/* check timer interrupt bit 7 in CRB */\
+	rol		:/* move interrupt flat into C */\
+	lda $e812	:/* clear timer interrupt */\
 
 /*
  * MMU systems may map task pages into kernel mem to make copying

@@ -83,18 +83,18 @@
 /*
  * check zeropage RAM, jump to he_zero if failure
  */
-#include "kernel/zerotest.a65"
+;#include "kernel/zerotest.a65"
 
 /*
  * check system RAM up to ROMSTART, jump to he_ram if failure
  * returns available RAM in 256 byte blocks in AC
  */
-	.zero
-cnt	.byt 0
-	.text
-#include "kernel/ramtest.a65"
-	cmp #MIN_MEM
-	bcc he_ram
+;	.zero
+;cnt	.byt 0
+;	.text
+;#include "kernel/ramtest.a65"
+;	cmp #MIN_MEM
+;	bcc he_ram
 
 /*
  * originally SYSPORT specific, they have a value for the C64 also...
@@ -107,8 +107,15 @@ cnt	.byt 0
 /* 
  * as we have set the VIC irq in the kernel, we have to clear the
  * VIC interrupt flag. 
+ *
+ * Note, this asl on the VIC interrupt latch register does two things:
+ * 1) it writes a zero into bit 0, which is the rasterline interrupt timer bit,
+ *    thus acknoledging the interrupt
+ * 2) it moves bit 7 into C, so if after CHECKTIMER C=1, then it's a timer interrupt
+ *
  */
-#define	CLRTIMER()	asl $d019
+;#define	CLRTIMER()	asl $d019
+#define	CHECKTIMER()	asl $d019
 
 /*
  * MMU systems may map task pages into kernel mem to make copying 

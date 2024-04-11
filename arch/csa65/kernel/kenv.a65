@@ -296,6 +296,11 @@ system	pha
  * we have changed the memtask call from jsr to jmp, but we need
  * the jsr routine (or an equivalent) for the return from interrupt 
  */
+	; we need to do this JSR here, as the return address for
+	; memtask is copied over from sys to task stack.
+	; If we would _only_ jmp, we could remove this address copy,
+	; _but_ we need a JSR anyway for the return from interrupt...
+	; so, we cannot change that to a pure jmp, at least yet ...
 
 #define	MEMTASK2()	jsr memtask2
 

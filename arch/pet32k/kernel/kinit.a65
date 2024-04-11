@@ -77,12 +77,11 @@
 	  sta $93
 
 /* 
- * C64 specific irq timer init, irq every 20ms 
  * We assume that the reset - or a loader program has disabled all irq 
  */
 
 	  lda #%00000001	; enable PIA1 CB1 screen retrace timer
-	  sta PETPIA1+PIA_CRA
+	  sta PETPIA1+PIA_CRB
 
 
 /*
@@ -114,7 +113,12 @@ ok
  * We have to clear the interrupt timer
  */
 
-#define	CLRTIMER()	lda PETPIA1+PIA_PA
+;#define	CLRTIMER()	lda PETPIA1+PIA_PA
+#define CHECKTIMER()    \
+        ldy PETPIA1+PIA_CRB      :/* check timer interrupt bit 7 in CRB */\
+	rol			 :/* move interrupt flag into C */\
+        lda PETPIA1+PIA_PB       :/* clear timer interrupt */\
+
 
 /*
  * MMU systems may map task pages into kernel mem to make copying 

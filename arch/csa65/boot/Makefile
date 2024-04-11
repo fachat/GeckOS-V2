@@ -9,7 +9,7 @@ XA=xa
 
 EMU=xcsa
 
-all: $(TRG) prom prom_romtest
+all: $(TRG) 
 
 #MANPAGES=../../../*/*/*.1.adoc
 
