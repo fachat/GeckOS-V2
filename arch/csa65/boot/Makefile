@@ -2,6 +2,8 @@
 BASE=../../../dist/osabase.d80
 TRG=geckoscsa.d80
 
+ROM=../csakernel ../csalib ../csarom
+
 XAINPUT=../../../include
 XA=xa
 
@@ -10,12 +12,13 @@ all: $(TRG) prom prom_romtest
 #MANPAGES=../../../*/*/*.1.adoc
 
 prom: rom kernel lib
-	((cat csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel.bin) > prom
+	((cat ../csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat ../csalib.bin ../csakernel.bin) > prom
 
 prom_romtest: rom kernel_romtest lib
-	((cat csarom_romtest.bin /dev/zero | dd bs=1024 count=18 ) && cat csalib.bin csakernel_romtest.bin) > prom_romtest
+	((cat ../csarom_romtest.bin /dev/zero | dd bs=1024 count=18 ) && cat ../csalib.bin ../csakernel_romtest.bin) > prom_romtest
 
-$(TRG): $(BASE) rom rom_romtest kernel kernel_romtest lib boot loader 
+$(TRG): $(BASE) rom kernel lib boot loader 
+	cp $(BASE) $@
 	c1541 -attach $@ -delete place4loader
 	c1541 -attach $@ -write loader -write csarom -write csakernel -write csalib -write boot
 
@@ -28,36 +31,31 @@ loader: loader.bas
 
 rom:
 	(cd ..; ${MAKE} csarom.bin;)
-	ln -sf ../csarom.bin
 	echo "00 00 08" | xxd -r > csarom
-	cat csarom.bin >> csarom
+	cat ../csarom.bin >> csarom
 
 rom_romtest:
 	(cd ..; ${MAKE} csarom_romtest.bin;)
-	ln -sf ../csarom_romtest.bin
 	echo "00 00 10" | xxd -r > csarom_romtest
-	cat csarom_romtest.bin >> csarom_romtest
+	cat ../csarom_romtest.bin >> csarom_romtest
 
 kernel:
 	(cd ..; ${MAKE} csakernel.bin;)
-	ln -sf ../csakernel.bin
 	# prime target with load address 0x6000
 	echo "00 00 60" | xxd -r > csakernel
-	cat csakernel.bin >> csakernel
+	cat ../csakernel.bin >> csakernel
 
 kernel_romtest:
 	(cd ..; ${MAKE} csakernel_romtest.bin;)
-	ln -sf ../csakernel_romtest.bin
 	# prime target with load address 0x6000
 	echo "00 00 60" | xxd -r > csakernel_romtest
-	cat csakernel_romtest.bin >> csakernel_romtest
+	cat ../csakernel_romtest.bin >> csakernel_romtest
 
 lib:
 	(cd ..; ${MAKE} csalib.bin;)
-	ln -sf ../csalib.bin
 	# prime target with load address 0x4000
 	echo "00 00 40" | xxd -r > csalib
-	cat csalib.bin >> csalib
+	cat ../csalib.bin >> csalib
 
 boot: boot.a65
 	${XA} -o boot boot.a65
