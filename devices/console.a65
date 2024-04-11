@@ -143,39 +143,24 @@ p1ok      pla
 p2t	  cmp #DC_TIMER
           bne p2x
 
-#if 1 /*def NOSYSPORT*/	/* allows interruptable devices! */
+#if 1 	/* allow interruptable devices? */
 	  jsr do_irq
 	  sec
 	  rts
 #else
-          bit SYSPORT
-	  bpl noirq	/* not my (50 Hz) irq */
-          lda SYSPORT
-          sta SYSPORT	/* clear 50 Hz interrupt */
-
           lda syscnt	/* this devices has already been interrupted */
 	  bmi wasirq	/* then return */
-          lda SYSPORT
-          and #1
-          beq do_irq	/* CPU irq line active -> no cli */
 
           dec syscnt	/* signal that devices is interrupted */
-          cli
+          ;cli
 
-          lda #0
-x3	  jsr setscr
 	  jsr do_irq
-	  lda screen
-	  clc
-	  adc #1
-          cmp MAX_ASCREEN
-          bcc x3
 
-xe        sei
+          sei
           inc syscnt
 	  lda #E_NOIRQ
           rts
-#endif /* NOSYSPORT */
+#endif 
 	.)
           
 do_irq  .(
