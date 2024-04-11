@@ -62,13 +62,18 @@ DZ2	  .word 0
           clc
           rts
 
-&irqdev   .(
+&timerdev lda #DC_TIMER
+	  .byt $2c
+&irqdev   lda #DC_IRQ
+	  .(
+	  pha
           ldx ANZDEV
           stx cnt
 l1        dec cnt
           bmi dendirq
           ldx cnt
-          lda #DC_IRQ
+	  pla
+	  pha
           ldy freq
           jsr exejmp
 #ifndef NOSYSPORT
@@ -77,7 +82,8 @@ l1        dec cnt
 #else
 	  bcs l1	; irq source removed -> ac=0 -> c=0
 #endif
-dendirq   clc
+dendirq   pla
+	  clc
           rts
           .)
           

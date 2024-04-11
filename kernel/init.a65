@@ -508,11 +508,12 @@ c2	jmp (tmp2)
           lda $104,x
           and #$10
           beq pb1
+
+	; do the BRK handling
 &petbrkjmp
-#ifdef EMUTEST
-	.byt 2
-#endif
           jmp pbrk
+
+	; do the actual IRQ handling
 &petirqjmp
 pb1 
           jsr memsys	; needs to be before accessing any kernel .data/.bss
@@ -530,12 +531,21 @@ taski
 	; here C=1 when it's an interval timer interrupt
 	; if C=0 it's another interrupt
 	; TODO: run separate interrupt paths here
-il       
+       
 #ifndef NO_DEVICE 
+	bcs timer
+
+	; actual IRQ
 	jsr irqdev
+	jmp endirq	; directly back into program
+
+timer	; timer could be interrupted?
+	jsr timerdev
 #endif
 
+	; have we been called from inside kernel?
 	  KERNELIRQ()
+	; yes then immediate return
 	  bne endirq
 
 #ifdef SAVEMEM
@@ -547,26 +557,9 @@ il
 #endif
           jmp irqloop
 
-#ifndef NOSYSPORT
-endirq2  
-#ifdef SAVEMEM
-	  KERNELIRQ()
-	  bne taski2
-	  RESTOREMEM()
-taski2
-#endif
-#endif
-
 endirq
 	  jmp retirq
           .)
 
-#ifndef NOSYSPORT
-&testirq  .(
-          lda SYSPORT
-          and #SYS_IRQ
-          rts
-          .)
-#endif
           .)
 

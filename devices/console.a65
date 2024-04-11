@@ -59,9 +59,7 @@ prg1      ldx #0
 screen    .byt 0	; screen the device is working on 
 actscr    .byt 0	; visible screen
 freq	  .byt 0	; hardware status byte from kernel (1/2 MHz bit)
-#ifndef NOSYSPORT
 syscnt	  .byt 0	; reentrance semaphore when IRQ can be checked
-#endif
 shfl	  .byt 0	; shift flag for typed char
 rspd	  .byt 0	; key repeat speed
 status    .dsb MAX_SCREEN
@@ -104,9 +102,7 @@ foo
           sta outstr,x
           sta getstr,x
 
-#ifndef NOSYSPORT
           sta syscnt
-#endif
           sta actscr
 
           txa
@@ -123,18 +119,11 @@ max_err	  sec
 
           .(
 p2x       jmp p2
+wasirq	  jmp ok
 
-#if 0 /*ndef NOSYSPORT */
-noirq	  lda #E_NOIRQ
-	  .byt $2c
-#endif
 &max_err  lda #E_NODEV
 	  sec
 	  rts
-#if 0 /*ndef NOSYSPORT */
-wasirq	  lda #E_OK
-	  rts
-#endif
 
 &p1 	  cpx #MAX_SCREEN
 	  bcs max_err
@@ -148,46 +137,28 @@ wasirq	  lda #E_OK
           rts
 p1ok      pla
           cmp #DC_IRQ
-          bne p2x
-
-#if 1 /*def NOSYSPORT*/	/* allows interruptable devices! */
-	  jsr do_irq
-	  sec
-	  rts
-#else
-          bit SYSPORT
-	  bpl noirq	/* not my (50 Hz) irq */
-          lda SYSPORT
-          sta SYSPORT	/* clear 50 Hz interrupt */
+          bne p2t
+	  rts		; quick return on actual DC_IRQ
+p2t	  cmp #DC_TIMER
+	  bne p2x
 
           lda syscnt	/* this devices has already been interrupted */
 	  bmi wasirq	/* then return */
-          lda SYSPORT
-          and #1
-          beq do_irq	/* CPU irq line active -> no cli */
 
           dec syscnt	/* signal that devices is interrupted */
-          cli
+          ;cli
 
-          lda #0
-x3	  jsr setscr
 	  jsr do_irq
-	  lda screen
-	  clc
-	  adc #1
-          cmp MAX_ASCREEN
-          bcc x3
 
-xe        sei
+          ;sei
           inc syscnt
 	  lda #E_NOIRQ
           rts
-#endif /* NOSYSPORT */
 	.)
           
 do_irq  .(
 	ldy screen
-	DO_IRQ
+	;DO_IRQ
 	lda status,y
 	and #DC_SW_RX
 	beq nocheck
@@ -400,7 +371,7 @@ ox2       cmp #DC_EXIT
           bne ok
 ox2a      cmp #DC_ST
           bne o3
-ok        lda #E_OK
+&ok       lda #E_OK
           .byt $2c
 devoff    lda #E_DOFF
           .byt $2c

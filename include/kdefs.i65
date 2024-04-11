@@ -202,6 +202,7 @@
 #define   DC_ST     10
 #define   DC_EXIT   11
 #define   DC_BRKKEY 12
+#define   DC_TIMER  13
 
 #define   DC_GNAM   16
 #define   DC_GNUM   17
