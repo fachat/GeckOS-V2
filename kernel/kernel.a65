@@ -58,7 +58,6 @@
 /*									  */
 /*  Architecture options:						  */
 /*     NOMMU        computer without MMU				  */
-/*     NOSYSPORT    computer without SYSPORT ($efe0)			  */
 /*									  */
 /*  Architecture defines - these are defined in arch/x/devices/kinit.a65: */
 /* 	LEDPORT	    Address of the port where an LED can be switched on   */
@@ -84,7 +83,6 @@
 
 #define   CMOSCPU
 #define   NOMMU
-#define   NOSYSPORT  
 #define   NMIDEV
 
 #ifndef ROMSTART

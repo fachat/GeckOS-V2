@@ -32,8 +32,6 @@
 /* These are necessary for C64 kernel **************************************/
 
 #define   NOMMU   
-#define   NOSYSPORT
-#undef 	  CLK2MHZ		/* we only have approx. 1 MHz ... */
 #undef 	  CMOSCPU		/* ... and no CMOS cpu */
 #define	  VIDPAGE 14
 #define	  SHORTLINE		/* prepare for 40 col screen */

@@ -30,7 +30,6 @@
 
 /* These are necessary for Gecko kernel ************************************/
 
-#define	NOSYSPORT
 /*#define	  SYSPORT	$7fe0*/		/* if mapped */
 
 #define	OSA_CPU		"6502"

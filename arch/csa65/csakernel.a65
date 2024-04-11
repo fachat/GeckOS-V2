@@ -52,11 +52,8 @@
 #define	NMIRESET
 
 #undef	CMOSCPU
-#define	NOSYSPORT
 
 #define	RAMEND		$80	/* 32k in bank 0 */
-
-#define	CLK2MHZ
 
 
 /***************************************************************************

@@ -89,7 +89,6 @@ ROMTEST         with ROMTEST the MMU is not loaded, but the contents of
                 not tested (to test a new system ROM)
 CMOSCPU         for (Rockwell) CMOS CPU
 NOMMU           system for a computer without MMU
-NOSYSPORT       system has no SYSPORT (at $efe0)
 NOSINPORT       system has no SYSPORT, but LED is driven, if a board is
                 plugged in
 NOENVIRQ        to build system where tasks cannot have an own irq routine

@@ -76,12 +76,8 @@ l1        dec cnt
 	  pha
           ldy freq
           jsr exejmp
-#ifndef NOSYSPORT
-          jsr testirq
-          beq l1
-#else
-	  bcs l1	; irq source removed -> ac=0 -> c=0
-#endif
+	  jmp l1
+
 dendirq   pla
 	  clc
           rts

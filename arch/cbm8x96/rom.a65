@@ -32,8 +32,6 @@
 /* These are necessary for PET kernel **************************************/
 
 #define   NOMMU   
-#define   NOSYSPORT
-#undef 	  CLK2MHZ		/* we only have approx. 1 MHz ... */
 #undef 	  CMOSCPU		/* ... and no CMOS cpu */
 #define	  VIDPAGE 8
 #undef	  SHORTLINE		/* prepare for 80 col screen */

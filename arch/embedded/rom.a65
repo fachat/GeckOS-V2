@@ -32,7 +32,6 @@
 
 #define   NOMMU   
 #define   NOSYSPORT
-#undef 	  CLK2MHZ		/* we only have approx. 1 MHz ... */
 #undef	  CMOSCPU		/* ... and CMOS cpu ? not if we keep save */
 #define	  RAMTEST
 #define	  NOMIRRORMEM

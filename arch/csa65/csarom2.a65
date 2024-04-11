@@ -46,8 +46,6 @@
 #undef	FSIBM
 #define	USE_LIB6502
 
-#define	CLK2MHZ
-
 #undef	BOOTDRV	"c"
 
 

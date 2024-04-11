@@ -37,7 +37,6 @@
 /* #define   SYSPAGE	$12 */	/* debug option */
 
 #undef	CMOSCPU
-#undef	NOSYSPORT		/* not just in kernel, also devices (console) */
 
 ;#define	RAMEND		$80	/* 32k in bank 0; not just kernel, also basic */
 

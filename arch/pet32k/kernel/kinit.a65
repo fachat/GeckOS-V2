@@ -61,7 +61,9 @@
  * check zeropage RAM, jump to he_zero if failure
  * clears zeropage - at least 2-7 is a _must_!
  */
+#if 0
 #include "kernel/zerotest.a65"
+#endif
 
 /*
  * init memory configuration - set IRQ vector on 32k PETs
