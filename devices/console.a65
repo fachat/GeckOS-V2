@@ -142,6 +142,11 @@ p1ok      pla
 p2t	  cmp #DC_TIMER
 	  bne p2x
 
+#if 1
+	  jsr do_irq
+	  sec
+	  rts
+#else
           lda syscnt	/* this devices has already been interrupted */
 	  bmi wasirq	/* then return */
 
@@ -154,11 +159,12 @@ p2t	  cmp #DC_TIMER
           inc syscnt
 	  lda #E_NOIRQ
           rts
+#endif
 	.)
           
 do_irq  .(
 	ldy screen
-	;DO_IRQ
+	DO_IRQ 
 	lda status,y
 	and #DC_SW_RX
 	beq nocheck

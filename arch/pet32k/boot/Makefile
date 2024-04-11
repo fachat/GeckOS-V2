@@ -48,7 +48,7 @@ emurun: $(TRG)
 #
 
 clean:
-	rm -f loader romld.bin
+	rm -f loader romld.bin 
 	# vice default monitor log output
 	rm -f monitor.log
 
