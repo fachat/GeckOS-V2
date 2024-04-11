@@ -40,6 +40,8 @@
 
 #endif
 
+#define	KERNELIRQ()	lda Syscnt:cmp #1
+
 /***************************************************************************
  * 
  * Hardware initialization

@@ -65,8 +65,6 @@
 /*	  Memory handling 		*/
 
 #undef MAP_ZERO
-#undef MAP_STACK
-#undef MAP_MEM
 #define	NOMMU
 
 #endif

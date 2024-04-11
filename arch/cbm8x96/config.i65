@@ -66,8 +66,6 @@
 
 /* we don't map any of these memory areas */
 #undef 	  MAP_ZERO
-#undef	  MAP_STACK
-#undef	  MAP_MEM
 
 #endif	/* _PETCONFIG_ */
 

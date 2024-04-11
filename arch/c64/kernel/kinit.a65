@@ -40,7 +40,6 @@
  * H_ERROR()		if LEDPORT is not defined, then H_ERROR replaces
  *			the LED toggle routine if needed.
  * CLRTIMER()		clear the system interrupt timer interrupt
- * KERNELIRQ()		returns if an interrupt occured in the kernel
  *			or outside. Is checked by "BNE IRQ_in_Kernel" 
  * SAVEMEM()		save system mem config for interrupt
  * RESTOREMEM()		restore system mem config after interrupt
@@ -129,12 +128,6 @@
 
 #undef	SAVEMEM
 #undef	RESTOREMEM
-
-/* 
- * Check if we have an interrupt in the kernel
- */
-
-#define	KERNELIRQ()	lda Syscnt:cmp #1
 
 /* 
  * no memory management...

@@ -66,8 +66,6 @@
 /* #define	SYSBUF		BLKSIZ+PCBUF*/
 
 #define	MAP_ZERO
-#define	MAP_STACK
-#define	MAP_MEM
 
 #endif
 

@@ -23,9 +23,7 @@ In addition to this some Macros have to be defined, that are used in the kernel 
   	LED_LED		bit of LED bit in LEDPORT address
   	H_ERROR()	if LEDPORT is not defined, then H_ERROR replaces
     	                the LED toggle routine if needed.
-  	CLRTIMER()	clear the system preemption timer interrupt
-  	KERNELIRQ()	returns if an interrupt occured in the kernel
-     	                or outside. Is checked by "BNE IRQ_in_Kernel"
+  	CHECKTIMER()	clear the system preemption timer interrupt and return state in C
   	SAVEMEM()	save system mem config for interrupt
   	RESTOREMEM()	restore system mem config after interrupt
   	STARTMEM()	This is used to alloc/enable memory pages found
