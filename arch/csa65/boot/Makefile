@@ -7,15 +7,16 @@ ROM=../csakernel ../csalib ../csarom
 XAINPUT=../../../include
 XA=xa
 
+EMU=xcsa
+
 all: $(TRG) prom prom_romtest
 
 #MANPAGES=../../../*/*/*.1.adoc
 
-prom: rom kernel lib
-	((cat ../csarom.bin /dev/zero | dd bs=1024 count=18 ) && cat ../csalib.bin ../csakernel.bin) > prom
-
-prom_romtest: rom kernel_romtest lib
-	((cat ../csarom_romtest.bin /dev/zero | dd bs=1024 count=18 ) && cat ../csalib.bin ../csakernel_romtest.bin) > prom_romtest
+#########################################################################
+#
+# disk images and emurun
+#
 
 $(TRG): $(BASE) rom kernel lib boot loader 
 	cp $(BASE) $@
@@ -26,8 +27,13 @@ romtest.d80: $(TRG)
 	cp $(TRG) $@
 	c1541 -attach $@ -delete csarom -write csarom_romtest 
 
-loader: loader.bas
-	petcat -w40 -o loader loader.bas
+emurun: $(TRG)
+	$(EMU) 
+
+#########################################################################
+#
+# rom images
+#
 
 rom:
 	(cd ..; ${MAKE} csarom.bin;)
@@ -57,6 +63,14 @@ lib:
 	echo "00 00 40" | xxd -r > csalib
 	cat ../csalib.bin >> csalib
 
+#########################################################################
+#
+# dependencies
+#
+
+loader: loader.bas
+	petcat -w40 -o loader loader.bas
+
 boot: boot.a65
 	${XA} -o boot boot.a65
 
@@ -64,6 +78,10 @@ inirom: inirom.a65
 	(XAINPUT=${XAINPUT}; export XAINPUT;\
 	${XA} -DOSA2KERNEL=61440 inirom.a65 -o inirom;\
 	if [ $$? -ne 0 ]; then rm -f inirom; fi)
+
+$(BASE):
+	make -C ../../.. all
+
 
 #########################################################################
 #

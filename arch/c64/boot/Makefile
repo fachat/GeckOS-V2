@@ -52,7 +52,7 @@ emuslip: $(TRG)
 #
 
 clean:
-	rm -f boot.bin osa.x64
+	rm -f boot.bin osa.x64 loader
 	rm -f monitor.log
 
 topclean:

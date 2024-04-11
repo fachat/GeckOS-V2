@@ -21,8 +21,12 @@
 
 ****************************************************************************/
 
+/*
+ * note: uses structs and globals from env.a65
+ */
 
 /*        Struct Task Environment Entry          */
+
 
 /* we have three structs now: 
  * TE_* 	for task environment handling - not needed for system without
@@ -53,44 +57,6 @@
  * SEND/RECEIVE by checking for waiting threads.
  */
 
-/****************************************************/
-/* first part of the taskTab */
-#define	TT_STDCIN	0	/* Std console in */
-#define	TT_STDIN	1	/* Stdin */
-#define	TT_STDOUT	2	/* Stdout */
-#define	TT_STDERR	3	/* Stderr */
-#define	TT_PARENT	4	/* parent process ID */
-#define	TT_SIGADR	5	/* addr of signal routine */
-#define	TT_LIBSAVE	7	/* 2 byte stdlib pointer to process info */
-#define	TT_ENV		9	/* environment number */
-#define	TT_NTHREADS	10	/* number of running threads */
-#define	TT_SIGMASK	11	/* mask of allowed signals */
-#define	TT_SIGPEND	12	/* mask of pending signals */
-#define	TT_STATUS	13
-
-/* second part of taskTab */
-#define	TT_PRIORITY	0	/* priority (i.e. irqcnt) of task */
-#define	TT_RETCODE	1	/* return code after kill */
-#define TT_EXECADDR	2	/* address where first thread was started */
-#define	TT_NAME		4	/* name of the forked tasks (note: stored backwards) */
-
-/* entries in both tables are the same size, to use the same index */
-#define	TT_SLEN		14	/* length of task struct */
-
-
-/****************************************************/
-#define	TH_ST		0	/* thread state */
-#define	TH_TASK		1	/* task ID */
-#define	TH_SP		2	/* stack pointer */
-#define	TH_LIBSAVE	3	/* 2 byte saved to make stdlib thread save */
-#define	TH_PAR		5	/* 3 byte kernel parameter space */
-#define	TH_SLEN		8	/* length of thread struct */
-
-/****************************************************/
-#ifndef ST_LEN
-#define	ST_LEN	128		/* stack length */
-#endif
-
           .(
 
 #ifdef MAP_ZERO
@@ -99,25 +65,9 @@
 	.data
 #endif
 
-&actTask  .byt 0
-actThread .byt 0
-
-&Syscnt	  .byt 0
-Irqcnt	  .byt 0
-#ifdef NEED_SLOCK
-lockfl	  .byt 0
-#endif
-
 div       .byt 0
 div2      .byt 0
 div3      .byt 0
-
-	  .data
-
-Xenv	  .dsb ANZXENV
-taskTab	  .dsb MAXNTASKS * TT_SLEN	/* first part of taskTab */
-taskTab2  .dsb MAXNTASKS * TT_SLEN	/* second part of taskTab */
-threadTab .dsb MAXNTHREADS * TH_SLEN
 
 	  .text
 
@@ -203,16 +153,16 @@ l0	tay
 /* memory management related, but architecture specific parts
  */
 
-KENV=*
-#print KENV
-
-#include "kernel/kenv.a65"
-
-#ifdef SPLITKENV
-#print *
-#print SPLITKENV
-	.dsb SPLITKENV-*,$ff
-#endif
+;KENV=*
+;#print KENV
+;
+;#include "kernel/kenv.a65"
+;
+;#ifdef SPLITKENV
+;#print *
+;#print SPLITKENV
+;	.dsb SPLITKENV-*,$ff
+;#endif
 
 /************************************************************************/
 
@@ -1714,7 +1664,7 @@ gnext     inx
           bcs gne
 	  .)
 
-&gsetxy	  txa
+&&gsetxy  txa
 	  and #7
 	  tay
 	  txa

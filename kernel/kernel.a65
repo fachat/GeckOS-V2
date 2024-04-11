@@ -120,11 +120,32 @@ notimp   lda #E_NOTIMP
 	sec
 	rts
 
+ENV=*
+#print ENV
+#include  "kernel/env.a65"
+
+KENV=*
+#print KENV
+#include  "kernel/kenv.a65"
+
+#ifdef SPLITKENV
+#print *
+#print SPLITKENV
+	.dsb SPLITKENV-*, $ff
+#endif
+
 STREAMS=*
 #print STREAMS
 #include  "kernel/streams.a65"
 ;STREAMS_LEN=*-STREAMS
 ;#print STREAMS_LEN
+
+/* needs to be behind env.a65 as it uses SYSBUF */
+FILES=*
+#print FILES
+#include  "kernel/files.a65"
+;FILES_LEN=*-FILES
+;#print FILES_LEN
 
 #ifdef SPLIT1K
 #print *
@@ -144,19 +165,12 @@ TASKS=*
 ;TASKS_LEN=*-TASKS
 ;#print TASKS_LEN
 
-/* needs to be behind tasks.a65 as it uses SYSBUF */
+/* needs to be behind env.a65 as it uses SYSBUF */
 DEVICES=*
 #print DEVICES
 #include  "kernel/devices.a65"
 ;DEVICES_LEN=*-DEVICES
 ;#print DEVICES_LEN
-
-/* needs to be behind tasks.a65 as it uses SYSBUF */
-FILES=*
-#print FILES
-#include  "kernel/files.a65"
-;FILES_LEN=*-FILES
-;#print FILES_LEN
 
 /* WARNING: init.a65 must be in the last 4k, to enable correct MMU mapping */
 INIT=*
