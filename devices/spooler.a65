@@ -44,10 +44,12 @@ spoolprg  cmp #DC_RES
           lda #0
           sta anzinstr
           sta status
-          clc
+okret     clc
           rts
 
 sp1       cmp #DC_IRQ
+	  beq okret
+	  cmp #DC_TIMER
           bne sp2
 
           lda status

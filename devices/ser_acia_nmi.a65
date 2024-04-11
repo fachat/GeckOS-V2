@@ -149,7 +149,7 @@ prg1      ldx #0
           sec
           rts
 prgok     pla
-          cmp #DC_IRQ
+          cmp #DC_TIMER
           beq devirq
           jmp others
 

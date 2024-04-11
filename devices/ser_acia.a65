@@ -89,8 +89,8 @@ prg1      ldx #0
           sec
           rts
 prgok     pla
-          cmp #DC_IRQ
-          beq devirq
+          cmp #DC_IRQ			; if we have an ACIA interrupt?
+          beq devirq			; note: no timer right now needed
           jmp others
 
 devini    
@@ -132,7 +132,7 @@ devirq
           beq nobyt		; no -> nobyt
           ldx outstr
           lda ACIA
-          jsr PUTC
+          jsr PUTC		; NOTE: broken - if stream is full, byte gets lost
           bcs test
 
 nobyt     ldx outstr

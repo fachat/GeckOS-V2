@@ -99,7 +99,9 @@ prg1      ldx #0
           rts
 prgok     pla
           cmp #DC_IRQ
-          beq devirq2
+          beq devirq2		; if we have a UART irq?
+	  cmp #DC_TIMER
+	  beq devirq2		; even if there is no UART irq, we may need to start sending
           jmp others
 devirq2	  jmp devirq
 

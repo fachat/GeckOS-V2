@@ -114,6 +114,8 @@ prg1      ldx #0
 prgok     pla
           cmp #DC_IRQ
           beq devirq1
+          cmp #DC_TIMER
+          beq devirq1
           jmp others
 devirq1	  jmp devirq
 

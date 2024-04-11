@@ -65,10 +65,6 @@ devstart
 
 -sernr = "1"
 
-; moved to first device, to more quickly send data in interrupt
-; clears interrupt when sent
-;#include  "devices/ser_9600.a65" ; fast serial interface by Daniel Dallmann
-
 #ifdef ACIABASE
 #print ACIABASE
 #define	ACIA_IGNORE_DSR
@@ -87,6 +83,10 @@ devstart
 #ifdef UARTBASE
 #include  "devices/ser_uart.a65"	; standard UART 16550A driver
 #endif
+
+; clears interrupt when sent
+#include  "devices/ser_9600.a65" ; fast serial interface by Daniel Dallmann
+
 
           .word $ffff
 

@@ -45,10 +45,12 @@ ni1       sta instr,y
           iny
           cpy #ANZINSTR
           bcc ni1
-          clc
+okret     clc
           rts
 
 sp1       cmp #DC_IRQ
+	  beq okret
+	  cmp #DC_TIMER
           bne sp2
 
           ldy #0
