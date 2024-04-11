@@ -534,7 +534,6 @@ taski
        
 #ifndef NO_DEVICE 
 	bcs timer
-
 	; actual IRQ
 	jsr irqdev
 	jmp endirq	; directly back into program

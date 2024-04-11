@@ -119,7 +119,8 @@ max_err	  sec
 
           .(
 p2x       jmp p2
-wasirq	  jmp ok
+wasirq	  lda #E_OK
+	  rts
 
 &max_err  lda #E_NODEV
 	  sec
@@ -137,34 +138,49 @@ wasirq	  jmp ok
           rts
 p1ok      pla
           cmp #DC_IRQ
-          bne p2t
-	  rts		; quick return on actual DC_IRQ
+	  bne p2t
+	  rts
 p2t	  cmp #DC_TIMER
-	  bne p2x
+          bne p2x
 
-#if 1
+#if 1 /*def NOSYSPORT*/	/* allows interruptable devices! */
 	  jsr do_irq
 	  sec
 	  rts
 #else
+          bit SYSPORT
+	  bpl noirq	/* not my (50 Hz) irq */
+          lda SYSPORT
+          sta SYSPORT	/* clear 50 Hz interrupt */
+
           lda syscnt	/* this devices has already been interrupted */
 	  bmi wasirq	/* then return */
+          lda SYSPORT
+          and #1
+          beq do_irq	/* CPU irq line active -> no cli */
 
           dec syscnt	/* signal that devices is interrupted */
-          ;cli
+          cli
 
+          lda #0
+x3	  jsr setscr
 	  jsr do_irq
+	  lda screen
+	  clc
+	  adc #1
+          cmp MAX_ASCREEN
+          bcc x3
 
-          ;sei
+xe        sei
           inc syscnt
 	  lda #E_NOIRQ
           rts
-#endif
+#endif /* NOSYSPORT */
 	.)
           
 do_irq  .(
 	ldy screen
-	DO_IRQ 
+	DO_IRQ
 	lda status,y
 	and #DC_SW_RX
 	beq nocheck
@@ -377,7 +393,7 @@ ox2       cmp #DC_EXIT
           bne ok
 ox2a      cmp #DC_ST
           bne o3
-&ok       lda #E_OK
+ok        lda #E_OK
           .byt $2c
 devoff    lda #E_DOFF
           .byt $2c

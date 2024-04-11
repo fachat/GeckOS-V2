@@ -115,7 +115,7 @@ ok
 
 ;#define	CLRTIMER()	lda PETPIA1+PIA_PA
 #define CHECKTIMER()    \
-        ldy PETPIA1+PIA_CRB      :/* check timer interrupt bit 7 in CRB */\
+        lda PETPIA1+PIA_CRB      :/* check timer interrupt bit 7 in CRB */\
 	rol			 :/* move interrupt flag into C */\
         lda PETPIA1+PIA_PB       :/* clear timer interrupt */\
 
