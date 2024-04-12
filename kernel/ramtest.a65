@@ -24,11 +24,26 @@
 /*
  * This is a main RAM test routine to be included by kinit, if necessary.
  * if BATMEM is defined, memory is not erased, rather restored
- * to the previous state. The memory is then set to MEMINIVAL.
- * Memory is checked from page 1 up to RAMSIZE.
+ * to the previous state. The memory is otherwise set to MEMINIVAL.
+ * Memory is checked from page RAMSTART up to RAMEND.
  * If NOMIRRORMEM is set, it is assumed that we do not have mirrored
  * memory areas and this is not checked.
  */
+
+/*   Memory options:                                                      */
+/*     RAMSIZE      Size of the RAM                                       */
+/*     MIN_MEM      minimum needed size of RAM to start                   */
+/*     RAMTEST      if set, the RAM from address 2 up is being tested up  */
+/*                  to RAMSIZE. If not set, RAMSIZE is assumed to be the  */
+/*                  real RAM size.                                        */
+/*                  If set, then BATMEM, MEMINIVAL, and NOMIRRORMEM can   */
+/*                  be used                                               */
+/*     BATMEM       during memory test the main memory is not cleared,    */
+/*                  the value is kept intact (for battery buffered RAM)   */
+/*     NOMIRRORMEM  can be set if definitely _no_ mirrored memory is      */
+/*                  there. Should definitely be set when a 32k RAM socket */
+/*                  can be fed with an 8 kByte RAM.                       */
+/*     MEMINIVAL    value to fill RAM with after RAM test (0 if not set)  */
 
 #ifdef RAMTEST
 	  .(

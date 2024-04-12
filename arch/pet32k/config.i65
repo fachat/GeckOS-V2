@@ -29,7 +29,7 @@
 
 /*        StreamData            */
 
-#define   ANZSTRM   16		/* number of streams */
+#define   ANZSTRM   12		/* number of streams */
 
 /*        SemaphoreData         */
 
@@ -39,7 +39,7 @@
 
 /*        DeviceData            */
 
-#define   MAXDEV    16		/* maximum number of devices */
+#define   MAXDEV    8		/* maximum number of devices */
 
 /*        EnvData               */
 
@@ -50,8 +50,8 @@
 #define	  MAXNTASKS	 5
 #define	  STACKSIZE      40   	/* (TH_SLEN * 5) */
 #else
-#define	  MAXNTHREADS    12    	/* (up to 16 is possible, if enough memory) */
-#define	  MAXNTASKS	 12
+#define	  MAXNTHREADS    8    	/* (up to 16 is possible, if enough memory) */
+#define	  MAXNTASKS	 8
 #define	  STACKSIZE      64   	/* (TH_SLEN * 8) */
 #endif
 #define   ANZXENV   5         	/* number of redirectable task IDs */

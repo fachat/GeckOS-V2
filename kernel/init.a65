@@ -58,7 +58,6 @@ pz        .word 0
 #else
 	.data
 #endif
-s1        .byt 0
 s2        .byt 0
 
 	.text
@@ -68,7 +67,7 @@ s2        .byt 0
 /*
  * initializes the hardware memory mapping, the system (preemption) timer
  * and the memory management, if needed. Also the macros 
- * GETFREQ(), LEDPORT, LED_LED, H_ERROR, and CLRTIMER() are defined.
+ * GETFREQ(), H_ERROR, and CHECKTIMER() are defined.
  * It jumps to he_ram if there is not enough RAM available.
  */
 #include "kernel/kinit.a65"
@@ -101,38 +100,33 @@ edev      ldx #HE_DEV
 
 prgstart  /* get system speed */
           GETFREQ()
-          sta s1
-
-#ifdef LEDPORT
-          jsr LEDOFF
-#endif
+          pha
 
 #ifdef NMIDEV
           jsr ininmi
 #endif
 	  jsr initthreads
           jsr inienv
-          ;bcs e4
+
 #ifndef NO_DEVICE
-          lda s1
+          pla
           jsr inidev
-          ;bcs e2
 #endif
+
 #ifndef NO_STREAMS
           jsr inistream 
-          ;bcs e3
 #endif
+
 #ifndef NO_SEM
           jsr inisem
 #endif
+
 #ifndef NO_FSM
           jsr fminit     
 #endif
 
-#ifdef STARTMEM
 	  STARTMEM()
-#endif
-;.byt 2
+
 	  lda #<ROMSTART
           sta pz
           lda #>ROMSTART
@@ -229,36 +223,12 @@ inext
  *
  */
 
-#ifdef LEDPORT
-&LEDOFF   lda LEDPORT
-          ora #LED_LED
-          sta LEDPORT
-          rts
-#endif
 
 &HERROR   .(        ; xr=Fehlernummer -1=1mal aus, -2=2mal aus etc
 #ifdef EMUTEST
 .byt 2
 #endif
-#ifdef LEDPORT
-          LDA LEDPORT:EOR #LED_LED
-          STA LEDPORT
-          LDY #0:TYA
-PRE2      ADC #1:BNE PRE2
-          INY:BNE PRE2
-          LDA LEDPORT:EOR #LED_LED
-          STA LEDPORT
-          LDA #0:TAY
-PRE3      ADC #1:BNE PRE3:INY
-          BNE PRE3:inx:BNE HERROR
-          ldx #15
-          lda #0:tay
-pre5      adc #1:bne pre5
-          iny:bne pre5
-          dex:bne pre5
-#else
 	  H_ERROR
-#endif
 
 #ifdef EMUTEST	/* then save some process info and restart CS/A */
 .(

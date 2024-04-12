@@ -106,8 +106,13 @@ ok
  */
 #define	GETFREQ()	lda #0
 
+/* 
+ * display hardware errors (TODO)
+ */
 #undef	LEDPORT
 #undef	LED_LED
+
+#define	H_ERROR
 
 /* 
  * We have to clear the interrupt timer

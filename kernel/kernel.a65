@@ -24,7 +24,7 @@
 #echo OS/A65 kernel
 
 /**************************************************************************/
-/*                              OS/A 1.4.0                                */
+/*                              OS/A 2.1.x                                */
 /*                                                                        */
 /*   The following kernel options are available:			  */
 /*   General options:							  */
@@ -37,38 +37,11 @@
 /*		    Gives larger stack space per process and more         */
 /*		    processes but is slower				  */
 /*									  */
-/*   Memory options:							  */
-/*     RAMSIZE	    Size of the RAM					  */
-/*     MIN_MEM	    minimum needed size of RAM to start 		  */
-/*     ROMTEST      if ROMTEST is defined, the MMU is not loaded, the RAM */
-/*		    is not tested, and RAMSIZE is assumed to be the real  */
-/*		    RAM size. The memory blocks in MMU registers $8-$f    */
-/*		    are secured with GETBLK				  */
-/*     RAMTEST	    if set, the RAM from address 2 up is being tested up  */
-/*		    to RAMSIZE. If not set, RAMSIZE is assumed to be the  */
-/*		    real RAM size. 					  */
-/*		    If set, then BATMEM, MEMINIVAL, and NOMIRRORMEM can   */
-/*		    be used						  */
-/*     BATMEM       during memory test the main memory is not cleared,    */
-/*		    the value is kept intact (for battery buffered RAM)	  */
-/*     NOMIRRORMEM  can be set if definitely _no_ mirrored memory is      */
-/*		    there. Should definitely be set when a 32k RAM socket */
-/*		    can be fed with an 8 kByte RAM.			  */
-/*     MEMINIVAL    value to fill RAM with after RAM test (0 if not set)  */
-/*									  */
-/*  Architecture options:						  */
-/*     NOMMU        computer without MMU				  */
-/*									  */
 /*  Architecture defines - these are defined in arch/x/devices/kinit.a65: */
-/* 	LEDPORT	    Address of the port where an LED can be switched on   */
-/*	LED_LED	    The bit of the LED in the LEDPORT. 0 means on, 	  */
-/*		    != 0 means off					  */
-/*		    can be set to SYSPORT, SYS_LED for example		  */
-/*	H_ERROR	    If LEDPORT is not defined, then H_ERROR must be 	  */
-/*		    defined as routine to signal hardware errors	  */
-/*	INITIMER    Routine to init kernel timer, i.e. the preemption     */
-/*		    timer						  */
-/*	CLRTIMER    clear the irq line from the kernel timer signal	  */
+/*	H_ERROR	    H_ERROR must be defined as routine to signal hardware */
+/*                  errors						  */
+/*	CHECKTIMER  clear the irq line from the kernel timer signal	  */
+/*                  and return if it was kernel timer interrupt in C      */
 /*									  */
 /**************************************************************************/
 

@@ -35,11 +35,8 @@
  * After that the file must define the following macros:
  *
  * GETFREQ()		returns a=0 for 1Mhz, a=128 for 2MHz
- * LEDPORT		address of LED port to signal hardware failures
- * LED_LED		bit of LED bit in LEDPORT address
- * H_ERROR()		if LEDPORT is not defined, then H_ERROR replaces
- *			the LED toggle routine if needed.
- * CLRTIMER()		clear the system interrupt timer interrupt
+ * H_ERROR()		output hardware errors
+ * CHECKTIMER()		test and clear the system interrupt timer interrupt
  * SAVEMEM()		save system mem config for interrupt
  * RESTOREMEM()		restore system mem config after interrupt
  * STARTMEM()           This is used to alloc/enable memory pages found
@@ -120,8 +117,10 @@ ok
  */
 #define	GETFREQ()	lda #0
 
-#undef	LEDPORT
-#undef	LED_LED
+/*
+ * output hardware errors (TODO)
+ */
+#define	H_ERROR
 
 /* 
  * We have to clear the interrupt timer

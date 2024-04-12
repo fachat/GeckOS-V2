@@ -84,6 +84,16 @@ The lib6502 forkto(3) code loads a relocatable (o65) file from
 disk, allocates main and zeropage memory for it, relocates it to 
 the given addresses and starts it via the kernel.
 
+== BUILD OPTION
+
+There is a *NOMMU* define for various functionalities although this has been mostly eliminated. 
+Most notably, it is not used in the kernel.
+The main use of this define is, in some of the programs, enable
+the *SEM_SENDBUF* handling when this buffer is needed.
+
+This *NOMMU* switch will go away when the shared *SENDBUF* is not
+needed anymore.
+
 == SEE ALSO
 link:sendreceive.7.adoc[sendreceive(7)],
 link:semaphores.7.adoc[semaphores(7)]

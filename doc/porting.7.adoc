@@ -15,14 +15,14 @@ The kernel needs two files in the arch/*/kernel subdirectory, namely kenv.a65 an
 === kinit.a65
 This file must initialize the stack, the memory management and mapping of the system ROM and RAM. Then the system preemption timer must be set up. When including kernel/zerotest.a65 and kernel/ramtest.a65 here all the memory options from above are available. Also the ramtest file returns the size of memory found in 256-byte blocks in a. This value must be passed to the end of the init routine in this file.
 
+The kinit file also sets up the system intervall timer, and defines a macro to check and clear the timer (see *CHECKTIMER* below).
+
 In addition to this some Macros have to be defined, that are used in the kernel later. 
 
 ----
   	GETFREQ()	returns a=0 for 1Mhz, a=128 for 2MHz
-  	LEDPORT		address of LED port to signal hardware failures
-  	LED_LED		bit of LED bit in LEDPORT address
-  	H_ERROR()	if LEDPORT is not defined, then H_ERROR replaces
-    	                the LED toggle routine if needed.
+  	H_ERROR()	H_ERROR defins a routine that outputs the detected hardware error.
+			This could be implemented by flashing screen borders, or an LED.
   	CHECKTIMER()	clear the system preemption timer interrupt and return state in C
   	SAVEMEM()	save system mem config for interrupt
   	RESTOREMEM()	restore system mem config after interrupt
@@ -31,6 +31,26 @@ In addition to this some Macros have to be defined, that are used in the kernel 
    	                by the kernel init. It is called _after_ inimem!
 
 ----
+
+ramtest options if ramtest.a65 or zerotest.a65 are included in the kinit file:
+
+----
+     RAMSTART     page where the ramtest should start (optional)
+     RAMEND	  page (+1) where the ramtest should end
+     MIN_MEM      minimum needed size of RAM to start                   
+     RAMTEST      if set, the RAM from address 2 up is being tested up  
+                  to RAMSIZE. If not set, RAMSIZE is assumed to be the  
+                  real RAM size.                                        
+                  If set, then BATMEM, MEMINIVAL, and NOMIRRORMEM can   
+                  be used                                               
+     BATMEM       during memory test the main memory is not cleared,    
+                  the value is kept intact (for battery buffered RAM)   
+     NOMIRRORMEM  can be set if definitely _no_ mirrored memory is      
+                  there. Should definitely be set when a 32k RAM socket 
+                  can be fed with an 8 kByte RAM.                       
+     MEMINIVAL    value to fill RAM with after RAM test (0 if not set)  
+----
+
 
 === kenv.a65
 The kenv.a65 file is included in another part of the kernel. It is the part that maps the memory according to the environment number for each task. Several routines must be defined here: 
@@ -74,6 +94,42 @@ Also some macros must be defined:
 	GETACTENV()	returns active environment in ac
 ----
 The full descriptions can be found in the C64 kenv file for example. This may look complicated, but it isn't. If you have a simple 6502 system without memory management, just copy (or set a link) to the C64 file. If you have a more complicated system, have a look at the CS/A65 file. 
+
+=== Sizing - config.i65
+
+A number of configuration options determine the internal size of the various tables, and thus how many
+streams, threads, etc can be managed. These are typically defined per architecture, in *config.i65*
+
+----
+#define   ANZSTRM   16          number of streams
+
+#define   ANZSEM    8           number of semaphores - multiple of 8
+#define   SYSSEM    8           multiple of 8, no of system semaphores
+                                   i.e. sems from -SYSSEM to -1 
+#define   MAXDEV    16          maximum number of devices 
+
+#define   MAXENVS   1           maximum number of environments (for kenv.a65 only)
+
+#ifndef STACKCOPY
+#define   MAXNTHREADS    5      (Stackpage-56)/40          
+#define   MAXNTASKS      5
+#define   STACKSIZE      40     (TH_SLEN * 5) 
+#else
+#define   MAXNTHREADS    12     (up to 16 is possible, if enough memory) 
+#define   MAXNTASKS      12
+#define   STACKSIZE      64     (TH_SLEN * 8) 
+#endif
+
+#define   ANZXENV   5           number of redirectable task IDs
+
+#define   IRQCNT    3           default priority for ROM-started tasks
+
+#define   MAXFS     4           maximum number of fileserver tasks
+
+#undef    MAP_ZERO		if set, map various data items into zp for speed
+
+----
+
 
 === Memory setup
 

@@ -100,8 +100,29 @@
  */
 #define	GETFREQ()	lda #0
 
+/*
+ * output hardware errors
+ */
+
 #define	LEDPORT		$d020
 #define	LED_LED		1
+
+#define H_ERROR                         \
+          LDA LEDPORT:EOR #LED_LED      :\
+          STA LEDPORT                   :\
+          LDY #0:TYA                    :\
+PRE2      ADC #1:BNE PRE2               :\
+          INY:BNE PRE2                  :\
+          LDA LEDPORT:EOR #LED_LED      :\
+          STA LEDPORT                   :\
+          LDA #0:TAY                    :\
+PRE3      ADC #1:BNE PRE3:INY           :\
+          BNE PRE3:inx:BNE HERROR       :\
+          ldx #15                       :\
+          lda #0:tay                    :\
+pre5      adc #1:bne pre5               :\
+          iny:bne pre5                  :\
+          dex:bne pre5  
 
 /* 
  * as we have set the VIC irq in the kernel, we have to clear the

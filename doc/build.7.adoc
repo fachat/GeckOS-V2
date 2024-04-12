@@ -80,13 +80,18 @@ STACKCOPY       If defined in non-MMU systems, save stack area somewhere else
                 are available.
 ----
 
+CS/A specific options
+
+----
+ROMTEST         with ROMTEST the MMU is not loaded, but the contents of
+                the MMU registers secured with GETBLK. Also memory is
+                not tested (to test a new system ROM)
+----
+
 kernel options in kernel/kernel.a65:
 
 ----
 ROM             with ROM all options are set globally or somewhere else
-ROMTEST         with ROMTEST the MMU is not loaded, but the contents of
-                the MMU registers secured with GETBLK. Also memory is
-                not tested (to test a new system ROM)
 CMOSCPU         for (Rockwell) CMOS CPU
 NOMMU           system for a computer without MMU
 NOSINPORT       system has no SYSPORT, but LED is driven, if a board is
@@ -97,7 +102,6 @@ BATMEM          main memory is not erased at memory test (for battery buffered
 NOMIRRORMEM     if the memory chip is definitely not mirrored (i.e. no
                 unconnected CPU address lines), one can
                 disable the test for this.
-CLK2MHZ         if NOSYSPORT or NOSINPORT, the CPU clock has to be set here
 NMIDEV          enables NMI routine (without MMU only)
 ----
 
