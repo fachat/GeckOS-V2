@@ -143,7 +143,7 @@ p1ok      pla
 p2t	  cmp #DC_TIMER
           bne p2x
 
-#if 1 	/* allow interruptable devices? */
+#if 0 	/* allow interruptable devices? */
 	  jsr do_irq
 	  sec
 	  rts
@@ -152,8 +152,11 @@ p2t	  cmp #DC_TIMER
 	  bmi wasirq	/* then return */
 
           dec syscnt	/* signal that devices is interrupted */
-          ;cli
+          cli
 
+	nop
+	nop
+	sei
 	  jsr do_irq
 
           sei

@@ -226,7 +226,6 @@ This interface uses a swiftlink compatible module with ACIA, using the NMI routi
 
 Swift link must be configured to $de00, and using the NMI interrupt.
 
-NOTE: this is not yet implemented and subject to change.
 
 ==== UART-based 
 After the disappointing results with the ACIA, replaced it with a 16550 UART, that has a 16 byte input buffer.

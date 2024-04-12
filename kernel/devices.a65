@@ -62,10 +62,13 @@ DZ2	  .word 0
           clc
           rts
 
-&timerdev lda #DC_TIMER
+&timerdev ldx #DC_TIMER
 	  .byt $2c
-&irqdev   lda #DC_IRQ
+&irqdev   ldx #DC_IRQ
 	  .(
+	  lda cnt
+	  pha
+	  txa
 	  pha
           ldx ANZDEV
           stx cnt
@@ -79,6 +82,8 @@ l1        dec cnt
 	  jmp l1
 
 dendirq   pla
+	  pla
+	  sta cnt
 	  clc
           rts
           .)
@@ -235,7 +240,7 @@ par       .byt 0
           lda Syscnt
           pha
           lda #0
-          sta Syscnt     ; Aufrufe von Device wie von Task
+;          sta Syscnt     ; Aufrufe von Device wie von Task
           stx adev       ; Dev-No for memtask
 
 /* TODO: in CS/A65, make non-ROM-started devices work! */
