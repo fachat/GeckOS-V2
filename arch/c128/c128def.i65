@@ -1,9 +1,9 @@
 /****************************************************************************
    
-    OS/A65 Version 2.0.0
+    OS/A65 Version 1.4.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-1997 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,44 +21,14 @@
 
 ****************************************************************************/
 
-
-/***************************************************************************/
-/*			These defines control the ROM build		   */ 
-/*									   */ 
-
-#include "env.i65"
-
-
-#define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
-
-/***************************************************************************
- * 
- * Here comes the ROM content
+/*
+ * These are the C64 specific defines
  */
- 
-#include  "config.i65"
-#include  "kdefs.i65"
-#include  "fdefs.i65"
 
-#include  "kernel.i65"
+#define	C64CIA1	$dc00
+#define	C64CIA2	$dd00
+#define	C64VIC	$d000
 
-          .word *+2		/* load address */
-
-/************* lib6502 code				*/
-
-#echo start of lib6502:
-#print *
-s_lib
-
-#include  "lib6502/lib6502.a65"
-
-#print *-s_lib
-
-#echo LIB6502:
-#print LIB6502
-
-;Memstart  =$1c80
-Memstart  =*
-Zerostart =$68
-
+#include "chips/vicii.i65"
+#include "chips/cia6526.i65"
 

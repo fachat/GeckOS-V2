@@ -21,44 +21,67 @@
 
 ****************************************************************************/
 
-
 /***************************************************************************/
-/*			These defines control the ROM build		   */ 
-/*									   */ 
+/*                      These defines control the ROM build                */
+/*                                                                         */
 
-#include "env.i65"
+#define   ROM
+
+;#define	ROMTEST
+
+/* These are necessary for CS/A65 kernel ***********************************/
+
+#define	OSA_ARCH	"CS/A65"
+
+/* These are changeable ****************************************************/
+
+#define	CSA_CONSOLE	0	/* device to output debug/log messages */
 
 
-#define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
+#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
+				   lib6502 */
+#define	NEED_GETINFO
+#define	NEED_SETINFO
+#define	NEED_UNGETC
+
+
+#define	NMIRESET
+
+#undef	CMOSCPU
+
+#define	RAMEND		$80	/* 32k in bank 0 */
+
 
 /***************************************************************************
  * 
+ * Better not change anything below 
+ */
+
+#ifdef CMOSCPU
+#define	OSA_CPU		"6502"
+#else
+#define	OSA_CPU		"65C02"
+#endif
+
+/***************************************************************************
+ *
  * Here comes the ROM content
  */
- 
+
 #include  "config.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
-
 #include  "kernel.i65"
 
-          .word *+2		/* load address */
+#define	MIN_MEM		$20		/* 8 kbyte */
+	.(
 
-/************* lib6502 code				*/
+/************* Kernel                                   */
+          
+#echo ############ kernel:
 
-#echo start of lib6502:
-#print *
-s_lib
+#include  "kernel/kernel.a65"
 
-#include  "lib6502/lib6502.a65"
-
-#print *-s_lib
-
-#echo LIB6502:
-#print LIB6502
-
-;Memstart  =$1c80
-Memstart  =*
-Zerostart =$68
+	.)
 
 

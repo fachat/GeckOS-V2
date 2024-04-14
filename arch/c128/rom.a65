@@ -1,0 +1,270 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/***************************************************************************/
+/*			These defines control the ROM build		   */ 
+/*									   */ 
+
+#define   ROM
+/* #define	  C64 */
+
+/* These are necessary for C64 kernel **************************************/
+
+#define   NOMMU   
+#undef 	  CMOSCPU		/* ... and no CMOS cpu */
+#define	  VIDPAGE 14
+#define	  SHORTLINE		/* prepare for 40 col screen */
+#define	  RAMTEST
+#define	  NOMIRRORMEM
+
+#define	  OSA_CPU	"6510"
+#define   OSA_ARCH	"C64"
+
+/* These are changeable ****************************************************/
+/* some specific configurations can be created using -D on the xa command line */
+
+/*#undef	ANDRE	*/		/* my personal configuration... :-) */
+
+#define	ROMSTART	$9000	/* where the ROM starts */
+
+#define	RAMSTART	1
+
+#define	RAMEND		>ROMSTART  /* The size of the RAM we allow to be used.
+				   Size in pages (256 bytes). Must be below
+				   ROMSTART */
+
+#define	MIN_MEM		>ROMSTART  /* minimum memory we need in system env. to 
+				   work ok, in pages */
+
+
+				/* if you have a 16550A UART with FIFO */
+#undef	UARTBASE	$d600
+				/* ACIA 6551 */
+#undef	ACIABASE	$d600
+/* #define ACIABASE	$df00 */
+#define ACIABASE	$de00
+
+#define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
+
+#define	MEMINIVAL	0	/* Clear memory to 0 on boot */
+
+#define	STACKCOPY		/* if defined, save stack area in memory
+				   when context switching, otherwise divide
+				   stack area and give each task a part.
+				   It's faster without, but allows more
+				   tasks with */
+
+#define NMIDEV			/* necessary for fast RS232 */
+				
+#undef	 PARALLEL		/* for IEEE488 interface from Commodore 
+				   disables serial bus interface! */
+
+#define	C64_BGND_COL 	0	/* console background color */
+#define	C64_TEXT_COL 	13	/* console text color */
+#define	C64_BORDER_COL 	13	/* console border color */
+
+#define	C64SWITCH	61	/* terminal switch key number (61= C=,
+				   4= F1) */
+
+/*#define	C64NMIRESET*/	/* restore button becomes reset 
+				   (doesn't work with NMIDEV and the
+				   plain C64 9600 baud RS232 interface) */
+
+#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
+				   lib6502 */
+#define	NEED_GETINFO
+#define	NEED_SETINFO
+#undef	NEED_SLOCK
+#define	NEED_RENICE
+
+#define	BOOTDRV		"c"	/* where are the boot files */
+
+#define ROOTPATH        "c:"    /* where lsh chdirs into on boot */
+
+#define	WWWDRV		BOOTDRV
+
+#undef	INETSTART		/* start INET server from init - customization
+				   below */
+
+/***************************************************************************/
+/* 			Better not change anything below                   */
+/*									   */ 
+
+#ifdef ANDRE	/* C64 with parallel IEEE488, UART and booting from CS/A 
+		   computer at IEEE id 10, mapping its fsibm drive there */
+
+#echo "Creating ANDRE's personal configuration"
+
+#define	PARALLEL
+#define	OLDHACK	
+
+#if 0
+#undef 	ACIABASE
+#define	UARTBASE	$d600
+#undef 	UARTXTAL
+#define	UARTXTAL	1
+
+#undef BOOTDRV
+#define	BOOTDRV		"e"
+
+#undef WWWDRV
+#define	WWWDRV		"c"
+
+#endif
+
+#endif	/* ANDRE */
+
+
+/***************************************************************************
+ * 
+ * Here comes the ROM content
+ */
+ 
+#include  "config.i65"
+#include  "kdefs.i65"
+#include  "fdefs.i65"
+#include  "c128def.i65"
+
+#include  "kernel.i65"
+
+#define	STDIOADDR	$d000
+
+          .word $3000		/* load address */
+
+.(
+
+/************* ROM entries 				*/
+
+/************* devices	 				*/
+
+#include  "devices/c128dev.a65"
+
+/************* init process 				*/
+
+#define	INIT_VERBOSE
+#define	INIT_RESTART
+#define	INIT_MERGE
+#define	INIT_LIB6502
+/* #define	INIT_USE_STDLIB */
+#define	INIT_OUTDEV	1
+
+#include  "sysapps/init/init.a65"
+
+/************* fsdev - converts devices into files 	*/
+
+#include  "sysapps/fs/fsdev.a65"
+
+/************* fsiec - IEEE488/IEC bus filesystem 	*/
+
+/* both, the parallel and serial iec bus use the same timer */
+#define	SEM_CIA2TB	SEM_SERIEC
+#undef SEM_PARIEC
+#undef SEM_SERIEC
+
+#define	NOLOOP
+#ifdef PARALLEL
+#define	FSIEC_DEVICE	"devices/piec_c64.a65"
+#else
+#define	FSIEC_DEVICE	"devices/siec_c64.a65"
+#endif
+#include  "sysapps/fs/fsiec.a65"
+#undef	FSIEC_DEVICE
+#print *
+
+
+/************* mon - OS/A 1 old style monitor/shell	*/
+#if 0
+
+#define	MON_SHEXE $c0		/* ROM executable flag */
+#define	MON_MONEXE 0		/* ROM executable flag */
+#define	MON_SHDEV 2		/* start on device 0 = video1 */
+#define	SHORTMON		/* no assembler/disassembler */
+#undef	NOSH
+
+#include  "sysapps/mon/mon.a65"
+
+#endif
+/************* boot slipd from BOOTDRV, wwwdrv c and stderr to video3	*/
+
+#ifdef INETSTART
+
+	/* add autostart of lib6502 program 'slipd' */
+
+	.(
+	.word end_slipd
+	.byt PK_LIB+PK_AUTOEXEC	; is lib6502 program
+	.word 0		; P_ADDR ignored
+	.byt 128	; P_RAM
+	.byt 128	; P_SHARED
+	.byt 0		; P_PRIORITY
+	.byt 0,0	; P_DEV
+			; wwwsrv drive is WWWDRV, login prg is "BOOTDRV:tlogin",
+			; debug output to 4th console
+	.byt BOOTDRV,":slipd", 0 
+	.byt 	"a:video4", 0
+	.byt	WWWDRV, ":", 0 
+	.byt 	BOOTDRV, ":tlogin", 0
+	.byt 	0	; end of parameter list
+end_slipd
+	.)
+
+#endif
+
+/************* boot lsh from BOOTDRV			*/
+
+#ifdef BOOTDRV
+
+	/* add autostart of lib6502 program 'lsh' */
+
+	.(
+	.word end_auto
+	.byt PK_LIB+PK_AUTOEXEC+PK_RESTART	; is lib6502 program
+	.word 0		; P_ADDR ignored
+	.byt 16		; P_RAM
+	.byt 128	; P_SHARED
+	.byt 0		; P_PRIORITY
+	.byt 1,1	; P_DEV
+	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0,0
+end_auto
+	.)
+
+#endif
+
+/************* end of ROM executables			*/
+
+          .word -1
+
+#print *
+
+/************* Constants for lib6502 memory handling	*/
+
+	.bss
+Memstart  =$1800
+;Memstart  =*
+	.text
+Memend	  =ROMSTART
+Zerostart =$70
+
+.)
+
