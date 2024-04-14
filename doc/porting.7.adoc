@@ -12,7 +12,104 @@ Note:: the proto files are not fully maintained, so a maintained architecture sh
 
 The kernel needs two files in the arch/*/kernel subdirectory, namely kenv.a65 and kinit.a65. The kinit.a65 file is included in the kernel startup code, i.e. after setting the interrupt flag and clearing the decimal flag this file is executed, and it is expected that the CPU gets out of this file at the end of it.
 
+== Memory setup
+
+One of the first decisions to be made is the memory setup. 
+
+Plain:: 
+	I systems with up to 64k of memory (potentially after re-mapping some ROM), a plain memory map like in the C64 or the PET32k can be used. 
+
+Partial map:: 
+	Other options are with partially mapped memory, similar to the CBM8296 (which actually has two banks of RAM in the upper 32k only). 
+	In this case system tasks are managed in one mapped bank, with only zeropage, lib6502 and kernel in shared memory. The user programs are loaded into the second bank, that, together with the rest of the not-mapped RAM, makes 
+	up a larger linear address space. The kenv.a65 code must switch between the banks appropriately.
+
+Full map::
+	In the CS/A machine, the memory can be re-mapped in blocks of 4k. This means every task can have its own zeropage and stack. The kenv.a65 code above must handle this as well. 
+	In this port, the memtask code for example re-maps all the MMU entries. During processing of the kernel calls, the kernel may even map task memory into the kernel space.
+
+When porting, it may be good to start with a plain setup to get a grip on porting the devices and filesystems, before venturing into more complicated setups. The C64 implementation is a good start for that (see also build below).
+
+=== Memory map considerations
+
+The system manages multiple so-called *environments*. These are specific memory setups. In a plain mapping, there is only a single environment. In a full map, each task can have its own environment, like in the CS/A machine.
+
+In a partial map system the situation can be more complicated. Typically in such systems there is more than 64k of memory available, that is split into multiple banks of 64k each. The system then has
+system-specific ways of letting the CPU access these banks of memory. 
+
+Two important areas are the start of memory with the zeropage, the stack (and the SENDBUF), and the end of memory with the interrupt vectors. 
+
+==== Top of memory
+
+Interrupt vectors should typically be accessible in all banks / environments, as they are needed by the CPU when an interrupt occurs. The interrupt code then needs to call the kernel - either the kernel (including kernel variables) is available in all environments too, or, in banks other then where the kernel is, a small interrupt stub switches environments to kernel space. Note that the architecture-specific code (see below) needs to provide a 
+*memsys* routine to handle entering the kernel not just from a task but also from an interrupt. Returning from an interrupt then needs to have at least the *memtask* routine available that allows to return to any bank / environment.
+
+==== Bottom of memory
+
+Zeropage, stack, and SENDBUF can / should be separate per environment - but they don't need to be. In the CS/A machine every task has its own zeropage, stack and SENDBUF. In the CBM8x96 port zeropage, stack, and SENDBUF are shared
+by both environments available on this platform.
+
+* Sharing stack is done by the kernel. It reserves a certain amount of stack space for itself. In a *STACKCOPY* system the rest of the stack can be used per task, and is copied over to/from a separate memory are when tasks are switched.
+
+* Sharing zeropage is done by a) assigning a fixed area to kernel and lib6502 program and init rom programs, and then have lib6502 manage the rest of the zeropage itself. To be able to do this, the lib6502 needs variable space that is also shared between the environments, to store the zeropage allocation map.
+	Note that the kernel maintains six locations in the zeropage, 2-7. Addresses 2/3 are a value that are stored per environment. Adresses 4/5 are values stored per task. Adresses 6/7 are stored per thread. The kernel replaces the value of these variables each time a thread / task / environment is switched (note: the environment values need to be taken care of in the architecture specific part).
+	These variables are used by the lib6502 implementation to make sure it is re-entrant. If you don't need lib6502, you can use these addresses yourself.
+
+* Sharing the *SENDBUF* is done by protecting it with the *SEM_SENDBUF* semaphore.
+
+=== Performance considerations
+
+The
+ 
+=== Where to put what
+
+The kernel has code and data sections (but when loading it does not use the actual data in the data section), so for the kernel to work the kernel variables (data section) need to be available. So, for the kernel to work, it has to either run on a specific bank where the kernel variables reside, or has the kernel variables in memory shared across all banks. If the kernel is in a specific bank only, at least the interrupt handler, kernel jump table, and entry/exit routines (*memtask* and *memsys*) need to be available in every bank.
+
+Note:: It is probably easier to have the kernel itself in all banks even if it runs in one bank only, as the kernel code does not (yet) have a specific separation of the code that is needed in all banks and the rest of the kernel code.
+
+The lib6502 itself is re-entrant, and should be available in all environments. So, the lib6502 code can be in shared memory. lib6502 data maintains the zeropage allocation map, as well as the pointers to the environment's specific main memory map (to be used for *malloc* and *free*). 
+The lib6502 variable space (data section) is thus locked to the decision if zeropage and main memory are shared or not. If the zeropage is shared, there is only one main memory map, and other environments cannot use *malloc* and related calls. If the zeropage is not shared, the lib6502's data section also needs to be in non-shared memory, and each environment can have its own dynamically allocated memory map.
+
+Note:: Currently the lib6502 does not provide the ability to separately manage a shared zeropage and different main memory maps, or vice versa. A shared zeropage with different main memory allocation maps may be provided by overriding the location of the zeropage allocation map in lib6502/zmem.a65.
+
+init-image-based (i.e. "rom"-based) programs are started by the kernel and the *init* process, and run directly in the memory where they are mapped during the initial memory setup. As they run
+from fixed memory locations and are not relocated, only a single instance can run at any one time. Also, they need their own variable space space too. Both init-image (ROM) and the variable space for those programs
+need to be accessible only from the specific environment where the init image programs are started. 
+
+=== Example memory maps
+
+* The C64 has a linear 64k address space, with an I/O windows at $dxxx. All of the memory is shared, there is only a single environment. The memory map starts with zeropage, stack, SENDBUF, and then all the variables for the ROM-based programs and lib6502. Then comes the freely allocatable memory, then the init image programs and lib6502. After that there is the I/O window at $dxxx, then screen buffers for multiple consoles, and finally the kernel up to the end of memory. (for more details see link:c64.p.adoc[c64(p)].
+
+* The CS/A machine has an MMU that allows to map any of the 16 4k blocks of CPU address space into any or 256 4k blocks of physical address space on the CS/A bus. There is an I/O window of 2k between $e800 and $efff. The top of memory is shared and contains the lib6502 and the kernel (with a window for the I/O address space). This area is mapped into any environment. Each task gets its own environment, with its own zeropage, stack, and SENDBUF. After this the lib6502 variable space is located, which is environment-specific. After that any application memory can be *malloc'd*. At the start each task (in its own environment) only gets mapped a total of 4k - the bottom block - of memory. Using the *SBRK* kernel call the lib6502 extends this memory as needed. The kernel has its own 4k memory block at the bottom that gets mapped in when a task enters the kernel (by call or by interrupt). 
+
+* The CBM8x92 has two environments, as it can replace the upper half of main memory with two banks of RAM. Also, the I/O window is only one page at $e8xx. The bottom half of memory is shared between the environments, including zeropage, stack, and SENDBUF. The memory starts with the shared zeropage, stack, and SENDBUF at the bottom, followed by the lib6502 code and (shared) lib6502 variables. In the first environment then comes the allocatable memory up to the kernel at the end of the kernel (the I/O window is mapped out of the way in this environment to maximise the available program memory). The other environment is unused from lib6502 space to mid of memory, where the second memory bank in the machine begins. In this space is the video window, the init-image program and their data, as well as kernel data. When entering the kernel from a userspace program (the first environment), the kernel executes *memsys* first that switches to the second environment where the kernel variable space is located, and *memtask* switches back if the program is running in the first environment. For more details see link:cbm8x96.p.adoc[cbm8x96(p)].
+
+* The C128 has two memory banks of 64k each, with potentially shared memory on the top and/or the bottom of each bank. In addition, the zeropage and stack can be re-mapped to other locations. This allows for two environments that are not shared. (As planned) The C128 has shared memory at the top of memory that contains the kernel and lib6502 code. The init image programs and their data will be mapped into a single bank only. The kernel data will be mapped into shared memory as well. The reason for this is that it is very difficult to copy data from one bank to another if not going through a shared memory area. Also, the infrastructure, to copy task data to kernel or back is already there for when the task memory is mapped into directly accessible space in the kernel memory space / environment. The lib6502 data is specific to each environment and will be in non-shared memory.
+
+== Porting Devices
+
+If the system that is ported to has a (linearly) memory mapped screen buffer, the devices/console.a65 console code can be used as starter. It includes architecture-specific code to map from ASCII (the system code table) to a
+system-specific table if needed, and other functions. You can use arch/pet32k/con_pet.a65 as an example. This again includes other files e.g. for keyboard mapping and the blinking cursor.
+
+If there is another type of mapping (e.g. Apple-II with non-linear screen buffer space), or even non-mapped video buffer, a new device needs to be written.
+
+Devices are built into a single block (that comes from the 4k block mapping in GeckOS original CS/A implementation) that is initialized during kernel init. The architecture-specific devices are defined in arch/c64devices/c64dev.a65 or arch/pet32k/devices.a65 for example. 
+
+=== Porting Filesystems
+
+The currently supported filesystems support Commodore IEC/IEEE devices, PC floppy disks with FAT12 format (using a WD1771 controller), and the devices filesystem.
+
+=== Devices
+
+The devices filesystem uses the the kernel *DEVCMD* interface to show device names and handle them. Note: that includes the mapping between device names and numbers. So, this should be relatively generic. On the other hand, if *FSDEV_NOROM* is not set, it also shows the content of the init ROM and allows to access its content. 
+
+Note:: The init ROM access will probably be replaced at some point, so it is recommended to just use *FSDEV_NOROM*.
+
+
+== Files and options
+
 === kinit.a65
+
 This file must initialize the stack, the memory management and mapping of the system ROM and RAM. Then the system preemption timer must be set up. When including kernel/zerotest.a65 and kernel/ramtest.a65 here all the memory options from above are available. Also the ramtest file returns the size of memory found in 256-byte blocks in a. This value must be passed to the end of the init routine in this file.
 
 The kinit file also sets up the system intervall timer, and defines a macro to check and clear the timer (see *CHECKTIMER* below).
@@ -131,50 +228,13 @@ streams, threads, etc can be managed. These are typically defined per architectu
 ----
 
 
-=== Memory setup
-
-One of the first decisions to be made is the memory setup. 
-
-Plain:: 
-	I systems with up to 64k of memory (potentially after re-mapping some ROM), a plain memory map like in the C64 or the PET32k can be used. 
-
-Partial map:: 
-	Other options are with partially mapped memory, similar to the CBM8296 (which actually has two banks of RAM in the upper 32k only). 
-	In this case system tasks are managed in one mapped bank, with only zeropage, lib6502 and kernel in shared memory. The user programs are loaded into the second bank, that, together with the rest of the not-mapped RAM, makes 
-	up a larger linear address space. The kenv.a65 code must switch between the banks appropriately.
-
-Full map::
-	In the CS/A machine, the memory can be re-mapped in blocks of 4k. This means every task can have its own zeropage and stack. The kenv.a65 code above must handle this as well. 
-	In this port, the memtask code for example re-maps all the MMU entries. During processing of the kernel calls, the kernel may even map task memory into the kernel space.
-
-When porting, it may be good to start with a plain setup to get a grip on porting the devices and filesystems, before venturing into more complicated setups. As mentioned above, the C64 implementation is a good start for that (see also build below).
-
-=== Porting Devices
-
-If the system that is ported to has a (linearly) memory mapped screen buffer, the devices/console.a65 console code can be used as starter. It includes architecture-specific code to map from ASCII (the system code table) to a
-system-specific table if needed, and other functions. You can use arch/pet32k/con_pet.a65 as an example. This again includes other files e.g. for keyboard mapping and the blinking cursor.
-
-If there is another type of mapping (e.g. Apple-II with non-linear screen buffer space), or even non-mapped video buffer, a new device needs to be written.
-
-Devices are built into a single block (that comes from the 4k block mapping in GeckOS original CS/A implementation) that is initialized during kernel init. The architecture-specific devices are defined in arch/c64devices/c64dev.a65 or arch/pet32k/devices.a65 for example. 
-
-=== Porting Filesystems
-
-The currently supported filesystems support Commodore IEC/IEEE devices, PC floppy disks with FAT12 format (using a WD1771 controller), and the devices filesystem.
-
-==== Devices
-
-The devices filesystem uses the the kernel *DEVCMD* interface to show device names and handle them. Note: that includes the mapping between device names and numbers. So, this should be relatively generic. On the other hand, if *FSDEV_NOROM* is not set, it also shows the content of the init ROM and allows to access its content. 
-
-Note:: The init ROM access will probably be replaced at some point, so it is recommended to just use *FSDEV_NOROM*.
-
-==== Storage
+=== Storage
 
 Depending on the target architecture, the filesystem code needs to be re-writting, if none of the existing code can be re-used.
 
 To implement a new filesystem driver, the API described in include/fdefs.a65 needs to be implemented. Existing filesystems could be used as reference, but note that the codebase is very old and messy.
 
-=== Setting up the build process
+== Setting up the build process
 
 Three main components need to be loaded into the target system:
 

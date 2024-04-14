@@ -123,7 +123,8 @@ lsh::
 
 	$0200		PCBUF communication buffer
 
-	$0300 		data/bss for ROM-based code
+	$0300 		data/bss for ROM-based code 
+			(incl. kernel and lib6502)
 	$1680		start of malloc'able free memory
 	$83ff 		end of free memory
 
@@ -134,6 +135,7 @@ lsh::
 			mon
 			(slipd)
 			lsh
+			lib6502 code
 	$d000		I/O area
 	$e000		screen buffer 1
 	$e400		screen buffer 2

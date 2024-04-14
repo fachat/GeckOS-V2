@@ -1,0 +1,96 @@
+= C128(P)
+:doctype: manpage
+
+== NAME
+GeckOS C128 Notes
+
+== DESCRIPTION
+
+The Commodore 128 (C128) has two banks of 64k memory. 
+
+The C128 port is based in parts on the C64 port (mostly devices), and the CS/A port due to the ability to 
+handle multiple environments.
+
+== Memory Map
+
+The C128 uses shared memory on the top of memory, containing the kernel code, the kernel variables, and
+the lib6502 code. 
+
+
+
+----
+Addr     RAM 0        RAM 1
+$ffff  ----------------------
+$ff00	configur     <---
+$ff00   -------      <---
+        kernel       <--- 
+$e000   -------      <--- 
+        I/O          <---
+$d000   -------      <---
+        kernel vars  <---
+        lib6502      <---
+$c000   -------      -------
+           |   	     init      
+                     img
+        lib650       programs
+        application  and
+        memory       vars
+$a800                -------
+           |           |
+                       
+           |         lilb6502
+                     app mem
+           |      
+
+           |           |
+
+           |           |
+
+$1c80   -------      -------
+        lib6502      lib6502
+        vars (e0)    vars (1)
+$0300   -------      -------
+        PCBUF(0)     PCBUF(1)
+$0200   -------      -------
+        Stack(0)     Stack(1)
+$0100   -------      -------
+        Zerop.(0)    Zerop.(1)
+$0000  ----------------------
+----
+
+== BUILDING
+Building the images is simple. Just go to the arch/c128/boot
+directory and type "make". This should build all files.
+"make geckos128.d64" should make a d64 VC1541 disk image with all necessary files.
+You have to have my new XA version in the path, though.
+
+To customize the ROM, change edit rom.a65 in arch/c128. You can gain some
+memory when you remove the shell/monitor from the ROM image.
+(You could replace it with the lib6502 monitor "mon" to be loaded like
+"lsh".)
+When running "make" then the command "file65" should print the addresses
+used for the different segments. They must not overlap. 
+
+To move the lib6502 RAM area, edit the values for +Memstart, Memend+
+and +Zerostart+ at the end of rom.a65.
+To move the segments, edit the Makefile and change the addresses for the 
+segments in the XA calls. The text segment address must be two below
+the actual start as it also counts the two byte starting address used
+for loading. In addition you have to edit the value for the definition
+of ROMSTART in rom.a65.
+
+=== BOOT
+Put the files "loader", "lsh", "rom.bin", "lib.bin" and "kern.bin" on a disk accessible by the 
+PET 8x96. load "loader" into BASIC memory and start it (probably edit 
+it for the right load device number). This boots OS/A65. 
+
+== SEE ALSO
+link:c64.p.adoc[PET32K(P)]
+link:csa65.p.adoc[PET32K(P)]
+
+== AUTHOR
+Written by André Fachat
+
+== REPORTING BUGS
+Please report bugs at https://github.com/fachat/GeckOS-V2/issues
+
