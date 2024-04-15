@@ -42,8 +42,6 @@
 
 #include  "kernel.i65"
 
-          .word *+2		/* load address */
-
 /************* lib6502 code				*/
 
 #echo start of lib6502:
@@ -57,8 +55,5 @@ s_lib
 #echo LIB6502:
 #print LIB6502
 
-;Memstart  =$1c80
-Memstart  =*
-Zerostart =$68
 
 

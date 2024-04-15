@@ -69,6 +69,7 @@
  */
 
 #include  "config.i65"
+#include  "c128def.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"

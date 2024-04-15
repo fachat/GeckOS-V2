@@ -27,13 +27,13 @@
 /*									   */ 
 
 #define   ROM
-/* #define	  C64 */
+/* #define	  C128 */
 
-/* These are necessary for C64 kernel **************************************/
+/* These are necessary for C128 kernel **************************************/
 
 #define   NOMMU   
 #undef 	  CMOSCPU		/* ... and no CMOS cpu */
-#define	  VIDPAGE 14
+#define	  VIDPAGE 8
 #define	  SHORTLINE		/* prepare for 40 col screen */
 #define	  RAMTEST
 #define	  NOMIRRORMEM
@@ -46,13 +46,13 @@
 
 /*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
-#define	ROMSTART	$9000	/* where the ROM starts */
-
-#define	RAMSTART	1
-
-#define	RAMEND		>ROMSTART  /* The size of the RAM we allow to be used.
-				   Size in pages (256 bytes). Must be below
-				   ROMSTART */
+;#define	ROMSTART	$9000	/* where the ROM starts */
+;
+;#define	RAMSTART	1
+;
+;#define	RAMEND		>ROMSTART  /* The size of the RAM we allow to be used.
+;				   Size in pages (256 bytes). Must be below
+;				   ROMSTART */
 
 #define	MIN_MEM		>ROMSTART  /* minimum memory we need in system env. to 
 				   work ok, in pages */
@@ -149,8 +149,6 @@
 #include  "kernel.i65"
 
 #define	STDIOADDR	$d000
-
-          .word $3000		/* load address */
 
 .(
 
@@ -258,13 +256,6 @@ end_auto
 #print *
 
 /************* Constants for lib6502 memory handling	*/
-
-	.bss
-Memstart  =$1800
-;Memstart  =*
-	.text
-Memend	  =ROMSTART
-Zerostart =$70
 
 .)
 

@@ -1,0 +1,152 @@
+
+START	=$3000
+
+ZP	=$fb
+LFNL	=1	; LIB
+LFNR	=2	; ROM
+LFNK	=3	; KERNEL
+ST	=$96
+
+MMU	=$d500
+MMUFF	=$ff00
+
+PCRA	=1
+PCRB	=2
+PCRC	=3
+PCRD	=4
+MCR	=5
+RCR	=6
+P0L	=7
+P0H	=8
+P1L	=9
+P1H	=10
+VR	=11
+
+MAPSYS	=%00111110	; all RAM except I/O
+MAPPET	=%00000000	; std BASIC
+CTRL	=MMU
+
+OPEN	=$ffc0
+SETLFS	=$ffba
+SETNAM	=$ffbd
+CHKIN	=$ffc6
+CHRIN	=$ffcf
+CLOSE	=$f2e0		; $ffc3 - calls into BASIC.... 
+CLRCH	=$ffcc
+
+	.word start
+	*= START
+
+start	jsr loadlib
+inc $d020
+	jsr loadrom
+inc $d020
+	jsr loadkern	; leaves load start address in startp
+inc $d020
+
+	sei
+
+	; https://www.oxyron.de/html/registers_mmu.html
+
+	lda #%00111110	; all RAM bank 0, but chargen which is I/O
+	sta MMU+PCRA	; config A
+
+	lda #%00001011	; video bank 0, shared hi (not low), 16k shared
+	sta MMU+RCR
+
+	sta MMUFF+PCRA	; and set env 0 config
+
+	jmp ($fffc)	; RESET
+
+
+	;------------------
+
+libname	.asc "LIB.BIN"
+libnlen	=*-libname
+
+kernname .asc "KERN.BIN"
+kernnlen =*-kernname
+
+romname	.asc "ROM.BIN"
+romnlen	=*-romname
+
+
+loadlib	lda #libnlen
+	ldx #<libname
+	ldy #>libname
+	jmp do_load
+
+loadrom	lda #romnlen
+	ldx #<romname
+	ldy #>romname
+	jmp do_load
+
+loadkern lda #kernnlen
+	ldx #<kernname
+	ldy #>kernname
+	;jsr do_load
+
+do_load	jsr SETNAM
+	lda #1		; LFN
+	ldx $d4		; current device (from where loader has been loaded)
+	ldy #0		; SEC = load
+	jsr SETLFS
+
+	jsr OPEN	
+
+	;------------------
+	; load and store in 8x96 extra memory banks
+
+load	ldx #1		; LFN
+	jsr CHKIN
+
+	lda #0
+	sta ST
+
+	jsr CHRIN
+	sta ZP
+	sta startp
+	jsr CHRIN
+	sta ZP+1
+	sta startp+1
+
+l1	jsr CHRIN
+	ldy #0
+
+	php
+	sei
+	ldx #MAPSYS
+	stx CTRL
+
+	sta (ZP),y
+
+	ldx #MAPPET
+	stx CTRL
+	plp
+
+	lda ST
+	bne endload
+
+incl	inc ZP
+	bne checkmmu
+	inc ZP+1
+checkmmu
+	ldx ZP+1
+	inx
+	bne l1	; high address was not $ff
+	lda ZP
+	cmp #$05
+	bcs l1	; skip first 5 bytes only
+
+	; $ff0x after increase
+	jsr CHRIN	; skip a byte
+	jmp incl
+
+endload	
+	jsr CLRCH
+	lda #1		; LFN
+	jmp CLOSE
+
+	; -----------------------------
+startp	.word 0
+

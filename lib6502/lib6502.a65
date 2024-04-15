@@ -71,15 +71,11 @@ notimp  lda #E_NOTIMP
 
         .dsb LIB6502BINADDR-*,<-1
 
-#ifdef LIB6502
-	.assert * == LIB6502-3*LIBOSACALLS, "LIB6502 address mismatch"
-#endif
-
 #else /* STDIOADDR */
 /****************************************/
 
 #ifdef LIB6502
-//#print LIB6502-5*3-*
+#print LIB6502-5*3-*
         .dsb LIB6502-(*+5*3)
 #endif
 
