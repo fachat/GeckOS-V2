@@ -58,7 +58,6 @@ start
 err 	rts
 
 loaded
-inc $d020
 	lda #"*"
 	jsr BSOUT
 
