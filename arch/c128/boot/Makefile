@@ -21,6 +21,9 @@ romld.bin: romld.a65
 loader: loader.bas romld.bin
 	petcat -w70 -o loader loader.bas
 
+../kern.o65 ../lib.o65 ../rom.o65:
+	make -C .. all
+
 #
 # Note: this loads the binaries directly at their desired locations
 # 	which means:
@@ -29,13 +32,15 @@ loader: loader.bas romld.bin
 #	b) the romld loader must copy that directly into RAM under ROM
 #
 $(ROM): ../kern.o65 ../lib.o65 ../rom.o65
-	make -C .. all
 	# add kernel load address
 	file65 ../kern.o65 | grep text | tr -s " " | cut -d " " -f 5 | sed -e 's/\$$//g' -e 's/\(..\)\(..\)/\2 \1/' | xxd -r -p > kern.bin
 	$(RELOC) -xt -o tmp ../kern.o65
 	cat tmp >> kern.bin
 	# add lib load address
-	file65 ../lib.o65 | grep text | tr -s " " | cut -d " " -f 5 | sed -e 's/\$$//g' -e 's/\(..\)\(..\)/\2 \1/' | xxd -r -p > lib.bin
+	# note we're using 4000 instead of the real 0300, as this would overwrite important c128 vectors
+	# so the romld loader needs to move the binary one block down
+	#file65 ../lib.o65 | grep text | tr -s " " | cut -d " " -f 5 | sed -e 's/\$$//g' -e 's/\(..\)\(..\)/\2 \1/' | xxd -r -p > lib.bin
+	echo "00 40" | xxd -r -p > lib.bin
 	$(RELOC) -xt -o tmp ../lib.o65
 	cat tmp >> lib.bin
 	# add rom load address

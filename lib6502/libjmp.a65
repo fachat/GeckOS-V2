@@ -168,11 +168,12 @@
 #define	getenvp		LIB6502+129
 #define	getos		LIB6502+132
 
-#endif
+#endif	/* _LIB6502_H_ */
 
 /**************************************************************************/
 
 #ifdef LIB6502BIN
+
 
 ; no more code goes here, as start and end addresses are computed from number of calls
 

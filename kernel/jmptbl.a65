@@ -27,9 +27,6 @@
 
 #echo "kernel jump table"
 
-#define	OSA_VERSION	"2.0"
-#define	OSA_NAME	"GeckOS/A65"
-
 #define		RESET     OSA2KERNEL
 
 #define		ENMEM     OSA2KERNEL+$3

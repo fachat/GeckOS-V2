@@ -32,14 +32,23 @@
 	.(
 
 #include "kernel.i65"
-#include "lib6502.i65"
 #include "fdefs.i65"
+#include "version.i65"
 
 #echo "Start" 
 #print *
 
+#ifdef LIB6502START
+
+#define	LIB6502 LIB6502START
 ; make sure the actual jump table is assembled
 #define	LIB6502BIN
+
+#endif /* LIB6502START */
+
+/* note: this is actually the very same file as include/lib6502.i65 */
+/* depending on whether LIB6502BIN is defined it generates the actual jump table or not */
+#include "lib6502/libjmp.a65"
 
 #include "lib6502/libdef.a65"
 #include "lib6502/libglob.a65"
@@ -58,6 +67,13 @@ notimp  lda #E_NOTIMP
         rts
 
 
+#ifndef LIB6502START
+
+/* make sure jump table is generated during the next include */
+#ifndef LIB6502BIN
+#define	LIB6502BIN
+#endif
+
 /****************************************
  * if STDIOADDR is defined, put jump table
  * at the just before STDIOADDR
@@ -75,14 +91,17 @@ notimp  lda #E_NOTIMP
 /****************************************/
 
 #ifdef LIB6502
-#print LIB6502-5*3-*
-        .dsb LIB6502-(*+5*3)
+
+libtarget=LIB6502-LIBOSACALLS*3
+        .dsb libtarget-*
 #endif
 
 #endif /* STDIOADDR */
 /****************************************/
 
 #include "lib6502/libjmp.a65"
+
+#endif /* not LIB6502START */
 
 #undef	LIB6502BIN
 

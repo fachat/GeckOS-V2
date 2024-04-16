@@ -61,15 +61,23 @@
  */
 	  lda #7
 	  sta 0		/* CPU data direction register */
-	  lda #5
+	  lda #7
 	  sta 1		/* Memory configuration */
+
+/* 
+ * disable any interrupt source
+ */
+	lda #0
+	sta C64VIC+VIC_IMR
+
+	lda #%01111111
+	sta C64CIA1+CIA_ICR	; disable system timer irq
+	sta C64CIA2+CIA_ICR	; disable nmi interrupts (if any)
 
 /* 
  * C64 specific irq timer init, irq every screen
  */
-	lda #%01111111
-	sta C64CIA1+CIA_ICR	; disable system timer irq
-
+	; lda #%01111111
 	and $d011		; clear most significant bit in VIC raster
 	sta $d011
 	

@@ -2,10 +2,8 @@
 START	=$3000
 
 ZP	=$fb
-LFNL	=1	; LIB
-LFNR	=2	; ROM
-LFNK	=3	; KERNEL
-ST	=$96
+FA	=$ba	; current device number
+ST	=$90	; I/O status
 
 MMU	=$d500
 MMUFF	=$ff00
@@ -26,35 +24,62 @@ MAPSYS	=%00111110	; all RAM except I/O
 MAPPET	=%00000000	; std BASIC
 CTRL	=MMU
 
+SETBNK	=$ff68		; specific c128
+BANK	=0		; BASIC bank definition - RAM - to read filename
+
 OPEN	=$ffc0
 SETLFS	=$ffba
 SETNAM	=$ffbd
 CHKIN	=$ffc6
 CHRIN	=$ffcf
-CLOSE	=$f2e0		; $ffc3 - calls into BASIC.... 
+CLOSE	=$ffc3		; $ffc3 - calls into BASIC.... 
 CLRCH	=$ffcc
+BSOUT	=$ffde
 
 	.word start
 	*= START
+start
+	lda #"*"
+	jsr BSOUT
 
-start	jsr loadlib
-inc $d020
 	jsr loadrom
-inc $d020
+	bcs err
+	lda #"*"
+	jsr BSOUT
+
 	jsr loadkern	; leaves load start address in startp
+	bcs err
+	lda #"*"
+	jsr BSOUT
+
+	jsr loadlib
+	bcc loaded
+
+err 	rts
+
+loaded
 inc $d020
+	lda #"*"
+	jsr BSOUT
 
 	sei
 
-	; https://www.oxyron.de/html/registers_mmu.html
+	jsr reloc_lib
 
 	lda #%00111110	; all RAM bank 0, but chargen which is I/O
 	sta MMU+PCRA	; config A
+	sta MMU
+
+	jsr setup_crom
+
+	; https://www.oxyron.de/html/registers_mmu.html
+
 
 	lda #%00001011	; video bank 0, shared hi (not low), 16k shared
 	sta MMU+RCR
 
 	sta MMUFF+PCRA	; and set env 0 config
+
 
 	jmp ($fffc)	; RESET
 
@@ -88,16 +113,30 @@ loadkern lda #kernnlen
 
 do_load	jsr SETNAM
 	lda #1		; LFN
-	ldx $d4		; current device (from where loader has been loaded)
+	ldx FA		; current device (from where loader has been loaded)
 	ldy #0		; SEC = load
 	jsr SETLFS
 
+	lda #BANK
+	ldx #BANK	; for filename
+	jsr SETBNK
+
+	lda #0
+	sta ST
+
 	jsr OPEN	
+
+	lda ST
+	beq load
+sta $0401
+	sec
+	rts
 
 	;------------------
 	; load and store in 8x96 extra memory banks
 
-load	ldx #1		; LFN
+load	.(
+	ldx #1		; LFN
 	jsr CHKIN
 
 	lda #0
@@ -142,10 +181,154 @@ checkmmu
 	jsr CHRIN	; skip a byte
 	jmp incl
 
-endload	
+endload	lda ST
+	pha
+
 	jsr CLRCH
 	lda #1		; LFN
-	jmp CLOSE
+	jsr CLOSE
+	
+	pla
+	and #$ff-$40
+sta $0400
+	;cmp #1
+	clc
+	rts
+	.)
+
+	; -----------------------------
+        ; copy the lib image into its place
+reloc_lib .(
+ 	ldx #MAPSYS
+	stx CTRL
+
+        ldx #$20	; number of pages
+
+        lda #0
+        sta $fb         ; lo address bytes
+        sta $fd
+
+	lda #$40
+        sta $fe         ; source address $0400
+	lda #3
+        sta $fc		; target address $0300
+
+        ldy #0
+loop                    ; copy xr pages of 256 byte from fd/fe upwards
+                        ; to fb/fc
+l1      lda ($fd),y
+        sta ($fb),y
+        iny
+        bne l1
+l2
+	inc $fe
+	inc $fc
+        dex
+        bne loop
+
+	ldx #MAPPET
+	stx CTRL
+
+	rts
+	.)
+
+	; -----------------------------
+	; setup character set
+
+setup_crom .(
+	lda #%00001111	; RAM bank 0, $c-$f ROM, chargen
+	sta MMU
+
+        lda 0
+        ora #7
+        sta 0           ; cpu ddr
+
+        ; first copy the charom from $d000, under the i/o
+
+        lda 1
+        and #%11111011  ; disable I/O, read Charom, write RAM
+        sta 1
+
+        ldy #0
+cl0a    lda #$ff
+        sta $d000,y
+        lda $d900,y
+        sta $d100,y
+        lda $da00,y
+        sta $d200,y
+        iny
+        bne cl0a
+
+cl1a    lda $d800,y
+        sta $d000+64*8,y
+        iny
+        cpy #8
+        bcc cl1a
+
+cl1     lda $d800,y
+        sta $d000+(97-1)*8,y
+        iny
+        cpy #27*8
+        bcc cl1
+
+cl2     lda $d800,y
+        sta $d000+(91-27)*8,y
+        iny
+        bne cl2
+
+        lda 1
+        and #%11111000  ; disable even the charom, only RAM
+        sta 1
+
+        ; ldy #0
+cl3     lda c92,y
+        sta $d000+92*8,y
+        lda c95,y
+        sta $d000+95*8,y
+        lda c96,y
+        sta $d000+96*8,y
+        iny
+        cpy #8
+        bcc cl3
+
+        ldy #0
+cl4     lda c123,y
+        sta $d000+123*8,y
+        iny
+        cpy #5*8
+        bcc cl4
+
+        ldy #0
+cl5     lda $d000,y
+        eor #$ff
+        sta $d400,y
+        iny
+        bne cl5
+        inc cl5+2
+        inc cl5+7
+        lda cl5+7
+        cmp #$d8
+        bcc cl5
+
+        lda 1
+        ora #%00000100  ; enable I/O
+        sta 1
+
+	sta MMUFF+PCRA	; and set env 0 config (re-enable I/O)
+
+	rts
+
+        ; character differences to C64 charom
+c92     .byt $00, $c0, $60, $30, $18, $0c, $06, $00 
+c95     .byt $00, $00, $00, $00, $00, $00, $ff, $00
+c96     .byt $06, $0c, $18, $00, $00, $00, $00, $00
+c123    .byt $0e, $18, $18, $30, $18, $18, $0e, $00
+        .byt $18, $18, $18, $00, $18, $18, $18, $00 
+        .byt $38, $0c, $0c, $06, $0c, $0c, $38, $00 
+        .byt $00, $00, $00, $73, $ce, $00, $00, $00 
+        .byt $00, $18, $3c, $66, $c3, $ff, $00, $00
+
+	.)
 
 	; -----------------------------
 startp	.word 0

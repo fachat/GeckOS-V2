@@ -25,14 +25,6 @@
 /*                      These defines control the ROM build                */
 /*                                                                         */
 
-#define	OSA_ARCH	"CS/A65"
-
-#ifdef CMOSCPU
-#define	OSA_CPU		"6502"
-#else
-#define	OSA_CPU		"65C02"
-#endif
-
 
 /***************************************************************************
  *
@@ -45,6 +37,7 @@
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"
+#include  "env.i65"
 	.(
 
 #define	LIBMEM_ALLOC_SBRK

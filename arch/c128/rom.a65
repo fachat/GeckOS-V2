@@ -33,26 +33,17 @@
 
 #define   NOMMU   
 #undef 	  CMOSCPU		/* ... and no CMOS cpu */
-#define	  VIDPAGE 8
+#define	  VIDPAGE 12*16		/* in memory pages */
 #define	  SHORTLINE		/* prepare for 40 col screen */
 #define	  RAMTEST
 #define	  NOMIRRORMEM
 
-#define	  OSA_CPU	"6510"
-#define   OSA_ARCH	"C64"
 
 /* These are changeable ****************************************************/
 /* some specific configurations can be created using -D on the xa command line */
 
 /*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
-;#define	ROMSTART	$9000	/* where the ROM starts */
-;
-;#define	RAMSTART	1
-;
-;#define	RAMEND		>ROMSTART  /* The size of the RAM we allow to be used.
-;				   Size in pages (256 bytes). Must be below
-;				   ROMSTART */
 
 #define	MIN_MEM		>ROMSTART  /* minimum memory we need in system env. to 
 				   work ok, in pages */
@@ -145,6 +136,7 @@
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "c128def.i65"
+#include  "env.i65"
 
 #include  "kernel.i65"
 

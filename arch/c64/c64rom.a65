@@ -33,7 +33,7 @@
 
 #define   NOMMU   
 #undef 	  CMOSCPU		/* ... and no CMOS cpu */
-#define	  VIDPAGE 14
+#define	  VIDPAGE 14*16
 #define	  SHORTLINE		/* prepare for 40 col screen */
 #define	  RAMTEST
 #define	  NOMIRRORMEM

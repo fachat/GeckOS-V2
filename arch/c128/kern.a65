@@ -29,10 +29,6 @@
 
 ;#define	ROMTEST
 
-/* These are necessary for CS/A65 kernel ***********************************/
-
-#define	OSA_ARCH	"CS/A65"
-
 /* These are changeable ****************************************************/
 
 #define	CSA_CONSOLE	0	/* device to output debug/log messages */

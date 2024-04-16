@@ -39,6 +39,17 @@ runc64ip: c64
 
 ##########
 
+c128: clean
+	(cd arch/c128; make; cd boot; make)
+
+runc128: c128
+	x128 +sound -autostart arch/c128/boot/geckos128.d64
+
+runc128ip: c128
+	x128 +sound -acia1 -acia1base 0xDE00 -acia1irq 1 -acia1mode 1 -myaciadev 2  -rsdev3 "|socat - PTY,link=/tmp/viceser" -autostart arch/c128/boot/geckos64.d64
+
+##########
+
 pet32k: clean
 	(cd arch/pet32k; make; cd boot; make)
 
