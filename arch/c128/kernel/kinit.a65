@@ -58,12 +58,29 @@
 
 /*
  * init memory configuration
+ * https://www.oxyron.de/html/registers_mmu.html
  */
 	  lda #7
-	  sta 0		/* CPU data direction register */
-	  lda #7
-	  sta 1		/* Memory configuration */
+	  sta 0		; CPU data direction register
+	  lda #7	; color ram for text mode cpu+vic; use RAM for $d000
+	  sta 1		; set Memory configuration 
 
+	lda #%00111110	; env 0: all RAM0, except I/O
+	sta MMU+PCRA	
+	lda #%01111111	; env 1: all RAM1 (even in $d000)
+	sta MMU+PCRB
+
+	lda #%00001010	; video RAM in bank 0, only top of bank shared, 8k shared
+	sta MMU+RCR
+
+	lda #0
+	sta MMU+P0L
+	sta MMU+P0H
+	sta MMU+P1H
+	lda #1
+	sta MMU+P1L
+	
+	sta MMUFF+LCRA	; set env 0
 /* 
  * disable any interrupt source
  */
@@ -155,8 +172,8 @@ pre5      adc #1:bne pre5               :\
  * and so must memtask.
  */
 
-#undef	SAVEMEM
-#undef	RESTOREMEM
+#define	SAVEMEM()	lda MMU:pha
+#define	RESTOREMEM()	pla:sta MMU
 
 /* 
  * no memory management...

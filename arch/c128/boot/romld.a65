@@ -1,6 +1,12 @@
 
 START	=$3000
 
+; where dup_lib is running
+; as it is copying from bank 0 to 1, it needs to be in shared RAM
+TMP	=$e000	
+LIBSIZE	=32	; pages for lib.bin
+
+
 ZP	=$fb
 FA	=$ba	; current device number
 ST	=$90	; I/O status
@@ -20,7 +26,8 @@ P1L	=9
 P1H	=10
 VR	=11
 
-MAPSYS	=%00111110	; all RAM except I/O
+MAPSYS0	=%00111110	; all RAM0 except I/O
+MAPSYS1	=%01111110	; all RAM1 except I/O
 MAPPET	=%00000000	; std BASIC
 CTRL	=MMU
 
@@ -38,21 +45,23 @@ BSOUT	=$ffde
 
 	.word start
 	*= START
+
+	;----------------------------------------------------
 start
 	lda #"*"
 	jsr BSOUT
 
-	jsr loadrom
+	jsr loadrom	; load init image to bank 0 RAM
 	bcs err
 	lda #"*"
 	jsr BSOUT
 
-	jsr loadkern	; leaves load start address in startp
+	jsr loadkern	; load kernel image to bank 0 RAM
 	bcs err
 	lda #"*"
 	jsr BSOUT
 
-	jsr loadlib
+	jsr loadlib	; load library image to bank 0 RAM
 	bcc loaded
 
 err 	rts
@@ -63,19 +72,22 @@ loaded
 
 	sei
 
-	jsr reloc_lib
+	lda #%00001010	; video bank 0, shared hi (not low), 8k shared
+	sta MMU+RCR
 
+	lda #%01111110	; all RAM bank 1, but chargen which is I/O
+	sta MMU+PCRB	; config B
 	lda #%00111110	; all RAM bank 0, but chargen which is I/O
 	sta MMU+PCRA	; config A
-	sta MMU
+
+	sta MMUFF+PCRA	; enable config A
+
+	jsr reloc_lib	; move lib image from load space to actual location, in both banks
 
 	jsr setup_crom
 
 	; https://www.oxyron.de/html/registers_mmu.html
 
-
-	lda #%00001011	; video bank 0, shared hi (not low), 16k shared
-	sta MMU+RCR
 
 	sta MMUFF+PCRA	; and set env 0 config
 
@@ -83,7 +95,7 @@ loaded
 	jmp ($fffc)	; RESET
 
 
-	;------------------
+	;----------------------------------------------------
 
 libname	.asc "LIB.BIN"
 libnlen	=*-libname
@@ -131,7 +143,7 @@ sta $0401
 	sec
 	rts
 
-	;------------------
+	;----------------------------------------------------
 	; load and store in 8x96 extra memory banks
 
 load	.(
@@ -143,17 +155,15 @@ load	.(
 
 	jsr CHRIN
 	sta ZP
-	sta startp
 	jsr CHRIN
 	sta ZP+1
-	sta startp+1
 
 l1	jsr CHRIN
 	ldy #0
 
 	php
 	sei
-	ldx #MAPSYS
+	ldx #MAPSYS0
 	stx CTRL
 
 	sta (ZP),y
@@ -195,43 +205,43 @@ sta $0400
 	rts
 	.)
 
-	; -----------------------------
+	;----------------------------------------------------
         ; copy the lib image into its place
 reloc_lib .(
- 	ldx #MAPSYS
-	stx CTRL
+	ldx #0
+l	lda r_start,x
+	sta TMP,x
+	inx
+	cpx #r_end-r_start
+	bne l
+	jmp TMP
 
-        ldx #$20	; number of pages
-
-        lda #0
-        sta $fb         ; lo address bytes
-        sta $fd
-
-	lda #$40
-        sta $fe         ; source address $0400
-	lda #3
-        sta $fc		; target address $0300
+r_start
+        ldx #LIBSIZE	; number of pages
 
         ldy #0
 loop                    ; copy xr pages of 256 byte from fd/fe upwards
-                        ; to fb/fc
-l1      lda ($fd),y
-        sta ($fb),y
+l1      lda $4000,y
+l2      sta $0300,y
+
+	sta MMUFF+PCRB	; bank 1
+l3	sta $0300,y
+	sta MMUFF+PCRA	; back to bank 0
+
         iny
         bne l1
-l2
-	inc $fe
-	inc $fc
+
+	inc l1-r_start+TMP+2
+	inc l2-r_start+TMP+2
+	inc l3-r_start+TMP+2
         dex
         bne loop
 
-	ldx #MAPPET
-	stx CTRL
-
 	rts
+r_end
 	.)
 
-	; -----------------------------
+	;----------------------------------------------------
 	; setup character set
 
 setup_crom .(
@@ -329,6 +339,6 @@ c123    .byt $0e, $18, $18, $30, $18, $18, $0e, $00
 
 	.)
 
-	; -----------------------------
-startp	.word 0
+	;----------------------------------------------------
+
 

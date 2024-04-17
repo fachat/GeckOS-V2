@@ -493,7 +493,7 @@ pb1
 #ifdef SAVEMEM
 	  KERNELIRQ()
 	  bne taski
-	  SAVEMEM
+	  SAVEMEM()
 taski
 #endif
         

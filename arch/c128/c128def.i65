@@ -31,4 +31,5 @@
 
 #include "chips/vicii.i65"
 #include "chips/cia6526.i65"
+#include "chips/mmu.i65"
 

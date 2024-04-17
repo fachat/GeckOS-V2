@@ -380,6 +380,9 @@ ok	lda #>Memend		; return available memory
 	rts
 	.)
 
+; YR contains the FORK_SHARED param
+; In the CBM8x96 port this is a flag to see if a task should be put into
+; the system env zero (when YR!=0) or the "user" env one (when YR=0)
 kgetenv	.(
 	ldx #0
 	tya

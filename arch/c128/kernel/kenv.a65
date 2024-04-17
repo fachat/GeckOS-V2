@@ -34,6 +34,10 @@
 
 #define	TE_SLEN		0	/* we don't have envs */
 
+	.data
+actEnv	.byt 0
+	.text
+
 /************************************************************************
  * These routines are needed in the env section! 
  *   inienv
@@ -240,7 +244,7 @@ pull	.(
 	.)
 
 	.(
-	.zero
+	.data
 AC      .byt 0
 XR      .byt 0
 YR      .byt 0
@@ -263,6 +267,8 @@ ADR     .word 0
 	  bne mtask					:\
           tsx                                           :\
           stx SSP                                       :\
+	  ldy actEnv					:\
+	  sta MMUFF+LCRA,y				:\
           ldy actThread                                 :\
           ldx threadTab+TH_SP,y                         :\
           txs						:\
@@ -272,6 +278,9 @@ mtask	.)
  * This is the standard return to user space. the kernel jumps here,
  * so we need not save any return address, but use the one on the
  * user stack.
+ */
+/*
+ * In the C128 port, env 0 and 1 have separate zeropage and stacks.
  */
 &&memtask .(
 	  php
@@ -294,9 +303,12 @@ mtask	.)
           ldx threadTab+TH_SP,y 
           txs
 
+	  ldy actEnv	; set memory configuration for environment
+	  sta MMUFF+LCRA,y ; store arbitrary value at either LCRA or LCRB
+
           pha		 ; SR
-          lda AC
-          ldy YR
+          lda AC	; as we already switched envs, these register locations
+          ldy YR	; need to be in shared memory, i.e. .data not .zero
           ldx XR
 mtask     
 	  plp
@@ -312,6 +324,9 @@ mtask
 &&memsys  php
           sei
           pha
+
+	  sta MMUFF+LCRA ; store arbitrary value in LCRA to enable env0
+
           lda Syscnt
           inc Syscnt
           cmp #0
@@ -326,7 +341,8 @@ mse       pla
           plp
           rts
 
-msys      pla
+msys      
+	  pla
           sta AC
           pla
           sta SR
@@ -357,19 +373,31 @@ msys      pla
 	.)
 
 
+; sbrk with C=0 returns the available memory. This is
+; either Memend for the user env 1, or ROMSTART for the system env 0
 &&sbrk	.(
 	bcc ok
 	sec
 	lda #E_NOMEM
 	rts
-ok	lda #>Memend		; return available memory
+ok	lda actEnv
+	bne env1
+	lda #>ROMSTART
+	.byt $2c
+env1	lda #>Memend		; return available memory
 	clc
 	rts
 	.)
 
+; YR contains the FORK_SHARED param
+; In the C128 port this is a flag to see if a task should be put into
+; the system env zero (when YR!=0) or the "user" env one (when YR=0)
 kgetenv	.(
 	ldx #0
-	clc
+	tya
+	bne system
+;	inx
+system	clc
 	rts
 	.)
 

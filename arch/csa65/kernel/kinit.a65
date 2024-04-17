@@ -218,7 +218,7 @@ pre5      adc #1:bne pre5               :\
  * and so must memtask.
  */
 #if 1
-#define SAVEMEM		lda MMU+1:pha:lda MMU+2:pha
+#define SAVEMEM()	lda MMU+1:pha:lda MMU+2:pha
 #define RESTOREMEM()	pla:sta MMU+2:pla:sta MMU+1
 #else
 #undef SAVEMEM
