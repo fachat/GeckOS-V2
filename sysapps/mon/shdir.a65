@@ -519,8 +519,8 @@ endnam    stx LZEI
           sta PCBUF+FORK_STDERR
 ;          lda #4 	;tpenv
 ;          sta PCBUF+FORK_SIZE
-;	  lda #$80
-;	  sta PCBUF+FORK_SHARED
+	  lda #0		; send to user env
+	  sta PCBUF+FORK_SHARED
 ;          lda fh+P_ADDR
 ;          sta PCBUF+FORK_ADDR
 ;          lda fh+P_ADDR+1

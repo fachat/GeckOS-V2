@@ -102,10 +102,15 @@ noferr
 	lda #SC_REG_WR
 	jsr STRCMD
 
+	; set shared to zero to use user env
+	lda #0
+	sta PCBUF+FORK_SHARED
+
 	pla
 &&init_forkto_i			; this is a ROM entry only for init
 				; which has to start lib6502 progs without
-				; too much support
+				; too much support;
+				; Has FORK_STD* and FORK_SHARED already set
 	pha
 
 	ldy #3
@@ -123,20 +128,21 @@ l1	sta PCBUF,x
 	bne l0
 
 	pla
+	ldy PCBUF+FORK_SHARED
+	.byt $2c
 &&mon_forkto_i			; this is a ROM entry for the monitor
 				; ac = comm stream, xr = length of fork
 				; struct in PCBUF. First byte of filename
 				; is comm stream
+	ldy #0
 	pha
 
 	lda #>Memend		; initial RAM size
 	sta PCBUF+FORK_SIZE
 	lda #0
 	sta PCBUF+FORK_PRIORITY
-#ifndef LIB6502_SHAREDZERO
-	lda #>-ROMSTART		; shared ROM size
-#endif
-	sta PCBUF+FORK_SHARED
+	; store either $80 for init progs, or zero for anything else
+	sty PCBUF+FORK_SHARED
 
 	lda #<libfork
 	sta PCBUF+FORK_ADDR

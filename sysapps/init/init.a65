@@ -736,6 +736,10 @@ noend2
 	sta PCBUF+FORK_STDOUT
 	sta PCBUF+FORK_STDERR
 
+	ldy #P_SHARED
+        lda (pz),y
+        sta PCBUF+FORK_SHARED
+
 #ifdef INIT_VERBOSE
 	jsr printfork
 #endif
