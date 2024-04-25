@@ -85,21 +85,27 @@ map1	lda #SYSPAGE						:\
  * copies PCBUF from another (thread id in y) task to actual task
  * length in TH_PAR+1(actThread)
  */
-#define	CPPCBUFRX()						\
-	ldx actTask						:\
-	lda taskTab + TT_ENV,x					:\
-	tax							:\
-	lda envTab + TE_MMU,x					:\
-	sta MMU+2						:\
-	lda threadTab + TH_TASK,y				:\
-	tax							:\
-	lda taskTab + TT_ENV,x					:\
-	tax							:\
-	lda envTab + TE_MMU,x					:\
-	sta MMU+1						:\
-	lda threadTab + TH_PAR+1,y				:\
-	jsr cploop
+;#define	CPPCBUFRX()						\
+;	ldx actTask						:\
+;	lda taskTab + TT_ENV,x					:\
+;	tax							:\
+;	lda envTab + TE_MMU,x					:\
+;	sta MMU+2						:\
+;	lda threadTab + TH_TASK,y				:\
+;	tax							:\
+;	lda taskTab + TT_ENV,x					:\
+;	tax							:\
+;	lda envTab + TE_MMU,x					:\
+;	sta MMU+1						:\
+;	lda threadTab + TH_PAR+1,y				:\
+;	jsr cploop
 
+#define	CPPCBUFRX()						\
+	jsr setmmu12						:\
+	lda threadTab + TH_PAR+1,y				:\
+	jsr cplooprx
+
+	
 /* 
  * copies PCBUF from actual task to another (thread id in y)
  * length in TH_PAR+1(actThread)
@@ -135,6 +141,17 @@ l_0	dey
 	rts
 	.)
 
+cplooprx .(
+	tay
+l_0	dey
+	lda PCBUF+(BLKSIZ*2),y
+	sta PCBUF+(BLKSIZ),y
+	tya
+	bne l_0
+	rts
+	.)
+
+; must preserve y as current thread ID
 setmmu12 .(
 	ldx actEnv
 	lda envTab + TE_MMU,x
