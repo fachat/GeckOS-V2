@@ -410,8 +410,36 @@ freenv	.(
  * MAPSYSBUF() maps the PCBUF of the active task into the system memory
  * at address SYSBUF. It's not needed in a C64...
  */
-#undef	MAPSYSBUF
-#define	SYSBUF	$200
+	.bss
+sysbuf	.dsb 256
+	.text
+
+#define	SYSBUF	sysbuf
+
+#define	MAPSYSBUF	jsr mapsysbuf
+#define	MAPSYSBUFOUT
+#define	MAPSYSBUFREV	jsr mapsysbufrev
+
+; largely inefficient, but should work for now
+&mapsysbuf .(
+	ldy #0
+l0	lda PCBUF,y
+	sta SYSBUF,y
+	iny
+	bne l0
+	rts
+	.)
+
+&mapsysbufrev .(
+	pha
+	ldy #0
+l0	lda SYSBUF,y
+	sta PCBUF,y
+	iny
+	bne l0
+	pla
+	rts
+	.)
 
 /*
  * MAPENV() maps the address given in a/y in env x to somewhere in the 

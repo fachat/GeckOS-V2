@@ -59,8 +59,9 @@
 
           .(
 
-#ifdef MAP_ZERO
 	.zero
+tp	.word 0
+#ifdef MAP_ZERO
 #else
 	.data
 #endif
@@ -171,7 +172,9 @@ l0	tay
 &fork    .(
 	  jsr memsys
 	  sty div
+
 	  MAPSYSBUF
+
 	  ldx SYSBUF+FORK_STDIN
           jsr teststd
           stx SYSBUF+FORK_STDIN
@@ -931,7 +934,7 @@ end	jmp memtask
 	.(
 	jsr memsys
 	; save C
-#ifdef MAPSYSBUF
+#ifdef MAPSYSBUFOUT
 	php	
 	; keeps X, destroys Y
 	MAPSYSBUF
@@ -1060,7 +1063,8 @@ next_thread
 	; return
 	ldx SYSBUF + TN_PID
 	clc
-done	jmp memtask
+done	MAPSYSBUFREV
+	jmp memtask
 
 	.)
 

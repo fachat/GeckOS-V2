@@ -92,6 +92,9 @@ fmok      sec
           sta SYSBUF+FM_OPEN_DRV
           lda fstask,y
           tax
+
+	  MAPSYSBUFREV
+
           clc
           rts
           .)

@@ -42,7 +42,7 @@ rom.o65: rom.a65 devices/*.a65
 	${FILE} rom.o65
 
 info: rom.o65 kern.o65 lib.o65
-	$(FILE)  rom.o65 kern.o65 lib.o65
+	$(FILE)  $^
 
 clean:
 	rm -f *.lab roms.l rom.o65 boot.tgz lib.o65 lib.bin kern.bin kern.o65 rom.bin

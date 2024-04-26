@@ -66,6 +66,8 @@
  * MAPSYSBUF must preserve xr 
  */
 #define MAPSYSBUF	jsr mapsysbuf
+#define MAPSYSBUFOUT	jsr mapsysbuf
+#define	MAPSYSBUFREV
 
 &mapsysbuf
 	.(							:\
