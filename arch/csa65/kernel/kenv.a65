@@ -803,8 +803,6 @@ gne       lda #E_OK
           lda #E_OK
           clc
           jmp memtask
-	  ;jsr memtask
-          ;rts
 
 /*
 &getblk   jsr memsys

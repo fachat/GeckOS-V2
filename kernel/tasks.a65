@@ -1159,6 +1159,7 @@ serr2	cmp #1
 	jmp memtask
 	
 	; y is target thread
+	; x is target task
 copyto
 #ifdef CPPCBUFTX
 	sty div

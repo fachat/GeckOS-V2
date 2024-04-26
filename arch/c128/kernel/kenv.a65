@@ -74,6 +74,12 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 #endif
 
 
+	; initializing the ENVSAVE pointers to zero is important,
+	; as lib6502 checks this and inits itself if zero.
+	; So, this is only relevant where zp is not shared between envs.
+	; In MMU systems this is in kgetenv, but we have a non-existent
+	; environment management - only one sys and one user env - so, 
+	; do it in init.
 &inienv .(
 	ldx #<-1
 	stx actThread
@@ -82,6 +88,12 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 	inx		; 0
 	stx ENVSAVE
 	stx ENVSAVE+1
+
+	sta MMUFF+LCRB	; enable user env
+	stx ENVSAVE	; init user env
+	stx ENVSAVE+1
+	sta MMUFF+LCRA	; enable sys env egain
+
 	inx		; 1
 	stx Syscnt
 	clc
@@ -106,8 +118,12 @@ newThread .byt 0
 	bne doit
 	rts
 doit
-	sta newThread
+	; protect from interrupt
+	php
+	sei
 
+	sta newThread
+	
 	ldx actThread
 	cpx #<-1
 	beq nosave
@@ -198,6 +214,8 @@ l4	cpy #STACKSIZE
 endset
 #endif
 noload	SYSBANK()
+
+	plp
 	rts
 	.)
 
@@ -256,11 +274,14 @@ divsp	.byt 0
 	.)
 
 pull	.(
+	ldy actEnv
+	SETBANK()
 	ldx actThread
 	inc threadTab + TH_SP,x
 	lda threadTab + TH_SP,x
 	tay
 	lda $0100,y
+	SYSBANK()
 	rts
 	.)
 
@@ -268,10 +289,13 @@ pull	.(
 	pha
 	ldx actThread
 	lda threadTab + TH_SP,x
-	tay
-	pla
-	sta $0100,y
 	dec threadTab + TH_SP,x
+	tax
+	pla
+	ldy actEnv
+	SETBANK()
+	sta $0100,x
+	SYSBANK()
 	rts
 	.)
 
@@ -357,8 +381,6 @@ mtask
           sei
           pha
 
-	  sta MMUFF+LCRA ; store arbitrary value in LCRA to enable env0
-
           lda Syscnt
           inc Syscnt
           cmp #0
@@ -372,7 +394,6 @@ mtask
 mse       pla
           plp
           rts
-
 msys      
 	  pla
           sta AC
@@ -388,6 +409,9 @@ msys
           txa
           ldx actThread
           sta threadTab+TH_SP,x
+
+	  sta MMUFF+LCRA ; store arbitrary value in LCRA to enable env0
+
           ldx SSP
           txs
           lda ADR+1
@@ -461,9 +485,11 @@ l0	lda PCBUF,y
 	sta SYSBUF,y
 	iny
 	bne l0
+	SYSBANK()
 	rts
 	.)
 
+	; must preserve X 
 &mapsysbufrev .(
 	pha
 	ldy actEnv
@@ -473,6 +499,7 @@ l0	lda SYSBUF,y
 	sta PCBUF,y
 	iny
 	bne l0
+	SYSBANK()
 	pla
 	rts
 	.)
@@ -481,6 +508,9 @@ l0	lda SYSBUF,y
  * MAPENV() maps the address given in a/y in env x to somewhere in the 
  * kernel map. returns mapped address in a/y
  * MAPAENV() does the same but for the actual task (env)
+ *
+ * Note: this is only done in the kernel/devices code, and only relevant
+ * 	 when devices run outside of the kernel memory map (which it doesn't here)
  */
 #define	MAPENV()
 #define	MAPAENV()
@@ -489,14 +519,74 @@ l0	lda SYSBUF,y
 /*
  * needed for GETINFO, gives RAM available for task
  */
-#define	GETTASKMEM	lda #>ROMSTART
+#define	GETTASKMEM	.(:ldx taskTab + TT_ENV,y:bne user:lda #>$e0:.byt $2c:user lda #>ROMSTART:.)
 
 /*
  * copy routines for SEND/RECEIVE and FORK
  */
-#undef CPPCBUFRX
-#undef CPPCBUFTX
-#define	CPFORKBUF()
+
+/* copy the PCBUF from another thread (in y) to this thread */
+/* uses copybuf which reqs source env in x, trg env in a, length in y */
+#define CPPCBUFRX()	.(				:\
+			lda threadTab + TH_TASK,y	:\
+			tax				:\
+			lda taskTab + TT_ENV,x		:\
+			cmp actEnv			:\
+			beq nocp			:\
+			tax				:\
+			lda threadTab + TH_PAR + 1,y	:\
+			tay				:\
+			lda actEnv			:\
+			jsr copybuf			:\
+		nocp	.)				:
+
+/* copy the PCBUF from this task to another thread (in y / trg task in x) */
+/* uses copybuf which reqs source env in x, trg env in a, length in y */
+#define CPPCBUFTX()	.(				:\
+			lda taskTab + TT_ENV,x		:\
+			cmp actEnv			:\
+			beq nocp			:\
+			pha				:\
+			ldx actThread			:\
+			lda threadTab + TH_PAR + 1,x	:\
+			tay				:\
+			pla				:\
+			ldx actEnv			:\
+			jsr copybuf			:\
+		nocp	.)				:
+
+/* copy the PCBUF to the forked task to give it command line etc */
+#define	CPFORKBUF()					\
+			jsr mapsysbufrev		:\
+			SYSBANK()
+
+/* copybuf, reqs source env in x, trg env in a, length in y */
+copybuf	.(
+	.data
+srcenv	.byt 0
+trgenv	.byt 0
+	.text
+	php
+	sei
+	stx srcenv
+	sta trgenv
+	ldy #0
+loop	dey
+	ldx srcenv
+	sta MMUFF+LCRA,x
+	lda PCBUF,y
+	pha
+	ldx trgenv
+	sta MMUFF+LCRA,x
+	pla
+	sta PCBUF,y
+	tya
+	bne loop
+	SYSBANK()
+	plp
+	rts
+	.)
+
 
 /*
  * needed in device code to get active environment in AC
