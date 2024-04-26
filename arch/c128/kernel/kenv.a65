@@ -38,6 +38,12 @@
 actEnv	.byt 0
 	.text
 
+/* 
+ * setup memory mapping for environment in Y
+ */
+#define SETBANK()       sta MMUFF+LCRA,y
+#define	SYSBANK()	sta MMUFF+LCRA
+
 /************************************************************************
  * These routines are needed in the env section! 
  *   inienv
@@ -72,6 +78,7 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 	ldx #<-1
 	stx actThread
 	stx actTask
+	stx actEnv
 	inx		; 0
 	stx ENVSAVE
 	stx ENVSAVE+1
@@ -81,6 +88,15 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 	rts
 	.)
 
+	
+	; ----------------------------
+	; switch threads for execution.
+	;
+	; this means setting up the stack, as well as 
+	; THREADSAVE and TASKSAVE zeropage pointers
+	; a) copying current stack / ptrs into kernel tables
+	; b) copying new stack / pts from kernel tables
+	;
 setthread .(
 	.data
 newThread .byt 0
@@ -96,12 +112,99 @@ doit
 	cpx #<-1
 	beq nosave
 
+	; ----------------------------
+	; save current stack and thread / task info into kernel tables
+
+	; setup memory bank so current thread info is available
+	ldy actEnv
+	SETBANK()
+
+	; save THREADSAVE zp pointer
 	lda THREADSAVE
 	sta threadTab + TH_LIBSAVE,x
 	lda THREADSAVE+1
 	sta threadTab + TH_LIBSAVE+1,x
 
+	; save TASKSAVE zp pointer
+	ldy threadTab + TH_TASK,x
+	lda TASKSAVE
+	sta taskTab + TT_LIBSAVE,y
+	lda TASKSAVE + 1
+	sta taskTab + TT_LIBSAVE + 1,y
+
 #ifdef STACKCOPY
+	; save stack (requires XR = thread ID)
+	jsr setstackzp
+
+	lda threadTab + TH_SP,x
+	tay
+	iny
+l2	cpy #STACKSIZE
+	bcs savetask
+	lda $100,y
+	sta (zp),y
+	iny
+	bne l2
+savetask
+#endif
+
+nosave	
+	; ----------------------------
+	; setup new thread / task
+	ldx newThread
+	stx actThread
+	cpx #<-1
+	bne load
+	stx actTask
+	stx actEnv
+	beq noload
+
+	; ----------------------------
+	; load stack and thread / task info into shared environment
+load
+	ldy threadTab + TH_TASK,x
+	sty actTask
+	lda taskTab + TT_ENV,y
+	sta actEnv
+
+	tay
+	SETBANK()
+
+	; restore TASKSAVE ptrs
+	ldy actTask
+	lda taskTab + TT_LIBSAVE,y
+	sta TASKSAVE
+	lda taskTab + TT_LIBSAVE + 1,y
+	sta TASKSAVE + 1
+
+	; restore THREADSAVE ptrs
+	lda threadTab + TH_LIBSAVE,x
+	sta THREADSAVE
+	lda threadTab + TH_LIBSAVE+1,x
+	sta THREADSAVE + 1
+
+#ifdef STACKCOPY
+	jsr setstackzp
+
+	lda threadTab + TH_SP,x
+	tay
+	iny
+l4	cpy #STACKSIZE
+	bcs endset
+	lda (zp),y
+	sta $100,y
+	iny
+	bne l4
+endset
+#endif
+noload	SYSBANK()
+	rts
+	.)
+
+#ifdef STACKCOPY
+	; calculate save area for STACKCOPY stacks
+	; preserves thread ID in XR
+setstackzp .(
 	.assert STACKSIZE == 8 * TH_SLEN, "algo computing stack offset from thread ID"
 
 	; XR has the thread ID, which is a multiple of TH_SLEN = 8
@@ -122,80 +225,9 @@ doit
 	lda #>Stacks
 	adc zp+1
 	sta zp+1
-	;bcc l1
-	;inc zp+1
-;l1
-	lda threadTab + TH_SP,x
-	tay
-	iny
-l2	cpy #STACKSIZE
-	bcs savetask
-	lda $100,y
-	sta (zp),y
-	iny
-	bne l2
-#endif
-savetask
-	ldy threadTab + TH_TASK,x
-	lda TASKSAVE
-	sta taskTab + TT_LIBSAVE,y
-	lda TASKSAVE + 1
-	sta taskTab + TT_LIBSAVE + 1,y
-nosave	
-loadtask
-	ldx newThread
-	stx actThread
-	cpx #<-1
-	bne load
-	stx actTask
-	beq noload
-load
-	ldy threadTab + TH_TASK,x
-	sty actTask
-
-	lda taskTab + TT_LIBSAVE,y
-	sta TASKSAVE
-	lda taskTab + TT_LIBSAVE + 1,y
-	sta TASKSAVE + 1
-
-loadthread 
-	lda threadTab + TH_LIBSAVE,x
-	sta THREADSAVE
-	lda threadTab + TH_LIBSAVE+1,x
-	sta THREADSAVE+1
-
-#ifdef STACKCOPY
-	txa
-	ldy #0
-	sty zp+1
-	asl 
-	rol zp+1
-	asl
-	rol zp+1
-	asl
-	rol zp+1
-	clc
-	adc #<Stacks
-	sta zp
-	lda #>Stacks
-	adc zp+1
-	sta zp+1
-	;bcc l3
-	;inc zp+1
-;l3
-	lda threadTab + TH_SP,x
-	tay
-	iny
-l4	cpy #STACKSIZE
-	bcs endset
-	lda (zp),y
-	sta $100,y
-	iny
-	bne l4
-#endif
-noload
-endset	rts
+	rts
 	.)
+#endif
 
 initsp	.(
 #ifdef STACKCOPY
@@ -396,7 +428,7 @@ kgetenv	.(
 	ldx #0
 	tya
 	bne system
-;	inx
+	inx
 system	clc
 	rts
 	.)
@@ -422,6 +454,8 @@ sysbuf	.dsb 256
 
 ; largely inefficient, but should work for now
 &mapsysbuf .(
+	ldy actEnv
+	SETBANK()
 	ldy #0
 l0	lda PCBUF,y
 	sta SYSBUF,y
@@ -432,6 +466,8 @@ l0	lda PCBUF,y
 
 &mapsysbufrev .(
 	pha
+	ldy actEnv
+	SETBANK()
 	ldy #0
 l0	lda SYSBUF,y
 	sta PCBUF,y

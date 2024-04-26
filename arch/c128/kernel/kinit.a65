@@ -65,9 +65,9 @@
 	  lda #7	; color ram for text mode cpu+vic; use RAM for $d000
 	  sta 1		; set Memory configuration 
 
-	lda #%00111110	; env 0: all RAM0, except I/O
+	lda #%00111110	; env 0: all RAM0, except I/O - for kernel and init progs
 	sta MMU+PCRA	
-	lda #%01111111	; env 1: all RAM1 (even in $d000)
+	lda #%01111111	; env 1: all RAM1 (even in $d000) - for other lib6502 progs
 	sta MMU+PCRB
 
 	lda #%00001010	; video RAM in bank 0, only top of bank shared, 8k shared
