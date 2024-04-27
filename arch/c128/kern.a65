@@ -45,7 +45,13 @@
 
 #undef	CMOSCPU
 
-#define	RAMEND		$80	/* 32k in bank 0 */
+#define STACKCOPY               /* if defined, save stack area in memory
+                                   when context switching, otherwise divide
+                                   stack area and give each task a part.
+                                   It's faster without, but allows more
+                                   tasks with */
+
+#define MEMINIVAL       0       /* Clear memory to 0 on boot */
 
 
 /***************************************************************************

@@ -58,14 +58,6 @@
 
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
 
-#define	MEMINIVAL	0	/* Clear memory to 0 on boot */
-
-#define	STACKCOPY		/* if defined, save stack area in memory
-				   when context switching, otherwise divide
-				   stack area and give each task a part.
-				   It's faster without, but allows more
-				   tasks with */
-
 #define NMIDEV			/* necessary for fast RS232 */
 				
 #undef	 PARALLEL		/* for IEEE488 interface from Commodore 

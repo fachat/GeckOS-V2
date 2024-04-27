@@ -199,7 +199,6 @@ endload	lda ST
 	
 	pla
 	and #$ff-$40
-sta $0400
 	;cmp #1
 	clc
 	rts

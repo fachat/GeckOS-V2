@@ -10,7 +10,7 @@ RELOC=reloc65
 # where the kernel and its data are located
 KERNEL=60416	# $ec00, also jump table
 KERNDATA=57344	# $e000
-KERNBSS=57856	# $e200
+KERNBSS=58880	# $e600
 
 # where the init image and its data are located
 ROMSTART=32768	# $8000

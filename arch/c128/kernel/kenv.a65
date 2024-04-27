@@ -285,17 +285,11 @@ divsp	.byt 0
 	.)
 
 pull	.(
-	ldy actEnv
-	php
-	sei
-	/*ENVBANK()*/
 	ldx actThread
 	inc threadTab + TH_SP,x
 	lda threadTab + TH_SP,x
 	tay
 	lda $0100,y
-	/*SYSBANK()*/
-	plp
 	rts
 	.)
 
@@ -306,13 +300,7 @@ pull	.(
 	dec threadTab + TH_SP,x
 	tax
 	pla
-	ldy actEnv
-	php
-	sei
-	/*ENVBANK()*/
 	sta $0100,x
-	/*SYSBANK()*/
-	plp
 	rts
 	.)
 
