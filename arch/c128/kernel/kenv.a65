@@ -40,9 +40,18 @@ actEnv	.byt 0
 
 /* 
  * setup memory mapping for environment in Y
+ *
+ * ENVBANK()/SYSBANK() Need to preserve X (A would also be needed for push)
+ *
+ * Also need to change ZP (stack is shared)
  */
-#define ENVBANK()       sta MMUFF+LCRA,y
-#define	SYSBANK()	sta MMUFF+LCRA
+
+; stores env (0 or 1) in P0H, then clears P0L, before switching to actual env mem
+#define ENVBANK()       sty MMU+P0H:lda #0:sta MMU+P0L:sta MMUFF+LCRA,y
+#define	SYSBANK()	sta MMUFF+LCRA:lda #0:sta MMU+P0H:sta MMU+P0L
+
+// #define ENVBANK()       sta MMUFF+LCRA,y
+// #define	SYSBANK()	sta MMUFF+LCRA
 
 /************************************************************************
  * These routines are needed in the env section! 
@@ -86,13 +95,15 @@ Stacks  .dsb MAXNTHREADS * STACKSIZE
 	stx actTask
 	stx actEnv
 	inx		; 0
+
 	stx ENVSAVE
 	stx ENVSAVE+1
 
-	sta MMUFF+LCRB	; enable user env
+	ldy #1		; env number
+	ENVBANK()
 	stx ENVSAVE	; init user env
 	stx ENVSAVE+1
-	sta MMUFF+LCRA	; enable sys env egain
+	SYSBANK()
 
 	inx		; 1
 	stx Syscnt
@@ -277,13 +288,13 @@ pull	.(
 	ldy actEnv
 	php
 	sei
-	ENVBANK()
+	/*ENVBANK()*/
 	ldx actThread
 	inc threadTab + TH_SP,x
 	lda threadTab + TH_SP,x
 	tay
 	lda $0100,y
-	SYSBANK()
+	/*SYSBANK()*/
 	plp
 	rts
 	.)
@@ -298,9 +309,9 @@ pull	.(
 	ldy actEnv
 	php
 	sei
-	ENVBANK()
+	/*ENVBANK()*/
 	sta $0100,x
-	SYSBANK()
+	/*SYSBANK()*/
 	plp
 	rts
 	.)
@@ -330,6 +341,9 @@ ADR     .word 0
           tsx                                           :\
           stx SSP                                       :\
 	  ldy actEnv					:\
+	  sty MMU+P0H					:\
+	  ldx #0					:\
+	  stx MMU+P0L					:\
 	  sta MMUFF+LCRA,y				:\
           ldy actThread                                 :\
           ldx threadTab+TH_SP,y                         :\
@@ -366,6 +380,9 @@ mtask	.)
           txs
 
 	  ldy actEnv	; set memory configuration for environment
+	  sty MMU+P0H
+	  ldx #0
+	  stx MMU+P0L
 	  sta MMUFF+LCRA,y ; store arbitrary value at either LCRA or LCRB
 
           pha		 ; SR
@@ -417,6 +434,9 @@ msys
           sta threadTab+TH_SP,x
 
 	  sta MMUFF+LCRA ; store arbitrary value in LCRA to enable env0
+	  lda #0
+	  sta MMU+P0H
+	  sta MMU+P0L
 
           ldx SSP
           txs

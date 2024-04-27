@@ -74,11 +74,12 @@
 	sta MMU+RCR
 
 	lda #0
-	sta MMU+P0L
-	sta MMU+P0H
-	sta MMU+P1H
+	sta MMU+P1H	; high is latched until ...
+	sta MMU+P0H	
+
+	sta MMU+P0L	; ... low is written to
 	lda #1
-	sta MMU+P1L
+	sta MMU+P1L	; 
 	
 	sta MMUFF+LCRA	; set env 0
 /* 

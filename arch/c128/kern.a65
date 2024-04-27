@@ -69,6 +69,7 @@
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"
+#include  "env.i65"
 
 #define	MIN_MEM		$20		/* 8 kbyte */
 	.(

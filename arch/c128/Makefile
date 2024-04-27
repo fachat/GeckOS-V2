@@ -24,17 +24,18 @@ LIBDATA=7168	# $1c00 data start
 
 Zerostart=96
 #Memstart=2048	# automatically set to end of lib6502 data
+Memend=57344	# $e000 end of allocatable memory in user env
 
 roms.l: lib.lab rom.lab kern.lab
 	../labels2vice.sh lib.lab rom.lab kern.lab > roms.l
 	
 lib.o65: lib.a65
 	# start binary at 910+2 = $0390
-	${XA} -I../../include -I../.. -DOSA2KERNEL=$(KERNEL)  -DLIB6502START=$(LIB6502) -DZerostart=$(Zerostart) -R -bt $(LIBSTART) -bd $(LIBDATA) -bz 8 -bb 65535 $< -o lib.o65 -l lib.lab;
+	${XA} -I../../include -I../.. -DOSA2KERNEL=$(KERNEL)  -DLIB6502START=$(LIB6502) -DZerostart=$(Zerostart) -DMemend=$(Memend) -R -bt $(LIBSTART) -bd $(LIBDATA) -bz 8 -bb 65535 $< -o lib.o65 -l lib.lab;
 	${FILE} lib.o65
 
 kern.o65: kern.a65 kernel/*.a65
-	${XA} -I../../include -I../.. -R -DROMSTART=$(ROMSTART) -DMemend=32768 -bt $(KERNEL) -bd $(KERNDATA) -bz 32 -bb $(KERNBSS) $< -o kern.o65 -l kern.lab;
+	${XA} -I../../include -I../.. -R -DROMSTART=$(ROMSTART) -DMemend=$(Memend) -bt $(KERNEL) -bd $(KERNDATA) -bz 32 -bb $(KERNBSS) $< -o kern.o65 -l kern.lab;
 	${FILE} kern.o65
 
 rom.o65: rom.a65 devices/*.a65
