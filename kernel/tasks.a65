@@ -937,7 +937,7 @@ end	jmp memtask
 #ifdef MAPSYSBUFOUT
 	php	
 	; keeps X, destroys Y
-	MAPSYSBUF
+	MAPSYSBUFOUT
 	plp
 #endif
 	bcc doloop
@@ -963,9 +963,8 @@ test	ldy taskTab + TT_NTHREADS,x
 	beq next
 found	
 	stx div		; save for later
-	txa
-	tay
-	; expects task ID in Y (to be changed?)
+	; expects task ID in X 
+	; needs to preserve X
 	GETTASKMEM
 	sta SYSBUF + TN_MEM
 	txa
@@ -1016,7 +1015,7 @@ name
 	lda taskTab2 + TT_NAME + offset,x
 	sta SYSBUF + TN_NAME,y
 	inx
-	cpy #0
+	tya		;cpy #0
 	bne name
 
 	; copy over thread info
@@ -1063,9 +1062,12 @@ next_thread
 	; return
 	ldx SYSBUF + TN_PID
 	clc
-done	pha
+done	
+#ifdef MAPSYSBUFREV
+	pha
 	MAPSYSBUFREV
 	pla
+#endif
 	jmp memtask
 
 	.)

@@ -814,7 +814,7 @@ gne       lda #E_OK
 /*
  * needed for GETINFO, gives mem available for task
  */
-#define	GETTASKMEM  ldx taskTab + TT_ENV,y: lda envTab + TE_RAMLEN,x: asl: asl: asl: asl
+#define	GETTASKMEM  lda taskTab + TT_ENV,x: tay: lda envTab + TE_RAMLEN,y: asl: asl: asl: asl
 
 /*
  * needed in device code to get active environment in AC
