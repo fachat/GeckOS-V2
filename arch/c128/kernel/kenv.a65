@@ -275,6 +275,8 @@ divsp	.byt 0
 
 pull	.(
 	ldy actEnv
+	php
+	sei
 	SETBANK()
 	ldx actThread
 	inc threadTab + TH_SP,x
@@ -282,6 +284,7 @@ pull	.(
 	tay
 	lda $0100,y
 	SYSBANK()
+	plp
 	rts
 	.)
 
@@ -293,9 +296,12 @@ pull	.(
 	tax
 	pla
 	ldy actEnv
+	php
+	sei
 	SETBANK()
 	sta $0100,x
 	SYSBANK()
+	plp
 	rts
 	.)
 
@@ -479,6 +485,8 @@ sysbuf	.dsb 256
 ; largely inefficient, but should work for now
 &mapsysbuf .(
 	ldy actEnv
+	php
+	sei
 	SETBANK()
 	ldy #0
 l0	lda PCBUF,y
@@ -486,6 +494,7 @@ l0	lda PCBUF,y
 	iny
 	bne l0
 	SYSBANK()
+	plp
 	rts
 	.)
 
@@ -493,6 +502,8 @@ l0	lda PCBUF,y
 &mapsysbufrev .(
 	ldy actEnv
 &&mapsysbufrevy 
+	php
+	sei
 	SETBANK()
 	ldy #0
 l0	lda SYSBUF,y
@@ -500,6 +511,7 @@ l0	lda SYSBUF,y
 	iny
 	bne l0
 	SYSBANK()
+	plp
 	rts
 	.)
 
