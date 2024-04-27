@@ -1,0 +1,184 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.0.0
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1998 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+/***************************************************************************
+ *
+ * This file is included in the RESET routine of the kernel,
+ * after the "sei:cld". The routine starting at the bginning
+ * of this file must initialize the hardware to the system RAM
+ * in the beginning and the system ROM in the end of the memory
+ * map. Also the system stack (pointer) is setup. 
+ * 
+ * In addition to that the system interrupt timer (needed for 
+ * task preemtion) must be setup.
+ *
+ * After that the file must define the following macros:
+ *
+ * GETFREQ()		returns a=0 for 1Mhz, a=128 for 2MHz
+ * LEDPORT		address of LED port to signal hardware failures
+ * LED_LED		bit of LED bit in LEDPORT address
+ * H_ERROR()		if LEDPORT is not defined, then H_ERROR replaces
+ *			the LED toggle routine if needed.
+ * CLRTIMER()		clear the system interrupt timer interrupt
+ *			or outside. Is checked by "BNE IRQ_in_Kernel" 
+ * SAVEMEM()		save system mem config for interrupt
+ * RESTOREMEM()		restore system mem config after interrupt
+ * STARTMEM()           This is used to alloc/enable memory pages found
+ *                      during kernel init. Takes mem size in AC as given
+ *                      by the kernel init. It is called _after_ inimem!
+ */
+
+/* Kernel routines for C64 hardware */
+
+/*
+ * init stack pointer for system stack
+ */
+	  ldx #<-1
+	  txs
+
+/*
+ * init memory configuration
+ * https://www.oxyron.de/html/registers_mmu.html
+ */
+	  lda #7
+	  sta 0		; CPU data direction register
+	  lda #7	; color ram for text mode cpu+vic; use RAM for $d000
+	  sta 1		; set Memory configuration 
+
+	lda #%00111110	; env 0: all RAM0, except I/O - for kernel and init progs
+	sta MMU+PCRA	
+	lda #%01111111	; env 1: all RAM1 (even in $d000) - for other lib6502 progs
+	sta MMU+PCRB
+
+	lda #%00001010	; video RAM in bank 0, only top of bank shared, 8k shared
+	sta MMU+RCR
+
+	lda #0
+	sta MMU+P1H	; high is latched until ...
+	sta MMU+P0H	
+
+	sta MMU+P0L	; ... low is written to
+	lda #1
+	sta MMU+P1L	; 
+	
+	sta MMUFF+LCRA	; set env 0
+/* 
+ * disable any interrupt source
+ */
+	lda #0
+	sta C64VIC+VIC_IMR
+
+	lda #%01111111
+	sta C64CIA1+CIA_ICR	; disable system timer irq
+	sta C64CIA2+CIA_ICR	; disable nmi interrupts (if any)
+
+/* 
+ * C64 specific irq timer init, irq every screen
+ */
+	; lda #%01111111
+	and $d011		; clear most significant bit in VIC raster
+	sta $d011
+	
+	lda #1			; raster line to use
+	sta $d012
+
+	lda #%00000001
+	sta $d01a		; enable the raster interrupt
+	
+/*
+ * check zeropage RAM, jump to he_zero if failure
+ */
+;#include "kernel/zerotest.a65"
+
+/*
+ * check system RAM up to ROMSTART, jump to he_ram if failure
+ * returns available RAM in 256 byte blocks in AC
+ */
+;	.zero
+;cnt	.byt 0
+;	.text
+;#include "kernel/ramtest.a65"
+;	cmp #MIN_MEM
+;	bcc he_ram
+
+/*
+ * originally SYSPORT specific, they have a value for the C64 also...
+ */
+#define	GETFREQ()	lda #0
+
+/*
+ * output hardware errors
+ */
+
+#define	LEDPORT		$d020
+#define	LED_LED		1
+
+#define H_ERROR                         \
+          LDA LEDPORT:EOR #LED_LED      :\
+          STA LEDPORT                   :\
+          LDY #0:TYA                    :\
+PRE2      ADC #1:BNE PRE2               :\
+          INY:BNE PRE2                  :\
+          LDA LEDPORT:EOR #LED_LED      :\
+          STA LEDPORT                   :\
+          LDA #0:TAY                    :\
+PRE3      ADC #1:BNE PRE3:INY           :\
+          BNE PRE3:inx:BNE HERROR       :\
+          ldx #15                       :\
+          lda #0:tay                    :\
+pre5      adc #1:bne pre5               :\
+          iny:bne pre5                  :\
+          dex:bne pre5  
+
+/* 
+ * as we have set the VIC irq in the kernel, we have to clear the
+ * VIC interrupt flag. 
+ *
+ * Note, this asl on the VIC interrupt latch register does two things:
+ * 1) it writes a zero into bit 0, which is the rasterline interrupt timer bit,
+ *    thus acknoledging the interrupt
+ * 2) it moves bit 7 into C, so if after CHECKTIMER C=1, then it's a timer interrupt
+ *
+ */
+;#define	CLRTIMER()	asl $d019
+#define	CHECKTIMER()	asl $d019
+
+/*
+ * MMU systems may map task pages into kernel mem to make copying 
+ * easier. This mapping has to be preserved during interrupt.
+ * SAVEMEM() saves the memory configuration, while RESTOREMEM() 
+ * restores it, obviously.
+ * These routines are called _after_ "jsr memsys", so this routine
+ * has to preserve this mapping when called from kernel space,
+ * and so must memtask.
+ */
+
+#define	SAVEMEM()	lda MMU:pha
+#define	RESTOREMEM()	pla:sta MMU
+
+/* 
+ * no memory management...
+ */
+#define	STARTMEM()
+
+

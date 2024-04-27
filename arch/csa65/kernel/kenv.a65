@@ -66,6 +66,8 @@
  * MAPSYSBUF must preserve xr 
  */
 #define MAPSYSBUF	jsr mapsysbuf
+#define MAPSYSBUFOUT	jsr mapsysbuf
+#define	MAPSYSBUFREV
 
 &mapsysbuf
 	.(							:\
@@ -86,20 +88,11 @@ map1	lda #SYSPAGE						:\
  * length in TH_PAR+1(actThread)
  */
 #define	CPPCBUFRX()						\
-	ldx actTask						:\
-	lda taskTab + TT_ENV,x					:\
-	tax							:\
-	lda envTab + TE_MMU,x					:\
-	sta MMU+2						:\
-	lda threadTab + TH_TASK,y				:\
-	tax							:\
-	lda taskTab + TT_ENV,x					:\
-	tax							:\
-	lda envTab + TE_MMU,x					:\
-	sta MMU+1						:\
+	jsr setmmu12						:\
 	lda threadTab + TH_PAR+1,y				:\
-	jsr cploop
+	jsr cplooprx
 
+	
 /* 
  * copies PCBUF from actual task to another (thread id in y)
  * length in TH_PAR+1(actThread)
@@ -135,6 +128,17 @@ l_0	dey
 	rts
 	.)
 
+cplooprx .(
+	tay
+l_0	dey
+	lda PCBUF+(BLKSIZ*2),y
+	sta PCBUF+(BLKSIZ),y
+	tya
+	bne l_0
+	rts
+	.)
+
+; must preserve y as current thread ID
 setmmu12 .(
 	ldx actEnv
 	lda envTab + TE_MMU,x
@@ -784,8 +788,6 @@ gne       lda #E_OK
           lda #E_OK
           clc
           jmp memtask
-	  ;jsr memtask
-          ;rts
 
 /*
 &getblk   jsr memsys
@@ -812,7 +814,7 @@ gne       lda #E_OK
 /*
  * needed for GETINFO, gives mem available for task
  */
-#define	GETTASKMEM  ldx taskTab + TT_ENV,y: lda envTab + TE_RAMLEN,x: asl: asl: asl: asl
+#define	GETTASKMEM  lda taskTab + TT_ENV,x: tay: lda envTab + TE_RAMLEN,y: asl: asl: asl: asl
 
 /*
  * needed in device code to get active environment in AC

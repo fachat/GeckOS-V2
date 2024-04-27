@@ -39,7 +39,6 @@
 #include  "config.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
-#include  "petdef.i65"
 
 #include  "kernel.i65"
 

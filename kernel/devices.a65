@@ -146,7 +146,7 @@ setnam    .(
 	.)
 
 devgnam   .(
-	  MAPSYSBUF
+	  MAPSYSBUFOUT
 
           jsr setnam
 gn1       lda (devzei),y
@@ -155,6 +155,9 @@ gn1       lda (devzei),y
           cmp #0
           bne gn1
 gn2       tya
+
+	  MAPSYSBUFREV
+
 	  sec
 	  sbc #3
           tax

@@ -1,4 +1,6 @@
 
+OSA2KERNEL=57856	# $e200
+LIB6502=$(shell echo $$(( $(OSA2KERNEL) - 45 * 3 )))
 
 XA=xa -k -XMASM 
 
@@ -16,9 +18,12 @@ csarom.bin: ${PARTS} csa_devices.o65 mkcsarom.sh
 csarom_romtest.bin: ${PARTS} csa_devices_romtest.o65 mkcsarom.sh
 	./mkcsarom.sh $@ csa_devices_romtest.o65 ${PARTS}
 
+info: csakernel.o65 csalib.o65
+	${FILE} $^
+
 csakernel.bin: ../../kernel/*.a65 kernel/*.a65 csakernel.a65
 	@echo "Building kernel at 0xE400 (with gap at E800-EFFF)"
-	${XA} -I../.. -I../../include -P $@.lst -R -bt 58368 -bz 8 -bd 768 -bb 2048 \
+	${XA} -I../.. -I../../include -P $@.lst -R -bt $(OSA2KERNEL) -bz 8 -bd 768 -bb 2048 \
 		-DROMTEST \
 		-DSPLITKENV=61440 \
 		-l csakernel.lab \
@@ -45,8 +50,8 @@ csalib.bin: ../../lib6502/*.a65 csalib.a65
 	@echo "Building lib at 0xCC00"
 	# note: ROMSTART here is shared ROM, so start of lib6502
 	${XA} -I../.. -I../../include -R -bt 51200 -bz 8 -bd 768 -bb 1536 \
-		-DOSA2KERNEL=58368 \
-		-DLIB6502=58233 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
+		-DLIB6502=$(LIB6502) \
 		-DROMSTART=51200 \
 		-l csalib.lab \
 		-o csalib.o65 \
@@ -67,8 +72,8 @@ csa_magic.o65: ../../sysapps/magic/* csa_magic.a65
 csa_init.o65: ../../sysapps/init/* csa_init.a65 
 	@echo "Building init at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 48 -bd 912 -bb 960 \
-		-DOSA2KERNEL=58368 \
-		-DLIB6502=58233 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
+		-DLIB6502=$(LIB6502) \
 		-DROMSTART=32768 \
 		-o csa_init.o65 \
 		csa_init.a65
@@ -77,7 +82,7 @@ csa_init.o65: ../../sysapps/init/* csa_init.a65
 csa_devices.o65: ../../devices/* devices/* csa_devices.a65
 	@echo "Building devices at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 200 -bd 1800 -bb 3300 \
-		-DOSA2KERNEL=58368 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
 		-DROMSTART=32768 \
 		-l csa_devices.lab \
 		-o csa_devices.o65 \
@@ -87,7 +92,7 @@ csa_devices.o65: ../../devices/* devices/* csa_devices.a65
 csa_devices_romtest.o65: ../../devices/* devices/* csa_devices.a65
 	@echo "Building devices at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 200 -bd 1800 -bb 3300 \
-		-DOSA2KERNEL=58368 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
 		-DROMSTART=32768 \
 		-DROMTEST \
 		-o csa_devices_romtest.o65 \
@@ -97,7 +102,7 @@ csa_devices_romtest.o65: ../../devices/* devices/* csa_devices.a65
 csa_fsdev.o65: csa_fsdev.a65
 	@echo "Building fsdev at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
-		-DOSA2KERNEL=58368 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
 		-DROMSTART=32768 \
 		-o csa_fsdev.o65 \
 		csa_fsdev.a65
@@ -106,7 +111,7 @@ csa_fsdev.o65: csa_fsdev.a65
 csa_fsiec.o65: csa_fsiec.a65
 	@echo "Building fsiec at 0x8000"
 	${XA} -I../.. -I../../include -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
-		-DOSA2KERNEL=58368 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
 		-DROMSTART=32768 \
 		-o csa_fsiec.o65 \
 		csa_fsiec.a65
@@ -129,7 +134,7 @@ csa_lmon.o65: csa_lmon.a65
 csa_mon.o65: csa_mon.a65
 	@echo "Building mon at 0x8000"
 	${XA} -I../.. -I../../include -I../../apps/lmon -R -bt 32768 -bz 64 -bd 768 -bb 2048 \
-		-DOSA2KERNEL=58368 \
+		-DOSA2KERNEL=$(OSA2KERNEL) \
 		-DROMSTART=32768 \
 		-o csa_mon.o65 \
 		csa_mon.a65

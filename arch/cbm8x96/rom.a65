@@ -186,7 +186,7 @@ s_boots
 	.byt PK_LIB+PK_AUTOEXEC+PK_RESTART	; is lib6502 program
 	.word 0		; P_ADDR ignored
 	.byt 16		; P_RAM
-	.byt 128	; P_SHARED
+	.byt 0		; P_SHARED - 0 puts it into user env, where malloc works
 	.byt 0		; P_PRIORITY
 	.byt 0,0	; P_DEV
 	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH,0,0

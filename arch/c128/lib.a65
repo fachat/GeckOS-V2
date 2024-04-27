@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-2020 Andre Fachat 
+    Copyright (C) 1989-1998 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,45 +21,43 @@
 
 ****************************************************************************/
 
-/***************************************************************************/
-/*                      These defines control the ROM build                */
-/*                                                                         */
 
+/***************************************************************************/
+/*			These defines control the ROM build		   */ 
+/*									   */ 
+
+#include "env.i65"
+
+
+#define	  LIB6502_SHAREDZERO	/* lib6502 fork sets FORK_SHARED to 0 */
 
 /***************************************************************************
- *
+ * 
  * Here comes the ROM content
  */
-
-/*
+ 
 #include  "config.i65"
-*/
 #include  "kdefs.i65"
 #include  "fdefs.i65"
+
 #include  "kernel.i65"
-#include  "env.i65"
-	.(
 
-#define	LIBMEM_ALLOC_SBRK
+/************* lib6502 code				*/
 
-Zerostart	=$40
-Memstart	=$0400
-Memend		=$1000		; only used in libexec for initial fork memory size
-
-
-#echo ############ Lib6502:
-
-; put lib6502 directly in front of kernel
-; when STDIOADDR is defined, lib6502 ends with lib jump table
-#define	STDIOADDR	OSA2KERNEL
+#echo start of lib6502:
+#print *
+s_lib
 
 #include  "lib6502/lib6502.a65"
 
-END=*
-#print END
+#print *-s_lib
 
-	.dsb OSA2KERNEL-*,$ff
+	.data
+Memstart=*
+	.text
 
-	.)
+#echo LIB6502:
+#print LIB6502
+
 
 

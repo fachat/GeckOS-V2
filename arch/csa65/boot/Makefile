@@ -1,4 +1,6 @@
 
+OSA2KERNEL=57856        # $e200
+
 BASE=../../../dist/osabase.d80
 TRG=geckoscsa.d80
 
@@ -72,7 +74,7 @@ loader: loader.bas
 	petcat -w40 -o loader loader.bas
 
 boot: boot.a65
-	${XA} -o boot boot.a65
+	${XA} -DOSA2KERNEL=$(OSA2KERNEL) -o boot boot.a65
 
 inirom: inirom.a65
 	(XAINPUT=${XAINPUT}; export XAINPUT;\

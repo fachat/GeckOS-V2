@@ -29,15 +29,8 @@
 
 /* These are necessary for CS/A65 kernel ***********************************/
 
-#define	OSA_ARCH	"CS/A65"
 
 #define	OSA2KERNEL	$f000
-
-#ifdef CMOSCPU
-#define OSA_CPU         "6502"
-#else
-#define OSA_CPU         "65C02"
-#endif
 
 /* These are changeable ****************************************************/
 

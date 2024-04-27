@@ -3,7 +3,7 @@
     OS/A65 Version 2.0.0
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-2020 Andre Fachat 
+    Copyright (C) 1989-1998 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,40 +25,66 @@
 /*                      These defines control the ROM build                */
 /*                                                                         */
 
+#define   ROM
+
+;#define	ROMTEST
+
+/* These are changeable ****************************************************/
+
+#define	CSA_CONSOLE	0	/* device to output debug/log messages */
+
+
+#define	NEED_CHECKCHLD		/* this is necessary if using "init" or 
+				   lib6502 */
+#define	NEED_GETINFO
+#define	NEED_SETINFO
+#define	NEED_UNGETC
+
+
+#define	NMIRESET
+
+#undef	CMOSCPU
+
+#define STACKCOPY               /* if defined, save stack area in memory
+                                   when context switching, otherwise divide
+                                   stack area and give each task a part.
+                                   It's faster without, but allows more
+                                   tasks with */
+
+#define MEMINIVAL       0       /* Clear memory to 0 on boot */
+
+
+/***************************************************************************
+ * 
+ * Better not change anything below 
+ */
+
+#ifdef CMOSCPU
+#define	OSA_CPU		"6502"
+#else
+#define	OSA_CPU		"65C02"
+#endif
 
 /***************************************************************************
  *
  * Here comes the ROM content
  */
 
-/*
 #include  "config.i65"
-*/
+#include  "c128def.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
 #include  "kernel.i65"
 #include  "env.i65"
+
+#define	MIN_MEM		$20		/* 8 kbyte */
 	.(
 
-#define	LIBMEM_ALLOC_SBRK
+/************* Kernel                                   */
+          
+#echo ############ kernel:
 
-Zerostart	=$40
-Memstart	=$0400
-Memend		=$1000		; only used in libexec for initial fork memory size
-
-
-#echo ############ Lib6502:
-
-; put lib6502 directly in front of kernel
-; when STDIOADDR is defined, lib6502 ends with lib jump table
-#define	STDIOADDR	OSA2KERNEL
-
-#include  "lib6502/lib6502.a65"
-
-END=*
-#print END
-
-	.dsb OSA2KERNEL-*,$ff
+#include  "kernel/kernel.a65"
 
 	.)
 

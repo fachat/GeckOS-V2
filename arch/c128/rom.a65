@@ -27,32 +27,23 @@
 /*									   */ 
 
 #define   ROM
-/* #define	  C64 */
+/* #define	  C128 */
 
-/* These are necessary for C64 kernel **************************************/
+/* These are necessary for C128 kernel **************************************/
 
 #define   NOMMU   
 #undef 	  CMOSCPU		/* ... and no CMOS cpu */
-#define	  VIDPAGE 14*16
+#define	  VIDPAGE 12*16		/* in memory pages */
 #define	  SHORTLINE		/* prepare for 40 col screen */
 #define	  RAMTEST
 #define	  NOMIRRORMEM
 
-#define	  OSA_CPU	"6510"
-#define   OSA_ARCH	"C64"
 
 /* These are changeable ****************************************************/
 /* some specific configurations can be created using -D on the xa command line */
 
 /*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
-#define	ROMSTART	$9000	/* where the ROM starts */
-
-#define	RAMSTART	1
-
-#define	RAMEND		>ROMSTART  /* The size of the RAM we allow to be used.
-				   Size in pages (256 bytes). Must be below
-				   ROMSTART */
 
 #define	MIN_MEM		>ROMSTART  /* minimum memory we need in system env. to 
 				   work ok, in pages */
@@ -66,14 +57,6 @@
 #define ACIABASE	$de00
 
 #define	UARTXTAL	4 	/*  xtal is 4 times 1.8324 MHz */
-
-#define	MEMINIVAL	0	/* Clear memory to 0 on boot */
-
-#define	STACKCOPY		/* if defined, save stack area in memory
-				   when context switching, otherwise divide
-				   stack area and give each task a part.
-				   It's faster without, but allows more
-				   tasks with */
 
 #define NMIDEV			/* necessary for fast RS232 */
 				
@@ -144,13 +127,12 @@
 #include  "config.i65"
 #include  "kdefs.i65"
 #include  "fdefs.i65"
-#include  "c64def.i65"
+#include  "c128def.i65"
+#include  "env.i65"
 
 #include  "kernel.i65"
 
 #define	STDIOADDR	$d000
-
-          .word $3000		/* load address */
 
 .(
 
@@ -158,7 +140,7 @@
 
 /************* devices	 				*/
 
-#include  "devices/c64dev.a65"
+#include  "devices/c128dev.a65"
 
 /************* init process 				*/
 
@@ -255,42 +237,9 @@ end_auto
 
           .word -1
 
-/************* lib6502 code				*/
-
-#echo "lib6502 starts at"
-#print *
-
-/* lib6502 jmp table is below STDIOADDR */
-
-#include  "lib6502/lib6502.a65"
-
-/************* fill not used area (I/O, screens)	*/
-
-#if $d000-* < 0
-#echo "Error after lib6502"
-#print *
-#endif
-
-.dsb $d000-*,<-1
-.dsb $1c00, <-1			/* from d000 to f000 
-				   ($e000-ebff is screen buffer) */
-
-/************* Kernel					*/
-          
-#print *
-
-#include  "kernel/kernel.a65"
-
 #print *
 
 /************* Constants for lib6502 memory handling	*/
-
-	.bss
-Memstart  =$1800
-;Memstart  =*
-	.text
-Memend	  =ROMSTART
-Zerostart =$70
 
 .)
 

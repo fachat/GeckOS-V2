@@ -43,7 +43,7 @@
 #define	KEY_START	20	/* when does key repetition start */
 
 				/* screen# -> hi byte of base address in AC */
-#define	HI_VID	        asl:asl:clc:adc #VIDPAGE<<4
+#define	HI_VID	        asl:asl:clc:adc #VIDPAGE
 
 #define	ACT_HI_VID      lda hivid
 
@@ -76,8 +76,10 @@ inivid	.(
         sta C64VIC+VIC_CR1            ; 25 lines
         lda #8
         sta C64VIC+VIC_CR2            ; 40 cols
-;       lda #(($10 & %001110000)>>3)+(($20 & %00111100)<<2)
-        lda #%10000100
+;       lda #(($10 & %001110000)>>2)+(($20 & %00111100)<<2)
+;       lda #%10000100
+#print (($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
+	lda #(($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
         sta C64VIC+VIC_BASE           ; character and screen base
 
         lda C64CIA2+CIA_DDRA          ; set upper two video address bits
@@ -85,6 +87,7 @@ inivid	.(
         sta C64CIA2+CIA_DDRA          ; set bits to output mode
         lda C64CIA2+CIA_PRA
         and #%11111100
+	ora #3-((VIDPAGE & %11000000) >> 6)
         sta C64CIA2+CIA_PRA           ; change to uppermost page ($c000-)
 
         lda #C64_TEXT_COL             ; set the screen (text) color
@@ -108,7 +111,8 @@ coloop  sta $d800,y
         asl
         asl
         asl
-        ora #%10000100
+        ;ora #%10000100
+	ora #(($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
         sta C64VIC+VIC_BASE
 	rts
 	.)

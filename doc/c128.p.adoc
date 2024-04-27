@@ -24,23 +24,22 @@ $ffff  ----------------------
 $ff00	configur     <---
 $ff00   -------      <---
         kernel       <--- 
-$e000   -------      <--- 
-        I/O          <---
-$d000   -------      <---
-        kernel vars  <---
-        lib6502      <---
-$c000   -------      -------
-           |   	     init      
-                     img
-        lib650       programs
-        application  and
-        memory       vars
-$a800                -------
+        +data        <---
+$e000   -------      -------
+        I/O/chrom          
+$d000   -------        |
+        screens      
+$c000   -------        |
+        init      
+        img            |
+        programs
+        + data         |
+$8000   -------        
            |           |
                        
-           |         lilb6502
-                     app mem
-           |      
+        lib6502      lib6502
+        app mem      app mem
+           |           |
 
            |           |
 
@@ -48,7 +47,7 @@ $a800                -------
 
 $1c80   -------      -------
         lib6502      lib6502
-        vars (e0)    vars (1)
+        + vars       + vars 
 $0300   -------      -------
         PCBUF(0)     PCBUF(1)
 $0200   -------      -------

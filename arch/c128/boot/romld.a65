@@ -1,0 +1,343 @@
+
+START	=$3000
+
+; where dup_lib is running
+; as it is copying from bank 0 to 1, it needs to be in shared RAM
+TMP	=$e000	
+LIBSIZE	=32	; pages for lib.bin
+
+
+ZP	=$fb
+FA	=$ba	; current device number
+ST	=$90	; I/O status
+
+MMU	=$d500
+MMUFF	=$ff00
+
+PCRA	=1
+PCRB	=2
+PCRC	=3
+PCRD	=4
+MCR	=5
+RCR	=6
+P0L	=7
+P0H	=8
+P1L	=9
+P1H	=10
+VR	=11
+
+MAPSYS0	=%00111110	; all RAM0 except I/O
+MAPSYS1	=%01111110	; all RAM1 except I/O
+MAPPET	=%00000000	; std BASIC
+CTRL	=MMU
+
+SETBNK	=$ff68		; specific c128
+BANK	=0		; BASIC bank definition - RAM - to read filename
+
+OPEN	=$ffc0
+SETLFS	=$ffba
+SETNAM	=$ffbd
+CHKIN	=$ffc6
+CHRIN	=$ffcf
+CLOSE	=$ffc3		; $ffc3 - calls into BASIC.... 
+CLRCH	=$ffcc
+BSOUT	=$ffde
+
+	.word start
+	*= START
+
+	;----------------------------------------------------
+start
+	lda #"*"
+	jsr BSOUT
+
+	jsr loadrom	; load init image to bank 0 RAM
+	bcs err
+	lda #"*"
+	jsr BSOUT
+
+	jsr loadkern	; load kernel image to bank 0 RAM
+	bcs err
+	lda #"*"
+	jsr BSOUT
+
+	jsr loadlib	; load library image to bank 0 RAM
+	bcc loaded
+
+err 	rts
+
+loaded
+	lda #"*"
+	jsr BSOUT
+
+	sei
+
+	lda #%00001010	; video bank 0, shared hi (not low), 8k shared
+	sta MMU+RCR
+
+	lda #%01111110	; all RAM bank 1, but chargen which is I/O
+	sta MMU+PCRB	; config B
+	lda #%00111110	; all RAM bank 0, but chargen which is I/O
+	sta MMU+PCRA	; config A
+
+	sta MMUFF+PCRA	; enable config A
+
+	jsr reloc_lib	; move lib image from load space to actual location, in both banks
+
+	jsr setup_crom
+
+	; https://www.oxyron.de/html/registers_mmu.html
+
+
+	sta MMUFF+PCRA	; and set env 0 config
+
+
+	jmp ($fffc)	; RESET
+
+
+	;----------------------------------------------------
+
+libname	.asc "LIB.BIN"
+libnlen	=*-libname
+
+kernname .asc "KERN.BIN"
+kernnlen =*-kernname
+
+romname	.asc "ROM.BIN"
+romnlen	=*-romname
+
+
+loadlib	lda #libnlen
+	ldx #<libname
+	ldy #>libname
+	jmp do_load
+
+loadrom	lda #romnlen
+	ldx #<romname
+	ldy #>romname
+	jmp do_load
+
+loadkern lda #kernnlen
+	ldx #<kernname
+	ldy #>kernname
+	;jsr do_load
+
+do_load	jsr SETNAM
+	lda #1		; LFN
+	ldx FA		; current device (from where loader has been loaded)
+	ldy #0		; SEC = load
+	jsr SETLFS
+
+	lda #BANK
+	ldx #BANK	; for filename
+	jsr SETBNK
+
+	lda #0
+	sta ST
+
+	jsr OPEN	
+
+	lda ST
+	beq load
+sta $0401
+	sec
+	rts
+
+	;----------------------------------------------------
+	; load and store in 8x96 extra memory banks
+
+load	.(
+	ldx #1		; LFN
+	jsr CHKIN
+
+	lda #0
+	sta ST
+
+	jsr CHRIN
+	sta ZP
+	jsr CHRIN
+	sta ZP+1
+
+l1	jsr CHRIN
+	ldy #0
+
+	php
+	sei
+	ldx #MAPSYS0
+	stx CTRL
+
+	sta (ZP),y
+
+	ldx #MAPPET
+	stx CTRL
+	plp
+
+	lda ST
+	bne endload
+
+incl	inc ZP
+	bne checkmmu
+	inc ZP+1
+checkmmu
+	ldx ZP+1
+	inx
+	bne l1	; high address was not $ff
+	lda ZP
+	cmp #$05
+	bcs l1	; skip first 5 bytes only
+
+	; $ff0x after increase
+	jsr CHRIN	; skip a byte
+	jmp incl
+
+endload	lda ST
+	pha
+
+	jsr CLRCH
+	lda #1		; LFN
+	jsr CLOSE
+	
+	pla
+	and #$ff-$40
+	;cmp #1
+	clc
+	rts
+	.)
+
+	;----------------------------------------------------
+        ; copy the lib image into its place
+reloc_lib .(
+	ldx #0
+l	lda r_start,x
+	sta TMP,x
+	inx
+	cpx #r_end-r_start
+	bne l
+	jmp TMP
+
+r_start
+        ldx #LIBSIZE	; number of pages
+
+        ldy #0
+loop                    ; copy xr pages of 256 byte from fd/fe upwards
+l1      lda $4000,y
+l2      sta $0300,y
+
+	sta MMUFF+PCRB	; bank 1
+l3	sta $0300,y
+	sta MMUFF+PCRA	; back to bank 0
+
+        iny
+        bne l1
+
+	inc l1-r_start+TMP+2
+	inc l2-r_start+TMP+2
+	inc l3-r_start+TMP+2
+        dex
+        bne loop
+
+	rts
+r_end
+	.)
+
+	;----------------------------------------------------
+	; setup character set
+
+setup_crom .(
+	lda #%00001111	; RAM bank 0, $c-$f ROM, chargen
+	sta MMU
+
+        lda 0
+        ora #7
+        sta 0           ; cpu ddr
+
+        ; first copy the charom from $d000, under the i/o
+
+        lda 1
+        and #%11111011  ; disable I/O, read Charom, write RAM
+        sta 1
+
+        ldy #0
+cl0a    lda #$ff
+        sta $d000,y
+        lda $d900,y
+        sta $d100,y
+        lda $da00,y
+        sta $d200,y
+        iny
+        bne cl0a
+
+cl1a    lda $d800,y
+        sta $d000+64*8,y
+        iny
+        cpy #8
+        bcc cl1a
+
+cl1     lda $d800,y
+        sta $d000+(97-1)*8,y
+        iny
+        cpy #27*8
+        bcc cl1
+
+cl2     lda $d800,y
+        sta $d000+(91-27)*8,y
+        iny
+        bne cl2
+
+        lda 1
+        and #%11111000  ; disable even the charom, only RAM
+        sta 1
+
+        ; ldy #0
+cl3     lda c92,y
+        sta $d000+92*8,y
+        lda c95,y
+        sta $d000+95*8,y
+        lda c96,y
+        sta $d000+96*8,y
+        iny
+        cpy #8
+        bcc cl3
+
+        ldy #0
+cl4     lda c123,y
+        sta $d000+123*8,y
+        iny
+        cpy #5*8
+        bcc cl4
+
+        ldy #0
+cl5     lda $d000,y
+        eor #$ff
+        sta $d400,y
+        iny
+        bne cl5
+        inc cl5+2
+        inc cl5+7
+        lda cl5+7
+        cmp #$d8
+        bcc cl5
+
+        lda 1
+        ora #%00000100  ; enable I/O
+        sta 1
+
+	sta MMUFF+PCRA	; and set env 0 config (re-enable I/O)
+
+	rts
+
+        ; character differences to C64 charom
+c92     .byt $00, $c0, $60, $30, $18, $0c, $06, $00 
+c95     .byt $00, $00, $00, $00, $00, $00, $ff, $00
+c96     .byt $06, $0c, $18, $00, $00, $00, $00, $00
+c123    .byt $0e, $18, $18, $30, $18, $18, $0e, $00
+        .byt $18, $18, $18, $00, $18, $18, $18, $00 
+        .byt $38, $0c, $0c, $06, $0c, $0c, $38, $00 
+        .byt $00, $00, $00, $73, $ce, $00, $00, $00 
+        .byt $00, $18, $3c, $66, $c3, $ff, $00, $00
+
+	.)
+
+	;----------------------------------------------------
+
+

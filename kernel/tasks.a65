@@ -59,8 +59,9 @@
 
           .(
 
-#ifdef MAP_ZERO
 	.zero
+tp	.word 0
+#ifdef MAP_ZERO
 #else
 	.data
 #endif
@@ -171,7 +172,9 @@ l0	tay
 &fork    .(
 	  jsr memsys
 	  sty div
+
 	  MAPSYSBUF
+
 	  ldx SYSBUF+FORK_STDIN
           jsr teststd
           stx SYSBUF+FORK_STDIN
@@ -931,10 +934,10 @@ end	jmp memtask
 	.(
 	jsr memsys
 	; save C
-#ifdef MAPSYSBUF
+#ifdef MAPSYSBUFOUT
 	php	
 	; keeps X, destroys Y
-	MAPSYSBUF
+	MAPSYSBUFOUT
 	plp
 #endif
 	bcc doloop
@@ -960,9 +963,8 @@ test	ldy taskTab + TT_NTHREADS,x
 	beq next
 found	
 	stx div		; save for later
-	txa
-	tay
-	; expects task ID in Y (to be changed?)
+	; expects task ID in X 
+	; needs to preserve X
 	GETTASKMEM
 	sta SYSBUF + TN_MEM
 	txa
@@ -1013,7 +1015,7 @@ name
 	lda taskTab2 + TT_NAME + offset,x
 	sta SYSBUF + TN_NAME,y
 	inx
-	cpy #0
+	tya		;cpy #0
 	bne name
 
 	; copy over thread info
@@ -1060,7 +1062,13 @@ next_thread
 	; return
 	ldx SYSBUF + TN_PID
 	clc
-done	jmp memtask
+done	
+#ifdef MAPSYSBUFREV
+	pha
+	MAPSYSBUFREV
+	pla
+#endif
+	jmp memtask
 
 	.)
 
@@ -1155,6 +1163,7 @@ serr2	cmp #1
 	jmp memtask
 	
 	; y is target thread
+	; x is target task
 copyto
 #ifdef CPPCBUFTX
 	sty div

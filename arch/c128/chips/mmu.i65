@@ -1,0 +1,21 @@
+
+MMU     =$d500
+MMUFF   =$ff00
+
+PCRA    =1
+PCRB    =2
+PCRC    =3
+PCRD    =4
+MCR     =5
+RCR     =6
+P0L     =7
+P0H     =8
+P1L     =9
+P1H     =10
+VR      =11
+
+LCRA	=PCRA
+LCRB	=PCRB
+LCRC	=PCRC
+LCRD	=PCRD
+

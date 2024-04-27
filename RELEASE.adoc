@@ -1,6 +1,34 @@
 
 = GECKOS RELEASE NOTES
 
+== GeckOS 2.2-b1
+
+=== Applications
+* lsh got job control
+
+=== Devices
+* new device for an NMI-driven ACIA-based RS232 (swiftlink)
+
+=== Kernel
+* *GETINFO* now returns thread info, needs iterative calls (renamed to *GETINFO2*)
+* *PSEM* blocks on C=1 like any other call with option to block (renamed to *PSEM2*)
+* *CHECKCHLD* also returns info for suspended children (renamed to *CHECKCHLD*)
+* New *JOBCMD* call to facilitate job control functions
+* Separate out timer interrupt from other interrupt sources in device's interrupt chains.
+
+=== Ports
+
+==== C128
+* There is a new port for the Commodore 128!
+
+=== Build
+* Cleanup of build process, using a common dist folder for generic applications / disk images
+* New build targets to automatically build and run in emulator at top level
+* Supports / requires xa65 v2.4.1 or later
+
+=== More details
+* link:https://github.com/fachat/GeckOS-V2/milestone/2?closed=1[Milestone 2.2 issues] on github
+
 == GeckOS 2.1
 
 === Documentation
