@@ -491,8 +491,8 @@ l0	lda PCBUF,y
 
 	; must preserve X 
 &mapsysbufrev .(
-	pha
 	ldy actEnv
+&&mapsysbufrevy 
 	SETBANK()
 	ldy #0
 l0	lda SYSBUF,y
@@ -500,7 +500,6 @@ l0	lda SYSBUF,y
 	iny
 	bne l0
 	SYSBANK()
-	pla
 	rts
 	.)
 
@@ -557,8 +556,12 @@ l0	lda SYSBUF,y
 
 /* copy the PCBUF to the forked task to give it command line etc */
 #define	CPFORKBUF()					\
-			jsr mapsysbufrev		:\
-			SYSBANK()
+			ldy div				:\
+			lda threadTab + TH_TASK,y	:\
+			tay				:\
+			lda taskTab + TT_ENV,y		:\
+			tay				:\
+			jsr mapsysbufrevy
 
 /* copybuf, reqs source env in x, trg env in a, length in y */
 copybuf	.(

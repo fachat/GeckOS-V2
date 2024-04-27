@@ -736,7 +736,7 @@ noend2
 	sta PCBUF+FORK_STDOUT
 	sta PCBUF+FORK_STDERR
 
-	ldy #P_SHARED
+	ldy #P_SHARED + 2	; add 2 for the link address (that is not included in P_*)
         lda (pz),y
         sta PCBUF+FORK_SHARED
 

@@ -1063,7 +1063,9 @@ next_thread
 	; return
 	ldx SYSBUF + TN_PID
 	clc
-done	MAPSYSBUFREV
+done	pha
+	MAPSYSBUFREV
+	pla
 	jmp memtask
 
 	.)
