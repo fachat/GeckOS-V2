@@ -23,8 +23,95 @@
 ****************************************************************************/
 
 
-/**************************************************************************/
-
+/**************************************************************************
+ *
+ * exports these variables and functions:
+ *
+ * 	spalte
+ *		current column 
+ *		(for device specific code)
+ *	zeile
+ *		current row
+ *		(for device specific code)
+ *	vzei
+ *		zp pointer to current mmap'd char line
+ *		(for device specific code)
+ *
+ *	inivscr
+ *		init a virtual device screen
+ *	setsrc
+ *		set the working area (coordinates etc)
+ *		to the screen given in A
+ *	sendline
+ *		send a line from the screen to the stream
+ *		note: looses chars if stream is full(!)
+ *	printchar
+ *		print a character on screen
+ *	setzei
+ *		set the vzei to the char line given in x
+ *	towcl
+ *		clear the current sub-window to the whole
+ *		screen
+ *
+ * The following screen codes are implemented:
+ *
+ *	0-31 range (xout):
+ *		TC_CR		carriage return
+ *		TC_LF		Line feed
+ *		TC_BELL		bell
+ *		TC_FF		Form feed (clear screen/win)
+ *		TC_BS		Backspace
+ *		
+ *	128-159 range (xcode):
+ *		128		tocl - crsr left
+ *		129		nextc - crsr right
+ *		130		tocu - crsr up
+ *		131		nextz - crsr down
+ *		132		tohome - crsr home (top left of win)
+ *		133		toclr - clear window (TC_FF)
+ *		134		todel - del char under cursor
+ *		135		toins - ins char under cursor
+ *		136		towlo - define crsr as upper left win corner
+ *		137		towru - define crsr as lower right win corner
+ *		138		towcl - clear window definition
+ *		139		toeol - move to end of non-space in line
+ *		140		toclrl - clear from crsr to end of line
+ *		141		toecho - set echo flag
+ *		142		tonoecho - clr echo flag
+ *		143		tocpos - position crsr to the row/col 
+ *					position given by the next two bytes
+ *
+ * Window management:
+ *	The driver manages a single display window. This is defined
+ *	by towlo, towru, and towcl controls (see above). Anything else
+ *	(LF, CR, CRSR movement, ...) happens inside this display window. 
+ *
+ *	Stacked window management must be done outside the driver in
+ *	user space.
+ *
+ *	wx/wy		left upper edge of window in abs screen coords
+ *	wh		height of the window in character lines
+ *	wr		rightmost col of window +1 in abs screen coords
+ *
+ * Line / Echo input management
+ *	The driver works in two modes, indirect or direct mode
+ *
+ *	In direct mode each character from keyboard is sent to the
+ *	the stream, and data from the stream is printed on the screen.
+ *
+ *	In indirect/echo mode characters from the keyboard are 
+ *	printed on the screen only. Only when a CR is entered,
+ *	the whole line is send to the stream. 
+ *
+ *	Note: indirect mode should only transfer from where the
+ *	actual input started - but is broken right now (conceptually?)
+ *	and transfers data from the start of line always (I think).
+ *
+ *	iz/is		line number of column of start of input
+ *
+ */
+ 
+	
 
           .(  	;1
 
@@ -426,17 +513,18 @@ td1       dey
 
 toins     .(	;3
           ldy wr
-          dey
-          lda (vzei),y
-          cmp #SCR_SPACE
-          bne tie
-          cpy spalte
-          beq tie
+	  jmp ticmp
+          ;dey
+          ;lda (vzei),y
+          ;cmp #SCR_SPACE
+          ;bne tie
+          ;cpy spalte
+          ;beq tiex
 ti1       dey
           lda (vzei),y
           iny
           sta (vzei),y
-          dey
+ticmp     dey
           cpy spalte
           bne ti1
           lda #SCR_SPACE
@@ -453,8 +541,10 @@ l         dey
           beq l
 e         iny 
           cpy wr
-          bcs x
-          sty spalte
+	  bcc store
+	  bne x
+	  dey		; if last char is not space, move crsr to last char
+store     sty spalte
 x         rts
           .)	;2
 
