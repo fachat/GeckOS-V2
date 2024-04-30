@@ -346,6 +346,8 @@ iniscr    .(	;2	; screen number in AC
           .)	;1
 
 &setscr   .(	;2
+	  lda curdev
+
 	  ldx actdev
 	  cpx #MAX_SCREEN
 	  bcs nosave

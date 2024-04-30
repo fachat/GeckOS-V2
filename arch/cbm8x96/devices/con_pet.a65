@@ -133,7 +133,6 @@ ok			.)
 	.text
 
 &console_init .(
-	jsr inimem
 	jsr inivid
 	jsr inikbd
 	jsr inicrsr
@@ -141,14 +140,9 @@ ok			.)
 	rts
 	.)
 
-inimem    .(
-          clc
-          rts
-          .)
-
 &inivid   .(   
-          lda curdev
-          bne ix
+;          lda curdev
+;          bne ix
 
 /* we assume the CRTC to be initialized... 
           ldx #0

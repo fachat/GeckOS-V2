@@ -74,22 +74,12 @@ zei2	.word 0
 
 	.text
 
-	  pha
-	  tya 
-	  pha
-	  txa
-	  jsr setscr
-	  ldx actdev
-	  pla
-	  tay
-	  pla
-
 	jmp gen_dev
 
 dev_reset .(	;2
 	  sty freq
 
-	lda #0
+	  lda #0
 
           sta syscnt
           sta actscr
@@ -98,6 +88,7 @@ dev_reset .(	;2
           bne re		; only the first is hw-initialized
 	  jsr console_init	; init hardware (called with y=hardware byte)
 &re
+	  jsr setscr
 	  jsr inivscr
           clc
           rts
@@ -132,9 +123,11 @@ wasirq	  lda #E_OK
 	.)	;1
           
 do_irq  .(	;2
+	jsr setscr
+
 	ldy curdev
 	DO_IRQ
-	
+
 	jsr gen_rx_check
 	
 	lda curdev	; get keyboard only for visible screen

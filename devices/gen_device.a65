@@ -99,12 +99,13 @@ nocheck	rts
 	.)
 
 &gen_dev  .(
-          cmp #DC_RES
-          bne p1
-
 	  ; generic reset
 	  cpx #MAX_DEVICE
 	  bcs max_err
+	  stx curdev
+
+          cmp #DC_RES
+          bne p1
 
 	  lda #3		; ^C
 	  sta brkkey,x
@@ -128,12 +129,6 @@ max_err  lda #E_NODEV
 	  rts
 
 p1	.(
-	cpx #MAX_DEVICE
-	bcs max_err
-
-	; set current device	
-	stx curdev
-
 	; check if device is active
 	  pha
           lda status,x
