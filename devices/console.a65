@@ -60,8 +60,9 @@ prg1      ldx #0
 
 
 	.data          
-curdev    .byt 0	; screen the device is working on 
-actscr    .byt 0	; visible screen
+;curdev	  .byt 0	; device currently called in DEVCMD
+actdev	  .byt 0	; device currently active in output
+actscr    .byt 0	; device currently visible 
 freq	  .byt 0	; hardware status byte from kernel (1/2 MHz bit)
 syscnt	  .byt 0	; reentrance semaphore when IRQ can be checked
 shfl	  .byt 0	; shift flag for typed char
@@ -78,7 +79,7 @@ zei2	.word 0
 	  pha
 	  txa
 	  jsr setscr
-	  ldx curdev
+	  ldx actdev
 	  pla
 	  tay
 	  pla
@@ -271,207 +272,7 @@ sw_close .(	;3
  *
  */
 
-	.data
-status    .dsb MAX_SCREEN
-outstr    .dsb MAX_SCREEN
-getstr    .dsb MAX_SCREEN
-brkkey    .dsb MAX_SCREEN
-	.text
-
-gen_tx_check .(
-	ldx curdev
-	lda status,x
-	and #DC_SW_TX	; do we send?
-	beq endtx
-
-	lda getstr,x
-	tax
-	lda #SC_STAT
-	jsr STRCMD	; check stream state
-	cmp #E_EOF
-	bne txok
-	jsr txoff
-	jmp endtx
-txok
-	cmp #E_SEMPTY
-	beq endtx
-	clc
-	rts
-endtx	sec
-	rts
-	.)
-
-gen_rx_check .(
-	lda status,y
-	and #DC_SW_RX
-	beq nocheck
-
-	ldx outstr,y
-	lda #SC_STAT
-	jsr STRCMD
-	cmp #E_NUL
-	bne nocheck
-	jsr rxoff
-nocheck	rts
-	.)
-
-gen_dev  .(
-          cmp #DC_RES
-          bne p1
-
-	  ; generic reset
-	  cpx #MAX_DEVICE
-	  bcs max_err
-
-	  lda #3		; ^C
-	  sta brkkey,x
-
-          lda #0		; linein off ; DC_SW_MOD	; linein ein
-          sta status,x
-          sta ctrlst,x
-
-          sta outstr,x
-          sta getstr,x
-
-#ifldef dev_reset
-	jmp dev_reset
-#else
-	rts
-#endif
-	.)
-
-&max_err  lda #E_NODEV
-	  sec
-	  rts
-
-p1	.(
-	cpx #MAX_DEVICE
-	bcs max_err
-	; check if device is active
-	  pha
-          lda status,x
-          and #DC_SW_EXIT
-          beq p1ok
-          pla
-          sec
-          rts
-
-p1ok      pla
-
-          cmp #DC_IRQ
-	  bne p2t
-#ifldef dev_irq
-	jmp dev_irq
-#else
-	rts
-#endif
-p2t	  cmp #DC_TIMER
-          bne p2
-#ifldef dev_timer
-	jmp dev_timer
-#else
-	rts
-#endif
-	.)
-
-p2        .(
-          cmp #DC_TX_ON
-          bne ox1q
-	ldy curdev
-	lda #0
-	sta ctrlst,y
-	jsr towcl
-          lda #DC_SW_TX
-          bne ox1q1
-ox1q      cmp #DC_RX_ON
-          bne ox1
-	  ; ldy curdev
-	  ; lda #3
-	  ; sta brkkey,y
-          lda #DC_SW_RX
-ox1q1     ldy curdev
-          ora status,y
-          sta status,y
-          jmp ok
-ox1       cmp #DC_TX_OFF
-          bne ox2x
-&txoff    ldy curdev
-          lda status,y
-          and #DC_SW_TX
-          beq devoff
-          ldx getstr,y
-          lda #SC_NUL
-          jsr STRCMD
-          lda status,y
-          and #255-DC_SW_TX
-          sta status,y
-          jmp ok          
-ox2x      cmp #DC_RX_OFF
-          bne ox2
-&rxoff    ldy curdev
-          lda status,y
-          and #DC_SW_RX
-          beq devoff
-          ldx outstr,y
-          lda #SC_EOF
-          jsr STRCMD
-          lda status,y
-          and #255-DC_SW_RX
-          sta status,y
-          jmp ok
-ox2       cmp #DC_EXIT
-          bne ox2a
-          jsr rxoff
-          jsr txoff
-          ldy curdev
-          lda #DC_SW_EXIT
-          ora status,y
-          sta status,y
-          bne ok
-ox2a      cmp #DC_ST
-          bne o3
-ok        lda #E_OK
-          .byt $2c
-devoff    lda #E_DOFF
-          .byt $2c
-devon     lda #E_DON
-          .byt $2c
-notimp    lda #E_NOTIMP
-          cmp #1
-          rts
-o3        cmp #DC_PS
-          bne o4
-          ldx curdev
-          lda status,x
-          and #DC_SW_RX
-          bne devon
-          tya
-          sta outstr,x
-          jmp ok
-o4        cmp #DC_SPD
-          bne o5
-          sty rspd
-          beq ok
-o5        cmp #DC_GS
-          bne o6		; notimp
-          ldx curdev
-          lda status,x
-          and #DC_SW_TX
-          bne devon
-          tya
-          sta getstr,x
-          jmp ok
-o6	  cmp #DC_BRKKEY
-	  bne notimp
-	  ldx curdev
-	  lda brkkey,x
-	  pha
-	  tya
-	  sta brkkey,x
-	  pla
-	  tay
-	  jmp ok
-          .)
+#include "devices/gen_device.a65"
 
 
 /**************************************************************************/
@@ -500,7 +301,7 @@ vtab      .dsb MAX_SCREEN*12
 
 &inivscr  .(
 
-	  lda curdev
+	  lda actdev
           jsr iniscr
 
           lda #TC_FF     ; form feed
@@ -545,14 +346,14 @@ lie3      ldy zei2
           bcs lie4
           lda (vzei),y
 	  SCR2ASC
-          ldy curdev
+          ldy actdev
           ldx outstr,y
           jsr PUTC
 	  SET_MMU
           inc zei2
           bne lie3
 lie4      lda #TC_CR
-          ldy curdev
+          ldy actdev
           ldx outstr,y
           jsr PUTC
 	  lda #SC_SSTAT
@@ -591,7 +392,7 @@ inccst	inc ctrlst,x
 &printchar .(
 	  SET_MMU
 
-	ldx curdev
+	ldx actdev
 	ldy ctrlst,x
 	bne extra
 
@@ -709,14 +510,15 @@ iniscr    .(		; screen number in AC
           .)
 
 &setscr   .(
-	  ldx curdev
+	  ldx actdev
 	  cpx #MAX_SCREEN
 	  bcs nosave
-          cmp curdev
+
+          cmp actdev
           beq setmmu	; same screen as current
           pha
 	  ; save screen
-          lda curdev
+          lda actdev
           asl
           asl
           sta zei2+1    ; screen# times 4     
@@ -736,7 +538,7 @@ s1        lda spalte,y	; copy screen control struct
           lda vzei+1
           sta vtab+1,x
           pla
-nosave	  sta curdev
+nosave	  sta actdev
 	  ; restore screen
           asl
           asl
@@ -835,14 +637,14 @@ xadr      .word tocl-1,nextc-1,tocu-1,nextz-1
 	  .word toecho-1, tonoecho-1, tocpos-1
 
 tocpos	.(
-	ldx curdev
+	ldx actdev
 	lda #1
 	sta ctrlst,x
 	rts
 	.)
 
 toecho	.(
-	ldx curdev
+	ldx actdev
 	lda status,x
 	ora #DC_SW_MOD
 	sta status,x
@@ -850,7 +652,7 @@ toecho	.(
 	.)
 
 tonoecho .(
-	ldx curdev
+	ldx actdev
 	lda status,x
 	and #$ff-DC_SW_MOD
 	sta status,x
