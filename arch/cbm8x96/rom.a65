@@ -27,8 +27,8 @@
 /*			These defines control the ROM build		   */ 
 /*									   */ 
 
-#define PET_KEYB_GRAPHICS
-#define	UARTBASE	$e818
+;#define PET_KEYB_GRAPHICS
+;#define	UARTBASE	$e818
 
 /* These are necessary for PET kernel **************************************/
 
