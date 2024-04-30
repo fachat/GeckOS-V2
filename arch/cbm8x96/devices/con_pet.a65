@@ -58,7 +58,7 @@
 #define	HI_VID	        asl:asl:asl:clc:adc #>SCRBUF
 
 #define	ACT_HI_VID      .(			:\
-			lda screen		:\
+			lda curdev		:\
 			cmp actscr		:\
 			beq orig		:\
 			asl:asl:asl		:\
@@ -125,7 +125,7 @@ ok			.)			:\
 			bne ok			:\
 			ldx zeile		:\
 			jsr setzei		:\
-			ldy screen		:\
+			ldy curdev		:\
 ok			.)
 
 	.data
@@ -147,7 +147,7 @@ inimem    .(
           .)
 
 &inivid   .(   
-          lda screen
+          lda curdev
           bne ix
 
 /* we assume the CRTC to be initialized... 

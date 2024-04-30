@@ -124,7 +124,7 @@ next      pla
           .)
 
 &inivid   .(   
-          lda screen
+          lda curdev
           bne ix
 
 	  lda #$2c		; set charrom and video base

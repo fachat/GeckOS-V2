@@ -22,9 +22,10 @@
 
 ****************************************************************************/
 
-          .(
+          .(	;1
 
-          .(
+
+          .(	;2
 #define   DC_SW_MOD      $20
 #define   DC_SW_EXIT     $10
 
@@ -46,6 +47,8 @@ devend3   .word     devend
 
 #include CONSOLE_DEVICE
 
+#define	MAX_DEVICE	MAX_SCREEN
+
 prg4      ldx #3
           .byt $2c
 prg3      ldx #2
@@ -53,54 +56,39 @@ prg3      ldx #2
 prg2      ldx #1
           .byt $2c
 prg1      ldx #0
-          .)
+          .)	;1
+
 
 	.data          
-screen    .byt 0	; screen the device is working on 
+curdev    .byt 0	; screen the device is working on 
 actscr    .byt 0	; visible screen
 freq	  .byt 0	; hardware status byte from kernel (1/2 MHz bit)
 syscnt	  .byt 0	; reentrance semaphore when IRQ can be checked
 shfl	  .byt 0	; shift flag for typed char
 rspd	  .byt 0	; key repeat speed
-status    .dsb MAX_SCREEN
-outstr    .dsb MAX_SCREEN
-getstr    .dsb MAX_SCREEN
-brkkey    .dsb MAX_SCREEN
-ctrlst    .dsb MAX_SCREEN
+ctrlst    .dsb MAX_SCREEN ; status for multi-byte sequences
 
 	.zero
 zei2	.word 0
 
 	.text
 
-          .(
 	  pha
 	  tya 
 	  pha
 	  txa
 	  jsr setscr
-	  ldx screen
+	  ldx curdev
 	  pla
 	  tay
 	  pla
-          cmp #DC_RES
-          bne p1
+
+	jmp gen_dev
+
+dev_reset .(	;2
 	  sty freq
 
-	  txa
-	  beq foo		; screen 0 is always reset, to set MAX_SCREEN
-	  cmp #MAX_SCREEN
-	  bcs max_err
-foo 
-	  lda #3		; ^C
-	  sta brkkey,x
-
-          lda #0		; linein off ; DC_SW_MOD	; linein ein
-          sta status,x
-          sta ctrlst,x
-
-          sta outstr,x
-          sta getstr,x
+	lda #0
 
           sta syscnt
           sta actscr
@@ -112,37 +100,9 @@ foo
 	  jsr inivscr
           clc
           rts
+          .)	;1
 
-max_err	  sec
-	  rts
-          .)
-
-          .(
-p2x       jmp p2
-wasirq	  lda #E_OK
-	  rts
-
-&max_err  lda #E_NODEV
-	  sec
-	  rts
-
-&p1 	  cpx #MAX_SCREEN
-	  bcs max_err
-
-	  pha
-          lda status,x
-          and #DC_SW_EXIT
-          beq p1ok
-          pla
-          sec
-          rts
-p1ok      pla
-          cmp #DC_IRQ
-	  bne p2t
-	  rts
-p2t	  cmp #DC_TIMER
-          bne p2x
-
+dev_timer .(	;2
 #if 0 	/* allow interruptable devices? */
 	  jsr do_irq
 	  sec
@@ -163,24 +123,20 @@ p2t	  cmp #DC_TIMER
           inc syscnt
 	  lda #E_NOIRQ
           rts
-#endif 
-	.)
-          
-do_irq  .(
-	ldy screen
-	DO_IRQ
-	lda status,y
-	and #DC_SW_RX
-	beq nocheck
 
-	ldx outstr,y
-	lda #SC_STAT
-	jsr STRCMD
-	cmp #E_NUL
-	bne nocheck
-	jsr rxoff
-nocheck
-	lda screen	; get keyboard only for visible screen
+wasirq	  lda #E_OK
+	  rts
+
+#endif 
+	.)	;1
+          
+do_irq  .(	;2
+	ldy curdev
+	DO_IRQ
+	
+	jsr gen_rx_check
+	
+	lda curdev	; get keyboard only for visible screen
 	cmp actscr
 	bne notact
 	jsr getkey	; returns x=shiftfl, y=index in keytable, a=ascii code
@@ -196,7 +152,7 @@ nocheck
 	jmp notact
 gotchar	
 	sta zei2
-	ldy screen	; first check if we are receiving (from keyboard)
+	ldy curdev	; first check if we are receiving (from keyboard)
 	lda status,y
         and #DC_SW_RX
         beq notact
@@ -215,14 +171,14 @@ dobrk
 	jsr STRCMD
 	; send BRK signal to foreground process
 	lda #SIG_BRK
-sendsig	ldy screen
+sendsig	ldy curdev
 	ldx outstr,y
 	tay
 	lda #SC_FGSIG
 	jsr STRCMD
 nobrk
 	ldx zei2
-	ldy screen
+	ldy curdev
 	lda status,y
 	and #DC_SW_RX+DC_SW_TX+DC_SW_MOD
 	cmp #DC_SW_RX+DC_SW_TX+DC_SW_MOD
@@ -244,36 +200,21 @@ direct	and #DC_SW_RX	; direct mode -> send the char directly
 	ldx outstr,y
 	jsr PUTC
 notact			; output stuff
-	ldx screen
-	lda status,x
-	and #DC_SW_TX	; do we send?
-	beq endirq
-
-	lda getstr,x
-	tax
-	lda #SC_STAT
-	jsr STRCMD	; check stream state
-	cmp #E_EOF
-	bne txok
-	jsr txoff
-	jmp endirq
-txok
-	cmp #E_SEMPTY
-	beq endirq
-
-	lda screen
+	jsr gen_tx_check
+	bcs endirq
+	lda curdev
 	cmp actscr
 	bne txloop
 	jsr crsroff
 
-txloop	ldy screen
+txloop	ldy curdev
 	ldx getstr,y
 	jsr GETC
 	bcs endirq
 	jsr printchar
 	jmp txloop
 endirq	
-	lda screen
+	lda curdev
 	cmp actscr
 	bne end1
 	jsr crsron
@@ -281,9 +222,9 @@ end1
 	BELLIRQ 
 	lda #E_NOIRQ
 	rts
-	.)
+	.)	;1
 
-do_switch .(
+do_switch .(	;2
           dex
           bmi sw_next    ; with shift
 	  dex
@@ -291,7 +232,7 @@ do_switch .(
 	  bpl sw_close
 
 	; next screen
-sw_next	.(
+sw_next	.(	;3
 p1c1b     ldx actscr	 ; needed to tell setact the old screen number
 	  inc actscr     ; then switch screen
 	  lda actscr
@@ -306,29 +247,137 @@ p1c1a
           bne p1c1b
           tya
           jmp setact
-	.)
+	.)	;2
 
 	; switch mode
-sw_mode	.(
-          ldy screen
+sw_mode	.(	;3
+          ldy curdev
           lda status,y
           eor #DC_SW_MOD
           sta status,y
           rts
-	.)
+	.)	;2
 
 	; switch off and close stream
-sw_close .(
+sw_close .(	;3
           jmp rxoff
-	.)
+	.)	;2
+
+	.)	;1
+
+/*************************************************************************
+ *
+ * Generic Device handling
+ *
+ */
+
+	.data
+status    .dsb MAX_SCREEN
+outstr    .dsb MAX_SCREEN
+getstr    .dsb MAX_SCREEN
+brkkey    .dsb MAX_SCREEN
+	.text
+
+gen_tx_check .(
+	ldx curdev
+	lda status,x
+	and #DC_SW_TX	; do we send?
+	beq endtx
+
+	lda getstr,x
+	tax
+	lda #SC_STAT
+	jsr STRCMD	; check stream state
+	cmp #E_EOF
+	bne txok
+	jsr txoff
+	jmp endtx
+txok
+	cmp #E_SEMPTY
+	beq endtx
+	clc
+	rts
+endtx	sec
+	rts
 	.)
 
-/*************************************************************************/
+gen_rx_check .(
+	lda status,y
+	and #DC_SW_RX
+	beq nocheck
+
+	ldx outstr,y
+	lda #SC_STAT
+	jsr STRCMD
+	cmp #E_NUL
+	bne nocheck
+	jsr rxoff
+nocheck	rts
+	.)
+
+gen_dev  .(
+          cmp #DC_RES
+          bne p1
+
+	  ; generic reset
+	  cpx #MAX_DEVICE
+	  bcs max_err
+
+	  lda #3		; ^C
+	  sta brkkey,x
+
+          lda #0		; linein off ; DC_SW_MOD	; linein ein
+          sta status,x
+          sta ctrlst,x
+
+          sta outstr,x
+          sta getstr,x
+
+#ifldef dev_reset
+	jmp dev_reset
+#else
+	rts
+#endif
+	.)
+
+&max_err  lda #E_NODEV
+	  sec
+	  rts
+
+p1	.(
+	cpx #MAX_DEVICE
+	bcs max_err
+	; check if device is active
+	  pha
+          lda status,x
+          and #DC_SW_EXIT
+          beq p1ok
+          pla
+          sec
+          rts
+
+p1ok      pla
+
+          cmp #DC_IRQ
+	  bne p2t
+#ifldef dev_irq
+	jmp dev_irq
+#else
+	rts
+#endif
+p2t	  cmp #DC_TIMER
+          bne p2
+#ifldef dev_timer
+	jmp dev_timer
+#else
+	rts
+#endif
+	.)
 
 p2        .(
           cmp #DC_TX_ON
           bne ox1q
-	ldy screen
+	ldy curdev
 	lda #0
 	sta ctrlst,y
 	jsr towcl
@@ -336,17 +385,17 @@ p2        .(
           bne ox1q1
 ox1q      cmp #DC_RX_ON
           bne ox1
-	  ; ldy screen
+	  ; ldy curdev
 	  ; lda #3
 	  ; sta brkkey,y
           lda #DC_SW_RX
-ox1q1     ldy screen
+ox1q1     ldy curdev
           ora status,y
           sta status,y
           jmp ok
 ox1       cmp #DC_TX_OFF
           bne ox2x
-&txoff    ldy screen
+&txoff    ldy curdev
           lda status,y
           and #DC_SW_TX
           beq devoff
@@ -359,7 +408,7 @@ ox1       cmp #DC_TX_OFF
           jmp ok          
 ox2x      cmp #DC_RX_OFF
           bne ox2
-&rxoff    ldy screen
+&rxoff    ldy curdev
           lda status,y
           and #DC_SW_RX
           beq devoff
@@ -374,7 +423,7 @@ ox2       cmp #DC_EXIT
           bne ox2a
           jsr rxoff
           jsr txoff
-          ldy screen
+          ldy curdev
           lda #DC_SW_EXIT
           ora status,y
           sta status,y
@@ -392,7 +441,7 @@ notimp    lda #E_NOTIMP
           rts
 o3        cmp #DC_PS
           bne o4
-          ldx screen
+          ldx curdev
           lda status,x
           and #DC_SW_RX
           bne devon
@@ -405,7 +454,7 @@ o4        cmp #DC_SPD
           beq ok
 o5        cmp #DC_GS
           bne o6		; notimp
-          ldx screen
+          ldx curdev
           lda status,x
           and #DC_SW_TX
           bne devon
@@ -414,7 +463,7 @@ o5        cmp #DC_GS
           jmp ok
 o6	  cmp #DC_BRKKEY
 	  bne notimp
-	  ldx screen
+	  ldx curdev
 	  lda brkkey,x
 	  pha
 	  tya
@@ -423,6 +472,7 @@ o6	  cmp #DC_BRKKEY
 	  tay
 	  jmp ok
           .)
+
 
 /**************************************************************************/
 
@@ -450,7 +500,7 @@ vtab      .dsb MAX_SCREEN*12
 
 &inivscr  .(
 
-	  lda screen
+	  lda curdev
           jsr iniscr
 
           lda #TC_FF     ; form feed
@@ -495,14 +545,14 @@ lie3      ldy zei2
           bcs lie4
           lda (vzei),y
 	  SCR2ASC
-          ldy screen
+          ldy curdev
           ldx outstr,y
           jsr PUTC
 	  SET_MMU
           inc zei2
           bne lie3
 lie4      lda #TC_CR
-          ldy screen
+          ldy curdev
           ldx outstr,y
           jsr PUTC
 	  lda #SC_SSTAT
@@ -541,7 +591,7 @@ inccst	inc ctrlst,x
 &printchar .(
 	  SET_MMU
 
-	ldx screen
+	ldx curdev
 	ldy ctrlst,x
 	bne extra
 
@@ -659,14 +709,14 @@ iniscr    .(		; screen number in AC
           .)
 
 &setscr   .(
-	  ldx screen
+	  ldx curdev
 	  cpx #MAX_SCREEN
 	  bcs nosave
-          cmp screen
+          cmp curdev
           beq setmmu	; same screen as current
           pha
 	  ; save screen
-          lda screen
+          lda curdev
           asl
           asl
           sta zei2+1    ; screen# times 4     
@@ -686,7 +736,7 @@ s1        lda spalte,y	; copy screen control struct
           lda vzei+1
           sta vtab+1,x
           pla
-nosave	  sta screen
+nosave	  sta curdev
 	  ; restore screen
           asl
           asl
@@ -785,14 +835,14 @@ xadr      .word tocl-1,nextc-1,tocu-1,nextz-1
 	  .word toecho-1, tonoecho-1, tocpos-1
 
 tocpos	.(
-	ldx screen
+	ldx curdev
 	lda #1
 	sta ctrlst,x
 	rts
 	.)
 
 toecho	.(
-	ldx screen
+	ldx curdev
 	lda status,x
 	ora #DC_SW_MOD
 	sta status,x
@@ -800,7 +850,7 @@ toecho	.(
 	.)
 
 tonoecho .(
-	ldx screen
+	ldx curdev
 	lda status,x
 	and #$ff-DC_SW_MOD
 	sta status,x

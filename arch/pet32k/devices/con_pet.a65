@@ -58,7 +58,7 @@
 #define	HI_VID
 
 #define	ACT_HI_VID      .(			:\
-			lda screen		:\
+			lda curdev		:\
 			cmp actscr		:\
 			beq orig		:\
 			lda #$78		:\
@@ -124,7 +124,7 @@ ok			.)			:\
 			bne ok			:\
 			ldx zeile		:\
 			jsr setzei		:\
-			ldy screen		:\
+			ldy curdev		:\
 ok			.)
 
 	.data
@@ -147,7 +147,7 @@ inimem    .(
           .)
 
 &inivid   .(   
-          lda screen
+          lda curdev
           bne ix
 
 	  lda #0
