@@ -24,6 +24,9 @@
 
           .(	;1
 
+#ifndef BASE_NAME
+#define	BASE_NAME	"video"
+#endif
 
           .(	;2
 #define   DC_SW_MOD      $20
@@ -31,19 +34,19 @@
 
           .word     devend1
           jmp prg1
-          .asc "video1",0
+          .asc BASE_NAME, "1",0
 
 devend1   .word     devend2
           jmp prg2
-          .asc "video2",0
+          .asc BASE_NAME, "2",0
 
 devend2   .word     devend3
           jmp prg3
-          .asc "video3",0
+          .asc BASE_NAME, "3",0
 
 devend3   .word     devend
           jmp prg4
-          .asc "video4",0
+          .asc BASE_NAME, "4",0
 
 #include CONSOLE_DEVICE
 
@@ -271,6 +274,8 @@ sw_close .(	;3
 /**************************************************************************/
 
 #include "devices/gen_con_mmap.a65"
+
+#undef BASE_NAME
 
 devend    .)
  

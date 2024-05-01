@@ -67,8 +67,13 @@ devstart
 #include  "devices/ser_acia_nmi.a65"
 #endif
 
+#define	BASE_NAME	"video"
 #define	CONSOLE_DEVICE	"devices/con_c64.a65"
-#include  "devices/console.a65"	; video device is merged with OS/A now...
+#include  "devices/console.a65"	
+
+#define	BASE_NAME	"vdc"
+#define	CONSOLE_DEVICE	"devices/con_vdc.a65"
+#include  "devices/console.a65"	
 
 
 #include  "devices/nulldev.a65"	; null device

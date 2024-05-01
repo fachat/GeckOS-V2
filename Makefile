@@ -14,6 +14,10 @@ clean:
 	(cd lib6502; ${MAKE} clean;)
 	(cd dist; ${MAKE} clean;)
 
+dclean: clean
+	git checkout */*/*/*.d64
+	git checkout */*/*/*.d80
+
 #####################################################
 
 XCSA=~/8bit/xcbm/bin/xcsa
