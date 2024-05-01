@@ -80,6 +80,15 @@
  *		142		tonoecho - clr echo flag
  *		143		tocpos - position crsr to the row/col 
  *					position given by the next two bytes
+ *	TODO:
+ *		144		todell - scroll lines under cursor up
+ *		145		toinsl	- scroll lines under cursor down
+ *		146		toattr - next byt is attribute for display
+ *			b7:	invers
+ *			b6:	bold
+ *			b5:	blink
+ *			b4:	underline
+ *			b3:	...
  *
  * Window management:
  *	The driver manages a single display window. This is defined

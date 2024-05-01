@@ -36,22 +36,64 @@
 
 #define	TRIGBELL	
 
-#define	MAXSPAL		#40
+#define	MAXSPAL		#80
 
 #define	MAXZEIL		#25
 
 #define	KEY_START	20	/* when does key repetition start */
-
-				/* screen# -> hi byte of base address in AC */
-#define	HI_VID	        asl:asl:clc:adc #VIDPAGE
-
-#define	ACT_HI_VID      lda hivid
 
 #define	SCR_SPACE	32
 
 #define	SCR2ASC
 
 #define	ASC2SCR
+
+#include "chips/vdc.i65"
+
+        .data 
+acthi	.byt 0		; current high byte of char text addr
+	.text
+
+	;-------------------------------------------------
+	; VDC memory map (16k)
+	;
+	; $2000		- 8k character "ROM"
+	; $1800		- 2k attributes (vdc1)
+	; $1000		- 2k character text (vdc1)
+	; $0800		- 2k attributes (vdc0)
+	; $0000		- 2k character text (vdc0)
+	;
+	;-------------------------------------------------
+
+VDC	=$d600
+VDCI	=VDC		; index register
+VDCD	=VDC+1		; data register
+
+; according to https://c-128.freeforums.net/thread/67/correct-write-vdc-registers
+; it is possible to read/write most registers in a "fast" way, but if 
+; you want to run the mass data transfer, you certainly need to 
+; a) check for the busy bit 7 in VDCI on reading regs 18/19, 30-32, and
+; b) write hi/lo sequence in reg pairs 18/19 and 32/33, and obey
+;    the busy bit for the high byte, and
+; c) obey the busy bit when writing to reg 31.
+
+wrvdcf	.(
+	stx VDCI
+	sta VDCD
+	rts
+	.)
+
+wrvdc	.(
+	pha
+	stx VDCI
+l	lda VDCI
+	bpl l
+	pla
+	sta VDCD
+	rts
+	.)
+
+	;-------------------------------------------------
 
 console_init .(
 	jsr inivid
@@ -61,24 +103,42 @@ console_init .(
 	.)
 
 inivid	.(
+	; init the VDC registers
 	; TODO
+	; set the background colour
+	; TODO
+inc $d020
+	jsr toff
 	rts
 	.)
 
+	; set the virtual screen that is to be displayed
+	; TODO: switch cursor off on old, and on on new scr
 setact	.(
-	; TODO
-	rts
+	; assume always a valid screen number (0 or 1 here)
+	asl
+	asl
+	asl
+	asl
+	ldx #VDC_MEM_STRT_H
+	jsr wrvdcf
+	ora #$08
+	ldx #VDC_ATT_STRT_H
+	sta acthi
+	jmp wrvdcf
 	.)
 
 /**************************************************************************
  * actual screen handling
  */
 
+	; set the structures such that all output goes to curdev
 setscr	.(
 	; TODO
 	rts
 	.)
 
+	; initialize a virtual screen - clear it, cursor to home
 inivscr	.(
 	; TODO
 	rts
@@ -94,10 +154,42 @@ printchar .(
 	rts
 	.)
 
+	; clear window definition
 towcl	.(
 	; TODO
 	rts
 	.)
+
+/**************************************************************************
+ * control char output
+ */
+
+toff	.(
+	; set to write
+	ldx #VDC_VSCRL
+	lda #%00000000
+	jsr wrvdc
+
+	; TODO: handle window
+
+	; write high, then low; ensure not busy on first access
+	ldx #VDC_UPDATE_H
+	lda acthi
+	jsr wrvdc
+	inx
+	lda #0
+	jsr wrvdcf
+
+	lda #33	;SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr wrvdcf
+
+	ldx #VDC_UPLEN
+	lda #0
+	jsr wrvdc
+	rts
+	.)
+
 
 /**************************************************************************
  * Cursor handling
@@ -159,6 +251,17 @@ towcl	.(
 
 /**************************************************************************/
 
+rowl	.byt <0,      <80,  <160,  <240,  <320,  <400,  <480,  <560
+ 	.byt <640,   <720,  <800,  <880,  <960, <1040, <1120, <1200 
+	.byt <1280, <1360, <1440, <1520, <1600, <1680, <1760, <1840
+	.byt <1920
+
+rowh	.byt >0,      >80,  >160,  >240,  >320,  >400,  >480,  >560
+ 	.byt >640,   >720,  >800,  >880,  >960, >1040, >1120, >1200 
+	.byt >1280, >1360, >1440, >1520, >1600, >1680, >1760, >1840
+	.byt >1920
+
+/**************************************************************************/
 
 #include "devices/kbd_c64.a65"
 
