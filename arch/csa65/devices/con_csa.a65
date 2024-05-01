@@ -197,5 +197,6 @@ s1        and #%00001111
 
 #include "devices/kbd_pet.a65"
 
+#include "devices/con_gen_mmap.a65"
 
 

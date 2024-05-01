@@ -1,10 +1,10 @@
 
 /****************************************************************************
    
-    OS/A65 Version 2.0.0
+    OS/A65 Version 2.2
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-2024 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -179,7 +179,7 @@ clr       lda #0
 
           .(
 
-kcnt       =zei2
+kcnt2       =zei2
         .data
 rcnt      .byt 0
 shiftfl   .byt 0
@@ -228,7 +228,7 @@ tzei      .word 0
           lda #0		; clear shift key flag
           sta shiftfl
           ldy #$ff
-          sty kcnt		; key count
+          sty kcnt2		; key count
 
           sta C64CIA1+CIA_PRA	; set all pins
 #ifdef CHECK_C128
@@ -273,7 +273,7 @@ nextbit   lsr			; check each bit
           ora shiftfl		; save special key into shiftflag
           sta shiftfl
           bpl l3		; always
-realkey   stx kcnt
+realkey   stx kcnt2
 l3        pla			; next
 nobit     inx
 	  dey
@@ -295,7 +295,7 @@ next128	  cpx #88
 	  sta C64VIC+VIC_C128_KEYB
 	  bcc nextbyt128	; always
 #endif
-endkey    lda kcnt
+endkey    lda kcnt2
           cmp #$ff
 nokey2    beq nokey
           cmp prev		; detect key repeat

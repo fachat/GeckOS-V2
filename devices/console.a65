@@ -28,7 +28,6 @@
 #define	BASE_NAME	"video"
 #endif
 
-          .(	;2
 #define   DC_SW_MOD      $20
 #define   DC_SW_EXIT     $10
 
@@ -59,7 +58,6 @@ prg3      ldx #2
 prg2      ldx #1
           .byt $2c
 prg1      ldx #0
-          .)	;1
 
 
 	.data          
@@ -273,7 +271,7 @@ sw_close .(	;3
 
 /**************************************************************************/
 
-#include "devices/gen_con_mmap.a65"
+;#include "devices/gen_con_mmap.a65"
 
 #undef BASE_NAME
 

@@ -222,4 +222,5 @@ getp1
 #include "devices/crsr_pet.a65"
 #include "devices/kbd_pet.a65"
 
+#include "devices/con_gen_mmap.a65"
 

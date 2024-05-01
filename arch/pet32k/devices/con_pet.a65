@@ -238,4 +238,6 @@ cp1	lda (p2),y
 #include "devices/crsr_pet.a65"
 #include "devices/kbd_pet.a65"
 
+#include "devices/con_gen_mmap.a65"
+
 
