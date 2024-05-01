@@ -60,60 +60,42 @@ console_init .(
 	rts
 	.)
 
-/*
- * For the C64 we put the video screen memory to $e000-$ec00, i.e.
- * we have three possible screens only. We need $ec00-$efff for the
- * stdlib. We use the std charom at $d000 in the RAM under I/O that
- * the VIC doesn't see. The boot loader has to copy the charom there.
- * Then we have all the memory below the I/O relatively free.
- */
-
 inivid	.(
-        lda #0
-        sta C64VIC+VIC_IRR            ; no interrupts
-        sta C64VIC+VIC_SPRITE_EN      ; sprites off
-        lda #27
-        sta C64VIC+VIC_CR1            ; 25 lines
-        lda #8
-        sta C64VIC+VIC_CR2            ; 40 cols
-;       lda #(($10 & %001110000)>>2)+(($20 & %00111100)<<2)
-;       lda #%10000100
-#print (($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
-	lda #(($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
-        sta C64VIC+VIC_BASE           ; character and screen base
-
-        lda C64CIA2+CIA_DDRA          ; set upper two video address bits
-        ora #3                        ; via CIA2, PRA Bit 0 and 1
-        sta C64CIA2+CIA_DDRA          ; set bits to output mode
-        lda C64CIA2+CIA_PRA
-        and #%11111100
-	ora #3-((VIDPAGE & %11000000) >> 6)
-        sta C64CIA2+CIA_PRA           ; change to uppermost page ($c000-)
-
-        lda #C64_TEXT_COL             ; set the screen (text) color
-        ldy #0
-coloop  sta $d800,y
-        sta $d900,y
-        sta $da00,y
-        sta $db00,y
-        iny
-        bne coloop
-
-        lda #C64_BGND_COL             ; set the border and background color
-        sta C64VIC+VIC_BGND_COL0
-        lda #C64_BORDER_COL
-        sta C64VIC+VIC_EXT_COL
+	; TODO
 	rts
 	.)
 
 setact	.(
-        asl
-        asl
-        asl
-        asl
-        ;ora #%10000100
-	ora #(($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
-        sta C64VIC+VIC_BASE
+	; TODO
+	rts
+	.)
+
+/**************************************************************************
+ * actual screen handling
+ */
+
+setscr	.(
+	; TODO
+	rts
+	.)
+
+inivscr	.(
+	; TODO
+	rts
+	.)
+
+sendline .(
+	; TODO
+	rts
+	.)
+
+printchar .(
+	; TODO
+	rts
+	.)
+
+towcl	.(
+	; TODO
 	rts
 	.)
 
@@ -123,53 +105,53 @@ setact	.(
 
           .(
         .data
-crsrfl  .byt 0
-crsrcnt .byt 0
+;crsrfl  .byt 0
+;crsrcnt .byt 0
         .text
 
 &inicrsr
-	lda #0
-	sta crsrfl
-	sta crsrcnt
+;	lda #0
+;	sta crsrfl
+;	sta crsrcnt
 	rts
 
 &crsroff .(                    ; disable cursor
-          bit crsrfl
-          bpl ret               ; not enabled
-
-          bit crsrfl
-          bvc clr               ; not inversed
-          ldy spalte
-          lda (vzei),y
-          eor #$80
-          sta (vzei),y
-clr       lda #0
-          sta crsrfl
+;          bit crsrfl
+;          bpl ret               ; not enabled
+;
+;          bit crsrfl
+;          bvc clr               ; not inversed
+;          ldy spalte
+;          lda (vzei),y
+;          eor #$80
+;          sta (vzei),y
+;clr       lda #0
+;          sta crsrfl
 &ret      rts
 	.)
 
 &crsron .(			; enable cursor
-          bit crsrfl
-          bmi irq               ; already enabled
-          lda #0                ; inverse cursor next crsrirq
-          sta crsrcnt
-          lda #128              ; enabled, but not invers
-          sta crsrfl
-
+;          bit crsrfl
+;          bmi irq               ; already enabled
+;          lda #0                ; inverse cursor next crsrirq
+;          sta crsrcnt
+;          lda #128              ; enabled, but not invers
+;          sta crsrfl
+;
 &irq      
-	  dec crsrcnt
-          bpl ret               ; not this time
-          lda #10
-          sta crsrcnt
-
-          ldy spalte
-          lda (vzei),y
-          eor #$80
-          sta (vzei),y
-          lda crsrfl
-          eor #$40
-          sta crsrfl
-
+;	  dec crsrcnt
+;          bpl ret               ; not this time
+;          lda #10
+;          sta crsrcnt
+;
+;          ldy spalte
+;          lda (vzei),y
+;          eor #$80
+;          sta (vzei),y
+;          lda crsrfl
+;          eor #$40
+;          sta crsrfl
+;
           rts
           .)
 
@@ -177,224 +159,6 @@ clr       lda #0
 
 /**************************************************************************/
 
-          .(
 
-kcnt2       =zei2
-        .data
-rcnt      .byt 0
-shiftfl   .byt 0
-prev      .byt 0
-#ifdef CHECK_C128
-is128	  .byt 0
-#endif
-        .zero
-tzei      .word 0
-        .text
-
-&inikbd   .(
-          lda #0
-          sta C64CIA1+CIA_DDRB
-          lda #$ff
-          sta C64CIA1+CIA_DDRA
-          sta C64CIA1+CIA_PRA
-
-#ifdef CHECK_C128
-	; according to http://cbm-hackers.2304266.n4.nabble.com/Re-Detect-a-C128-from-C64-mode-td4656728i20.html
-	inc $d02f
-	lda $d02f
-	dec $d02f
-	eor $d02f
-	sta is128
-#endif
-
-          lda #4
-          sta rcnt
-          sta rspd
-          rts
-          .)
-
-	; must return x=shiftfl, y=index in keytable, a=ascii code
-	; shiftfl:
-	; 	0 = none
-	; 	1 = Shift
-	; 	2 = Ctrl
-	;	3 = shift+Ctrl
-	; Switchkey handling:
-	;	0 = Tab
-	;	1 = switch mode
-	;	2 = switch console
-	;	3 = close Stream
-&getkey  .(
-          lda #0		; clear shift key flag
-          sta shiftfl
-          ldy #$ff
-          sty kcnt2		; key count
-
-          sta C64CIA1+CIA_PRA	; set all pins
-#ifdef CHECK_C128
-	  lda #%11111000
-	  sta C64VIC+VIC_C128_KEYB
-#endif
-l0        lda C64CIA1+CIA_PRB	; check input
-          cmp C64CIA1+CIA_PRB
-          bne l0
-          cmp #$ff		; if none is set
-#ifdef CHECK_C128
-	  beq nokey2
-#else
-          beq nokey		; no scan necessary (faster)
-#endif
-
-	  ldx #0
-
-#ifdef CHECK_C128
-	  lda #$ff
-	  sta C64VIC+VIC_C128_KEYB
-#endif
-          lda #%11111110	; set only a single line
-nextbyte  sta C64CIA1+CIA_PRA
-nextbyt128
-	  pha			; we need to save this, as more pressed
-				; keys can change the value read back!
-
-l1        lda C64CIA1+CIA_PRB
-          cmp C64CIA1+CIA_PRB	; read input from keyboard matrix
-          bne l1
-          ldy #8
-
-nextbit   lsr			; check each bit
-          bcs nobit
-          pha
-          lda ktab,x		; read from keyboard table
-          cmp #5		; all below 6 are special keys
-          bcs realkey
-          cmp #3		; also 3
-          beq realkey
-          ora shiftfl		; save special key into shiftflag
-          sta shiftfl
-          bpl l3		; always
-realkey   stx kcnt2
-l3        pla			; next
-nobit     inx
-	  dey
-	  bne nextbit
-
-	  pla
-          sec
-          rol 
-	  cpx #64		; end of C64 table
-	  bcc nextbyte		; not done yet
-#ifdef CHECK_C128
-	  bne next128
-	  sta C64CIA1+CIA_PRA	; AC is $ff
-	  bit is128		; only at =64 (bit ANDs value with AC)
-	  beq endkey 		; not a C128
-	  asl			; AC becomes $fe
-next128	  cpx #88
-	  bcs endkey
-	  sta C64VIC+VIC_C128_KEYB
-	  bcc nextbyt128	; always
-#endif
-endkey    lda kcnt2
-          cmp #$ff
-nokey2    beq nokey
-          cmp prev		; detect key repeat
-          bne lx
-
-          dec rcnt
-          bne nkret
-          ldx rspd
-          .byt $2c
-
-lx        ldx #KEY_START
-          stx rcnt
-
-          sta prev
-
-          tay
-          lda shiftfl
-          and #3
-          asl
-          tax
-          lda ttab,x
-          sta tzei
-          lda ttab+1,x
-          sta tzei+1
-
-          lda (tzei),y
-          ldx shiftfl
-          clc
-          rts
-
-nokey     ldx #<-1
-          stx prev
-          ldx #KEY_START
-          stx rcnt
-nkret     ldx shiftfl
-          sec
-          rts
-          .)
-
-ttab      .word ktab, stab, ctab, sctab
-
-ktab      .byt TC_BS, TC_CR, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CDWN
-          .byt "3wa4zse", 1 /* shift */
-          .byt "5rd6cftx"
-	  .byt "7yg8bhuv"
-          .byt "9ij0mkon"
-	  .byt "+pl-.:@,"
-          .byt "|*;", TC_HOME, 1 /* shift */, "=^^/"
-          .byt "1_", 2 /* control */, "2 ", TC_HT /* C= */, "q", 3 /* stop */
-#ifdef CHECK_C128
-	  .byt TC_HELP, "85", TC_HT, "2471"
-	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
-	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
-#endif
-
-stab      .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
-          .byt "#WA$ZSE", 1 /* shift */
-          .byt "%RD&CFTX"
-	  .byt "'YG(BHUV"
-          .byt ")IJ0MKON"
-	  .byt "+PL_>[@<"
-          .byt "\\*]", TC_CLR, 1 /* shift */, "=^^?"
-          .byt "!", TC_ESC, 2 /* control */, 34," ", 6 /* C= */, "Q", 3 /*stop*/
-#ifdef CHECK_C128
-	  .byt TC_HELP, "85", TC_HT, "2471"
-	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
-	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
-#endif
-
-ctab      .byt TC_DEL, TC_EOL, TC_WRU, 0, 6 /* F1 */, 0, 0, TC_WLO
-          .byt "3^w^a4^z^s^e", 1 /* shift */
-          .byt "5^r^d6^c^f^t^x"
-	  .byt "7^y^g8^b^h^u^v"
-          .byt "9^i^j0^m^k^o^n"
-	  .byt "+^p^l-.{@,"
-          .byt "|*}", TC_WCLS, 1 /* shift */, "=^^/"
-          .byt "1", TC_CLL, 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /*stop*/
-#ifdef CHECK_C128
-	  .byt TC_HELP, "85", TC_HT, "2471"
-	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
-	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
-#endif
-
-sctab     .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
-          .byt "3^W^A4^Z^S^E", 1 /* shift */
-          .byt "5^R^D6^C^F^T^X"
-	  .byt "7^Y^G8^B^H^U^V"
-          .byt "9^I^J0^M^K^O^N"
-	  .byt "+^P^L_.:@,"
-          .byt "\\*;", TC_CLR, 1 /* shift */, "=^^/"
-          .byt "1_", 2 /* control */, "2 ", 6 /* C= */, "Q", 3 /* stop */
-#ifdef CHECK_C128
-	  .byt TC_HELP, "85", TC_HT, "2471"
-	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
-	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
-#endif
-
-
-	.)
-
-#include "devices/con_gen_mmap.a65"
+#include "devices/kbd_c64.a65"
 

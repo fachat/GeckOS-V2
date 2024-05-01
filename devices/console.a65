@@ -47,6 +47,13 @@ devend3   .word     devend
           jmp prg4
           .asc BASE_NAME, "4",0
 
+	; zei2 is used in CONSOLE_DEVICE, so 
+	; should be defined. Otherwise block level may be
+	; elevated and label defined errors may occur
+	.zero
+zei2	.word 0
+	.text
+
 #include CONSOLE_DEVICE
 
 #define	MAX_DEVICE	MAX_SCREEN
@@ -69,9 +76,6 @@ syscnt	  .byt 0	; reentrance semaphore when IRQ can be checked
 shfl	  .byt 0	; shift flag for typed char
 rspd	  .byt 0	; key repeat speed
 ctrlst    .dsb MAX_SCREEN ; status for multi-byte sequences
-
-	.zero
-zei2	.word 0
 
 	.text
 
