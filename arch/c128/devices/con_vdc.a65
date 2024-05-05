@@ -48,10 +48,27 @@
 
 #define	ASC2SCR
 
+#define	FGCOL		2
+
 #include "chips/vdc.i65"
 
         .data 
-acthi	.byt 0		; current high byte of char text addr
+hivid	.byt 0		; current high byte of char text addr
+
+col	.byt 0		; current column in window
+row	.byt 0		; current row in window
+
+wx	.byt 0		; top left window column (absolute)
+wy	.byt 0		; top left window row (absolute)
+ww	.byt 0		; window width (rel to wx)
+wh	.byt 0		; window height (rel. to wy)
+
+iz	.byt 0		; line number of start of input
+is	.byt 0		; column of start of input
+
+cptr	.word 0		; current memory pointer
+
+tmp	.byt 0		; temp counter
 	.text
 
 	;-------------------------------------------------
@@ -76,20 +93,37 @@ VDCD	=VDC+1		; data register
 ; b) write hi/lo sequence in reg pairs 18/19 and 32/33, and obey
 ;    the busy bit for the high byte, and
 ; c) obey the busy bit when writing to reg 31.
+; 
+; according to the C128 ROM here i
+; https://github.com/mist64/cbmsrc/blob/5c5138ff128d289ccd98d260f700af52c4a75521/EDITOR_C128/ed2.src
+; writing multiple bytes to vdc memory requires a "kludge" to make sure
+; all bytes are written (as opposed to copy, which seems not to need this)
 
-wrvdcf	.(
+vdcfrd	.(
+	stx VDCI
+	lda VDCD
+	rts
+	.)
+
+vdcfwr	.(
 	stx VDCI
 	sta VDCD
 	rts
 	.)
 
-wrvdc	.(
-	pha
+vdcwr	.(
 	stx VDCI
-l	lda VDCI
+l	bit VDCI
 	bpl l
-	pla
 	sta VDCD
+	rts
+	.)
+
+vdcrd	.(
+	stx VDCI
+l	bit VDCI
+	bpl l
+	lda VDCD
 	rts
 	.)
 
@@ -107,6 +141,7 @@ inivid	.(
 	; TODO
 	; set the background colour
 	; TODO
+	jsr inivscr
 inc $d020
 	jsr toff
 	rts
@@ -121,11 +156,10 @@ setact	.(
 	asl
 	asl
 	ldx #VDC_MEM_STRT_H
-	jsr wrvdcf
+	jsr vdcfwr
 	ora #$08
 	ldx #VDC_ATT_STRT_H
-	sta acthi
-	jmp wrvdcf
+	jmp vdcfwr
 	.)
 
 /**************************************************************************
@@ -138,58 +172,266 @@ setscr	.(
 	rts
 	.)
 
-	; initialize a virtual screen - clear it, cursor to home
-inivscr	.(
-	; TODO
-	rts
-	.)
 
 sendline .(
 	; TODO
 	rts
 	.)
 
+	; initialize a virtual screen - clear it, cursor to home
+inivscr	.(
+	lda actdev
+	
+	and #1
+	asl
+	asl
+	asl
+	asl
+	sta hivid
+
+	jsr towcl
+	
+	lda #TC_FF
+	jsr printchar
+
+	jsr setlin
+	
+	clc
+	rts
+	.)
+
+setlin	.(
+	lda row
+	sta iz
+	lda col
+	sta is
+	rts
+	.)
+
+
+
+/**************************************************************************
+ * helper routines
+ */
+
+setchr	.(
+	ldx #VDC_UPDATE_H
+	lda cptr+1
+	jsr vdcwr
+	inx
+	lda cptr
+	jmp vdcwr
+	.)
+
+setcol	.(
+	ldx #VDC_UPDATE_H
+	lda cptr+1
+	ora #$08
+	jsr vdcwr
+	inx
+	lda cptr
+	jmp vdcwr
+	.)
+	
+setptr	.(
+	ldx col
+	ldy row
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	lda actscr
+	cmp actdev
+	bne done
+
+	ldx #VDC_CRSR_POS_H
+	lda cptr+1
+	jsr vdcwr
+	inx
+	lda cptr
+	jmp vdcwr
+
+done	rts
+	.)
+
+	; take col/row in current window in X/Y respectively
+	; return memory address of col/row in vdc in A/Y
+calcaddr .(
+	tya
+	clc 
+	adc wy
+	tay
+	txa
+	clc
+	adc wx		; should not overflow
+	adc rowl,y
+	pha
+	lda #0
+	adc rowh,y
+	adc hivid
+	tay
+	pla
+	rts
+	.)
+
+/**************************************************************************
+ * char output
+ */
+
 printchar .(
+	ldx actdev
+	ldy ctrlst,x
+	bne extra
+	
+	tay
+	bmi x1
+	cmp #32
+	bcs outc
+	jmp xout
+x1	cmp #128+32
+	bcs outc
+	jmp xcode
+outc	
+	pha
+	; check if prev. print left us in the the col behind the window 
+	ldx col
+	cpx ww
+	bcc outok
+	; if so, then wrap over to next line, col 0
+	ldx #0
+	stx col
+	jsr nextrow
+outok
+	jsr setptr
+	jsr setchr
+	pla
+	ldx #VDC_UPDATA
+	jsr vdcwr
+	jsr setcol
+	lda #FGCOL
+	jsr vdcwr
+	; fall-through
+nextcol	
+	inc col
+	ldx col
+	cpx ww
+	beq colok
+	bcc colok
+	dec col
+colok	rts
+
+&nextrow .(
+	ldx row
+	inx
+	cpx wh
+	bcs nok
+stx $c000
+	stx row
+	rts
+
+nok	ldx #0
+	stx row
+	.)
+	; fall-through
+scrollup .(
 	; TODO
 	rts
 	.)
 
-	; clear window definition
-towcl	.(
-	; TODO
-	rts
 	.)
 
 /**************************************************************************
  * control char output
  */
 
-toff	.(
-	; set to write
+xout      .(    ;2
+          cmp #TC_CR
+          bne x1
+          lda #0
+          sta col
+          rts
+x1        cmp #TC_LF
+          bne x3a
+          jmp nextrow
+x3a       
+          cmp #TC_FF
+          bne x3
+	  jmp toff
+x3        
+          ;cmp #TC_BS
+          ;bne x4
+x4	  rts
+          .)    ;2
+
+xcode	rts
+extra	rts
+
+&toff	.(
+	; set to write (not copy)
 	ldx #VDC_VSCRL
-	lda #%00000000
-	jsr wrvdc
+	jsr vdcfrd
+	and #%01111111
+	jsr vdcwr
 
-	; TODO: handle window
+	; first row/col in win
+	ldy #0
+	sty tmp
+lloop
+	ldx #0
+	jsr calcaddr
+	; start of line address in a/y
 
-	; write high, then low; ensure not busy on first access
+	; write high, then low
+	pha
+	tya
 	ldx #VDC_UPDATE_H
-	lda acthi
-	jsr wrvdc
+	jsr vdcwr
 	inx
-	lda #0
-	jsr wrvdcf
+	pla
+	jsr vdcwr
 
-	lda #33	;SCR_SPACE
+	lda #SCR_SPACE
 	ldx #VDC_UPDATA
-	jsr wrvdcf
+	jsr vdcwr
 
+	lda ww
+	sec
+	sbc #1
+	jsr clr_kludge
+	
+	inc tmp
+	ldy tmp
+	cpy wh
+	bcc lloop
+	rts	
+
+clr_kludge_1
+	lda #1
+clr_kludge
 	ldx #VDC_UPLEN
-	lda #0
-	jsr wrvdc
+	jsr vdcwr
+	; TODO kludge - not needed in VICE right now
 	rts
 	.)
 
+	; clear window definition
+towcl	.(
+	lda #0
+	sta wx
+	sta wy
+	lda MAXSPAL
+	sta ww
+	lda MAXZEIL
+	sta wh
+	rts
+	.)
+	; fall-through
+tohome	.(
+	lda #0
+	sta col
+	sta row
+	jmp setlin
+	.)
 
 /**************************************************************************
  * Cursor handling
