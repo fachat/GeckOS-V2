@@ -139,7 +139,6 @@ inivid	.(
 	; set the background colour
 	; TODO
 	jsr inivscr
-inc $d020
 	jsr toff
 	rts
 	.)
@@ -278,8 +277,9 @@ calcaddr .(
 printchar .(
 	ldx actdev
 	ldy ctrlst,x
-	bne extra
-	
+	beq no_extra
+	jmp extra
+no_extra
 	tay
 	bmi x1
 	cmp #32
@@ -322,17 +322,86 @@ colok	rts
 	inx
 	cpx wh
 	bcs nok
-stx $c000
 	stx row
 	rts
 
-nok	ldx #0
-	stx row
+nok	
 	.)
 	; fall-through
 scrollup .(
-	; TODO
-	rts
+	lda #0
+	sta tmp		; line counter
+
+	; set to copy
+	ldx #VDC_VSCRL
+	jsr vdcrd
+	ora #$80
+	jsr vdcwr
+scrloop
+	; set row address
+	ldx #0		; col zero
+	ldy tmp		; row tmp
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; setup line target address	
+	jsr setchr
+
+	; setup line source address
+	ldx #0
+	ldy tmp
+	iny
+	cpy wh
+	bcs donescroll
+	inc tmp
+
+	jsr calcaddr
+	pha
+	tya
+	ldx #VDC_COPYSRC_H
+	jsr vdcwr
+	pla
+	inx
+	jsr vdcwr
+
+	; copy line
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	; attribute target
+	jsr setcol
+	
+	; attribute source
+	ldx #0
+	ldy tmp
+	jsr calcaddr
+	pha
+	tya
+	ora #$08	; map from char to attribute space
+	ldx #VDC_COPYSRC_H
+	jsr vdcwr
+	pla
+	inx
+	jsr vdcwr
+
+	; copy attributes
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	jmp scrloop
+
+donescroll
+	; set to store
+	ldx #VDC_VSCRL
+	jsr vdcrd
+	and #$7f
+	jsr vdcwr
+	; clear line as set in cptr
+	jsr clrline
+	jmp setptr
 	.)
 
 	.)
@@ -377,16 +446,24 @@ lloop
 	ldx #0
 	jsr calcaddr
 	; start of line address in a/y
+	sta cptr
+	sty cptr+1
 
-	; write high, then low
-	pha
-	tya
-	ldx #VDC_UPDATE_H
-	jsr vdcwr
-	inx
-	pla
-	jsr vdcwr
+	jsr clrline
 
+	inc tmp
+	ldy tmp
+	cpy wh
+	bcc lloop
+	rts	
+
+&clrline .(
+	jsr setchr
+	jsr writespace
+	jsr setcol
+	lda #FGCOL
+	.byt $2c
+writespace
 	lda #SCR_SPACE
 	ldx #VDC_UPDATA
 	jsr vdcwr
@@ -394,14 +471,8 @@ lloop
 	lda ww
 	sec
 	sbc #1
-	jsr clr_kludge
-	
-	inc tmp
-	ldy tmp
-	cpy wh
-	bcc lloop
-	rts	
-
+	jmp clr_kludge
+		
 clr_kludge_1
 	lda #1
 clr_kludge
@@ -409,6 +480,8 @@ clr_kludge
 	jsr vdcwr
 	; TODO kludge - not needed in VICE right now
 	rts
+	.)
+
 	.)
 
 	; clear window definition
