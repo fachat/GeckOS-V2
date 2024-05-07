@@ -82,9 +82,6 @@ tmp	.byt 0		; temp counter
 	;
 	;-------------------------------------------------
 
-VDC	=$d600
-VDCI	=VDC		; index register
-VDCD	=VDC+1		; data register
 
 ; according to https://c-128.freeforums.net/thread/67/correct-write-vdc-registers
 ; it is possible to read/write most registers in a "fast" way, but if 

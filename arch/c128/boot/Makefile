@@ -3,7 +3,7 @@ BASE=../../../dist/osabase.d64
 
 ROM=kern.bin lib.bin rom.bin
 
-XA=xa
+XA=xa -I..
 RELOC=reloc65
 
 TRG=geckos128.d64
@@ -16,7 +16,7 @@ all: $(TRG)
 #
 
 romld.bin: romld.a65
-	xa romld.a65 -o romld.bin
+	$(XA) romld.a65 -o romld.bin
 
 loader: loader.bas romld.bin
 	petcat -w70 -o loader loader.bas

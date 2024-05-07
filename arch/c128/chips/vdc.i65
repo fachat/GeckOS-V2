@@ -1,4 +1,7 @@
 
+VDC		=$d600
+VDCI		=VDC
+VDCD		=VDC+1
 
 VDC_HDISP      =1
 VDC_VDISP      =6
