@@ -14,10 +14,8 @@ KERNBSS=58880	# $e600
 
 # where the init image and its data are located
 ROMSTART=32768	# $8000
-#ROMDATA=43008	# $a800
-#ROMBSS=43520	# $aa00
-ROMDATA=45056	# $b000
-ROMBSS=45568	# $b200
+ROMDATA=45568	# $b200
+ROMBSS=46080	# $b400
 
 # where the lib6502 and its data are located
 LIB6502=783	# $030f, jump table address

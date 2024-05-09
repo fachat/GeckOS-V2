@@ -299,40 +299,6 @@ TNT_PAR			=5	/* three byte thread parameter space	*/
 TNT_SLEN		=8	/* length of entry			*/
 
 
-/*        Terminal Commands        */
-
-#define   TC_BEL    7
-#define   TC_BS     8
-#define   TC_HT     9
-#define   TC_LF     10
-#define   TC_VT     11
-#define   TC_FF     12
-#define   TC_CR     13
-#define   TC_ESC    27
-
-#define   TC_CLFT   $80
-#define   TC_CRGT   $81
-#define   TC_CUP    $82
-#define   TC_CDWN   $83
-#define   TC_HOME   $84
-#define   TC_CLR    $85
-#define   TC_DEL    $86
-#define   TC_INS    $87
-#define   TC_WLO    $88    
-#define   TC_WRU    $89  
-#define   TC_WCLS   $8a
-#define   TC_EOL    $8b
-#define   TC_CLL    $8c
-
-#define   TC_ECHO   $8d		/* device shall echo: terminal = full screen */
-#define   TC_NOECHO $8e		/* appl. echos: full appl. control */
-
-#define	  TC_CPOS   $8f		/* next chars are row and column */
-
-#define	  TC_HELP   $90
-#define	  TC_ALT    $91		/* what used for? */
-#define	  TC_NOSCRL $92
-
 /*********************** System Semaphores *************************/
 /* System semaphores cannot be allocated and/or freed with 
  * GETSEM/FRESEM, but can be used with PSEM and VSEM.

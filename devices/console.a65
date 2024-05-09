@@ -43,6 +43,8 @@
 zei2	.word 0
 	.text
 
+#include "tcdefs.i65"
+
 #include CONSOLE_DEVICE
 
 #if MAX_SCREEN < 3

@@ -75,6 +75,7 @@
 #define	  Getname   getname
 #define	  Set2name  set2name
 
+#include  "tcdefs.i65"
 
           .(
 #ifdef ROM

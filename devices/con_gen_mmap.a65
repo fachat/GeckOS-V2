@@ -64,9 +64,9 @@
  *		
  *	128-159 range (xcode):
  *		128		tocl - crsr left
- *		129		nextc - crsr right
+ *		129		nextcol - crsr right
  *		130		tocu - crsr up
- *		131		nextz - crsr down
+ *		131		nextrow - crsr down
  *		132		tohome - crsr home (top left of win)
  *		133		toclr - clear window (TC_FF)
  *		134		todel - del char under cursor
@@ -254,16 +254,16 @@ outc      ASC2SCR
 	  ldy spalte
           sta (vzei),y
           
-&nextc    ldy spalte
+&nextcol  ldy spalte
           iny
           cpy wr
           bcc o1
-          jsr nextz
+          jsr nextrow
           ldy wx
 o1        sty spalte
           rts
           
-&nextz    ldx zeile
+&nextrow  ldx zeile
           inx
           cpx wh
           bcc o2
@@ -418,7 +418,7 @@ xout      .(	;2
           rts
 x1        cmp #TC_LF
           bne x2
-          jmp nextz
+          jmp nextrow
 x2        cmp #TC_BEL
           bne x3a
 	  TRIGBELL
@@ -470,18 +470,22 @@ xcode     .(	;2
           bcs xe
           asl
           tax
-          lda xadr+1,x
+          lda xaddr+1,x
+	  beq xe
           pha
-          lda xadr,x
+          lda xaddr,x
           pha
 xe        rts
 
-maxcode   =16
-xadr      .word tocl-1,nextc-1,tocu-1,nextz-1
-          .word tohome-1,toclr-1,todel-1,toins-1
-          .word towlo-1,towru-1,towcl-1
-          .word toeol-1,toclrl-1
-	  .word toecho-1, tonoecho-1, tocpos-1
+xaddr     .word tocl-1,nextcol-1,tocu-1,nextrow-1 
+          .word tohome-1,toff-1,todel-1,toins-1   
+          .word towlo-1,towru-1,towcl-1           
+          .word toeol-1,toclrl-1                  
+          .word 0,0 ;todell-1, toinsl-1                
+          .word toecho-1, tonoecho-1              
+          .word tocpos-1, 0,0 ;, toattr-1, tofgcol-1     
+xaddre                                            
+maxcode   =(xaddre-xaddr)/2     ;19               
 
 tocpos	.(	;3
 	ldx actdev

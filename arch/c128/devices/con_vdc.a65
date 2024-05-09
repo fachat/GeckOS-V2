@@ -48,7 +48,8 @@
 
 #define	ASC2SCR
 
-#define	FGCOL		2
+#define	FGCOL		15
+#define	BGCOL		0
 
 #include "chips/vdc.i65"
 
@@ -65,6 +66,9 @@ wh	.byt 0		; window height (rel. to wy)
 
 iz	.byt 0		; line number of start of input
 is	.byt 0		; column of start of input
+
+attrbg	.byt 0		; background attribute value
+attrfg	.byt 0		; foreground attribute value
 
 cptr	.word 0		; current memory pointer
 
@@ -124,6 +128,70 @@ l	bit VDCI
 	rts
 	.)
 
+vdcsetsrc .(
+	jsr calcaddr
+	pha
+	tya
+	ldx #VDC_COPYSRC_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+vdcsetcolsrc .(
+	jsr calcaddr
+	pha
+	tya
+	ora #$08
+	ldx #VDC_COPYSRC_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+vdcsetupd .(
+	jsr calcaddr
+	pha
+	tya
+	ldx #VDC_UPDATE_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+vdcsetcolupd .(
+	jsr calcaddr
+	pha
+	tya
+	ora #$08
+	ldx #VDC_UPDATE_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+
+vdcsetwr .(
+	; set to write (not copy)
+	ldx #VDC_VSCRL
+	jsr vdcfrd
+	and #%01111111
+	jmp vdcwr
+	.)
+
+vdcsetcp .(
+	; set to write (not copy)
+	ldx #VDC_VSCRL
+	jsr vdcfrd
+	ora #%10000000
+	jmp vdcwr
+	.)
+
+
 	;-------------------------------------------------
 
 console_init .(
@@ -134,10 +202,16 @@ console_init .(
 	.)
 
 inivid	.(
+	pha
 	; init the VDC registers
 	; TODO
 	; set the background colour
 	; TODO
+	lda #FGCOL
+	sta attrfg
+	lda #BGCOL
+	sta attrbg
+	pla
 	jsr inivscr
 	jsr toff
 	rts
@@ -164,6 +238,8 @@ setact	.(
 
 	; set the structures such that all output goes to curdev
 setscr	.(
+	lda curdev
+	sta actdev
 	; TODO
 	rts
 	.)
@@ -305,10 +381,11 @@ outok
 	ldx #VDC_UPDATA
 	jsr vdcwr
 	jsr setcol
-	lda #FGCOL
+	lda attrfg
+	ldx #VDC_UPDATA
 	jsr vdcwr
 	; fall-through
-nextcol	
+&nextcol	
 	inc col
 	ldx col
 	cpx ww
@@ -316,27 +393,26 @@ nextcol
 	bcc colok
 	dec col
 colok	rts
+	.)
 
-&nextrow .(
+nextrow .(
 	ldx row
 	inx
 	cpx wh
-	bcs nok
+	bcs scrollup
 	stx row
 	rts
-
-nok	
 	.)
+
+todell	lda row
+	.byt $2c
 	; fall-through
 scrollup .(
 	lda #0
 	sta tmp		; line counter
 
 	; set to copy
-	ldx #VDC_VSCRL
-	jsr vdcrd
-	ora #$80
-	jsr vdcwr
+	jsr vdcsetcp
 scrloop
 	; set row address
 	ldx #0		; col zero
@@ -356,14 +432,7 @@ scrloop
 	bcs donescroll
 	inc tmp
 
-	jsr calcaddr
-	pha
-	tya
-	ldx #VDC_COPYSRC_H
-	jsr vdcwr
-	pla
-	inx
-	jsr vdcwr
+	jsr vdcsetsrc
 
 	; copy line
 	ldx #VDC_UPLEN
@@ -376,15 +445,7 @@ scrloop
 	; attribute source
 	ldx #0
 	ldy tmp
-	jsr calcaddr
-	pha
-	tya
-	ora #$08	; map from char to attribute space
-	ldx #VDC_COPYSRC_H
-	jsr vdcwr
-	pla
-	inx
-	jsr vdcwr
+	jsr vdcsetcolsrc
 
 	; copy attributes
 	ldx #VDC_UPLEN
@@ -395,16 +456,75 @@ scrloop
 
 donescroll
 	; set to store
-	ldx #VDC_VSCRL
-	jsr vdcrd
-	and #$7f
-	jsr vdcwr
+	jsr vdcsetwr
 	; clear line as set in cptr
 	jsr clrline
 	jmp setptr
 	.)
 
+toinsl	.(
+	; set to copy
+	jsr vdcsetcp
+
+	; start with last line as target
+	ldy wh
+	dey
+	sty tmp
+scrloop	
+	ldy tmp
+	dey
+	cpy row		; did we reach current line as src?
+	beq clr		; yes then clear
+
+	; set row address
+	ldx #0		; col zero
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; setup line target address	
+	jsr setchr
+
+	; setup line source address
+	ldx #0
+	ldy tmp
+
+	jsr vdcsetsrc
+
+	; copy line
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	; attribute target
+	jsr setcol
+	
+	; attribute source
+	ldx #0
+	ldy tmp
+	jsr vdcsetcolsrc
+
+	; copy attributes
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	dec tmp
+	jmp scrloop
+
+clr
+	; set to store
+	jsr vdcsetwr
+	; clear line as set in cptr
+	ldy row
+	ldx #0
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+	jsr clrline
+	jmp setptr
 	.)
+
 
 /**************************************************************************
  * control char output
@@ -416,7 +536,8 @@ xout      .(    ;2
           lda #0
           sta col
           rts
-x1        cmp #TC_LF
+x1        
+	  cmp #TC_LF
           bne x3a
           jmp nextrow
 x3a       
@@ -424,20 +545,315 @@ x3a
           bne x3
 	  jmp toff
 x3        
-          ;cmp #TC_BS
-          ;bne x4
+          cmp #TC_BS
+          bne x4
+	  jmp tobs
 x4	  rts
           .)    ;2
 
-xcode	rts
-extra	rts
+        /* handle multi-byte sequences - pretty simple now. */
+extra   .(      ;2
+        dey
+        beq crsrrow	; ctrlst=1
+
+	dey
+	beq crsrcol	; ctrlst=2
+
+	dey
+	beq attr	; ctrlst=3
+
+	dey
+	beq colr	; ctrlst=4
+
+clrctrl lda #0
+        sta ctrlst,x
+        rts
+
+attr	and #%11110000
+	sta tmp
+	lda attrfg
+	and #%00001111
+	ora tmp
+	sta attrfg
+	jmp clrctrl
+
+colr	and #%00001111
+	sta tmp
+	lda attrfg
+	and #%11110000
+	ora tmp
+	sta attrfg
+	jmp clrctrl
+
+crsrcol	cmp ww
+        bcc colok
+        lda ww
+        sbc #1
+colok   sta col
+	jmp clrctrl
+
+crsrrow cmp wh
+        bcc rowok
+        lda wh
+        sbc #1
+rowok   sta row
+inccst  inc ctrlst,x
+        rts
+
+        .)
+
+tocpos  .(
+        lda #1
+	.byt $2c
+        .)
+	; fall through
+toattr  .( 
+        lda #3
+        .byt $2c
+        .)
+	; fall through
+tofgcol .( 
+        lda #4
+        ldx actdev
+        sta ctrlst,x
+        rts
+        .)
+
+toecho  .(
+        ldx actdev
+        lda status,x
+        ora #DC_SW_MOD
+        sta status,x
+        rts
+        .)
+
+tonoecho .(
+        ldx actdev
+        lda status,x
+        and #$ff-DC_SW_MOD
+        sta status,x
+        rts
+        .)
+
+xcode     .(    ;2
+          and #$7f
+          cmp #maxcode
+          bcs xe
+          asl
+          tax
+          lda xaddr+1,x
+          pha
+          lda xaddr,x
+          pha
+xe        rts
+
+xaddr     .word tocl-1,nextcol-1,tocu-1,nextrow-1
+          .word tohome-1,toff-1,todel-1,toins-1
+          .word towlo-1,towru-1,towcl-1
+          .word toeol-1,toclrl-1
+	  .word todell-1, toinsl-1
+          .word toecho-1, tonoecho-1
+	  .word tocpos-1, toattr-1, tofgcol-1
+xaddre
+maxcode   =(xaddre-xaddr)/2	;19
+	.)
+
+toeol	.(
+	ldx #0
+	stx col
+	ldy row
+	jsr vdcsetupd
+
+	ldy col
+l	iny
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	cmp #SCR_SPACE
+	beq next
+	sty col
+next	cpy ww
+	bcc l
+	jmp setptr
+	.)
+
+towru	.(
+	ldy col
+	iny
+	sty ww
+	ldy row
+	iny
+	sty wh
+	rts
+	.)
+
+towlo	.(
+	lda col
+	clc
+	adc wx
+	sta wx
+	lda row
+	clc
+	adc wy
+	sta wy
+	lda ww
+	sec
+	sbc col	
+	sta ww
+	lda wh
+	sec
+	sbc row
+	sta wh
+	jmp tohome
+	.)
+
+	; cursor left
+tocl	.(
+	lda col
+	beq done
+	dec col
+done	rts
+	.)
+
+tocu	.(
+	lda row
+	beq done
+	dec row
+done	rts
+	.)
+
+tobs	.(
+	ldx col
+	bne dobs
+	rts
+dobs
+	dec col
+&todel
+	jsr vdcsetcp
+
+	ldx col
+	ldy row
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; set target address	
+	jsr setchr
+
+	; src address
+	ldx col
+	inx
+	ldy row
+	jsr vdcsetsrc
+
+	lda ww
+	clc
+	sbc col
+	beq setspc
+	
+	ldx #VDC_UPLEN
+	jsr vdcwr
+
+	; copy attributes
+	; trg address
+	jsr setcol
+	; src address
+	ldx col
+	inx
+	ldy row
+	jsr vdcsetcolsrc
+
+	lda ww
+	clc
+	sbc col
+	
+	ldx #VDC_UPLEN
+	jsr vdcwr
+setspc
+	jsr vdcsetwr
+
+	ldx ww
+	dex
+	ldy row
+	jsr vdcsetupd
+
+	lda #SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	ldx ww
+	dex
+	ldy row
+	jsr vdcsetcolupd
+
+	lda attrbg
+	ldx #VDC_UPDATA
+	jmp vdcwr
+	.)
+	
+	; insert space under cursor
+toins	.(
+	jsr vdcsetcp
+
+	ldx col
+	inx
+	ldy row
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; set target address	
+	jsr setchr
+
+	; src address
+	ldx col
+	ldy row
+	jsr vdcsetsrc
+
+	lda ww
+	clc
+	sbc col
+	beq setspc
+	
+	ldx #VDC_UPLEN
+	jsr vdcwr
+
+	; copy attributes
+	; trg address
+	jsr setcol
+	; src address
+	ldx col
+	ldy row
+	jsr vdcsetcolsrc
+
+	lda ww
+	clc
+	sbc col
+	
+	ldx #VDC_UPLEN
+	jsr vdcwr
+setspc
+	jsr vdcsetwr
+
+	ldx col
+	ldy row
+	jsr vdcsetupd
+
+	lda #SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	ldx col
+	ldy row
+	jsr vdcsetcolupd
+
+	lda attrbg
+	ldx #VDC_UPDATA
+	jmp vdcwr
+	.)
 
 &toff	.(
 	; set to write (not copy)
-	ldx #VDC_VSCRL
-	jsr vdcfrd
-	and #%01111111
-	jsr vdcwr
+	jsr vdcsetwr
 
 	; first row/col in win
 	ldy #0
@@ -455,13 +871,13 @@ lloop
 	ldy tmp
 	cpy wh
 	bcc lloop
-	rts	
+	jmp tohome	
 
 &clrline .(
 	jsr setchr
 	jsr writespace
 	jsr setcol
-	lda #FGCOL
+	lda attrbg
 	.byt $2c
 writespace
 	lda #SCR_SPACE
@@ -472,6 +888,27 @@ writespace
 	sec
 	sbc #1
 	jmp clr_kludge
+	.)
+
+&toclrl .(
+	jsr setptr
+	jsr setchr
+	jsr writespace
+	jsr setcol
+	lda attrbg
+	.byt $2c
+writespace
+	lda #SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	lda ww
+	clc
+	sbc col
+	beq done
+	jmp clr_kludge
+done	rts
+	.)
 		
 clr_kludge_1
 	lda #1
@@ -480,7 +917,6 @@ clr_kludge
 	jsr vdcwr
 	; TODO kludge - not needed in VICE right now
 	rts
-	.)
 
 	.)
 
@@ -514,50 +950,18 @@ tohome	.(
         .text
 
 &inicrsr
-;	lda #0
-;	sta crsrfl
-;	sta crsrcnt
-	rts
-
+	; fall-through
 &crsroff .(                    ; disable cursor
-;          bit crsrfl
-;          bpl ret               ; not enabled
-;
-;          bit crsrfl
-;          bvc clr               ; not inversed
-;          ldy spalte
-;          lda (vzei),y
-;          eor #$80
-;          sta (vzei),y
-;clr       lda #0
-;          sta crsrfl
-&ret      rts
+	ldx #VDC_CRSR_STRT
+	lda #7+32		; start line, no cursor
+	jmp vdcwr
 	.)
 
 &crsron .(			; enable cursor
-;          bit crsrfl
-;          bmi irq               ; already enabled
-;          lda #0                ; inverse cursor next crsrirq
-;          sta crsrcnt
-;          lda #128              ; enabled, but not invers
-;          sta crsrfl
-;
-&irq      
-;	  dec crsrcnt
-;          bpl ret               ; not this time
-;          lda #10
-;          sta crsrcnt
-;
-;          ldy spalte
-;          lda (vzei),y
-;          eor #$80
-;          sta (vzei),y
-;          lda crsrfl
-;          eor #$40
-;          sta crsrfl
-;
-          rts
-          .)
+	ldx #VDC_CRSR_STRT
+	lda #7+64		; start line, blinking cursor
+	jmp vdcwr
+        .)
 
 	.)
 
