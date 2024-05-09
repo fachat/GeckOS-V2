@@ -48,7 +48,7 @@
  *	printchar
  *		print a character on screen
  *	setzei
- *		set the vzei to the char line given in x
+ *		set the vzei to the char line (in window) given in x
  *	towcl
  *		clear the current sub-window to the whole
  *		screen
@@ -298,7 +298,9 @@ sz1       ACT_HI_VID
           sta vzei+1
           ldx zeile
           rts
-        
+
+&todell	  ldx zeile
+	  .byt $2c        
 scrollup  ldx #0
           jsr setzei
 
@@ -337,7 +339,47 @@ su4       sta (vzei),y
           rts
           .)	;1
 
-iniscr    .(	;2	; screen number in AC
+toinsl	  .(
+	ldx wh
+	dex
+        jsr setzei
+
+su2     dex
+        cpx zeile
+	beq clr
+
+        lda vzei
+        sec
+        sbc MAXSPAL
+        sta zei2
+        lda vzei+1
+        sbc #0
+        sta zei2+1
+
+          ldy wx
+su1       lda (zei2),y
+          sta (vzei),y
+          iny
+          cpy wr
+          bcc su1
+          
+        lda zei2
+        sta vzei
+        lda zei2+1
+        sta vzei+1
+        jmp su2     
+
+clr       ldy wx
+          lda #SCR_SPACE
+su4       sta (vzei),y
+          iny
+          cpy wr
+          bcc su4
+
+	jmp clrli          
+          .)	
+
+iniscr    .(		; screen number in AC
 	  HI_VID
           sta hivid 
 
@@ -478,10 +520,10 @@ xcode     .(	;2
 xe        rts
 
 xaddr     .word tocl-1,nextcol-1,tocu-1,nextrow-1 
-          .word tohome-1,toff-1,todel-1,toins-1   
+          .word tohome-1,toclr-1,todel-1,toins-1   
           .word towlo-1,towru-1,towcl-1           
           .word toeol-1,toclrl-1                  
-          .word 0,0 ;todell-1, toinsl-1                
+          .word todell-1, toinsl-1                
           .word toecho-1, tonoecho-1              
           .word tocpos-1, 0,0 ;, toattr-1, tofgcol-1     
 xaddre                                            

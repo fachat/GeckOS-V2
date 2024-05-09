@@ -133,18 +133,12 @@ ok			.)
 	.text
 
 &console_init .(
-	jsr inimem
 	jsr inivid
 	jsr inikbd
 	jsr inicrsr
 	jsr inibell
 	rts
 	.)
-
-inimem    .(
-          clc
-          rts
-          .)
 
 &inivid   .(   
           lda curdev
