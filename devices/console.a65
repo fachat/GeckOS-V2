@@ -36,6 +36,31 @@
           jmp prg1
           .asc BASE_NAME, "1",0
 
+#if 1	//MAX_SCREEN < 3
+devend1	  .word	    devend
+          jmp prg2
+          .asc BASE_NAME, "2",0
+#else
+devend1   .word     devend2
+          jmp prg2
+          .asc BASE_NAME, "2",0
+
+#if 1	//MAX_SCREEN < 4
+devend2	  .word	    devend
+          jmp prg3
+          .asc BASE_NAME, "3",0
+#else
+devend2   .word     devend3
+          jmp prg3
+          .asc BASE_NAME, "3",0
+
+devend3   .word     devend
+          jmp prg4
+          .asc BASE_NAME, "4",0
+
+#endif	// MAX_SCREEN < 4
+#endif 	// MAX_SCREEN < 3
+
 	; zei2 is used in CONSOLE_DEVICE, so 
 	; should be defined. Otherwise block level may be
 	; elevated and label defined errors may occur
@@ -44,26 +69,6 @@ zei2	.word 0
 	.text
 
 #include CONSOLE_DEVICE
-
-#if MAX_SCREEN < 3
-devend1	  .word	    devend
-#else
-devend1   .word     devend2
-#endif
-          jmp prg2
-          .asc BASE_NAME, "2",0
-
-#if MAX_SCREEN < 4
-devend2	  .word	    devend
-#else
-devend2   .word     devend3
-#endif
-          jmp prg3
-          .asc BASE_NAME, "3",0
-
-devend3   .word     devend
-          jmp prg4
-          .asc BASE_NAME, "4",0
 
 
 #define	MAX_DEVICE	MAX_SCREEN

@@ -1,7 +1,11 @@
 
 START	=$7000
 
+TRGADDR	=$0300
+
 ZP	=$02
+ZP2	=$fe
+
 ST	=$96
 
 CHKIN	=$ffc6
@@ -16,11 +20,47 @@ start	jsr loadrom
 
 	sei
 
-	jmp (startp)	; RESET
+	jsr moverom
+
+	jmp TRGADDR	; RESET
+
+	;------------------
+moverom	.(
+	lda ZP
+	sta endp
+	lda ZP+1
+	sta endp+1
+	lda startp
+	sta ZP
+	lda startp+1
+	sta ZP+1
+	lda #<TRGADDR
+	sta ZP2
+	lda #>TRGADDR
+	sta ZP2+1
+
+	ldy #0
+mvblk	lda (ZP),y
+	sta (ZP2),y
+	iny
+	bne mvblk
+
+	inc ZP+1
+	inc ZP2+1
+
+	lda ZP+1
+	cmp endp+1
+	bcc mvblk
+	bne done
+	lda ZP
+	cmp endp
+	bcc mvblk
+done	rts
+	.)
 
 	;------------------
 
-romname	.asc "PETROM.BIN"
+romname	.asc "ROM.BIN"
 romnlen	=*-romname
 
 
@@ -104,4 +144,6 @@ OPEN	=$f563
 
 	; -----------------------------
 startp	.word 0
+endp	.word 0
+
 
