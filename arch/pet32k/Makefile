@@ -1,5 +1,5 @@
 
-TRG=petrom.bin
+TRG=rom.bin
 
 XAINPUT=../../include,..,../..
 XA=xa -k
@@ -19,9 +19,9 @@ pet ${TRG}:
 	${RELOC} -v -bt 766 -bz 8 -X -o ${TRG} rom.o65 | tee reloc.lst
 	../reloclab.sh reloc.lst rom.lab > rom.lab.tmp 2>/dev/null
 	mv rom.lab.tmp rom.lab
-	../labels2vice.sh rom.lab > rom.l
+	../labels2vice.sh rom.lab > roms.l
 	
 clean:
-	rm -f ${TRG} rom.lab rom.o65 rom reloc.lst rom.l
+	rm -f ${TRG} rom.lab rom.o65 reloc.lst roms.l
 	make -C boot clean
 

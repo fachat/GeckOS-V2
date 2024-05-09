@@ -46,7 +46,7 @@ crsrcnt .byt 0
           bvc clr               ; not inversed
           ldy spalte
           lda (vzei),y
-          eor #$80
+          and #$7f
           sta (vzei),y
 clr       lda #0
           sta crsrfl
