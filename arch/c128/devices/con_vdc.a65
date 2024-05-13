@@ -576,7 +576,11 @@ attr	and #%11110000
 	sta attrfg
 	jmp clrctrl
 
-colr	and #%00001111
+colr	cmp #TC_COL_DEFAULT
+	bne setfgcol
+	lda #FGCOL
+setfgcol
+	and #%00001111
 	sta tmp
 	lda attrfg
 	and #%11110000

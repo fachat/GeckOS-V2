@@ -77,6 +77,24 @@ main
 	ldx #txtB-txtA
 	jsr strnout
 
+	jsr waitkey
+
+	; ---
+
+	lda #<txtB
+	ldy #>txtB
+	ldx #txtC-txtB
+	jsr strnout
+
+	jsr waitkey
+
+	; ---
+
+	lda #<txtC
+	ldy #>txtC
+	ldx #txtD-txtC
+	jsr strnout
+
 	lda #E_OK
 	rts
 
@@ -87,19 +105,19 @@ waitkey	ldx #STDIN
 txt1	.byt TC_WCLS, TC_FF
 	.byt TC_LF, TC_LF
 	.byt " +----------------------+", TC_CR,TC_LF	; 0
-	.byt " |   _______________   ",TC_ATTR,%01000000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 1
-	.byt " |   insert here ><    ",TC_ATTR,%00100000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 2
-	.byt " |   delete this > <   ",TC_ATTR,%00010000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 3
-	.byt " |   _______________   ",TC_ATTR,%01000000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 4
-	.byt " |   insert line v     ",TC_ATTR,%00100000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 5
-	.byt " |   delete this <->   ",TC_ATTR,%00010000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 6
-txt1a	.byt " |   _______________   ",TC_ATTR,%01000000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 7
-	.byt " |   red blue green    ",TC_ATTR,%00100000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 8
-	.byt " |   blink uline rev   ",TC_ATTR,%00010000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 9
-	.byt " |   _______________   ",TC_ATTR,%01000000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 10
-	.byt " |   del this:_foo__   ",TC_ATTR,%00100000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 10
+	.byt " |   _______________   ",TC_ATTR,TC_ATTR_REV,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 1
+	.byt " |   insert here ><    ",TC_ATTR,TC_ATTR_ULINE,"1",TC_ATTR,0,"|", TC_CR,TC_LF	; 2
+	.byt " |   delete this > <   ",TC_ATTR,TC_ATTR_BLINK,"2",TC_ATTR,0,"|", TC_CR,TC_LF	; 3
+	.byt " |   _______________   ",TC_ATTR,TC_ATTR_REV,"3",TC_ATTR,0,"|", TC_CR,TC_LF	; 4
+	.byt " |   insert line v     ",TC_ATTR,TC_ATTR_ULINE,"4",TC_ATTR,0,"|", TC_CR,TC_LF	; 5
+	.byt " |   delete this <->   ",TC_ATTR,TC_ATTR_BLINK,"5",TC_ATTR,0,"|", TC_CR,TC_LF	; 6
+txt1a	.byt " |   _______________   ",TC_ATTR,TC_ATTR_REV,"6",TC_ATTR,0,"|", TC_CR,TC_LF	; 7
+	.byt " |   red blue green    ",TC_ATTR,TC_ATTR_ULINE,"7",TC_ATTR,0,"|", TC_CR,TC_LF	; 8
+	.byt " |   blink uline rev   ",TC_ATTR,TC_ATTR_BLINK,"8",TC_ATTR,0,"|", TC_CR,TC_LF	; 9
+	.byt " |   _______________   ",TC_ATTR,TC_ATTR_REV,"9",TC_ATTR,0,"|", TC_CR,TC_LF	; 10
+	.byt " |   del this:_foo__   ",TC_ATTR,TC_ATTR_ULINE,"A",TC_ATTR,0,"|", TC_CR,TC_LF	; 10
 	.byt " |   eol this:          |", TC_CR,TC_LF	; 10
-	.byt " |   last line         ",TC_ATTR,%00010000,"0",TC_ATTR,0,"|", TC_CR,TC_LF	; 11
+	.byt " |   last line         ",TC_ATTR,TC_ATTR_BLINK,"C",TC_ATTR,0,"|", TC_CR,TC_LF	; 11
 	.byt " +----------------------+", TC_CR,TC_LF	; 12
 	.byt 0
 
@@ -112,7 +130,15 @@ txt7	.byt TC_CPOS, 5,4, TC_INSL
 txt8	.byt TC_CPOS, 6,4, TC_DELL
 txt9	.byt TC_CPOS, 10,12, TC_CLL
 txtA	.byt TC_CPOS, 11,2, TC_EOL, 'x'
-txtB
+txtB	.byt TC_CPOS, 7,3, TC_FGCOL, TC_COL_LRED, "red "
+	.byt TC_FGCOL, TC_COL_LBLUE, "blue ",
+	.byt TC_FGCOL, TC_COL_LGREEN, "green"
+	.byt TC_FGCOL, TC_COL_DEFAULT
+txtC	.byt TC_CPOS, 8,3, TC_ATTR, TC_ATTR_BLINK, "blink", TC_ATTR, 0, " "
+	.byt TC_ATTR, TC_ATTR_ULINE, "uline", TC_ATTR, 0, " ",
+	.byt TC_ATTR, TC_ATTR_REV, "rev"
+	.byt TC_ATTR, 0
+txtD
 
 strnout	.(
 	.zero

@@ -55,9 +55,6 @@ TC_NOECHO 	=$90	/* appl. echos: full appl. control */
 TC_CPOS   	=$91		; set cursor pos - next chars are row and col
 
 TC_ATTR		=$92		; next byte is attribute for display
-TC_ATTR_REV	=%01000000	; reverse bit
-TC_ATTR_ULINE	=%00100000	; underline bit (opt. dep. on console)
-TC_ATTR_BLINK	=%00010000	; blink bit (opt. dep. on console)
 
 TC_FGCOL	=$93		; next byte is foreground colour
 
@@ -65,4 +62,27 @@ TC_HELP   	=$9c		; C128 HELP key
 TC_ALT    	=$9d		; C128 ALT key
 TC_NOSCRL 	=$9e		; C128 NO SCROLL key
 
+
+TC_ATTR_REV	=%01000000	; reverse bit
+TC_ATTR_ULINE	=%00100000	; underline bit (opt. dep. on console)
+TC_ATTR_BLINK	=%00010000	; blink bit (opt. dep. on console)
+
+TC_COL_BLACK	=0		; blacK
+TC_COL_DGREY	=1		; dark grey
+TC_COL_DBLUE	=2		; dark blue
+TC_COL_LBLUE	=3		; light blue
+TC_COL_DGREEN	=4		; dark green
+TC_COL_LGREEN	=5		; light green
+TC_COL_DCYAN	=6		; dark cyan
+TC_COL_LCYAN	=7		; light cyan
+TC_COL_DRED	=8		; dark red
+TC_COL_LRED	=9		; light red
+TC_COL_DPURPLE	=10		; dark purple
+TC_COL_LPURPLE	=11		; light purple
+TC_COL_BROWN	=12		; brown
+TC_COL_YELLOW	=13		; yellow
+TC_COL_LGREY	=14		; light grey
+TC_COL_WHITE	=15		; white
+
+TC_COL_DEFAULT	=128		; default color
 
