@@ -71,6 +71,7 @@ attrfg	.byt 0		; foreground attribute value
 cptr	.word 0		; current memory pointer
 
 tmp	.byt 0		; temp counter
+tmp2	.byt 0		; temp counter
 	.text
 
 	;-------------------------------------------------
@@ -795,63 +796,57 @@ setspc
 	
 	; insert space under cursor
 toins	.(
-	jsr vdcsetcp
+	; save original column
+	lda col
+	pha
 
-	ldx col
-	inx
-	ldy row
-	jsr calcaddr
-	sta cptr
-	sty cptr+1
-
-	; set target address	
-	jsr setchr
-
-	; src address
-	ldx col
-	ldy row
-	jsr vdcsetsrc
-
-	lda ww
-	clc
-	sbc col
-	beq setspc
-	
-	ldx #VDC_UPLEN
-	jsr vdcwr
-
-	; copy attributes
-	; trg address
-	jsr setcol
-	; src address
-	ldx col
-	ldy row
-	jsr vdcsetcolsrc
-
-	lda ww
-	clc
-	sbc col
-	
-	ldx #VDC_UPLEN
-	jsr vdcwr
-setspc
-	jsr vdcsetwr
-
-	ldx col
-	ldy row
-	jsr vdcsetupd
-
+	; insert space
 	lda #SCR_SPACE
+	sta tmp
+	lda #BGCOL
+	sta tmp2
+cloop
+	jsr setptr
+
+	; read char
+	jsr setchr
 	ldx #VDC_UPDATA
+	jsr vdcrd
+	pha
+
+	; write char
+	jsr setchr
+	ldx #VDC_UPDATA
+	lda tmp
 	jsr vdcwr
 
-	ldx col
-	ldy row
-	jsr vdcsetcolupd
+	pla
+	sta tmp
 
-	lda attrbg
+	; read attr
+	jsr setcol
 	ldx #VDC_UPDATA
-	jmp vdcwr
+	jsr vdcrd
+	pha
+
+	; write attr
+	jsr setcol
+	ldx #VDC_UPDATA
+	lda tmp2
+	jsr vdcwr
+
+	pla
+	sta tmp2
+
+	; next col
+	inc col
+	lda col
+	cmp ww
+	bcc cloop
+
+	pla
+	sta col
+	jmp setptr
 	.)
 
 &toff	.(
