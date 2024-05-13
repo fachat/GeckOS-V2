@@ -24,9 +24,7 @@
 
 #define	CHECK_C128
 
-#define	MAX_SCREEN	3		/* hard maximum number of screens */
-
-#define	MAX_ASCREEN	#3		/* soft maximum number of screens */
+#define	MAX_SCREEN	3		/* maximum number of screens */
 
 #define	SWITCHKEY	61
 

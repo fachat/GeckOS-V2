@@ -253,7 +253,7 @@ sw_next	.(	;3
 p1c1b     ldx actscr	 ; needed to tell setact the old screen number
 	  inc actscr     ; then switch screen
 	  lda actscr
-	  cmp MAX_ASCREEN
+	  cmp #MAX_SCREEN
 	  bcc p1c1a
 	  lda #0
 	  sta actscr

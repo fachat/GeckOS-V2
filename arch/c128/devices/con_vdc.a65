@@ -24,9 +24,7 @@
 
 #define	CHECK_C128
 
-#define	MAX_SCREEN	3		/* hard maximum number of screens */
-
-#define	MAX_ASCREEN	#3		/* soft maximum number of screens */
+#define	MAX_SCREEN	2		/* maximum number of screens */
 
 #define	SWITCHKEY	61
 
@@ -238,7 +236,8 @@ setact	.(
 
 	; set the structures such that all output goes to curdev
 setscr	.(
-	lda curdev
+	;lda curdev
+	lda #0
 	sta actdev
 	; TODO
 	rts
@@ -472,9 +471,10 @@ toinsl	.(
 	sty tmp
 scrloop	
 	ldy tmp
-	dey
 	cpy row		; did we reach current line as src?
 	beq clr		; yes then clear
+	sty tmp
+	dec tmp
 
 	; set row address
 	ldx #0		; col zero
@@ -509,7 +509,6 @@ scrloop
 	lda ww
 	jsr vdcwr
 
-	dec tmp
 	jmp scrloop
 
 clr

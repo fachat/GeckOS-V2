@@ -30,7 +30,7 @@
 
 #define	MAX_SCREEN	4		/* hard limit for tables */
 
-#define	MAX_ASCREEN	maxscr		/* soft limit */
+#define	MAX_ASCREEN	maxscr		/* soft limit (dep. on 40/80 cols) */
 
 #define	SWITCHKEY	79		/* Rev/off on graphics keyboard */
 ; for VICE?

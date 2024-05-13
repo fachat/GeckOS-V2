@@ -4,6 +4,7 @@ version="2.1.1"
 all:
 	(cd apps; ${MAKE};)
 	(cd sysapps; ${MAKE};)
+	(cd tests; ${MAKE};)
 	(cd dist; ${MAKE};)
 
 clean:
@@ -13,6 +14,7 @@ clean:
 	(cd kernel; ${MAKE} clean;)
 	(cd lib6502; ${MAKE} clean;)
 	(cd dist; ${MAKE} clean;)
+	(cd tests; ${MAKE} clean;)
 
 dclean: clean
 	git checkout */*/*/*.d64

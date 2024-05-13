@@ -29,9 +29,7 @@
 #define   vdc       $e880
 #define   VIDPAGE   4
 
-#define	MAX_SCREEN	2		/* hard limit for tables */
-
-#define	MAX_ASCREEN	#2		/* soft limit */
+#define	MAX_SCREEN	2		/* number of supported virtual consoles */
 
 #ifdef PET_KEYB_GRAPHICS
 #define	SWITCHKEY	79		/* graphics keyboard REV/OFF key */

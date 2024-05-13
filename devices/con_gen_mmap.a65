@@ -400,7 +400,11 @@ iniscr    .(		; screen number in AC
 	  lda curdev
 
 	  ldx actdev
+#ifdef MAX_ASCREEN
+	  cpx MAX_ASCREEN
+#else
 	  cpx #MAX_SCREEN
+#endif
 	  bcs nosave
 
           cmp actdev
