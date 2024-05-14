@@ -183,6 +183,8 @@ nkret     ldx shiftfl
 
 ttab      .word ktab, stab, ctab, sctab
 
+	; see also https://sta.c64.org/cbm64kbdlay.html
+
 ktab      .byt TC_BS, TC_CR, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CDWN
           .byt "3wa4zse", 1 /* shift */
           .byt "5rd6cftx"
@@ -211,7 +213,7 @@ stab      .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
 	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
 #endif
 
-ctab      .byt TC_DEL, TC_EOL, TC_WRU, 0, 6 /* F1 */, 0, 0, TC_WLO
+ctab      .byt TC_DELL, TC_EOL, TC_WRU, 0, 6 /* F1 */, 0, 0, TC_WLO
           .byt "3^w^a4^z^s^e", 1 /* shift */
           .byt "5^r^d6^c^f^t^x"
 	  .byt "7^y^g8^b^h^u^v"
@@ -222,10 +224,10 @@ ctab      .byt TC_DEL, TC_EOL, TC_WRU, 0, 6 /* F1 */, 0, 0, TC_WLO
 #ifdef CHECK_C128
 	  .byt TC_HELP, "85", TC_HT, "2471"
 	  .byt TC_ESC, "+-", TC_LF, TC_CR, "693"
-	  .byt TC_ALT, "0.", TC_CUP, TC_CDWN, TC_CLFT, TC_CRGT, TC_NOSCRL
+	  .byt TC_ALT, "0.", TC_CUP, TC_WLO, TC_CLFT, TC_WRU, TC_NOSCRL
 #endif
 
-sctab     .byt TC_INS, TC_LF, TC_CLFT, 0, 6 /* F1 */, 0, 0, TC_CUP
+sctab     .byt TC_INSL, TC_CLL, TC_CRGT, 0, 6 /* F1 */, 0, 0, TC_CUP
           .byt "3^W^A4^Z^S^E", 1 /* shift */
           .byt "5^R^D6^C^F^T^X"
 	  .byt "7^Y^G8^B^H^U^V"

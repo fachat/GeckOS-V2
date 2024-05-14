@@ -110,12 +110,16 @@ nocheck	rts
 	  lda #3		; ^C
 	  sta brkkey,x
 
-          lda #0		; linein off ; DC_SW_MOD	; linein ein
-          sta status,x
+	  lda #0
           sta ctrlst,x
 
           sta outstr,x
           sta getstr,x
+
+	  ; 0 		= linein off 
+	  ; DC_SW_MOD 	= linein ein
+          ;lda #DC_SW_MOD		
+          sta status,x
 
 #ifldef dev_reset
 	jmp dev_reset

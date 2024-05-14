@@ -107,6 +107,9 @@ dev_reset .(	;2
           sta syscnt
           sta actscr
 
+	  ;lda #DC_SW_MOD
+	  ;sta status,x
+
           txa
           bne re		; only the first is hw-initialized
 	  jsr console_init	; init hardware (called with y=hardware byte)
