@@ -375,7 +375,7 @@ outc
 	stx col
 	jsr nextrow
 outok
-	jsr setptr
+	;jsr setptr	 - should be done in prev. print for cursr pos
 	jsr setchr
 	pla
 	ldx #VDC_UPDATA
@@ -392,7 +392,8 @@ outok
 	beq colok
 	bcc colok
 	dec col
-colok	rts
+colok	
+	jmp setptr
 	.)
 
 nextrow .(
@@ -594,7 +595,8 @@ crsrcol	cmp ww
         lda ww
         sbc #1
 colok   sta col
-	jmp clrctrl
+	jsr clrctrl
+	jmp setptr
 
 crsrrow cmp wh
         bcc rowok
@@ -936,6 +938,7 @@ tohome	.(
 	lda #0
 	sta col
 	sta row
+	jsr setptr
 	jmp setlin
 	.)
 

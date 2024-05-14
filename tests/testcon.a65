@@ -128,16 +128,16 @@ txt5	.byt TC_CPOS, 1,16, TC_INS
 txt6	.byt TC_CPOS, 2,16, TC_DEL
 txt7	.byt TC_CPOS, 5,4, TC_INSL
 txt8	.byt TC_CPOS, 6,4, TC_DELL
-txt9	.byt TC_CPOS, 10,12, TC_CLL
-txtA	.byt TC_CPOS, 11,2, TC_EOL, 'x'
-txtB	.byt TC_CPOS, 7,3, TC_FGCOL, TC_COL_LRED, "red "
+txt9	.byt TC_CPOS, 7,3, TC_FGCOL, TC_COL_LRED, "red "
 	.byt TC_FGCOL, TC_COL_LBLUE, "blue ",
 	.byt TC_FGCOL, TC_COL_LGREEN, "green"
 	.byt TC_FGCOL, TC_COL_DEFAULT
-txtC	.byt TC_CPOS, 8,3, TC_ATTR, TC_ATTR_BLINK, "blink", TC_ATTR, 0, " "
+txtA	.byt TC_CPOS, 8,3, TC_ATTR, TC_ATTR_BLINK, "blink", TC_ATTR, 0, " "
 	.byt TC_ATTR, TC_ATTR_ULINE, "uline", TC_ATTR, 0, " ",
 	.byt TC_ATTR, TC_ATTR_REV, "rev"
 	.byt TC_ATTR, 0
+txtB	.byt TC_CPOS, 10,12, TC_CLL
+txtC	.byt TC_CPOS, 11,2, TC_EOL, 'x'
 txtD
 
 strnout	.(

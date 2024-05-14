@@ -154,6 +154,9 @@ tmp	.byt 0
           lda #TC_FF     ; form feed
           jsr printchar
 	  jsr setlin
+	
+	  lda #0
+	  sta attrfg
 
           clc
           rts
@@ -371,7 +374,7 @@ su4       sta (vzei),y
           iny
           cpy wr
           bcc su4
-          
+ 
 &clrli    ldx #<-1
           stx iz
           rts

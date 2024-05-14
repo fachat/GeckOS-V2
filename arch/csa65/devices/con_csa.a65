@@ -180,7 +180,7 @@ s1        and #%00001111
 
 &crsron  .(
           ldx #15
-          lda spalte
+          lda col
           clc
           adc vzei
           stx vdc

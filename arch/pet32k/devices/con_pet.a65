@@ -120,7 +120,7 @@ ok			.)			:\
 			bpl ok			:\
 			cpy actscr		:\
 			bne ok			:\
-			ldx zeile		:\
+			ldx row		:\
 			jsr setzei		:\
 			ldy curdev		:\
 ok			.)
@@ -222,7 +222,7 @@ cp1	lda (p2),y
 	dex
 	bne cp1
 
-	ldx zeile
+	ldx row
 	jmp setzei
 
 	  .)

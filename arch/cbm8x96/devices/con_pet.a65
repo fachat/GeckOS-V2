@@ -121,7 +121,7 @@ ok			.)			:\
 			bpl ok			:\
 			cpy actscr		:\
 			bne ok			:\
-			ldx zeile		:\
+			ldx row		:\
 			jsr setzei		:\
 			ldy curdev		:\
 ok			.)
@@ -190,7 +190,7 @@ p2	.word 0
 	lda #$80
 	sta p1+1
 	jsr cp2to1
-	ldx zeile
+	ldx row
 	jmp setzei
 
 cp2to1	ldx #8
