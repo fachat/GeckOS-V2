@@ -1,10 +1,10 @@
 
 /****************************************************************************
    
-    OS/A65 Version 2.0.0
+    OS/A65 Version 2.2
     Multitasking Operating System for 6502 Computers
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-2024 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -137,10 +137,9 @@ crsrcnt .byt 0
 
           bit crsrfl
           bvc clr               ; not inversed
-          ldy spalte
+          ldy col
           lda (vzei),y
-          ;eor #$80
-	  and #$7f
+          eor #$80
           sta (vzei),y
 clr       lda #0
           sta crsrfl
@@ -161,7 +160,7 @@ clr       lda #0
           lda #10
           sta crsrcnt
 
-          ldy spalte
+          ldy col
           lda (vzei),y
           eor #$80
           sta (vzei),y

@@ -695,10 +695,12 @@ towlo	.(
 	clc
 	adc wx
 	sta wx
+
 	lda row
 	clc
 	adc wy
 	sta wy
+
 	lda ww
 	sec
 	sbc col	

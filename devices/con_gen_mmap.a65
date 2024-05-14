@@ -1,10 +1,10 @@
 /****************************************************************************
    
-    OS/A65 Version 2.0.0
+    OS/A65 Version 2.2
     Multitasking Operating System for 6502 Computers
-    Generic console device
+    Generic memory mapped console device
 
-    Copyright (C) 1989-1998 Andre Fachat 
+    Copyright (C) 1989-2024 Andre Fachat 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -27,10 +27,10 @@
  *
  * exports these variables and functions:
  *
- * 	spalte
+ * 	col
  *		current column 
  *		(for device specific code)
- *	zeile
+ *	row
  *		current row
  *		(for device specific code)
  *	vzei
@@ -80,7 +80,6 @@
  *		142		tonoecho - clr echo flag
  *		143		tocpos - position crsr to the row/col 
  *					position given by the next two bytes
- *	TODO:
  *		144		todell - scroll lines under cursor up
  *		145		toinsl	- scroll lines under cursor down
  *		146		toattr - next byt is attribute for display
@@ -120,13 +119,14 @@
  *
  */
  
-	
+
+FGCOL	=5	
 
           .(  	;1
 
 	.data
-&spalte   .byt 0
-&zeile    .byt 0
+&col      .byt 0
+&row      .byt 0
 wx        .byt 0
 wy        .byt 0
 wr        .byt 0
@@ -134,11 +134,13 @@ wh        .byt 0
 hivid     .byt 0
 iz        .byt 0
 is        .byt 0
-#if is-spalte+2 > 12
+attrfg	  .byt 0
+#if is-col+2 > 12
 #echo Warning: illegal struct length for vtab
 #else
 vtab      .dsb MAX_SCREEN*12
 #endif
+tmp	.byt 0
 	.zero
 &vzei   .word 0
 
@@ -158,27 +160,27 @@ vtab      .dsb MAX_SCREEN*12
           .)
 
 setlin    .(
-          lda zeile
+          lda row
           sta iz
-          lda spalte
+          lda col
           sta is
           rts
           .)
           
 &sendline .(	;2
 	  SET_MMU
-          ldy zeile
+          ldy row
           cpy iz
           bne liex
           ldy is
-          cpy spalte
+          cpy col
           bcc liex2
           beq liex2
 liex      ldy wx
-liex2     sty spalte
+liex2     sty col
           sty zei2
           ldy wr
-lie2      cpy spalte
+lie2      cpy col
           beq lie1
           dey
           lda (vzei),y
@@ -211,36 +213,69 @@ extra	.(	;2
 	dey
 	beq crsrrow
 
+	dey
+	beq crsrcol
+
+	dey
+	beq attr
+
+	dey
+	beq colr
+
+clrctrl	lda #0
+	sta ctrlst,x
+	rts
+
+attr    and #%11110000      
+        sta tmp             
+        lda attrfg          
+        and #%00001111      
+        ora tmp             
+        sta attrfg          
+        jmp clrctrl         
+                            
+colr    cmp #TC_COL_DEFAULT 
+        bne setfgcol        
+        lda #FGCOL          
+setfgcol                    
+        and #%00001111      
+        sta tmp             
+        lda attrfg          
+        and #%11110000      
+        ora tmp             
+        sta attrfg          
+        jmp clrctrl         
+
 crsrcol	clc
 	adc wx
 	cmp wr
 	bcc colok
 	lda wr
 	sbc #1
-colok   sta spalte
-
-clrctrl	lda #0
-	sta ctrlst,x
-	rts
+colok   sta col
+	jsr clrctrl
+	ldx row
+	jmp setzei
 
 crsrrow	cmp wh
 	bcc rowok
 	lda wh
 	sbc #1
-rowok	sta zeile
+rowok	sta row
 inccst	inc ctrlst,x
 	rts
 	
-	.)	;1
+	.)
          
 	/* print all characters on screen */
-&printchar .(	;2
+&printchar .(
 	  SET_MMU
 
 	ldx actdev
 	ldy ctrlst,x
-	bne extra
-
+	beq no_extra
+	jmp extra
+no_extra
           tay
           bmi x1
           cmp #32
@@ -251,29 +286,32 @@ x1        cmp #128+32
           jmp xcode
           
 outc      ASC2SCR
-	  ldy spalte
+	bit attrfg
+	bvc doout
+	ora #$80
+doout	  ldy col
           sta (vzei),y
           
-&nextcol  ldy spalte
+&nextcol  ldy col
           iny
           cpy wr
           bcc o1
           jsr nextrow
           ldy wx
-o1        sty spalte
+o1        sty col
           rts
           
-&nextrow  ldx zeile
+&nextrow  ldx row
           inx
           cpx wh
           bcc o2
           jsr scrollup
           ldx wh
           dex
-o2        ;stx zeile
+o2        ;stx row
 
-&&setzei  stx zeile
-          txa
+&&setzei  stx row
+&setzei2  txa
           clc
           adc wy
           tax
@@ -296,10 +334,10 @@ sz1       ACT_HI_VID
 	  clc
           adc vzei+1
           sta vzei+1
-          ldx zeile
+          ldx row
           rts
 
-&todell	  ldx zeile
+&todell	  ldx row
 	  .byt $2c        
 scrollup  ldx #0
           jsr setzei
@@ -342,11 +380,14 @@ su4       sta (vzei),y
 toinsl	  .(
 	ldx wh
 	dex
-        jsr setzei
+        jsr setzei2
 
-su2     dex
-        cpx zeile
+	ldx wh
+	dex
+
+su2     cpx row
 	beq clr
+	dex
 
         lda vzei
         sec
@@ -386,11 +427,14 @@ iniscr    .(		; screen number in AC
           lda #0
           sta wx
           sta wy
-          sta spalte
+          sta col
           lda MAXSPAL
           sta wr
           lda MAXZEIL
           sta wh
+
+	  lda FGCOL
+	  sta attrfg
 
           ldx #0
           jmp setzei
@@ -420,11 +464,11 @@ iniscr    .(		; screen number in AC
           adc zei2+1
           tax		; screen# times 12
           ldy #0
-s1        lda spalte,y	; copy screen control struct
+s1        lda col,y	; copy screen control struct
           sta vtab,x	; to buffer
           inx
           iny
-          cpy #is-spalte+1
+          cpy #is-col+1
           bcc s1
           lda vzei
           sta vtab,x
@@ -442,10 +486,10 @@ nosave	  sta actdev
           tax
           ldy #0
 s2        lda vtab,x	; copy screen control struct from buffer
-          sta spalte,y	; to struct
+          sta col,y	; to struct
           inx
           iny
-          cpy #is-spalte+1
+          cpy #is-col+1
           bcc s2
           lda vtab,x
           sta vzei
@@ -460,7 +504,7 @@ xout      .(	;2
           cmp #TC_CR
           bne x1
           lda wx
-          sta spalte
+          sta col
           rts
 x1        cmp #TC_LF
           bne x2
@@ -485,17 +529,17 @@ c2a       sta (vzei),y
           bcc c2b
           jsr clrli
 &&tohome  lda wx
-          sta spalte
+          sta col
           ldx #0
           jmp setzei
           .)	;2
 x3        .(	;3
           cmp #TC_BS
           bne x4
-          ldy spalte
+          ldy col
           cpy wx
           beq c7
-          dec spalte
+          dec col
 bslp      lda (vzei),y
           dey
           sta (vzei),y
@@ -529,16 +573,26 @@ xaddr     .word tocl-1,nextcol-1,tocu-1,nextrow-1
           .word toeol-1,toclrl-1                  
           .word todell-1, toinsl-1                
           .word toecho-1, tonoecho-1              
-          .word tocpos-1, 0,0 ;, toattr-1, tofgcol-1     
+          .word tocpos-1, toattr-1, tofgcol-1     
 xaddre                                            
 maxcode   =(xaddre-xaddr)/2     ;19               
 
-tocpos	.(	;3
-	ldx actdev
-	lda #1
-	sta ctrlst,x
-	rts
-	.)
+tocpos  .(             
+        lda #1         
+        .byt $2c       
+        .)             
+        ; fall through 
+toattr  .(             
+        lda #3         
+        .byt $2c       
+        .)             
+        ; fall through 
+tofgcol .(             
+        lda #4         
+        ldx actdev     
+        sta ctrlst,x   
+        rts            
+        .)             
 
 toecho	.(
 	ldx actdev
@@ -557,7 +611,7 @@ tonoecho .(
 	.)
 
 todel     .(	;3
-          ldy spalte
+          ldy col
 td0       iny
           cpy wr
           bcs td1
@@ -579,14 +633,14 @@ toins     .(	;3
           ;lda (vzei),y
           ;cmp #SCR_SPACE
           ;bne tie
-          ;cpy spalte
+          ;cpy col
           ;beq tiex
 ti1       dey
           lda (vzei),y
           iny
           sta (vzei),y
 ticmp     dey
-          cpy spalte
+          cpy col
           bne ti1
           lda #SCR_SPACE
           sta (vzei),y
@@ -605,13 +659,13 @@ e         iny
 	  bcc store
 	  bne x
 	  dey		; if last char is not space, move crsr to last char
-store     sty spalte
+store     sty col
 x         rts
           .)	;2
 
 toclrl    .(	;3
           lda #SCR_SPACE
-          ldy spalte
+          ldy col
 c         sta (vzei),y
           iny
           cpy wr
@@ -620,15 +674,15 @@ c         sta (vzei),y
           .)	;2
           
 tocl      .(	;3
-          ldy spalte
+          ldy col
           cpy wx
           beq c4
-          dec spalte
+          dec col
           rts
 c4        ldy wr
           dey
-          sty spalte
-&tocu     ldx zeile
+          sty col
+&tocu     ldx row
           beq c5
           dex
 c5        jsr setzei
@@ -636,36 +690,39 @@ c5        jsr setzei
           .)	;2
           
 towlo     .(	;3
-          lda spalte
+          lda col	; col is in absolute coords
           sta wx
-          lda wh
-          sec
-          sbc zeile
-          sta wh
-          lda zeile
+
+          lda row	; row is relative to window
           clc
           adc wy
           sta wy
+
+          lda wh
+          sec
+          sbc row
+          sta wh
+
           lda #0
-          sta zeile
+          sta row
           jmp clrli
           .)	;2
           
 towru     .(	;3
-          ldy spalte
+          ldy col
           iny
           sty wr
-          ldx zeile
+          ldx row
           inx
           stx wh
           jmp clrli
           .)	;2
           
 &&towcl     .(	;3
-          lda zeile
+          lda row
           clc
           adc wy
-          sta zeile
+          sta row
           lda #0
           sta wx
           sta wy
