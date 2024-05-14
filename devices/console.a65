@@ -152,12 +152,15 @@ do_irq  .(	;2
 	DO_IRQ
 
 	jsr gen_rx_check
+
+	; ----------------------
+	; check keyboard input
 	
 	lda curdev	; get keyboard only for visible screen
 	cmp actscr
-	bne notact
+	bne end_input
 	jsr getkey	; returns x=shiftfl, y=index in keytable, a=ascii code
-	bcs notact
+	bcs end_input
 	cpy #SWITCHKEY
 	bne gotchar
 #ifndef SWITCHNOSHIFT
@@ -166,13 +169,13 @@ do_irq  .(	;2
 #endif
 	jsr crsroff	; must preserve xr
 	jsr do_switch
-	jmp notact
+	jmp end_input
 gotchar	
 	sta zei2
 	ldy curdev	; first check if we are receiving (from keyboard)
 	lda status,y
         and #DC_SW_RX
-        beq notact
+        beq end_input
 	lda zei2
 	cmp brkkey,y
 	beq dobrk
@@ -209,21 +212,30 @@ print
 	jsr crsroff
 	txa
 	jsr printchar
-	jmp notact
+	jmp end_input
           
 direct	and #DC_SW_RX	; direct mode -> send the char directly
-	beq notact
+	beq end_input
 	txa
 	ldx outstr,y
 	jsr PUTC
-notact			; output stuff
+end_input
+	
+	; ----------------------
+	; output from stream to screen
+
+	; output stuff
 	jsr gen_tx_check
 	bcs endirq
+
+	; are we on the current screen?
 	lda curdev
 	cmp actscr
 	bne txloop
+	; if so, switch off cursor
 	jsr crsroff
 
+	; check input from stream
 txloop	ldy curdev
 	ldx getstr,y
 	jsr GETC
@@ -231,9 +243,11 @@ txloop	ldy curdev
 	jsr printchar
 	jmp txloop
 endirq	
+	; are we on the current screen?
 	lda curdev
 	cmp actscr
 	bne end1
+	; if so, switch crsr back on
 	jsr crsron
 end1
 	BELLIRQ 

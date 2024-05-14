@@ -374,6 +374,9 @@ su4       sta (vzei),y
           iny
           cpy wr
           bcc su4
+
+	  ldx row
+	  jsr setzei
  
 &clrli    ldx #<-1
           stx iz

@@ -127,7 +127,7 @@ txt4	.byt TC_CPOS, 0,0, '0'
 txt5	.byt TC_CPOS, 1,16, TC_INS
 txt6	.byt TC_CPOS, 2,16, TC_DEL
 txt7	.byt TC_CPOS, 5,4, TC_INSL
-txt8	.byt TC_CPOS, 6,4, TC_DELL
+txt8	.byt TC_CPOS, 6,6, TC_DELL
 txt9	.byt TC_CPOS, 7,3, TC_FGCOL, TC_COL_LRED, "red "
 	.byt TC_FGCOL, TC_COL_LBLUE, "blue ",
 	.byt TC_FGCOL, TC_COL_LGREEN, "green"
