@@ -776,14 +776,14 @@ tocl	.(
 	lda col
 	beq done
 	dec col
-done	rts
+done	jmp setptr
 	.)
 
 tocu	.(
 	lda row
 	beq done
 	dec row
-done	rts
+done	jmp setptr
 	.)
 
 tobs	.(
@@ -852,7 +852,9 @@ setspc
 
 	lda attrbg
 	ldx #VDC_UPDATA
-	jmp vdcwr
+	jsr vdcwr
+
+	jmp setptr
 	.)
 	
 	; insert space under cursor
@@ -988,7 +990,7 @@ towcl	.(
 	sta ww
 	lda MAXZEIL
 	sta wh
-	rts
+	jmp setptr
 	.)
 	; fall-through
 tohome	.(
