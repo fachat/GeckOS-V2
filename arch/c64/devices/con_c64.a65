@@ -64,6 +64,14 @@ console_init .(
  * stdlib. We use the std charom at $d000 in the RAM under I/O that
  * the VIC doesn't see. The boot loader has to copy the charom there.
  * Then we have all the memory below the I/O relatively free.
+ *
+ * For the C128 we put the screens at $c000 in bank 0, where
+ * all the system programs run. The charrom needs to be copied
+ * to the $d000 area ram in bank 0 under the I/O as in the 
+ * C64 case.
+ *
+ * The actual distinction / address selection is done by the 
+ * definition of VIDPAGE, which happens outside of this file.
  */
 
 inivid	.(
@@ -104,12 +112,12 @@ coloop  sta $d800,y
 	rts
 	.)
 
+	; set the active (displayed) screen
 setact	.(
         asl
         asl
         asl
         asl
-        ;ora #%10000100
 	ora #(($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
         sta C64VIC+VIC_BASE
 	rts
@@ -176,6 +184,9 @@ clr       lda #0
 /**************************************************************************/
 
 #include "devices/con_gen_mmap.a65"
+
+; make sure 40 col device only scans in 1 MHz mode */
+#define	CHECK_SPEED	lda freq:bpl scan:jmp nokey:scan
 
 #include "devices/kbd_c64.a65"
 

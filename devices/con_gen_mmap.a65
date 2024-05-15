@@ -125,6 +125,8 @@ FGCOL	=5
           .(  	;1
 
 	.data
+; active screen data
+; col must be first, is must be last (see setscr)
 &col      .byt 0
 &row      .byt 0
 wx        .byt 0
@@ -132,14 +134,18 @@ wy        .byt 0
 wr        .byt 0
 wh        .byt 0
 hivid     .byt 0
+attrfg	  .byt 0
 iz        .byt 0
 is        .byt 0
-attrfg	  .byt 0
-#if is-col+2 > 12
-#echo Warning: illegal struct length for vtab
-#else
+
+; table for screen data for all screens
+; includes list from above, plus vzei/vzei+1
+; length of entry is computed in setscr
+tablen	  =is-col+3
+	.assert tablen <= 12, "struct len mismatch"
 vtab      .dsb MAX_SCREEN*12
-#endif
+
+; volatile
 tmp	.byt 0
 	.zero
 &vzei   .word 0
@@ -446,7 +452,9 @@ iniscr    .(		; screen number in AC
           jmp setzei
           .)	;1
 
-&setscr   .(	;2
+	; set the internal structures to the curdev screen
+	; i.e. all following prints etc go this screen.
+&setscr   .(
 	  lda curdev
 
 	  ldx actdev
@@ -460,7 +468,7 @@ iniscr    .(		; screen number in AC
           cmp actdev
           beq setmmu	; same screen as current
           pha
-	  ; save screen
+	  ; save screen data
           lda actdev
           asl
           asl
@@ -481,8 +489,9 @@ s1        lda col,y	; copy screen control struct
           lda vzei+1
           sta vtab+1,x
           pla
-nosave	  sta actdev
+
 	  ; restore screen
+nosave	  sta actdev
           asl
           asl
           sta zei2+1

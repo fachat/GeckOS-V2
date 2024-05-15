@@ -22,6 +22,17 @@
 
 ****************************************************************************/
 
+/*
+ * This file defines the keyboard scanning for the C64/C128.
+ * It also handles a C128 in C64 mode, where it is possible
+ * to actually scan and use the extra C128 keys.
+ *
+ * It exports:
+ * 	inikbd
+ *			Initialize the keyboard routine
+ *	getkey
+ *			return a key if pressed (details see below)
+ */
 
           .(
 
@@ -71,6 +82,9 @@ tzei      .word 0
 	;	2 = switch console
 	;	3 = close Stream
 &getkey  .(
+	; if defined, skips scanning in either 1 or 2 MHz mode (C128)
+	CHECK_SPEED 
+
           lda #0		; clear shift key flag
           sta shiftfl
           ldy #$ff
