@@ -278,7 +278,7 @@ nosave	; restore screen data
 	sta actdev
 	asl
 	sta tmp		; x2
-	asl		; x4
+	asl tmp		; x4
 	adc tmp		; -> x6
 	asl tmp		; x8
 	adc tmp		; -> x14

@@ -51,8 +51,17 @@ start
 	lda #"*"
 	jsr BSOUT
 
-	jsr loadrom	; load init image to bank 0 RAM
+	; do we load the 40 or 80 col rom?
+	lda MMU+MCR
+	bmi load40
+
+	jsr loadrom80	; load init image to bank 0 RAM
 	bcs err
+	bcc rloaded
+load40
+	jsr loadrom40
+	bcs err
+rloaded	
 	lda #"*"
 	jsr BSOUT
 
@@ -107,8 +116,11 @@ libnlen	=*-libname
 kernname .asc "KERN.BIN"
 kernnlen =*-kernname
 
-romname	.asc "ROM.BIN"
-romnlen	=*-romname
+rom40name .asc "ROM40.BIN"
+rom40nlen =*-rom40name
+
+rom80name .asc "ROM80.BIN"
+rom80nlen =*-rom80name
 
 
 loadlib	lda #libnlen
@@ -116,9 +128,16 @@ loadlib	lda #libnlen
 	ldy #>libname
 	jmp do_load
 
-loadrom	lda #romnlen
-	ldx #<romname
-	ldy #>romname
+loadrom40
+	lda #rom40nlen
+	ldx #<rom40name
+	ldy #>rom40name
+	jmp do_load
+
+loadrom80
+	lda #rom80nlen
+	ldx #<rom80name
+	ldy #>rom80name
 	jmp do_load
 
 loadkern lda #kernnlen
