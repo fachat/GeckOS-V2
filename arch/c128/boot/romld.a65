@@ -85,10 +85,10 @@ loaded
 	sta MMU+RCR
 
 	lda #%00111111	; all RAM bank 0
-	sta MMU+PCRC	; config C - read crom to transfer to VDC
-	lda #%01111110	; all RAM bank 1, but chargen which is I/O
+	sta MMU+PCRC	; config C - work on copy of crom, transfer to VDC
+	lda #%01111110	; all RAM bank 1, but I/O
 	sta MMU+PCRB	; config B
-	lda #%00111110	; all RAM bank 0, but chargen which is I/O
+	lda #%00111110	; all RAM bank 0, but I/O
 	sta MMU+PCRA	; config A
 
 	sta MMUFF+PCRA	; enable config A
@@ -267,7 +267,7 @@ r_end
 	; setup character set
 
 setup_crom .(
-	lda #%00001111	; RAM bank 0, $c-$f ROM, chargen
+	lda #%00001111	; RAM bank 0, $c-$f ROM, -> map chargen at $dxxx
 	sta MMU
 
         lda 0
@@ -276,52 +276,57 @@ setup_crom .(
 
         ; first copy the charom from $d000, under the i/o
 
-        lda 1
-        and #%11111011  ; disable I/O, read Charom, write RAM
-        sta 1
-
         ldy #0
-cl0a    lda #$ff
+cl0a    ; first 32 chars - control. no graphs so far
+	lda #$ff
         sta $d000,y
+	; 2nd 32 chars - special chars and numbers
         lda $d900,y
         sta $d100,y
+	; 3rd 32 chars - upper case
         lda $da00,y
         sta $d200,y
         iny
         bne cl0a
 
+	; copy "@" to before the upper case chars
 cl1a    lda $d800,y
         sta $d000+64*8,y
         iny
         cpy #8
         bcc cl1a
 
+	; copy lower case "a-z" to 4th set of 32 chars
 cl1     lda $d800,y
         sta $d000+(97-1)*8,y
         iny
         cpy #27*8
         bcc cl1
 
+	; copy [Pound]^_ to behind lower case chars
 cl2     lda $d800,y
         sta $d000+(91-27)*8,y
         iny
         bne cl2
 
-        lda 1
-        and #%11111000  ; disable even the charom, only RAM
-        sta 1
+	sta MMUFF+LCRC
 
         ; ldy #0
-cl3     lda c92,y
+cl3     ; char 92 - replace pound with backslash
+	lda c92,y
         sta $d000+92*8,y
+	; char 95 - underscore
         lda c95,y
         sta $d000+95*8,y
+	; char 96 - tick quote
         lda c96,y
         sta $d000+96*8,y
         iny
         cpy #8
         bcc cl3
 
+	; 5 chars from position 123 to 127
+	; curly open, pipe, curly close, tilde, delta
         ldy #0
 cl4     lda c123,y
         sta $d000+123*8,y
@@ -329,20 +334,21 @@ cl4     lda c123,y
         cpy #5*8
         bcc cl4
 
+	; calculate reverse
         ldy #0
 cl5     lda $d000,y
         eor #$ff
-        sta $d400,y
+cl6     sta $d400,y
         iny
         bne cl5
         inc cl5+2
-        inc cl5+7
-        lda cl5+7
+        inc cl6+2
+        lda cl6+2
         cmp #$d8
         bcc cl5
 
         lda 1
-        ora #%00000100  ; enable I/O
+        ora #%00000100  ; disable $1xxx char ROM mapping for VIC
         sta 1
 
 	sta MMUFF+PCRA	; and set env 0 config (re-enable I/O)
