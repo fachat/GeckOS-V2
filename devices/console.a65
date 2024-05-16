@@ -210,7 +210,8 @@ nobrk
 	bne print	; no cr, then just print it
 	jsr crsroff
 	jsr sendline	; otherwise send the whole line
-	ldx #TC_CR
+	;ldx #TC_CR
+	jmp end_input
 print
 	jsr crsroff
 	txa
@@ -239,12 +240,18 @@ end_input
 	jsr crsroff
 
 	; check input from stream
-txloop	ldy curdev
+	ldy curdev
 	ldx getstr,y
 	jsr GETC
 	bcs endirq
+txloop
 	jsr printchar
-	jmp txloop
+	ldy curdev
+	ldx getstr,y
+	jsr GETC
+	bcc txloop
+	; set the line start for any input, to be read by getline
+	jsr setlin
 endirq	
 	; are we on the current screen?
 	lda curdev

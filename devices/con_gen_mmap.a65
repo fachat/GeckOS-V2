@@ -45,6 +45,7 @@
  *	sendline
  *		send a line from the screen to the stream
  *		note: looses chars if stream is full(!)
+ *		prints TC_CR to col zero, or to start of input
  *	printchar
  *		print a character on screen
  *	setzei
@@ -52,6 +53,8 @@
  *	towcl
  *		clear the current sub-window to the whole
  *		screen
+ *	setlin
+ *		set start of the input field
  *
  * The following screen codes are implemented:
  *
@@ -168,7 +171,7 @@ tmp	.byt 0
           rts
           .)
 
-setlin    .(
+&setlin   .(
           lda row
           sta iz
           lda col
@@ -181,13 +184,16 @@ setlin    .(
           ldy row
           cpy iz
           bne liex
+	  ; same row
           ldy is
           cpy col
           bcc liex2
           beq liex2
-liex      ldy wx
+liex      ; not in same row, or col left of start - read from start
+	  ldy wx
 liex2     sty col
-          sty zei2
+          sty zei2	; start of data
+	  ; find last non-space char in line
           ldy wr
 lie2      cpy col
           beq lie1
@@ -196,7 +202,8 @@ lie2      cpy col
           cmp #SCR_SPACE
           beq lie2
           iny
-lie1      sty zei2+1
+lie1      sty zei2+1	; end of data
+	  ; send data to screen
 lie3      ldy zei2
           cpy zei2+1
           bcs lie4
@@ -208,13 +215,17 @@ lie3      ldy zei2
 	  SET_MMU
           inc zei2
           bne lie3
+	  ; done sending, finish with TC_CR
 lie4      lda #TC_CR
           ldy actdev
           ldx outstr,y
           jsr PUTC
 	  lda #SC_SSTAT
 	  ldy #SCE_PUSH
-	  jmp STRCMD
+	  jsr STRCMD
+	  ; 
+	  ldx row
+	  jmp setzei
           .)	;1
 
 	/* handle multi-byte sequences - pretty simple now. */

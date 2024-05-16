@@ -47,7 +47,7 @@
 #define	ASC2SCR
 
 #define	FGCOL		15
-#define	BGCOL		0
+#define	BGCOL		15	/* same as FGCOL - otherwise we wouldn't see the cursor */
 
 #include "chips/vdc.i65"
 
@@ -296,8 +296,54 @@ setdone
 
 
 sendline .(
-	; TODO
-	rts
+	ldy row
+	cpy iz
+	bne diffrow
+	; same row
+	ldx is
+	cpx col
+	bcc colok
+	beq colok
+diffrow ldx #0
+colok	stx col
+	stx tmp
+	; find last non-space char in line
+	ldy row
+	jsr vdcsetupd
+
+	ldy tmp
+l	iny
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	cmp #SCR_SPACE
+	beq next
+	sty tmp
+next	cpy ww
+	bcc l
+	; now tmp has the last col with char != space
+	; send data to stream	
+	ldx col
+	ldy row
+	jsr vdcsetupd
+
+	ldy col
+l1 	sty tmp2
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	SCR2ASC
+	ldy actdev
+	ldx outstr,y
+	jsr PUTC
+	ldy tmp2
+	cpy tmp
+	bcs done
+	iny
+	bne l1
+done	lda #TC_CR
+	ldy actdev
+	ldx outstr,y
+	jsr PUTC
+	jmp setptr
 	.)
 
 	; initialize a virtual screen - clear it, cursor to home
@@ -328,7 +374,7 @@ inivscr	.(
 	rts
 	.)
 
-setlin	.(
+&setlin	.(
 	lda row
 	sta iz
 	lda col
@@ -997,8 +1043,7 @@ tohome	.(
 	lda #0
 	sta col
 	sta row
-	jsr setptr
-	jmp setlin
+	jmp setptr
 	.)
 
 /**************************************************************************
