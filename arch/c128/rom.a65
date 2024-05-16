@@ -148,8 +148,14 @@
 #define	INIT_RESTART
 #define	INIT_MERGE
 #define	INIT_LIB6502
-/* #define	INIT_USE_STDLIB */
+
+#ifdef VDCSCREEN
+#define	INIT_OUTDEV	4
+#define	LIB_OUTDEV	4
+#else
 #define	INIT_OUTDEV	1
+#define	LIB_OUTDEV	1
+#endif
 
 #include  "sysapps/init/init.a65"
 
@@ -226,7 +232,7 @@ end_slipd
 	.byt 16		; P_RAM
 	.byt 128	; P_SHARED
 	.byt 0		; P_PRIORITY
-	.byt 1,1	; P_DEV
+	.byt LIB_OUTDEV, LIB_OUTDEV	; P_DEV
 	.byt BOOTDRV,":lsh",0,"-v",0,"-d",0,ROOTPATH, 0,0
 end_auto
 	.)

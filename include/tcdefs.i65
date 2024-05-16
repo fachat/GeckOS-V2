@@ -1,0 +1,88 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.2
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-1997 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/*        Terminal Commands        */
+
+TC_BEL    	=7		; ring the bell tone
+TC_BS     	=8		; backspace
+TC_HT     	=9		; horizontal tab (4 chars)
+TC_LF     	=10		; line feed
+TC_VT     	=11		; vertical tab
+TC_FF     	=12		; form feed (clear scr)
+TC_CR     	=13		; carriage return
+TC_ESC    	=27		; escape
+
+TC_CLFT   	=$80		; cursor left
+TC_CRGT   	=$81		; cursor right
+TC_CUP    	=$82		; cursor up
+TC_CDWN   	=$83		; cursor down
+TC_HOME   	=$84		; cursor home (top left of window)
+TC_CLR    	=$85		; clear window (FF)
+TC_DEL    	=$86		; delete char under cursor
+TC_INS    	=$87		; insert space under cursor
+TC_WLO    	=$88    	; define cursor pos as top left win corner
+TC_WRU    	=$89  		; define cursor pos as bottom right win corner
+TC_WCLS   	=$8a		; clear window definition
+TC_EOL    	=$8b		; move behind last non-space in line
+TC_CLL    	=$8c		; clear from cursor to end of line
+TC_DELL		=$8d		; delete line where cursor is
+TC_INSL		=$8e		; insert empty line under cursor
+
+TC_ECHO   	=$8f	/* device shall echo: terminal = full screen */
+TC_NOECHO 	=$90	/* appl. echos: full appl. control */
+
+TC_CPOS   	=$91		; set cursor pos - next chars are row and col
+
+TC_ATTR		=$92		; next byte is attribute for display
+
+TC_FGCOL	=$93		; next byte is foreground colour
+
+TC_HELP   	=$9c		; C128 HELP key
+TC_ALT    	=$9d		; C128 ALT key
+TC_NOSCRL 	=$9e		; C128 NO SCROLL key
+
+
+TC_ATTR_REV	=%01000000	; reverse bit
+TC_ATTR_ULINE	=%00100000	; underline bit (opt. dep. on console)
+TC_ATTR_BLINK	=%00010000	; blink bit (opt. dep. on console)
+
+TC_COL_BLACK	=0		; blacK
+TC_COL_DGREY	=1		; dark grey
+TC_COL_DBLUE	=2		; dark blue
+TC_COL_LBLUE	=3		; light blue
+TC_COL_DGREEN	=4		; dark green
+TC_COL_LGREEN	=5		; light green
+TC_COL_DCYAN	=6		; dark cyan
+TC_COL_LCYAN	=7		; light cyan
+TC_COL_DRED	=8		; dark red
+TC_COL_LRED	=9		; light red
+TC_COL_DPURPLE	=10		; dark purple
+TC_COL_LPURPLE	=11		; light purple
+TC_COL_BROWN	=12		; brown
+TC_COL_YELLOW	=13		; yellow
+TC_COL_LGREY	=14		; light grey
+TC_COL_WHITE	=15		; white
+
+TC_COL_DEFAULT	=128		; default color
+

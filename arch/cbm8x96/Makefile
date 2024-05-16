@@ -27,7 +27,7 @@ kern.bin: kern.a65
 	${RELOC} -xt -o kern.bin kern.o65
 
 rom.bin: rom.a65
-	${XA} -I../../include -I../.. -R -DLIB6502=$(LIB) -DOSA2KERNEL=$(KERNEL) -bt 40958 -bd 55296 -bz 52 -bb 56320 $< -o rom.o65 -l rom.lab;
+	${XA} -I../../include -I../.. -R -DLIB6502=$(LIB) -DOSA2KERNEL=$(KERNEL) -bt 40958 -bd 55296 -bz 54 -bb 56320 $< -o rom.o65 -l rom.lab;
 	${FILE} rom.o65
 	${RELOC} -xt -o rom.bin rom.o65
 

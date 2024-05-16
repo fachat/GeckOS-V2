@@ -8,16 +8,16 @@ SYS=kill lsmem ontty ps
 DISK=chkdsk format mkdir ls more mv rm rmdir 
 INET=httpd telnet tlogin index.html
 SLIP=slipd slipmind 
-TEST=sample.bat
+TEST=sample.bat testcon
 
 osabase.d80: $(APPS) $(SYS) $(DISK) $(INET) $(SLIP) $(TEST)
-	./mkdisk d80 $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)
+	./mkdisk d80 $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP) $(TEST)
 
 osabase.d64: $(APPS) $(SYS) $(DISK) $(INET) $(SLIP) $(TEST)
-	./mkdisk d64 $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP)
+	./mkdisk d64 $@ place4loader $(APPS) $(SYS) $(DISK) $(INET) $(SLIP) $(TEST)
 
 osanonet.d64: $(APPS) $(SYS) $(DISK) $(TEST)
-	./mkdisk d64 $@ place4loader $(APPS) $(SYS) $(DISK) 
+	./mkdisk d64 $@ place4loader $(APPS) $(SYS) $(DISK) $(TEST)
 
 clean:
 	rm -f $(IMGS)

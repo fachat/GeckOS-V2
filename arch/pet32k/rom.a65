@@ -86,7 +86,11 @@
 	; start of boot rom image
 
 	; load address
-          .word *+2
+	;
+	; note at least $03ed is being modified in interrupt
+	; while loading, so code needs to be moved there after
+	; the actual loading.
+          .word $0400
 
 	; jmp to reset as used by loader
 	  jmp RESET

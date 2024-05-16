@@ -1,5 +1,5 @@
 
-all: lib.o65 kern.o65 rom.o65 roms.l
+all: lib.o65 kern.o65 rom40.o65 rom80.o65 roms.l
 
 SHELL=/bin/bash	# for arithmetic expansion
 
@@ -14,8 +14,8 @@ KERNBSS=58880	# $e600
 
 # where the init image and its data are located
 ROMSTART=32768	# $8000
-ROMDATA=43008	# $a800
-ROMBSS=43520	# $aa00
+ROMDATA=45568	# $b200
+ROMBSS=46080	# $b400
 
 # where the lib6502 and its data are located
 LIB6502=783	# $030f, jump table address
@@ -38,14 +38,18 @@ kern.o65: kern.a65 kernel/*.a65
 	${XA} -I../../include -I../.. -R -DROMSTART=$(ROMSTART) -DMemend=$(Memend) -bt $(KERNEL) -bd $(KERNDATA) -bz 32 -bb $(KERNBSS) $< -o kern.o65 -l kern.lab;
 	${FILE} kern.o65
 
-rom.o65: rom.a65 devices/*.a65
-	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -bt $(ROMSTART) -bd $(ROMDATA) -bz 52 -bb $(ROMBSS) $< -o rom.o65 -l rom.lab;
-	${FILE} rom.o65
+rom40.o65: rom.a65 devices/*.a65
+	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -bt $(ROMSTART) -bd $(ROMDATA) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
+	${FILE} $@
 
-info: rom.o65 kern.o65 lib.o65
+rom80.o65: rom.a65 devices/*.a65
+	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -DVDCSCREEN -bt $(ROMSTART) -bd $(ROMDATA) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
+	${FILE} $@
+
+info: rom80.o65 rom40.o65 kern.o65 lib.o65
 	$(FILE)  $^
 
 clean:
-	rm -f *.lab roms.l rom.o65 boot.tgz lib.o65 lib.bin kern.bin kern.o65 rom.bin
+	rm -f *.lab roms.l rom40.o65 rom80.o65 boot.tgz lib.o65 lib.bin kern.bin kern.o65 rom.bin
 	make -C boot clean
 

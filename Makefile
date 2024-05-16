@@ -4,6 +4,7 @@ version="2.1.1"
 all:
 	(cd apps; ${MAKE};)
 	(cd sysapps; ${MAKE};)
+	(cd tests; ${MAKE};)
 	(cd dist; ${MAKE};)
 
 clean:
@@ -13,6 +14,11 @@ clean:
 	(cd kernel; ${MAKE} clean;)
 	(cd lib6502; ${MAKE} clean;)
 	(cd dist; ${MAKE} clean;)
+	(cd tests; ${MAKE} clean;)
+
+dclean: clean
+	git checkout */*/*/*.d64
+	git checkout */*/*/*.d80
 
 #####################################################
 
@@ -44,6 +50,9 @@ c128: clean
 
 runc128: c128
 	x128 +sound -autostart arch/c128/boot/geckos128.d64
+
+runc128f: c128
+	x128 -80col +sound -autostart arch/c128/boot/geckos128.d64
 
 runc128ip: c128
 	x128 +sound -acia1 -acia1base 0xDE00 -acia1irq 1 -acia1mode 1 -myaciadev 2  -rsdev3 "|socat - PTY,link=/tmp/viceser" -autostart arch/c128/boot/geckos64.d64

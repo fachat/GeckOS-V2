@@ -1,7 +1,7 @@
 
 
 BASE=../../../dist/osanonet.d64
-ROM=../petrom.bin
+ROM=../rom.bin
 
 XA=xa
 

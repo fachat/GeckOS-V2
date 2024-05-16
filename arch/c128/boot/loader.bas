@@ -1,7 +1,7 @@
 
 
    10 on a goto 50
-   15 poke59468,14
+   15 print chr$(14)
    20 a=1
    30 print "Loading bootloader"
    40 load"romld.bin",8,1

@@ -29,9 +29,7 @@
 #define   vdc       $e880
 #define   VIDPAGE   4
 
-#define	MAX_SCREEN	2		/* hard limit for tables */
-
-#define	MAX_ASCREEN	#2		/* soft limit */
+#define	MAX_SCREEN	2		/* number of supported virtual consoles */
 
 #ifdef PET_KEYB_GRAPHICS
 #define	SWITCHKEY	79		/* graphics keyboard REV/OFF key */
@@ -58,7 +56,7 @@
 #define	HI_VID
 
 #define	ACT_HI_VID      .(			:\
-			lda screen		:\
+			lda curdev		:\
 			cmp actscr		:\
 			beq orig		:\
 			lda #$78		:\
@@ -122,9 +120,9 @@ ok			.)			:\
 			bpl ok			:\
 			cpy actscr		:\
 			bne ok			:\
-			ldx zeile		:\
+			ldx row		:\
 			jsr setzei		:\
-			ldy screen		:\
+			ldy curdev		:\
 ok			.)
 
 	.data
@@ -133,7 +131,6 @@ ok			.)
 	.text
 
 &console_init .(
-	jsr inimem
 	jsr inivid
 	jsr inikbd
 	jsr inicrsr
@@ -141,13 +138,8 @@ ok			.)
 	rts
 	.)
 
-inimem    .(
-          clc
-          rts
-          .)
-
 &inivid   .(   
-          lda screen
+          lda curdev
           bne ix
 
 	  lda #0
@@ -230,12 +222,14 @@ cp1	lda (p2),y
 	dex
 	bne cp1
 
-	ldx zeile
+	ldx row
 	jmp setzei
 
 	  .)
 
 #include "devices/crsr_pet.a65"
 #include "devices/kbd_pet.a65"
+
+#include "devices/con_gen_mmap.a65"
 
 

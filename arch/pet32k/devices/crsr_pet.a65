@@ -44,9 +44,9 @@ crsrcnt .byt 0
 
           bit crsrfl
           bvc clr               ; not inversed
-          ldy spalte
+          ldy col
           lda (vzei),y
-          eor #$80
+          and #$7f
           sta (vzei),y
 clr       lda #0
           sta crsrfl
@@ -67,7 +67,7 @@ clr       lda #0
           lda #10
           sta crsrcnt
 
-          ldy spalte
+          ldy col
           lda (vzei),y
           eor #$80
           sta (vzei),y

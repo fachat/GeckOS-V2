@@ -164,6 +164,7 @@ nostr1  jmp xterm
 #include  "kdefs.i65"
 #include  "kernel.i65"
 #include  "fdefs.i65"
+#include  "tcdefs.i65"
 
 #define RETRTS          /* return from program with RTS */
 

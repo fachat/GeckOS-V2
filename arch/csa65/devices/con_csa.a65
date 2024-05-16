@@ -30,7 +30,7 @@
 
 #define	MAX_SCREEN	4		/* hard limit for tables */
 
-#define	MAX_ASCREEN	maxscr		/* soft limit */
+#define	MAX_ASCREEN	maxscr		/* soft limit (dep. on 40/80 cols) */
 
 #define	SWITCHKEY	79		/* Rev/off on graphics keyboard */
 ; for VICE?
@@ -124,7 +124,7 @@ next      pla
           .)
 
 &inivid   .(   
-          lda screen
+          lda curdev
           bne ix
 
 	  lda #$2c		; set charrom and video base
@@ -180,7 +180,7 @@ s1        and #%00001111
 
 &crsron  .(
           ldx #15
-          lda spalte
+          lda col
           clc
           adc vzei
           stx vdc
@@ -197,5 +197,6 @@ s1        and #%00001111
 
 #include "devices/kbd_pet.a65"
 
+#include "devices/con_gen_mmap.a65"
 
 

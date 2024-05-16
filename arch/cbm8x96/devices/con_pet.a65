@@ -31,9 +31,7 @@
 
 #define   VIDPAGE   4
 
-#define	MAX_SCREEN	3		/* hard limit for tables */
-
-#define	MAX_ASCREEN	#3		/* soft limit */
+#define	MAX_SCREEN	3		/* number of supported virt. consoles */
 
 #ifdef PET_KEYB_GRAPHICS
 #define SWITCHKEY       79              /* graphics keyboard REV/OFF key */
@@ -58,7 +56,7 @@
 #define	HI_VID	        asl:asl:asl:clc:adc #>SCRBUF
 
 #define	ACT_HI_VID      .(			:\
-			lda screen		:\
+			lda curdev		:\
 			cmp actscr		:\
 			beq orig		:\
 			asl:asl:asl		:\
@@ -123,9 +121,9 @@ ok			.)			:\
 			bpl ok			:\
 			cpy actscr		:\
 			bne ok			:\
-			ldx zeile		:\
+			ldx row		:\
 			jsr setzei		:\
-			ldy screen		:\
+			ldy curdev		:\
 ok			.)
 
 	.data
@@ -133,7 +131,6 @@ ok			.)
 	.text
 
 &console_init .(
-	jsr inimem
 	jsr inivid
 	jsr inikbd
 	jsr inicrsr
@@ -141,14 +138,9 @@ ok			.)
 	rts
 	.)
 
-inimem    .(
-          clc
-          rts
-          .)
-
 &inivid   .(   
-          lda screen
-          bne ix
+;          lda curdev
+;          bne ix
 
 /* we assume the CRTC to be initialized... 
           ldx #0
@@ -198,7 +190,7 @@ p2	.word 0
 	lda #$80
 	sta p1+1
 	jsr cp2to1
-	ldx zeile
+	ldx row
 	jmp setzei
 
 cp2to1	ldx #8
@@ -228,4 +220,5 @@ getp1
 #include "devices/crsr_pet.a65"
 #include "devices/kbd_pet.a65"
 
+#include "devices/con_gen_mmap.a65"
 

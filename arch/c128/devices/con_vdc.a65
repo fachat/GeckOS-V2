@@ -1,0 +1,1100 @@
+
+/****************************************************************************
+   
+    OS/A65 Version 2.2
+    Multitasking Operating System for 6502 Computers
+
+    Copyright (C) 1989-2024 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+#define	CHECK_C128
+
+#define	MAX_SCREEN	2		/* maximum number of screens */
+
+#define	SWITCHKEY	61
+
+#define	SET_MMU
+
+#define	BELLIRQ	
+
+#define	TRIGBELL	
+
+#define	MAXSPAL		#80
+
+#define	MAXZEIL		#25
+
+#define	KEY_START	20	/* when does key repetition start */
+
+#define	SCR_SPACE	32
+
+#define	SCR2ASC
+
+#define	ASC2SCR
+
+#define	FGCOL		15
+#define	BGCOL		15	/* same as FGCOL - otherwise we wouldn't see the cursor */
+
+#include "chips/vdc.i65"
+
+        .data 
+; active screen data
+; hivid is first, attrfg is last
+hivid	.byt 0		; current high byte of char text addr
+
+col	.byt 0		; current column in window
+row	.byt 0		; current row in window
+
+wx	.byt 0		; top left window column (absolute)
+wy	.byt 0		; top left window row (absolute)
+ww	.byt 0		; window width (rel to wx)
+wh	.byt 0		; window height (rel. to wy)
+
+iz	.byt 0		; line number of start of input
+is	.byt 0		; column of start of input
+
+attrfg	.byt 0		; foreground attribute value
+attrbg	.byt 0		; background attribute value
+
+cptr	.word 0		; current memory pointer
+
+; table for screen data for both screens
+; contains the 
+; length of entry is computed in setscr
+tablen	=*-hivid
+	.assert tablen <= 14, "struct length mismatch"
+vtab	.dsb MAX_SCREEN * 14
+
+#print tablen
+
+; volatile
+
+tmp	.byt 0		; temp counter
+tmp2	.byt 0		; temp counter
+	.text
+
+	;-------------------------------------------------
+	; VDC memory map (16k)
+	;
+	; $2000		- 8k character "ROM"
+	; $1800		- 2k attributes (vdc1)
+	; $1000		- 2k character text (vdc1)
+	; $0800		- 2k attributes (vdc0)
+	; $0000		- 2k character text (vdc0)
+	;
+	;-------------------------------------------------
+
+
+; according to https://c-128.freeforums.net/thread/67/correct-write-vdc-registers
+; it is possible to read/write most registers in a "fast" way, but if 
+; you want to run the mass data transfer, you certainly need to 
+; a) check for the busy bit 7 in VDCI on reading regs 18/19, 30-32, and
+; b) write hi/lo sequence in reg pairs 18/19 and 32/33, and obey
+;    the busy bit for the high byte, and
+; c) obey the busy bit when writing to reg 31.
+; 
+; according to the C128 ROM here i
+; https://github.com/mist64/cbmsrc/blob/5c5138ff128d289ccd98d260f700af52c4a75521/EDITOR_C128/ed2.src
+; writing multiple bytes to vdc memory requires a "kludge" to make sure
+; all bytes are written (as opposed to copy, which seems not to need this)
+
+vdcfrd	.(
+	stx VDCI
+	lda VDCD
+	rts
+	.)
+
+vdcfwr	.(
+	stx VDCI
+	sta VDCD
+	rts
+	.)
+
+vdcwr	.(
+	stx VDCI
+l	bit VDCI
+	bpl l
+	sta VDCD
+	rts
+	.)
+
+vdcrd	.(
+	stx VDCI
+l	bit VDCI
+	bpl l
+	lda VDCD
+	rts
+	.)
+
+vdcsetsrc .(
+	jsr calcaddr
+	pha
+	tya
+	ldx #VDC_COPYSRC_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+vdcsetcolsrc .(
+	jsr calcaddr
+	pha
+	tya
+	ora #$08
+	ldx #VDC_COPYSRC_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+vdcsetupd .(
+	jsr calcaddr
+	pha
+	tya
+	ldx #VDC_UPDATE_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+vdcsetcolupd .(
+	jsr calcaddr
+	pha
+	tya
+	ora #$08
+	ldx #VDC_UPDATE_H
+	jsr vdcwr
+	pla
+	inx
+	jmp vdcwr
+	.)
+
+
+vdcsetwr .(
+	; set to write (not copy)
+	ldx #VDC_VSCRL
+	jsr vdcfrd
+	and #%01111111
+	jmp vdcwr
+	.)
+
+vdcsetcp .(
+	; set to write (not copy)
+	ldx #VDC_VSCRL
+	jsr vdcfrd
+	ora #%10000000
+	jmp vdcwr
+	.)
+
+
+	;-------------------------------------------------
+
+	; only called once (for the first virtual console)
+console_init .(
+	jsr inivid
+	jsr inicrsr
+	jsr inikbd
+	rts
+	.)
+
+inivid	.(
+	; init the VDC registers
+	; TODO
+	; set the background colour
+	; TODO
+	rts
+	.)
+
+	; set the virtual screen that is to be displayed
+	; TODO: switch cursor off on old, and on on new scr
+setact	.(
+	; assume always a valid screen number (0 or 1 here)
+	asl
+	asl
+	asl
+	asl
+	ldx #VDC_MEM_STRT_H
+	jsr vdcfwr
+	ora #$08
+	ldx #VDC_ATT_STRT_H
+	jmp vdcfwr
+	.)
+
+/**************************************************************************
+ * actual screen handling
+ */
+
+	; set the structures such that all output goes to curdev
+setscr	.(
+	lda curdev
+
+	; is current data valid?	
+	ldx actdev
+	cpx #MAX_SCREEN
+	bcs nosave
+
+	; do we need to copy?
+	cmp actdev
+	beq setdone
+
+	; save screen
+	; compute position in vtab
+	lda actdev	; <=4
+	asl		; 
+	sta tmp		; x2
+	asl tmp		; x4, also clears carry
+	adc tmp		; -> x2 + x4 -> x6
+	asl tmp		; x8
+	adc tmp		; -> x6 + x8 -> x14
+	tax
+	; copy
+	ldy #0
+s1	lda hivid,y
+	sta vtab,x
+	inx
+	iny
+	cpy #tablen
+	bcc s1
+
+	lda curdev
+nosave	; restore screen data
+	sta actdev
+	asl
+	sta tmp		; x2
+	asl tmp		; x4
+	adc tmp		; -> x6
+	asl tmp		; x8
+	adc tmp		; -> x14
+	tax
+	ldy #0
+s2	lda vtab,x
+	sta hivid,y
+	inx
+	iny
+	cpy #tablen
+	bcc s2
+setdone
+	rts
+	.)
+
+
+sendline .(
+	ldy row
+	cpy iz
+	bne diffrow
+	; same row
+	ldx is
+	cpx col
+	bcc colok
+	beq colok
+diffrow ldx #0
+colok	stx col
+	stx tmp
+	; find last non-space char in line
+	ldy row
+	jsr vdcsetupd
+
+	ldy tmp
+l	iny
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	cmp #SCR_SPACE
+	beq next
+	sty tmp
+next	cpy ww
+	bcc l
+	; now tmp has the last col with char != space
+	; send data to stream	
+	ldx col
+	ldy row
+	jsr vdcsetupd
+
+	ldy col
+l1 	sty tmp2
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	SCR2ASC
+	ldy actdev
+	ldx outstr,y
+	jsr PUTC
+	ldy tmp2
+	cpy tmp
+	bcs done
+	iny
+	bne l1
+done	lda #TC_CR
+	ldy actdev
+	ldx outstr,y
+	jsr PUTC
+	jmp setptr
+	.)
+
+	; initialize a virtual screen - clear it, cursor to home
+	; setscr has been called before
+inivscr	.(
+	lda #FGCOL
+	sta attrfg
+	lda #BGCOL
+	sta attrbg
+
+	lda actdev
+	
+	and #1
+	asl
+	asl
+	asl
+	asl
+	sta hivid
+
+	jsr towcl
+	
+	lda #TC_FF
+	jsr printchar
+
+	jsr setlin
+	
+	clc
+	rts
+	.)
+
+&setlin	.(
+	lda row
+	sta iz
+	lda col
+	sta is
+	rts
+	.)
+
+
+
+/**************************************************************************
+ * helper routines
+ */
+
+setchr	.(
+	ldx #VDC_UPDATE_H
+	lda cptr+1
+	jsr vdcwr
+	inx
+	lda cptr
+	jmp vdcwr
+	.)
+
+setcol	.(
+	ldx #VDC_UPDATE_H
+	lda cptr+1
+	ora #$08
+	jsr vdcwr
+	inx
+	lda cptr
+	jmp vdcwr
+	.)
+	
+setptr	.(
+	ldx col
+	ldy row
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	lda actscr
+	cmp actdev
+	bne done
+
+	ldx #VDC_CRSR_POS_H
+	lda cptr+1
+	jsr vdcwr
+	inx
+	lda cptr
+	jmp vdcwr
+
+done	rts
+	.)
+
+	; take col/row in current window in X/Y respectively
+	; return memory address of col/row in vdc in A/Y
+calcaddr .(
+	tya
+	clc 
+	adc wy
+	tay
+	txa
+	clc
+	adc wx		; should not overflow
+	adc rowl,y
+	pha
+	lda #0
+	adc rowh,y
+	adc hivid
+	tay
+	pla
+	rts
+	.)
+
+/**************************************************************************
+ * char output
+ */
+
+printchar .(
+	ldx actdev
+	ldy ctrlst,x
+	beq no_extra
+	jmp extra
+no_extra
+	tay
+	bmi x1
+	cmp #32
+	bcs outc
+	jmp xout
+x1	cmp #128+32
+	bcs outc
+	jmp xcode
+outc	
+	pha
+	; check if prev. print left us in the the col behind the window 
+	ldx col
+	cpx ww
+	bcc outok
+	; if so, then wrap over to next line, col 0
+	ldx #0
+	stx col
+	jsr nextrow
+outok
+	; set update data address to char position
+	jsr setchr
+	pla
+	ldx #VDC_UPDATA
+	jsr vdcwr
+	; set update data address to colour position
+	jsr setcol
+	lda attrfg
+	ldx #VDC_UPDATA
+	jsr vdcwr
+	; fall-through
+&nextcol	
+	inc col
+	ldx col
+	cpx ww
+	beq colok
+	bcc colok
+	dec col
+colok	
+	jmp setptr
+	.)
+
+nextrow .(
+	ldx row
+	inx
+	cpx wh
+	bcs scrollup
+	stx row
+	jmp setptr
+	.)
+
+todell	lda row
+	.byt $2c
+	; fall-through
+scrollup .(
+	lda #0
+	sta tmp		; line counter
+
+	; set to copy
+	jsr vdcsetcp
+scrloop
+	; set row address
+	ldx #0		; col zero
+	ldy tmp		; row tmp
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; setup line target address	
+	jsr setchr
+
+	; setup line source address
+	ldx #0
+	ldy tmp
+	iny
+	cpy wh
+	bcs donescroll
+	inc tmp
+
+	jsr vdcsetsrc
+
+	; copy line
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	; attribute target
+	jsr setcol
+	
+	; attribute source
+	ldx #0
+	ldy tmp
+	jsr vdcsetcolsrc
+
+	; copy attributes
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	jmp scrloop
+
+donescroll
+	; set to store
+	jsr vdcsetwr
+	; clear line as set in cptr
+	jsr clrline
+	jmp setptr
+	.)
+
+toinsl	.(
+	; set to copy
+	jsr vdcsetcp
+
+	; start with last line as target
+	ldy wh
+	dey
+	sty tmp
+scrloop	
+	ldy tmp
+	cpy row		; did we reach current line as src?
+	beq clr		; yes then clear
+	sty tmp
+	dec tmp
+
+	; set row address
+	ldx #0		; col zero
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; setup line target address	
+	jsr setchr
+
+	; setup line source address
+	ldx #0
+	ldy tmp
+
+	jsr vdcsetsrc
+
+	; copy line
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	; attribute target
+	jsr setcol
+	
+	; attribute source
+	ldx #0
+	ldy tmp
+	jsr vdcsetcolsrc
+
+	; copy attributes
+	ldx #VDC_UPLEN
+	lda ww
+	jsr vdcwr
+
+	jmp scrloop
+
+clr
+	; set to store
+	jsr vdcsetwr
+	; clear line as set in cptr
+	ldy row
+	ldx #0
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+	jsr clrline
+	jmp setptr
+	.)
+
+
+/**************************************************************************
+ * control char output
+ */
+
+xout      .(    ;2
+          cmp #TC_CR
+          bne x1
+          lda #0
+          sta col
+          rts
+x1        
+	  cmp #TC_LF
+          bne x3a
+          jmp nextrow
+x3a       
+          cmp #TC_FF
+          bne x3
+	  jmp toff
+x3        
+          cmp #TC_BS
+          bne x4
+	  jmp tobs
+x4	  rts
+          .)    ;2
+
+        /* handle multi-byte sequences - pretty simple now. */
+extra   .(      ;2
+        dey
+        beq crsrrow	; ctrlst=1
+
+	dey
+	beq crsrcol	; ctrlst=2
+
+	dey
+	beq attr	; ctrlst=3
+
+	dey
+	beq colr	; ctrlst=4
+
+clrctrl lda #0
+        sta ctrlst,x
+        rts
+
+attr	and #%11110000
+	sta tmp
+	lda attrfg
+	and #%00001111
+	ora tmp
+	sta attrfg
+	jmp clrctrl
+
+colr	cmp #TC_COL_DEFAULT
+	bne setfgcol
+	lda #FGCOL
+setfgcol
+	and #%00001111
+	sta tmp
+	lda attrfg
+	and #%11110000
+	ora tmp
+	sta attrfg
+	jmp clrctrl
+
+crsrcol	cmp ww
+        bcc colok
+        lda ww
+        sbc #1
+colok   sta col
+	jsr clrctrl
+	jmp setptr
+
+crsrrow cmp wh
+        bcc rowok
+        lda wh
+        sbc #1
+rowok   sta row
+inccst  inc ctrlst,x
+        rts
+
+        .)
+
+tocpos  .(
+        lda #1
+	.byt $2c
+        .)
+	; fall through
+toattr  .( 
+        lda #3
+        .byt $2c
+        .)
+	; fall through
+tofgcol .( 
+        lda #4
+        ldx actdev
+        sta ctrlst,x
+        rts
+        .)
+
+toecho  .(
+        ldx actdev
+        lda status,x
+        ora #DC_SW_MOD
+        sta status,x
+        rts
+        .)
+
+tonoecho .(
+        ldx actdev
+        lda status,x
+        and #$ff-DC_SW_MOD
+        sta status,x
+        rts
+        .)
+
+xcode     .(    ;2
+          and #$7f
+          cmp #maxcode
+          bcs xe
+          asl
+          tax
+          lda xaddr+1,x
+          pha
+          lda xaddr,x
+          pha
+xe        rts
+
+xaddr     .word tocl-1,nextcol-1,tocu-1,nextrow-1
+          .word tohome-1,toff-1,todel-1,toins-1
+          .word towlo-1,towru-1,towcl-1
+          .word toeol-1,toclrl-1
+	  .word todell-1, toinsl-1
+          .word toecho-1, tonoecho-1
+	  .word tocpos-1, toattr-1, tofgcol-1
+xaddre
+maxcode   =(xaddre-xaddr)/2	;19
+	.)
+
+toeol	.(
+	ldx #0
+	stx col
+	ldy row
+	jsr vdcsetupd
+
+	ldy col
+l	iny
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	cmp #SCR_SPACE
+	beq next
+	sty col
+next	cpy ww
+	bcc l
+	jmp setptr
+	.)
+
+towru	.(
+	ldy col
+	iny
+	sty ww
+	ldy row
+	iny
+	sty wh
+	rts
+	.)
+
+towlo	.(
+	lda col
+	clc
+	adc wx
+	sta wx
+
+	lda row
+	clc
+	adc wy
+	sta wy
+
+	lda ww
+	sec
+	sbc col	
+	sta ww
+	lda wh
+	sec
+	sbc row
+	sta wh
+	jmp tohome
+	.)
+
+	; cursor left
+tocl	.(
+	lda col
+	beq done
+	dec col
+done	jmp setptr
+	.)
+
+tocu	.(
+	lda row
+	beq done
+	dec row
+done	jmp setptr
+	.)
+
+tobs	.(
+	ldx col
+	bne dobs
+	rts
+dobs
+	dec col
+&todel
+	jsr vdcsetcp
+
+	ldx col
+	ldy row
+	jsr calcaddr
+	sta cptr
+	sty cptr+1
+
+	; set target address	
+	jsr setchr
+
+	; src address
+	ldx col
+	inx
+	ldy row
+	jsr vdcsetsrc
+
+	lda ww
+	clc
+	sbc col
+	beq setspc
+	
+	ldx #VDC_UPLEN
+	jsr vdcwr
+
+	; copy attributes
+	; trg address
+	jsr setcol
+	; src address
+	ldx col
+	inx
+	ldy row
+	jsr vdcsetcolsrc
+
+	lda ww
+	clc
+	sbc col
+	
+	ldx #VDC_UPLEN
+	jsr vdcwr
+setspc
+	jsr vdcsetwr
+
+	ldx ww
+	dex
+	ldy row
+	jsr vdcsetupd
+
+	lda #SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	ldx ww
+	dex
+	ldy row
+	jsr vdcsetcolupd
+
+	lda attrbg
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	jmp setptr
+	.)
+	
+	; insert space under cursor
+toins	.(
+	; save original column
+	lda col
+	pha
+
+	; insert space
+	lda #SCR_SPACE
+	sta tmp
+	lda #BGCOL
+	sta tmp2
+cloop
+	jsr setptr
+
+	; read char
+	jsr setchr
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	pha
+
+	; write char
+	jsr setchr
+	ldx #VDC_UPDATA
+	lda tmp
+	jsr vdcwr
+
+	pla
+	sta tmp
+
+	; read attr
+	jsr setcol
+	ldx #VDC_UPDATA
+	jsr vdcrd
+	pha
+
+	; write attr
+	jsr setcol
+	ldx #VDC_UPDATA
+	lda tmp2
+	jsr vdcwr
+
+	pla
+	sta tmp2
+
+	; next col
+	inc col
+	lda col
+	cmp ww
+	bcc cloop
+
+	pla
+	sta col
+	jmp setptr
+	.)
+
+&toff	.(
+	; set to write (not copy)
+	jsr vdcsetwr
+
+	; first row/col in win
+	ldy #0
+	sty tmp
+lloop
+	ldx #0
+	jsr calcaddr
+	; start of line address in a/y
+	sta cptr
+	sty cptr+1
+
+	jsr clrline
+
+	inc tmp
+	ldy tmp
+	cpy wh
+	bcc lloop
+	jmp tohome	
+
+&clrline .(
+	jsr setchr
+	jsr writespace
+	jsr setcol
+	lda attrbg
+	.byt $2c
+writespace
+	lda #SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	lda ww
+	sec
+	sbc #1
+	jmp clr_kludge
+	.)
+
+&toclrl .(
+	jsr setptr
+	jsr setchr
+	jsr writespace
+	jsr setcol
+	lda attrbg
+	.byt $2c
+writespace
+	lda #SCR_SPACE
+	ldx #VDC_UPDATA
+	jsr vdcwr
+
+	lda ww
+	clc
+	sbc col
+	beq done
+	jmp clr_kludge
+done	rts
+	.)
+		
+clr_kludge_1
+	lda #1
+clr_kludge
+	ldx #VDC_UPLEN
+	jsr vdcwr
+	; TODO kludge - not needed in VICE right now
+	rts
+
+	.)
+
+	; clear window definition
+towcl	.(
+	lda #0
+	sta wx
+	sta wy
+	lda MAXSPAL
+	sta ww
+	lda MAXZEIL
+	sta wh
+	jmp setptr
+	.)
+	; fall-through
+tohome	.(
+	lda #0
+	sta col
+	sta row
+	jmp setptr
+	.)
+
+/**************************************************************************
+ * Cursor handling
+ */
+
+          .(
+        .data
+;crsrfl  .byt 0
+;crsrcnt .byt 0
+        .text
+
+&inicrsr
+	; fall-through
+
+	; must preserver XR
+&crsroff .(                    ; disable cursor
+	txa
+	pha
+	ldx #VDC_CRSR_STRT
+	lda #7+32		; start line, no cursor
+	jsr vdcwr
+	pla
+	tax
+	rts
+	.)
+
+&crsron .(			; enable cursor
+	ldx #VDC_CRSR_STRT
+	lda #7+64		; start line, blinking cursor
+	jmp vdcwr
+        .)
+
+	.)
+
+/**************************************************************************/
+
+rowl	.byt <0,      <80,  <160,  <240,  <320,  <400,  <480,  <560
+ 	.byt <640,   <720,  <800,  <880,  <960, <1040, <1120, <1200 
+	.byt <1280, <1360, <1440, <1520, <1600, <1680, <1760, <1840
+	.byt <1920
+
+rowh	.byt >0,      >80,  >160,  >240,  >320,  >400,  >480,  >560
+ 	.byt >640,   >720,  >800,  >880,  >960, >1040, >1120, >1200 
+	.byt >1280, >1360, >1440, >1520, >1600, >1680, >1760, >1840
+	.byt >1920
+
+/**************************************************************************/
+
+; make sure 80 col device only scans in 2 MHz mode */   
+#define CHECK_SPEED     lda freq:bmi scan:jmp nokey:scan
+
+#include "devices/kbd_c64.a65"
+

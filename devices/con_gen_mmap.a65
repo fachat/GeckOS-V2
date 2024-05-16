@@ -1,0 +1,765 @@
+/****************************************************************************
+   
+    OS/A65 Version 2.2
+    Multitasking Operating System for 6502 Computers
+    Generic memory mapped console device
+
+    Copyright (C) 1989-2024 Andre Fachat 
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+****************************************************************************/
+
+
+/**************************************************************************
+ *
+ * exports these variables and functions:
+ *
+ * 	col
+ *		current column 
+ *		(for device specific code)
+ *	row
+ *		current row
+ *		(for device specific code)
+ *	vzei
+ *		zp pointer to current mmap'd char line
+ *		(for device specific code)
+ *
+ *	inivscr
+ *		init a virtual device screen
+ *	setsrc
+ *		set the working area (coordinates etc)
+ *		to the screen given in A
+ *	sendline
+ *		send a line from the screen to the stream
+ *		note: looses chars if stream is full(!)
+ *		prints TC_CR to col zero, or to start of input
+ *	printchar
+ *		print a character on screen
+ *	setzei
+ *		set the vzei to the char line (in window) given in x
+ *	towcl
+ *		clear the current sub-window to the whole
+ *		screen
+ *	setlin
+ *		set start of the input field
+ *
+ * The following screen codes are implemented:
+ *
+ *	0-31 range (xout):
+ *		TC_CR		carriage return
+ *		TC_LF		Line feed
+ *		TC_BELL		bell
+ *		TC_FF		Form feed (clear screen/win)
+ *		TC_BS		Backspace
+ *		
+ *	128-159 range (xcode):
+ *		128		tocl - crsr left
+ *		129		nextcol - crsr right
+ *		130		tocu - crsr up
+ *		131		nextrow - crsr down
+ *		132		tohome - crsr home (top left of win)
+ *		133		toclr - clear window (TC_FF)
+ *		134		todel - del char under cursor
+ *		135		toins - ins char under cursor
+ *		136		towlo - define crsr as upper left win corner
+ *		137		towru - define crsr as lower right win corner
+ *		138		towcl - clear window definition
+ *		139		toeol - move to end of non-space in line
+ *		140		toclrl - clear from crsr to end of line
+ *		141		toecho - set echo flag
+ *		142		tonoecho - clr echo flag
+ *		143		tocpos - position crsr to the row/col 
+ *					position given by the next two bytes
+ *		144		todell - scroll lines under cursor up
+ *		145		toinsl	- scroll lines under cursor down
+ *		146		toattr - next byt is attribute for display
+ *			b7:	invers
+ *			b6:	bold
+ *			b5:	blink
+ *			b4:	underline
+ *			b3:	...
+ *
+ * Window management:
+ *	The driver manages a single display window. This is defined
+ *	by towlo, towru, and towcl controls (see above). Anything else
+ *	(LF, CR, CRSR movement, ...) happens inside this display window. 
+ *
+ *	Stacked window management must be done outside the driver in
+ *	user space.
+ *
+ *	wx/wy		left upper edge of window in abs screen coords
+ *	wh		height of the window in character lines
+ *	wr		rightmost col of window +1 in abs screen coords
+ *
+ * Line / Echo input management
+ *	The driver works in two modes, indirect or direct mode
+ *
+ *	In direct mode each character from keyboard is sent to the
+ *	the stream, and data from the stream is printed on the screen.
+ *
+ *	In indirect/echo mode characters from the keyboard are 
+ *	printed on the screen only. Only when a CR is entered,
+ *	the whole line is send to the stream. 
+ *
+ *	Note: indirect mode should only transfer from where the
+ *	actual input started - but is broken right now (conceptually?)
+ *	and transfers data from the start of line always (I think).
+ *
+ *	iz/is		line number of column of start of input
+ *
+ */
+ 
+
+FGCOL	=5	
+
+          .(  	;1
+
+	.data
+; active screen data
+; col must be first, is must be last (see setscr)
+&col      .byt 0
+&row      .byt 0
+wx        .byt 0
+wy        .byt 0
+wr        .byt 0
+wh        .byt 0
+hivid     .byt 0
+attrfg	  .byt 0
+iz        .byt 0
+is        .byt 0
+
+; table for screen data for all screens
+; includes list from above, plus vzei/vzei+1
+; length of entry is computed in setscr
+tablen	  =is-col+3
+	.assert tablen <= 12, "struct len mismatch"
+vtab      .dsb MAX_SCREEN*12
+
+; volatile
+tmp	.byt 0
+	.zero
+&vzei   .word 0
+
+	.text
+
+&inivscr  .(	;2
+
+	  lda actdev
+          jsr iniscr
+
+          lda #TC_FF     ; form feed
+          jsr printchar
+	  jsr setlin
+	
+	  lda #0
+	  sta attrfg
+
+          clc
+          rts
+          .)
+
+&setlin   .(
+          lda row
+          sta iz
+          lda col
+          sta is
+          rts
+          .)
+          
+&sendline .(	;2
+	  SET_MMU
+          ldy row
+          cpy iz
+          bne liex
+	  ; same row
+          ldy is
+          cpy col
+          bcc liex2
+          beq liex2
+liex      ; not in same row, or col left of start - read from start
+	  ldy wx
+liex2     sty col
+          sty zei2	; start of data
+	  ; find last non-space char in line
+          ldy wr
+lie2      cpy col
+          beq lie1
+          dey
+          lda (vzei),y
+          cmp #SCR_SPACE
+          beq lie2
+          iny
+lie1      sty zei2+1	; end of data
+	  ; send data to screen
+lie3      ldy zei2
+          cpy zei2+1
+          bcs lie4
+          lda (vzei),y
+	  SCR2ASC
+          ldy actdev
+          ldx outstr,y
+          jsr PUTC
+	  SET_MMU
+          inc zei2
+          bne lie3
+	  ; done sending, finish with TC_CR
+lie4      lda #TC_CR
+          ldy actdev
+          ldx outstr,y
+          jsr PUTC
+	  lda #SC_SSTAT
+	  ldy #SCE_PUSH
+	  jsr STRCMD
+	  ; 
+	  ldx row
+	  jmp setzei
+          .)	;1
+
+	/* handle multi-byte sequences - pretty simple now. */
+extra	.(	;2
+	dey
+	beq crsrrow
+
+	dey
+	beq crsrcol
+
+	dey
+	beq attr
+
+	dey
+	beq colr
+
+clrctrl	lda #0
+	sta ctrlst,x
+	rts
+
+attr    and #%11110000      
+        sta tmp             
+        lda attrfg          
+        and #%00001111      
+        ora tmp             
+        sta attrfg          
+        jmp clrctrl         
+                            
+colr    cmp #TC_COL_DEFAULT 
+        bne setfgcol        
+        lda #FGCOL          
+setfgcol                    
+        and #%00001111      
+        sta tmp             
+        lda attrfg          
+        and #%11110000      
+        ora tmp             
+        sta attrfg          
+        jmp clrctrl         
+
+crsrcol	clc
+	adc wx
+	cmp wr
+	bcc colok
+	lda wr
+	sbc #1
+colok   sta col
+	jsr clrctrl
+	ldx row
+	jmp setzei
+
+crsrrow	cmp wh
+	bcc rowok
+	lda wh
+	sbc #1
+rowok	sta row
+inccst	inc ctrlst,x
+	rts
+	
+	.)
+         
+	/* print all characters on screen */
+&printchar .(
+	  SET_MMU
+
+	ldx actdev
+	ldy ctrlst,x
+	beq no_extra
+	jmp extra
+no_extra
+          tay
+          bmi x1
+          cmp #32
+          bcs outc
+          jmp xout
+x1        cmp #128+32
+          bcs outc
+          jmp xcode
+          
+outc      ASC2SCR
+	bit attrfg
+	bvc doout
+	ora #$80
+doout	  ldy col
+          sta (vzei),y
+          
+&nextcol  ldy col
+          iny
+          cpy wr
+          bcc o1
+          jsr nextrow
+          ldy wx
+o1        sty col
+          rts
+          
+&nextrow  ldx row
+          inx
+          cpx wh
+          bcc o2
+          jsr scrollup
+          ldx wh
+          dex
+o2        ;stx row
+
+&&setzei  stx row
+&setzei2  txa
+          clc
+          adc wy
+          tax
+          lda #0
+          sta vzei
+          sta vzei+1
+          sta zei2+1
+          lda MAXSPAL
+          sta zei2
+szmul     txa
+          beq sz1
+          lsr
+          tax
+          bcc szm1
+          lda zei2:clc:adc vzei:sta vzei
+          lda zei2+1:adc vzei+1:sta vzei+1
+szm1      asl zei2:rol zei2+1
+          jmp szmul
+sz1       ACT_HI_VID
+	  clc
+          adc vzei+1
+          sta vzei+1
+          ldx row
+          rts
+
+&todell	  ldx row
+	  .byt $2c        
+scrollup  ldx #0
+          jsr setzei
+
+su2       inx
+          cpx wh
+          bcs su3
+          lda vzei
+          clc
+          adc MAXSPAL
+          sta zei2
+          lda vzei+1
+          adc #0
+          sta zei2+1
+          ldy wx
+su1       lda (zei2),y
+          sta (vzei),y
+          iny
+          cpy wr
+          bcc su1
+          
+          lda zei2
+          sta vzei
+          lda zei2+1
+          sta vzei+1
+          jmp su2     
+
+su3       ldy wx
+          lda #SCR_SPACE
+su4       sta (vzei),y
+          iny
+          cpy wr
+          bcc su4
+
+	  ldx row
+	  jsr setzei
+ 
+&clrli    ldx #<-1
+          stx iz
+          rts
+          .)	;1
+
+toinsl	  .(
+	ldx wh
+	dex
+        jsr setzei2
+
+	ldx wh
+	dex
+
+su2     cpx row
+	beq clr
+	dex
+
+        lda vzei
+        sec
+        sbc MAXSPAL
+        sta zei2
+        lda vzei+1
+        sbc #0
+        sta zei2+1
+
+          ldy wx
+su1       lda (zei2),y
+          sta (vzei),y
+          iny
+          cpy wr
+          bcc su1
+          
+        lda zei2
+        sta vzei
+        lda zei2+1
+        sta vzei+1
+        jmp su2     
+
+clr       ldy wx
+          lda #SCR_SPACE
+su4       sta (vzei),y
+          iny
+          cpy wr
+          bcc su4
+
+	jmp clrli          
+          .)	
+
+iniscr    .(		; screen number in AC
+	  HI_VID
+          sta hivid 
+
+          lda #0
+          sta wx
+          sta wy
+          sta col
+          lda MAXSPAL
+          sta wr
+          lda MAXZEIL
+          sta wh
+
+	  lda FGCOL
+	  sta attrfg
+
+          ldx #0
+          jmp setzei
+          .)	;1
+
+	; set the internal structures to the curdev screen
+	; i.e. all following prints etc go this screen.
+&setscr   .(
+	  lda curdev
+
+	  ldx actdev
+#ifdef MAX_ASCREEN
+	  cpx MAX_ASCREEN
+#else
+	  cpx #MAX_SCREEN
+#endif
+	  bcs nosave
+
+          cmp actdev
+          beq setmmu	; same screen as current
+          pha
+	  ; save screen data
+          lda actdev
+          asl
+          asl
+          sta zei2+1    ; screen# times 4     
+          asl
+          clc
+          adc zei2+1
+          tax		; screen# times 12
+          ldy #0
+s1        lda col,y	; copy screen control struct
+          sta vtab,x	; to buffer
+          inx
+          iny
+          cpy #is-col+1
+          bcc s1
+          lda vzei
+          sta vtab,x
+          lda vzei+1
+          sta vtab+1,x
+          pla
+
+	  ; restore screen
+nosave	  sta actdev
+          asl
+          asl
+          sta zei2+1
+          asl
+          clc
+          adc zei2+1
+          tax
+          ldy #0
+s2        lda vtab,x	; copy screen control struct from buffer
+          sta col,y	; to struct
+          inx
+          iny
+          cpy #is-col+1
+          bcc s2
+          lda vtab,x
+          sta vzei
+          lda vtab+1,x
+          sta vzei+1
+setmmu   
+	  SET_MMU
+          rts
+          .)	;1
+
+xout      .(	;2
+          cmp #TC_CR
+          bne x1
+          lda wx
+          sta col
+          rts
+x1        cmp #TC_LF
+          bne x2
+          jmp nextrow
+x2        cmp #TC_BEL
+          bne x3a
+	  TRIGBELL
+	  rts
+x3a       .(	;3
+          cmp #TC_FF
+          bne x3
+&&toclr   ldx #0
+c2b       jsr setzei
+          ldy wx
+          lda #SCR_SPACE
+c2a       sta (vzei),y
+          iny
+          cpy wr
+          bcc c2a
+          inx
+          cpx wh
+          bcc c2b
+          jsr clrli
+&&tohome  lda wx
+          sta col
+          ldx #0
+          jmp setzei
+          .)	;2
+x3        .(	;3
+          cmp #TC_BS
+          bne x4
+          ldy col
+          cpy wx
+          beq c7
+          dec col
+bslp      lda (vzei),y
+          dey
+          sta (vzei),y
+          iny
+          iny
+          cpy wr
+          bcc bslp
+          dey
+          lda #SCR_SPACE
+          sta (vzei),y
+&x4 c7    rts
+          .)	;2
+          .)	;1
+
+xcode     .(	;2
+          and #$7f
+          cmp #maxcode
+          bcs xe
+          asl
+          tax
+          lda xaddr+1,x
+	  beq xe
+          pha
+          lda xaddr,x
+          pha
+xe        rts
+
+xaddr     .word tocl-1,nextcol-1,tocu-1,nextrow-1 
+          .word tohome-1,toclr-1,todel-1,toins-1   
+          .word towlo-1,towru-1,towcl-1           
+          .word toeol-1,toclrl-1                  
+          .word todell-1, toinsl-1                
+          .word toecho-1, tonoecho-1              
+          .word tocpos-1, toattr-1, tofgcol-1     
+xaddre                                            
+maxcode   =(xaddre-xaddr)/2     ;19               
+
+tocpos  .(             
+        lda #1         
+        .byt $2c       
+        .)             
+        ; fall through 
+toattr  .(             
+        lda #3         
+        .byt $2c       
+        .)             
+        ; fall through 
+tofgcol .(             
+        lda #4         
+        ldx actdev     
+        sta ctrlst,x   
+        rts            
+        .)             
+
+toecho	.(
+	ldx actdev
+	lda status,x
+	ora #DC_SW_MOD
+	sta status,x
+	rts
+	.)
+
+tonoecho .(
+	ldx actdev
+	lda status,x
+	and #$ff-DC_SW_MOD
+	sta status,x
+	rts
+	.)
+
+todel     .(	;3
+          ldy col
+td0       iny
+          cpy wr
+          bcs td1
+          lda (vzei),y
+          dey
+          sta (vzei),y
+          iny
+          bne td0
+td1       dey
+          lda #SCR_SPACE
+          sta (vzei),y
+          rts
+          .)	;2
+
+toins     .(	;3
+          ldy wr
+	  jmp ticmp
+          ;dey
+          ;lda (vzei),y
+          ;cmp #SCR_SPACE
+          ;bne tie
+          ;cpy col
+          ;beq tiex
+ti1       dey
+          lda (vzei),y
+          iny
+          sta (vzei),y
+ticmp     dey
+          cpy col
+          bne ti1
+          lda #SCR_SPACE
+          sta (vzei),y
+tie       rts
+          .)	;2
+
+toeol     .(	;3
+          ldy wr
+l         dey
+          bmi e
+          lda (vzei),y
+          cmp #SCR_SPACE
+          beq l
+e         iny 
+          cpy wr
+	  bcc store
+	  bne x
+	  dey		; if last char is not space, move crsr to last char
+store     sty col
+x         rts
+          .)	;2
+
+toclrl    .(	;3
+          lda #SCR_SPACE
+          ldy col
+c         sta (vzei),y
+          iny
+          cpy wr
+          bcc c
+          rts
+          .)	;2
+          
+tocl      .(	;3
+          ldy col
+          cpy wx
+          beq c4
+          dec col
+          rts
+c4        ldy wr
+          dey
+          sty col
+&tocu     ldx row
+          beq c5
+          dex
+c5        jsr setzei
+          rts
+          .)	;2
+          
+towlo     .(	;3
+          lda col	; col is in absolute coords
+          sta wx
+
+          lda row	; row is relative to window
+          clc
+          adc wy
+          sta wy
+
+          lda wh
+          sec
+          sbc row
+          sta wh
+
+          lda #0
+          sta row
+          jmp clrli
+          .)	;2
+          
+towru     .(	;3
+          ldy col
+          iny
+          sty wr
+          ldx row
+          inx
+          stx wh
+          jmp clrli
+          .)	;2
+          
+&&towcl     .(	;3
+          lda row
+          clc
+          adc wy
+          sta row
+          lda #0
+          sta wx
+          sta wy
+          lda MAXSPAL
+          sta wr
+          lda MAXZEIL
+          sta wh
+          jmp clrli
+          .)	;2
+          .)	;1
+
+
+	.)	;0
+ 

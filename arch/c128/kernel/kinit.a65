@@ -123,8 +123,9 @@
 
 /*
  * originally SYSPORT specific, they have a value for the C64 also...
+ * In C128, check 40/80 col flag, and assume 2 MHz if on 80 col
  */
-#define	GETFREQ()	lda #0
+#define	GETFREQ()	lda MMU+MCR:and #%10000000:eor #%10000000
 
 /*
  * output hardware errors

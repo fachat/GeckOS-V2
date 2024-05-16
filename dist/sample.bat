@@ -1,4 +1,1 @@
-
-uname
-ls
-
+../tests/sample.bat
