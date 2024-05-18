@@ -22,9 +22,12 @@
 
 ****************************************************************************/
 
-#define	CHECK_C128
+#define	CHECK_C128			/* if defined, scan extra c128 keys */
 
-#define	MAX_SCREEN	3		/* maximum number of screens */
+#define	MAX_SCREEN	2		/* maximum number of screens */
+
+#define	CON_MMAP_COLOUR			/* enable colour handling in generic
+					   memory mapped console code */
 
 #define	SWITCHKEY	61
 
@@ -45,11 +48,16 @@
 
 #define	ACT_HI_VID      lda hivid
 
+#define	ACT_HI_COL      .(:lda actscr:cmp actdev:bne inact:\
+				lda #$d8:.byt $2c:inact lda #VIDPAGE+$08:.)
+
 #define	SCR_SPACE	32
 
 #define	SCR2ASC
 
 #define	ASC2SCR
+
+#define	CON_TXT_COL	C64_TEXT_COL
 
 console_init .(
 	jsr inivid
@@ -59,9 +67,15 @@ console_init .(
 	.)
 
 /*
- * For the C64 we put the video screen memory to $e000-$ec00, i.e.
- * we have three possible screens only. We need $ec00-$efff for the
- * stdlib. We use the std charom at $d000 in the RAM under I/O that
+ * For the C64 we put the video screen memory to $e000-$e800, i.e.
+ * we have two possible screens only. The area from $e800-$ec00
+ * is used for the colour information for the screen that is
+ * currently not used.
+ *
+ * We need $ec00-$efff for the
+ * stdlib. 
+ *
+ * We use the std charom at $d000 in the RAM under I/O that
  * the VIC doesn't see. The boot loader has to copy the charom there.
  * Then we have all the memory below the I/O relatively free.
  *
@@ -74,8 +88,12 @@ console_init .(
  * definition of VIDPAGE, which happens outside of this file.
  */
 
+	.data
+actflg	.byt 0
+	.text
+
 inivid	.(
-        lda #0
+	lda #0
         sta C64VIC+VIC_IRR            ; no interrupts
         sta C64VIC+VIC_SPRITE_EN      ; sprites off
         lda #27
@@ -96,9 +114,11 @@ inivid	.(
 	ora #3-((VIDPAGE & %11000000) >> 6)
         sta C64CIA2+CIA_PRA           ; change to uppermost page ($c000-)
 
+/* replaced with TC_FF on each screen */
         lda #C64_TEXT_COL             ; set the screen (text) color
         ldy #0
-coloop  sta $d800,y
+coloop  ; active screen
+	sta $d800,y
         sta $d900,y
         sta $da00,y
         sta $db00,y
@@ -120,7 +140,40 @@ setact	.(
         asl
 	ora #(($d0 & %00111000) >> 2) + ((VIDPAGE & %00111100)<< 2)
         sta C64VIC+VIC_BASE
-	rts
+
+	cmp actflg
+	beq noswap
+	sta actflg
+	
+	ldy #0
+l	ldx $d800,y
+	lda $800+(VIDPAGE<<8),y
+	sta $d800,y
+	txa
+	sta $800+(VIDPAGE<<8),y
+
+	ldx $d900,y
+	lda $900+(VIDPAGE<<8),y
+	sta $d900,y
+	txa
+	sta $900+(VIDPAGE<<8),y
+
+	ldx $da00,y
+	lda $a00+(VIDPAGE<<8),y
+	sta $da00,y
+	txa
+	sta $a00+(VIDPAGE<<8),y
+
+	ldx $db00,y
+	lda $b00+(VIDPAGE<<8),y
+	sta $db00,y
+	txa
+	sta $b00+(VIDPAGE<<8),y
+
+	iny
+	bne l
+
+noswap	rts
 	.)
 
 /**************************************************************************

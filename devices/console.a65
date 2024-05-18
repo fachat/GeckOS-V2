@@ -224,7 +224,7 @@ direct	and #DC_SW_RX	; direct mode -> send the char directly
 	ldx outstr,y
 	jsr PUTC
 end_input
-	
+	ldx curdev	
 	; ----------------------
 	; output from stream to screen
 

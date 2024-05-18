@@ -3,7 +3,7 @@
 TRG=geckos64.d64
 
 BASE=../../../dist/osabase.d64
-ROM=../c64rom.bin
+ROM=c64rom.bin
 
 XA=xa
 
@@ -25,6 +25,7 @@ loader: loader.bas
 # init rom image
 $(ROM):
 	make -C .. all
+	reloc65 -xt -o $(ROM) ../c64rom.o65
 
 # base d64 distribution file
 $(BASE):
@@ -52,6 +53,7 @@ emuslip: $(TRG)
 #
 
 clean:
+	rm -f $(ROM)
 	rm -f boot.bin loader
 	rm -f monitor.log
 

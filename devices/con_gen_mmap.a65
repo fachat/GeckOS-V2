@@ -123,7 +123,11 @@
  */
  
 
-FGCOL	=5	
+#ifdef CON_MMAP_COLOUR	
+FGCOL	=C64_TEXT_COL
+#else
+FGCOL	=0
+#endif
 
           .(  	;1
 
@@ -144,7 +148,7 @@ is        .byt 0
 ; table for screen data for all screens
 ; includes list from above, plus vzei/vzei+1
 ; length of entry is computed in setscr
-tablen	  =is-col+3
+tablen	  =*-col+2
 	.assert tablen <= 12, "struct len mismatch"
 vtab      .dsb MAX_SCREEN*12
 
@@ -152,7 +156,9 @@ vtab      .dsb MAX_SCREEN*12
 tmp	.byt 0
 	.zero
 &vzei   .word 0
-
+#ifdef CON_MMAP_COLOUR
+&colptr	.word 0
+#endif
 	.text
 
 &inivscr  .(	;2
@@ -164,9 +170,6 @@ tmp	.byt 0
           jsr printchar
 	  jsr setlin
 	
-	  lda #0
-	  sta attrfg
-
           clc
           rts
           .)
@@ -311,7 +314,10 @@ outc      ASC2SCR
 	ora #$80
 doout	  ldy col
           sta (vzei),y
-          
+#ifdef CON_MMAP_COLOUR
+	lda attrfg
+	sta (colptr),y          
+#endif
 &nextcol  ldy col
           iny
           cpy wr
@@ -350,21 +356,35 @@ szmul     txa
           lda zei2+1:adc vzei+1:sta vzei+1
 szm1      asl zei2:rol zei2+1
           jmp szmul
-sz1       ACT_HI_VID
+sz1       
+	  ACT_HI_VID
 	  clc
           adc vzei+1
           sta vzei+1
+#ifdef CON_MMAP_COLOUR
+	  ACT_HI_COL
+	  sta colptr+1
+	  lda vzei+1
+	  and #%00000011
+	  clc
+	  adc colptr+1
+	  sta colptr+1
+	  lda vzei
+	  sta colptr
+#endif
           ldx row
           rts
 
 &todell	  ldx row
 	  .byt $2c        
 scrollup  ldx #0
-          jsr setzei
+          jsr setzei	; stores x in row
 
+	  ; scroll actual data
 su2       inx
           cpx wh
           bcs su3
+	  ; calc source address by adding MAXSPAL
           lda vzei
           clc
           adc MAXSPAL
@@ -372,26 +392,59 @@ su2       inx
           lda vzei+1
           adc #0
           sta zei2+1
+	  ; copy line
           ldy wx
 su1       lda (zei2),y
           sta (vzei),y
           iny
           cpy wr
           bcc su1
-          
+          ; next line 
           lda zei2
           sta vzei
           lda zei2+1
           sta vzei+1
-          jmp su2     
-
-su3       ldy wx
+#ifdef CON_MMAP_COLOUR
+	  ; calc source address by adding MAXSPAL
+          lda colptr
+          clc
+          adc MAXSPAL
+          sta zei2
+          lda colptr+1
+          adc #0
+          sta zei2+1
+	  ; copy line
+          ldy wx
+su1c      lda (zei2),y
+          sta (colptr),y
+          iny
+          cpy wr
+          bcc su1c
+          ; next line 
+          lda zei2
+          sta colptr
+          lda zei2+1
+          sta colptr+1
+#endif
+          jmp su2
+su3
+	  ; clear line
+          ldy wx
           lda #SCR_SPACE
 su4       sta (vzei),y
           iny
           cpy wr
           bcc su4
+#ifdef CON_MMAP_COLOUR
+	ldy wx
+	lda attrfg
+su4c	sta (colptr),y
+	iny
+	cpy wr
+	bcc su4c
+#endif
 
+	  ; reset pointers
 	  ldx row
 	  jsr setzei
  
@@ -411,7 +464,7 @@ toinsl	  .(
 su2     cpx row
 	beq clr
 	dex
-
+	; calc source
         lda vzei
         sec
         sbc MAXSPAL
@@ -419,18 +472,40 @@ su2     cpx row
         lda vzei+1
         sbc #0
         sta zei2+1
-
+	; copy line
           ldy wx
 su1       lda (zei2),y
           sta (vzei),y
           iny
           cpy wr
           bcc su1
-          
+        ; next line  
         lda zei2
         sta vzei
         lda zei2+1
         sta vzei+1
+#ifdef CON_MMAP_COLOUR
+	; calc source
+	lda colptr
+	sec
+	sbc MAXSPAL
+	sta zei2
+	lda colptr+1
+	sbc #0
+	sta zei2+1
+	; copy colour line
+	ldy wx
+su1c	lda (zei2),y
+	sta (colptr),y
+	iny
+	cpy wr
+	bcc su1c
+	; next line
+	lda zei2
+	sta colptr
+	lda zei2+1
+	sta colptr+1
+#endif
         jmp su2     
 
 clr       ldy wx
@@ -439,7 +514,14 @@ su4       sta (vzei),y
           iny
           cpy wr
           bcc su4
-
+#ifdef CON_MMAP_COLOUR
+	ldy wx
+	lda attrfg
+su4c	sta (colptr),y
+	iny
+	cpy wr
+	bcc su4c
+#endif
 	jmp clrli          
           .)	
 
@@ -456,7 +538,7 @@ iniscr    .(		; screen number in AC
           lda MAXZEIL
           sta wh
 
-	  lda FGCOL
+	  lda #FGCOL
 	  sta attrfg
 
           ldx #0
@@ -543,13 +625,22 @@ x3a       .(	;3
           cmp #TC_FF
           bne x3
 &&toclr   ldx #0
-c2b       jsr setzei
+c2b       jsr setzei	; stores x in row
+	  ; clr data  
           ldy wx
           lda #SCR_SPACE
 c2a       sta (vzei),y
           iny
           cpy wr
           bcc c2a
+#ifdef CON_MMAP_COLOUR
+	  ldy wx
+	  lda attrfg
+c2ac	  sta (colptr),y
+	  iny
+	  cpy wr
+	  bcc c2ac
+#endif
           inx
           cpx wh
           bcc c2b
@@ -644,6 +735,12 @@ td0       iny
           lda (vzei),y
           dey
           sta (vzei),y
+#ifdef CON_MMAP_COLOUR
+	iny
+	lda (colptr),y
+	dey
+	sta (colptr),y
+#endif
           iny
           bne td0
 td1       dey
@@ -655,16 +752,16 @@ td1       dey
 toins     .(	;3
           ldy wr
 	  jmp ticmp
-          ;dey
-          ;lda (vzei),y
-          ;cmp #SCR_SPACE
-          ;bne tie
-          ;cpy col
-          ;beq tiex
 ti1       dey
           lda (vzei),y
           iny
           sta (vzei),y
+#ifdef CON_MMAP_COLOUR
+	dey
+	lda (colptr),y
+	iny
+	sta (colptr),y
+#endif
 ticmp     dey
           cpy col
           bne ti1
