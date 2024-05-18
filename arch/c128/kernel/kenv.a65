@@ -43,15 +43,14 @@ actEnv	.byt 0
  *
  * ENVBANK()/SYSBANK() Need to preserve X (A would also be needed for push)
  *
- * Also need to change ZP (stack is shared)
+ * Also need to change ZP (stack is shared, because we copy it anyway)
  */
 
 ; stores env (0 or 1) in P0H, then clears P0L, before switching to actual env mem
+; note: ENVBANK must have I/O available, thus switching directly from user to sys bank
+; is not working, as user bank does not have I/O visible but RAM instead
 #define ENVBANK()       sty MMU+P0H:lda #0:sta MMU+P0L:sta MMUFF+LCRA,y
 #define	SYSBANK()	sta MMUFF+LCRA:lda #0:sta MMU+P0H:sta MMU+P0L
-
-// #define ENVBANK()       sta MMUFF+LCRA,y
-// #define	SYSBANK()	sta MMUFF+LCRA
 
 /************************************************************************
  * These routines are needed in the env section! 
@@ -175,7 +174,7 @@ l2	cpy #STACKSIZE
 savetask
 #endif
 
-nosave	
+nosave	SYSBANK()
 	; ----------------------------
 	; setup new thread / task
 	ldx newThread
