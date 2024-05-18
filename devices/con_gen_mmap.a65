@@ -147,10 +147,17 @@ is        .byt 0
 
 ; table for screen data for all screens
 ; includes list from above, plus vzei/vzei+1
+; and colptr/colptr+1
 ; length of entry is computed in setscr
+#ifdef CON_MMAP_COLOUR
+tablen	  =*-col+4
+	.assert tablen <= 14, "struct len mismatch (expect <=14)"
+vtab      .dsb MAX_SCREEN*14
+#else
 tablen	  =*-col+2
-	.assert tablen <= 12, "struct len mismatch"
+	.assert tablen <= 12, "struct len mismatch (expect <=12)"
 vtab      .dsb MAX_SCREEN*12
+#endif
 
 ; volatile
 tmp	.byt 0
@@ -250,7 +257,7 @@ clrctrl	lda #0
 	rts
 
 attr    and #%11110000      
-        sta tmp             
+        sta tmp
         lda attrfg          
         and #%00001111      
         ora tmp             
@@ -262,7 +269,7 @@ colr    cmp #TC_COL_DEFAULT
         lda #FGCOL          
 setfgcol                    
         and #%00001111      
-        sta tmp             
+        sta tmp
         lda attrfg          
         and #%11110000      
         ora tmp             
@@ -292,8 +299,12 @@ inccst	inc ctrlst,x
          
 	/* print all characters on screen */
 &printchar .(
+	pha
 	  SET_MMU
 
+	jsr setscr
+
+	pla
 	ldx actdev
 	ldy ctrlst,x
 	beq no_extra
@@ -357,21 +368,21 @@ szmul     txa
 szm1      asl zei2:rol zei2+1
           jmp szmul
 sz1       
+#ifdef CON_MMAP_COLOUR
+	  lda vzei
+	  sta colptr
+	  lda vzei+1
+	  sta colptr+1
+	  ACT_HI_COL
+	  clc
+	  adc colptr+1
+	  sta colptr+1
+#endif
 	  ACT_HI_VID
 	  clc
           adc vzei+1
           sta vzei+1
-#ifdef CON_MMAP_COLOUR
-	  ACT_HI_COL
-	  sta colptr+1
-	  lda vzei+1
-	  and #%00000011
-	  clc
-	  adc colptr+1
-	  sta colptr+1
-	  lda vzei
-	  sta colptr
-#endif
+
           ldx row
           rts
 
@@ -549,6 +560,8 @@ iniscr    .(		; screen number in AC
 	; i.e. all following prints etc go this screen.
 &setscr   .(
 	  lda curdev
+          cmp actdev
+          beq setmmu	; same screen as current
 
 	  ldx actdev
 #ifdef MAX_ASCREEN
@@ -558,51 +571,75 @@ iniscr    .(		; screen number in AC
 #endif
 	  bcs nosave
 
-          cmp actdev
-          beq setmmu	; same screen as current
           pha
 	  ; save screen data
           lda actdev
-          asl
-          asl
-          sta zei2+1    ; screen# times 4     
-          asl
-          clc
-          adc zei2+1
-          tax		; screen# times 12
+          asl		; a=x2
+#ifdef CON_MMAP_COLOUR
+	  sta tmp	; tmp=x2
+	  asl tmp	; tmp=x4
+	  adc tmp	; a=a+tmp=x6
+	  asl tmp	; tmp=x8
+	  adc tmp	; a=a+tmp=x14
+#else
+	  asl		; a=x4
+	  sta tmp	; tmp=x4
+	  asl 		; a=x8
+	  adc tmp	; a=a+tmp=x12
+#endif
+          tax		; screen# times len
           ldy #0
 s1        lda col,y	; copy screen control struct
           sta vtab,x	; to buffer
           inx
           iny
-          cpy #is-col+1
+          cpy #tablen-4
           bcc s1
           lda vzei
           sta vtab,x
           lda vzei+1
           sta vtab+1,x
+#ifdef CON_MMAP_COLOUR
+          lda colptr
+          sta vtab+2,x
+          lda colptr+1
+          sta vtab+3,x
+#endif
           pla
 
 	  ; restore screen
 nosave	  sta actdev
-          asl
-          asl
-          sta zei2+1
-          asl
-          clc
-          adc zei2+1
+	  asl
+#ifdef CON_MMAP_COLOUR
+	  sta tmp
+	  asl tmp
+	  adc tmp
+	  asl tmp
+	  adc tmp
+#else
+	  asl		; a=x4
+	  sta tmp	; tmp=x4
+	  asl 		; a=x8
+	  adc tmp	; a=a+tmp=x12
+#endif
           tax
           ldy #0
 s2        lda vtab,x	; copy screen control struct from buffer
           sta col,y	; to struct
           inx
           iny
-          cpy #is-col+1
+          cpy #tablen-4
           bcc s2
           lda vtab,x
           sta vzei
           lda vtab+1,x
           sta vzei+1
+#ifdef CON_MMAP_COLOUR
+          lda vtab+2,x
+          sta colptr
+          lda vtab+3,x
+          sta colptr+1
+#endif
 setmmu   
 	  SET_MMU
           rts

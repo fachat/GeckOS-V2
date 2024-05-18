@@ -262,12 +262,11 @@ ADR     .word 0
           ldy actTask					:\
           lda taskTab+TT_ENV,y				:\
           beq system					:\
-;.byt 2							:\
           lda #%10001100				:\
           sta $fff0					:\
 system							:\
           txs						:\
-mtask	.)
+mtask	.)						
 
 /* 
  * This is the standard return to user space. the kernel jumps here,

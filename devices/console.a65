@@ -40,7 +40,7 @@
 	; should be defined. Otherwise block level may be
 	; elevated and label defined errors may occur
 	;
-	; language note: "zei" is the abbreviation for
+	; language note "zei" is the abbreviation for
 	; german "Zeiger", which literally means "pointer".
 	.zero
 zei2	.word 0
@@ -110,6 +110,7 @@ dev_reset .(	;2
           sta syscnt
           sta actscr
 
+	  ; uncomment to start in direct mode
 	  ;lda #DC_SW_MOD
 	  ;sta status,x
 
@@ -238,10 +239,10 @@ end_input
 	; are we on the current screen?
 	lda curdev
 	cmp actscr
-	bne txloop
+	bne dotx
 	; if so, switch off cursor
 	jsr crsroff
-
+dotx
 	; check input from stream
 	ldy curdev
 	ldx getstr,y
