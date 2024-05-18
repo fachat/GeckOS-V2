@@ -150,8 +150,8 @@
 #define	INIT_LIB6502
 
 #ifdef VDCSCREEN
-#define	INIT_OUTDEV	4
-#define	LIB_OUTDEV	4
+#define	INIT_OUTDEV	3
+#define	LIB_OUTDEV	3
 #else
 #define	INIT_OUTDEV	1
 #define	LIB_OUTDEV	1

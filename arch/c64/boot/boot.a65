@@ -88,13 +88,15 @@ cl5     lda $d000,y
 	and #%11111101	; only I/O is still there
 	sta 1
 
-	lda #0
-	ldx #$88
+	; copy from top down, as load area and target areas overlap
 
-	sta $fb		; target address
+	lda #0
+	ldx #$80	; 32k ROM image (max)
+
+	sta $fb		; target address - below $0000 = top of mem
 	sta $fc
 
-	sta $fd		; source address
+	sta $fd		; source address - load ends at $a000
 	lda #$a0
 	sta $fe
 

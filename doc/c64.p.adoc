@@ -126,9 +126,9 @@ lsh::
 	$0300 		data/bss for ROM-based code 
 			(incl. kernel and lib6502)
 	$1680		start of malloc'able free memory
-	$83ff 		end of free memory
+	$81ff 		end of free memory
 
-	$8400		start of boot ROM
+	$8200		start of boot ROM
 			devices
 			init
 			fsiec

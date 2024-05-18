@@ -46,7 +46,7 @@
 
 /*#undef	ANDRE	*/		/* my personal configuration... :-) */
 
-#define	ROMSTART	$9000	/* where the ROM starts */
+/*#define	ROMSTART	$9000	/ where the ROM starts - defined Makefile */
 
 #define	RAMSTART	1
 
@@ -150,7 +150,13 @@
 
 #define	STDIOADDR	$d000
 
-          .word $3000		/* load address */
+	; define the load address for the loader
+	; 
+	; note that the loaded image must end at $a000
+	; and the loader copies (currently) 32k at max.
+	.word ROMSTART-$6000	
+
+.assert	* = ROMSTART, "build address mismatch"
 
 .(
 

@@ -48,6 +48,11 @@
  *
  *	rxoff
  *		switches off receiving 
+ *
+ * calls:
+ *
+ *	starttx	
+ *		init after stream open (on curdev)
  */
 
 	.data
@@ -166,7 +171,7 @@ p2        .(
 	ldy curdev
 	lda #0
 	sta ctrlst,y
-	jsr towcl
+	jsr starttx
           lda #DC_SW_TX
           bne ox1q1
 ox1q      cmp #DC_RX_ON

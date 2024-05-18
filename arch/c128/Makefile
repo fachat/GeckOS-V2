@@ -14,8 +14,9 @@ KERNBSS=58880	# $e600
 
 # where the init image and its data are located
 ROMSTART=32768	# $8000
-ROMDATA=45568	# $b200
-ROMBSS=46080	# $b400
+ROMDATA80=45824	# $b300
+ROMDATA40=45824	# $b300
+ROMBSS=46336	# $b500
 
 # where the lib6502 and its data are located
 LIB6502=783	# $030f, jump table address
@@ -39,11 +40,11 @@ kern.o65: kern.a65 kernel/*.a65
 	${FILE} kern.o65
 
 rom40.o65: rom.a65 devices/*.a65
-	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -bt $(ROMSTART) -bd $(ROMDATA) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
+	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -bt $(ROMSTART) -bd $(ROMDATA40) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
 	${FILE} $@
 
 rom80.o65: rom.a65 devices/*.a65
-	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -DVDCSCREEN -bt $(ROMSTART) -bd $(ROMDATA) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
+	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -DVDCSCREEN -bt $(ROMSTART) -bd $(ROMDATA80) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
 	${FILE} $@
 
 info: rom80.o65 rom40.o65 kern.o65 lib.o65

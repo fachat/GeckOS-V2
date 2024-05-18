@@ -3,7 +3,7 @@ all: lib.bin kern.bin rom.bin roms.l
 
 SHELL=/bin/bash	# for arithmetic expansion
 
-XA=xa -k -E
+XA=xa -k -E -XMASM
 FILE=file65 
 RELOC=reloc65
 
