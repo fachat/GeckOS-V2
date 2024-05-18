@@ -39,6 +39,9 @@
 	; zei2 is used in CONSOLE_DEVICE, so 
 	; should be defined. Otherwise block level may be
 	; elevated and label defined errors may occur
+	;
+	; language note: "zei" is the abbreviation for
+	; german "Zeiger", which literally means "pointer".
 	.zero
 zei2	.word 0
 	.text
@@ -86,7 +89,7 @@ prg1      ldx #0
 
 
 	.data          
-;curdev	  .byt 0	; device currently called in DEVCMD
+;curdev	  .byt 0	; device currently called in DEVCMD (set in generic dev code)
 actdev	  .byt 0	; device currently active in output
 actscr    .byt 0	; device currently visible 
 freq	  .byt 0	; hardware status byte from kernel (1/2 MHz bit)
@@ -305,6 +308,11 @@ sw_close .(	;3
 	.)	;2
 
 	.)	;1
+
+starttx	.(
+	jsr setscr
+	jmp towcl
+	.)
 
 /*************************************************************************
  *
