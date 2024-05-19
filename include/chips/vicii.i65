@@ -52,6 +52,7 @@
 #define	VIC_SPRITE_COL	39		/* +0, ... ,+7 */
 
 #define	VIC_C128_KEYB	47		/* C128 mode */
+#define	VIC_C128_FAST	48		/* C128 mode */
 
 #endif
 

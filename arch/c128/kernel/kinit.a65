@@ -104,7 +104,19 @@
 
 	lda #%00000001
 	sta $d01a		; enable the raster interrupt
-	
+
+/*
+ * system speed
+ *
+ * 1 MHz for 40 col screen, 2 MHz for 80 col screen
+ */
+	lda MMU+MCR
+	eor #%10000000
+	asl			; shift bit 7 into C
+	lda #0
+	rol			; shift into bit 0
+	sta $d030
+
 /*
  * check zeropage RAM, jump to he_zero if failure
  */

@@ -42,12 +42,15 @@
 
 #define   CIA1      $dc00
 #define   CIA2      $dd00
+#define   VIC       $d000
 
 #include "chips/cia6526.i65"
+#include "chips/vicii.i65"
 
 	.data
 cnt2      .byt 0
 burst_flg .byt 0	; set when burst has been identified during ATN
+save_fast .byt 0	; save speed setting for machine
 	.text
 
 	/* when we get the IEC semaphore, we have nothing to do left,
@@ -96,6 +99,7 @@ burst_flg .byt 0	; set when burst has been identified during ATN
           sta cnt2
           sta bytfl
           sta eoifl
+          sta save_fast
           clc
 	  .byt $24
 inix      sec
@@ -367,10 +371,23 @@ timexout  lda #4
 
 stabilize:
         sei
+
+	bit save_fast	; have we checked before?
+	bmi stabend	; yes then end
+
+	; save speed setting
+	lda VIC+VIC_C128_FAST
+	sta save_fast	; (unused bit 7 reads 1)
+
+	; go to slow mode
+	lda #0
+	sta VIC+VIC_C128_FAST
+stabend
         rts
+
 ;E573:  SEI
 ;
-;E574:  BIT $0A3A       ; flag $0a3a.7 set?
+;E574:  BIT $0A3A       ; flag $0a3a.7 set? then disable speed switch (e.g. works w/ 1571)
 ;E577:  BMI stabend     ; yes, then end
 ;E579:  BIT SAVE_FAST   ; have we checked speed before?
 ;E57C:  BMI stabend     ; yes, then end
@@ -401,8 +418,18 @@ stabilize:
 ; Restore Timing
 
 restore:
+	bit save_fast
+	bpl restend
+
+	lda save_fast
+	sta VIC+VIC_C128_FAST
+
+	lda #0
+	sta save_fast
+restend
 ;       cli
         rts
+
 ;E59F:  BIT $0A3A       ; flag $0a3a.7 is set?
 ;E5A2:  BMI restend     ; yes then end
 ;E5A4:  BIT SAVE_FAST   ; timing changed (from Stabilize timing above)?

@@ -150,8 +150,9 @@
 #define	INIT_LIB6502
 
 #ifdef VDCSCREEN
-#define	INIT_OUTDEV	3
-#define	LIB_OUTDEV	3
+/* if using VDC, the VIC device is not included anymore as we run with 2 MHz */
+#define	INIT_OUTDEV	1
+#define	LIB_OUTDEV	1
 #else
 #define	INIT_OUTDEV	1
 #define	LIB_OUTDEV	1
