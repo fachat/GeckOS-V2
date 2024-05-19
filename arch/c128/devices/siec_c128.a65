@@ -434,9 +434,8 @@ fastout:
 	lda #$7f
 	sta CIA1+CIA_ICR
 	;
-	lda #1
-	sta MMU+MCR
-	;
+	lda #0
+	sta CIA1+CIA_TAH
 	lda #$04
 	sta CIA1+CIA_TAL
 	;
