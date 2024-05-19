@@ -31,11 +31,14 @@ loader: loader.bas romld.bin
 #	a) the load address must correspond to the text segment start address
 #	b) the romld loader must copy that directly into RAM under ROM
 #
-$(ROM): ../kern.o65 ../lib.o65 ../rom40.o65 ../rom80.o65
+
+kern.bin: ../kern.o65
 	# add kernel load address
 	file65 ../kern.o65 | grep text | tr -s " " | cut -d " " -f 5 | sed -e 's/\$$//g' -e 's/\(..\)\(..\)/\2 \1/' | xxd -r -p > kern.bin
 	$(RELOC) -xt -o tmp ../kern.o65
 	cat tmp >> kern.bin
+
+lib.bin: ../lib.o65 
 	# add lib load address
 	# note we're using 0400 instead of the real 0300, as this would overwrite important c128 vectors
 	# so the romld loader needs to move the binary one block down
@@ -43,17 +46,20 @@ $(ROM): ../kern.o65 ../lib.o65 ../rom40.o65 ../rom80.o65
 	echo "00 40" | xxd -r -p > lib.bin
 	$(RELOC) -xt -o tmp ../lib.o65
 	cat tmp >> lib.bin
+
+rom40.bin: ../rom40.o65 
 	# add rom40 load address
 	file65 ../rom40.o65 | grep text | tr -s " " | cut -d " " -f 5 | sed -e 's/\$$//g' -e 's/\(..\)\(..\)/\2 \1/' | xxd -r -p > rom40.bin
 	$(RELOC) -xt -o tmp ../rom40.o65
 	cat tmp >> rom40.bin
 	rm -f tmp
+
+rom80.bin: ../rom80.o65 
 	# add rom80 load address
 	file65 ../rom80.o65 | grep text | tr -s " " | cut -d " " -f 5 | sed -e 's/\$$//g' -e 's/\(..\)\(..\)/\2 \1/' | xxd -r -p > rom80.bin
 	$(RELOC) -xt -o tmp ../rom80.o65
 	cat tmp >> rom80.bin
 	rm -f tmp
-
 
 $(BASE):
 	make -C ../../.. all

@@ -40,12 +40,14 @@
 
  */
 
+#define   CIA1      $dc00
 #define   CIA2      $dd00
 
 #include "chips/cia6526.i65"
 
 	.data
 cnt2      .byt 0
+burst_flg .byt 0	; set when burst has been identified during ATN
 	.text
 
 	/* when we get the IEC semaphore, we have nothing to do left,
@@ -104,13 +106,19 @@ inix      sec
 	.)
 
 &IECIN     .(
-          sei
+          jsr stabilize
+
           lda #0
           sta eoifl
-          lda #8
-          sta cnt2
+
+	; clear SR interrupt
+	lda CIA1+CIA_ICR
+
+	; save XR
+	txa
+	pha
+
           jsr clkhi
-;          jsr datalo
 
 l14       ;    jsr testatn
           ;    bcs atnin
@@ -129,49 +137,80 @@ l16       jsr fragti
           ;    bcs atnin
 	  bit CIA2+CIA_PRA	; wait clklo
           bvs l16
-          bvc l17
+          bvc rxdata
 
+	; check and set eoi flag
 l15       lda eoifl
           beq l18
+	; read timeout exit, so pull xr from stack and restore
+	pla
+	tax
           lda #2
           jmp error
+	; set eof (set to -1)
 l18       dec eoifl
           jsr datalo
-jsr clkhi
+	jsr clkhi
           jsr waitus
           lda #$40		; EOF
           jsr seterror
           bne l19
 
-l17   
-l20    
+rxdata	; number of bits
+	ldx #8
+
+l20	; wait for first slow bit (clk high) while checking for fast rx
+	lda CIA1+CIA_ICR
+	and #$08
+	bne rxfast
+    
 	  lda CIA2+CIA_PRA
           asl
           bpl l20
-          ror byte
+rxnxt
+	; store bit
+        ror byte
 
-l21
-	  bit CIA2+CIA_PRA
-          bvs l21
+l21	; wait for clk lo
+	lda CIA2+CIA_PRA
+	cmp CIA2+CIA_PRA
+	bne l21
+	asl		
+	bmi l21
 
-          dec cnt2
-          bne l20
+	dex
+        beq rxend	; got all 8 bits
+
+l21a	; wait for clk hi
+	lda CIA2+CIA_PRA
+	cmp CIA2+CIA_PRA
+	bne l21a
+	asl		; put data bit into carry
+	bpl l21a	
+	bmi rxnxt	; always, shift bit into output byte
+
+rxfast	; receive a fast byte (from SR)
+	lda CIA1+CIA_SDR
+	sta byte
+	lda #$c0
+	sta burst_flg
+rxend
+	pla
+	tax
 
           jsr datalo
 
           bit status
           bvc l22
           jsr endhndshk
+	sec
+	.byt $24
+l22	clc
+	php
+	jsr restore
+	plp
           lda byte
-          sec
-	  cli
           rts
-
-l22       lda byte
-          clc
-	  cli
-          rts
-         
 	.)
  
 /*
@@ -183,51 +222,106 @@ atnin     jsr datalo
 
 nodev     lda #$80
 ;inc $d020
-error     jsr seterror
-          jsr atnhi
-endhndshk jsr waitus
-;          jsr datahi
-          jsr clkhi
-jsr datahi
-          sec
-	cli
-          rts
+error   pha
+	lda burst_flg
+	and #$7f
+	sta burst_flg
+	pla  
+	jsr seterror
+	jsr restore
+	jmp resatn
+
+endhndshk 
+	jsr waitus
+	jsr clkhi
+	jmp datahi
 
 iec0out	 .(   
-	  sei
-          jsr datahi
+	; c128 fast IEC handling
+	jsr stabilize 	; stabilize timing
+	jsr datahi
 
-cmp #$3f
-bne l1xxx
-jsr clkhi
-l1xxx
+	lda #0
+	sta burst_flg
 
-          jsr atnlo
-&iec2out  sei
-	  jsr clklo
-          jsr datahi
-          jsr waitms
-&iecout   sei 
-          jsr datahi
+	; is ATN already set?
+	lda CIA2+CIA_PRA
+	and #%00001000
+	bne atnison
+	; send signature byte
+	lda #$ff
+	jsr fastout
+	; wait loop
+	txa
+	ldx #$14
+atnl	dex
+	bne atnl
+	tax
+atnison
+        jsr atnlo
+
+	; entry point for seclisten etc ($e37c)
+&iec2out  
+	jsr stabilize
+
+	jsr clklo
+        jsr datahi
+
+        jsr waitms
+&iecout   
+	; byte to send is already stored in 'byte'
+
+	jsr stabilize
+
+        jsr datahi
 l0
-	  jsr checkin
-          bcs nodev
+	jsr checkin
+        bcs nodev		; device not present
 
-          jsr clkhi
-          bit eoifl
-          bpl l3 
-                              ; eoi senden
-l4
-	  jsr checkin
-          bcc l4
-l5
-	  jsr checkin
-          bcs l5
-l3
-	  jsr checkin
-          bcc l3
+	; clr sr int
+	bit CIA1+CIA_ICR
 
-          jsr clklo
+	; check eoi
+        jsr clkhi
+        bit eoifl
+        bpl bytout 
+	; send eoi 
+l4	; wait for data low from device as EOI ack
+	jsr checkin
+        bcc l4
+l5	; wait for data high
+	jsr checkin
+        bcs l5
+
+bytout	; normal byte out
+	jsr checkin
+	php
+
+	lda CIA1+CIA_ICR
+	and #$08		; SR flag?
+	beq slowdrv
+	; received fast byte - mark drive as fast SIEC
+	lda #$c0
+	sta burst_flg
+slowdrv
+	plp
+        bcc bytout
+
+        jsr clklo
+	
+	lda CIA2+CIA_PRA
+	and #%00001000		; ATN active?
+	bne txslow		; yes, then do slow transfer
+
+	bit burst_flg
+	bpl txslow
+
+	lda byte
+	jsr fastout
+	jmp endtx
+
+txslow	
+	; send 8 bits serial (bit bang)
           lda #8
           sta cnt2
 l6  
@@ -240,30 +334,137 @@ l6
           ror byte            ; bit setzen
           bcs l7
           jsr datalo
-          bne l8
+          bne l8		; always
 l7        jsr datahi
 
+	; pulse clkhi
 l8        jsr clkhi
-;          jsr waitus
-nop:nop:nop:nop
-;          jsr dhiclo
-lda CIA2+CIA_PRA
-and #%11011111
-ora #%00010000
-sta CIA2+CIA_PRA
+	nop
+	nop
+	nop
+	nop
+	lda CIA2+CIA_PRA
+	and #%11011111
+	ora #%00010000
+	sta CIA2+CIA_PRA
+
+	; next bit
           dec cnt2
           bne l6
-
+endtx
           jsr waitdlo
           bcs timeout
-;	  cli
-          rts
+	jmp restore		; restore timing
+
 timeout   lda #3
           .byt $2c
 timexout  lda #4
 ;	  cli
           jmp error
 	.)
+
+/**************************************************************************/
+
+stabilize:
+        sei
+        rts
+;E573:  SEI
+;
+;E574:  BIT $0A3A       ; flag $0a3a.7 set?
+;E577:  BMI stabend     ; yes, then end
+;E579:  BIT SAVE_FAST   ; have we checked speed before?
+;E57C:  BMI stabend     ; yes, then end
+;
+;E57E:  LDA VIC+VIC_FAST        ; VIC-IIe FAST; bit 0 set is 2MHz
+;E581:  STA SAVE_FAST   ; save value (sets bit 7 - unused bits read 1)
+;E584:  LDA VIC+VIC_SPRT        ; Sprite enable register
+;E587:  STA SAVE_SPRT   ; save value
+;
+;E58A:  LDA #$00        
+;E58C:  STA VIC+VIC_SPRT        ; disable all sprites
+;E58F:  STA VIC+VIC_FAST        ; go to slow mode
+;
+;E592:  LDA SAVE_SPRT   ; have any sprites been enabled?
+;E595:  BEQ stabend     ; no, then end
+;E597:  TXA             ; otherwise delay at least one rasterline
+;E598:  LDX #$00
+;
+;stab0:
+;E59A:  DEX
+;E59B:  BNE stab0
+;E59D:  TAX
+;
+;stabend:
+;E59E:  RTS
+
+;
+; Restore Timing
+
+restore:
+;       cli
+        rts
+;E59F:  BIT $0A3A       ; flag $0a3a.7 is set?
+;E5A2:  BMI restend     ; yes then end
+;E5A4:  BIT SAVE_FAST   ; timing changed (from Stabilize timing above)?
+;E5A7:  BPL restend     ; no then end
+;
+;E5A9:  LDA SAVE_SPRT
+;E5AC:  STA VIC+VIC_SPRT
+;E5AF:  LDA SAVE_FAST
+;E5B2:  STA VIC+VIC_FAST
+;E5B5:  LDA #$00        ; store zero in FAST store byte
+;E5B7:  STA SAVE_FAST   ; make sure next time we check timing
+;
+;restend:
+;E5BA:  CLI
+;E5BB:  RTS
+
+; Fast Disk On
+;
+; From C128, $e8bc ff
+
+fastout:
+	pha
+
+	; fast IEC direction to output
+	lda MMU+MCR
+	ora #$08
+	sta MMU+MCR
+	;
+	lda #$7f
+	sta CIA1+CIA_ICR
+	;
+	lda #0
+	sta CIA1+CIA_TAH
+	lda #$04
+	sta CIA1+CIA_TAL
+	;
+	lda CIA1+CIA_CRA
+	and #$80
+	ora #$55
+	sta CIA1+CIA_CRA
+	bit CIA1+CIA_ICR
+
+	pla
+	sta CIA1+CIA_SDR
+fol
+	lda CIA1+CIA_ICR
+	and #$08		; check SR flag
+	beq fol
+
+; Fast Disk Off
+
+fastoff:
+	lda CIA1+CIA_CRA
+	and #$80
+	ora #$08
+	sta CIA1+CIA_CRA
+	; set fast IEC direction to input
+	lda MMU+MCR
+	and #$f7
+	sta MMU+MCR
+        rts
+
 
 /**************************************************************************/
 
@@ -277,7 +478,8 @@ clkhi
 	  and #%11101111
 	  sta CIA2+CIA_PRA
           rts
-datalo 
+
+datalo 	; must return with Z=0
 	  lda CIA2+CIA_PRA
 	  ora #%00100000
 	  sta CIA2+CIA_PRA
@@ -374,18 +576,18 @@ w4        dex
           rts
 
 sectalk	  .(
-          sei
           sta byte
           jsr iec2out
           bcs st1
+	jsr stabilize
           jsr datalo
           jsr atnhi
           jsr clkhi
-st2       ;bit VIA1+VIA_DRA
-	  bit CIA2+CIA_PRA
+	; wait for CLK lo
+st2 	  bit CIA2+CIA_PRA
           bvs st2
-st1       cli
-          rts
+	  jmp restore
+st1       jmp resatn
           .)
 
 seclisten .(
@@ -398,27 +600,33 @@ seclisten .(
 	  .)
 
 &UNTALK    .(
-	  sei
+	  jsr stabilize
           jsr clklo
+	  jsr atnlo
           lda #$5f
-          jsr atnout
-          jsr atnhi
-          jsr clkhi
-          jsr datahi
-          cli
-          rts
+	.byt $2c
 	  .)
-
+	; fall-through
 &UNLISTEN  .(
 	  lda #$3f
-          sei
+	pha
+	lda burst_flg
+	and #$7f
+	sta burst_flg
+	pla
           jsr atnout
+&resatn
           jsr atnhi
+&resclkdata
+	txa
+	ldx #$0a
+rs1	dex
+	bne rs1
           jsr clkhi
-          cli
-          rts
+	jmp datahi
 	  .)
 
+#undef CIA1
 #undef CIA2
 
 
