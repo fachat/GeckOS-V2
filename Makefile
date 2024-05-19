@@ -49,7 +49,7 @@ c128: clean
 	(cd arch/c128/boot; make)
 
 runc128: c128
-	x128 +sound -drive8type 1541 -autostart arch/c128/boot/geckos128.d64
+	x128 -40col -drive8type 1541 -autostart arch/c128/boot/geckos128.d64
 
 runc128f: c128
 	x128 -80col -drive8type 1571 -autostart arch/c128/boot/geckos128.d64
