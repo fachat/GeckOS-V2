@@ -14,16 +14,16 @@ KERNBSS=58880	# $e600
 
 # where the init image and its data are located
 ROMSTART=32768	# $8000
-ROMDATA80=45824	# $b300
-ROMDATA40=45824	# $b300
-ROMBSS=46336	# $b500
+ROMDATA80=46080	# $b400
+ROMDATA40=46080	# $b400
+ROMBSS=46592	# $b600
 
 # where the lib6502 and its data are located
 LIB6502=783	# $030f, jump table address
 LIBSTART=768	# $0300 code start
 LIBDATA=7168	# $1c00 data start
 
-Zerostart=96
+Zerostart=96	# $60 zeropage start
 #Memstart=2048	# automatically set to end of lib6502 data
 Memend=57344	# $e000 end of allocatable memory in user env
 
@@ -36,8 +36,8 @@ lib.o65: lib.a65
 	${FILE} lib.o65
 
 kern.o65: kern.a65 kernel/*.a65
-	${XA} -I../../include -I../.. -R -DROMSTART=$(ROMSTART) -DMemend=$(Memend) -bt $(KERNEL) -bd $(KERNDATA) -bz 32 -bb $(KERNBSS) $< -o kern.o65 -l kern.lab;
-	${FILE} kern.o65
+	${XA} -I../../include -I../.. -R -DROMSTART=$(ROMSTART) -DMemend=$(Memend) -bt $(KERNEL) -bd $(KERNDATA) -bz 32 -bb $(KERNBSS) $< -o kern.o65 -l kern.lab
+	${FILE} $@
 
 rom40.o65: rom.a65 devices/*.a65
 	${XA} -I../../include -I../.. -R -DOSA2KERNEL=$(KERNEL) -DLIB6502=$(LIB6502) -DROMSTART=$(ROMSTART) -bt $(ROMSTART) -bd $(ROMDATA40) -bz 52 -bb $(ROMBSS) $< -o $@ -l rom.lab;
