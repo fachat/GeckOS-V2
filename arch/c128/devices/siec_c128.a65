@@ -63,8 +63,6 @@ burst_flg .byt 0	; set when burst has been identified during ATN
 	lda #NMI_OFF
 	jmp CTRLNMI
 #else
-	lda #0
-	sta burst_flg
 	rts
 #endif
 	.)
@@ -112,8 +110,6 @@ inix      sec
 
           lda #0
           sta eoifl
-          lda #8
-          sta cnt2
 
 	; clear SR interrupt
 	lda CIA1+CIA_ICR
@@ -143,14 +139,14 @@ l16       jsr fragti
           bvs l16
           bvc rxdata
 
+	; check and set eoi flag
 l15       lda eoifl
           beq l18
-	; exit, so pull xr from stack and restore
+	; read timeout exit, so pull xr from stack and restore
 	pla
 	tax
           lda #2
           jmp error
-
 	; set eof (set to -1)
 l18       dec eoifl
           jsr datalo
@@ -160,7 +156,9 @@ l18       dec eoifl
           jsr seterror
           bne l19
 
-rxdata
+rxdata	; number of bits
+	ldx #8
+
 l20	; wait for first slow bit (clk high) while checking for fast rx
 	lda CIA1+CIA_ICR
 	and #$08
@@ -171,14 +169,17 @@ l20	; wait for first slow bit (clk high) while checking for fast rx
           bpl l20
 rxnxt
 	; store bit
-          ror byte
+        ror byte
 
 l21	; wait for clk lo
-	  bit CIA2+CIA_PRA
-          bvs l21
+	lda CIA2+CIA_PRA
+	cmp CIA2+CIA_PRA
+	bne l21
+	asl		
+	bmi l21
 
-          dec cnt2
-          beq rxend	; got all 8 bits
+	dex
+        beq rxend	; got all 8 bits
 
 l21a	; wait for clk hi
 	lda CIA2+CIA_PRA
@@ -230,24 +231,19 @@ error   pha
 	jsr restore
 	jmp resatn
 
-endhndshk jsr waitus
-;          jsr datahi
-          jsr clkhi
-jsr datahi
-          sec
-	cli
-          rts
+endhndshk 
+	jsr waitus
+	jsr clkhi
+	jmp datahi
 
 iec0out	 .(   
-	  sei
-          jsr datahi
-
-	cmp #$3f
-	bne l1xxx
-	jsr clkhi
-l1xxx
 	; c128 fast IEC handling
 	jsr stabilize 	; stabilize timing
+	jsr datahi
+
+	lda #0
+	sta burst_flg
+
 	; is ATN already set?
 	lda CIA2+CIA_PRA
 	and #%00001000
@@ -262,45 +258,44 @@ atnl	dex
 	bne atnl
 	tax
 atnison
-          jsr atnlo
+        jsr atnlo
 
-	; entry point for seclisten etc
-&iec2out  sei
-
+	; entry point for seclisten etc ($e37c)
+&iec2out  
 	jsr stabilize
 
-	  jsr clklo
-          jsr datahi
+	jsr clklo
+        jsr datahi
 
-          jsr waitms
+        jsr waitms
 &iecout   
 	; byte to send is already stored in 'byte'
 
-	  sei 
-
 	jsr stabilize
 
-          jsr datahi
+        jsr datahi
 l0
-	  jsr checkin
-          bcs nodev		; device not present
+	jsr checkin
+        bcs nodev		; device not present
 
-          jsr clkhi
-          bit eoifl
-          bpl l3 
-                              ; send eoi 
+	; clr sr int
+	bit CIA1+CIA_ICR
+
+	; check eoi
+        jsr clkhi
+        bit eoifl
+        bpl bytout 
+	; send eoi 
 l4	; wait for data low from device as EOI ack
-	  jsr checkin
-          bcc l4
+	jsr checkin
+        bcc l4
 l5	; wait for data high
-	  jsr checkin
-          bcs l5
+	jsr checkin
+        bcs l5
 
-l3	; normal byte out
-	lda CIA2+CIA_PRA
-	cmp CIA2+CIA_PRA
-	bne l3
-	pha
+bytout	; normal byte out
+	jsr checkin
+	php
 
 	lda CIA1+CIA_ICR
 	and #$08		; SR flag?
@@ -309,10 +304,10 @@ l3	; normal byte out
 	lda #$c0
 	sta burst_flg
 slowdrv
-	pla
-          bpl l3
+	plp
+        bcc bytout
 
-          jsr clklo
+        jsr clklo
 	
 	lda CIA2+CIA_PRA
 	and #%00001000		; ATN active?
@@ -339,17 +334,21 @@ l6
           ror byte            ; bit setzen
           bcs l7
           jsr datalo
-          bne l8
+          bne l8		; always
 l7        jsr datahi
 
+	; pulse clkhi
 l8        jsr clkhi
-;          jsr waitus
-nop:nop:nop:nop
-;          jsr dhiclo
-lda CIA2+CIA_PRA
-and #%11011111
-ora #%00010000
-sta CIA2+CIA_PRA
+	nop
+	nop
+	nop
+	nop
+	lda CIA2+CIA_PRA
+	and #%11011111
+	ora #%00010000
+	sta CIA2+CIA_PRA
+
+	; next bit
           dec cnt2
           bne l6
 endtx
@@ -480,7 +479,8 @@ clkhi
 	  and #%11101111
 	  sta CIA2+CIA_PRA
           rts
-datalo 
+
+datalo 	; must return with Z=0
 	  lda CIA2+CIA_PRA
 	  ora #%00100000
 	  sta CIA2+CIA_PRA
@@ -577,7 +577,6 @@ w4        dex
           rts
 
 sectalk	  .(
-          sei
           sta byte
           jsr iec2out
           bcs st1
@@ -588,6 +587,7 @@ sectalk	  .(
 	; wait for CLK lo
 st2 	  bit CIA2+CIA_PRA
           bvs st2
+	  jmp restore
 st1       jmp resatn
           .)
 

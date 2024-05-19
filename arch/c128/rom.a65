@@ -174,6 +174,7 @@
 #ifdef PARALLEL
 #define	FSIEC_DEVICE	"devices/piec_c64.a65"
 #else
+;#define	FSIEC_DEVICE	"devices/siec_c64.a65"
 #define	FSIEC_DEVICE	"devices/siec_c128.a65"
 #endif
 #include  "sysapps/fs/fsiec.a65"
