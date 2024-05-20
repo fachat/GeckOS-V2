@@ -2,6 +2,6 @@
 
 #define	OSA_NAME	"GeckOS/A65"
 
-#define	OSA_VERSION	"2.2-b1"
+#define	OSA_VERSION	"2.2"
 
 

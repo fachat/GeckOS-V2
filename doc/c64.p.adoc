@@ -7,24 +7,30 @@ c64 - describes the GeckOS port to the C64
 == DESCRIPTION
 The C64 is a machine that has a single environment with almost 60k usable RAM, and no memory management unit.
 
+== Quickstart
+
+In the downloaded GeckOS directory, run *make runc64* to automatically build the *gecko64.d64* disk image in the *arch/c64/boot* directory, and autostart it in the VICE *x64* emulator.
 
 == BUILDING
 To build the program, you have to have the 6502 cross assembler 'xa' in version 2.4.1 or later.
 Current testing takes place on 'VICE' (x64), the versatile Commodore emulator.
 
+You can just run *make runc64* to directly build it and start GeckOS in the VICE x64 emulator.
+This option builds a 'geckos64.d64' disk image and autostarts the emulator with it.
+
+Alternatively, go to the arch/c64/boot directory and type "make" this will build
+all necessary files in this directory, including links to all
+important applications. 
 In the file c64rom/c64rom.a65, a few options can be set by setting
 the defines appropriately. See doc/build.html.
 
-Go to the arch/c64/boot directory and type "make" this will build
-all necessary files in this directory, including links to all
-important applications. Typing "make osa.d64" will produce a
+Typing "make geckos64.d64" will produce a
 d64 disk image with all necessary files. This disk image can be
 transfered to a C64 and used.
 
 If you change something in the code and reassemble, check from the file65
-output that the data and bss segments don't overlap. Also the
-memory that is dynamically allocated starts at $1600 (see
-arch/c64/c64rom.a65). Only if nothing overlaps there is no danger.
+output that the data and bss segments don't overlap. 
+The memory that is dynamically allocated is automatically located at the end of the 'ROM' image.
 
 See also *build(7)*.
 
@@ -51,7 +57,7 @@ their places and jumps to the kernel RESET routine.
 When using osa.d64 in VICE, you have to enable the true1541 emulation.
 
 == USAGE
-The video device is able to handle up to three screen output windows.
+The video device is able to handle up to two screen output windows.
 The C= key switches between the different windows (You can change the
 switch key in arch/c64/devices/con_c64.a65, but when you're using
 the "C=" key, don't try to use the Ctrl-Alt-Fx keys in XFree when the
@@ -125,21 +131,23 @@ lsh::
 
 	$0300 		data/bss for ROM-based code 
 			(incl. kernel and lib6502)
-	$1680		start of malloc'able free memory
-	$81ff 		end of free memory
 
-	$8200		start of boot ROM
+	~$1790		end of data/bss for ROM code, i.e.
+			start of malloc'able free memory
+			(set as needed during build)
+	 ---
+	$8dff 		end of free memory
+
+	$8e00		start of boot ROM
 			devices
 			init
 			fsiec
-			mon
-			(slipd)
 			lsh
 			lib6502 code
 	$d000		I/O area
 	$e000		screen buffer 1
 	$e400		screen buffer 2
-	$e800		screen buffer 3
+	$e800		colour buffer for not displayed screen
 	$ec00		kernel
 	$ffff		end of ROM
 ----
@@ -174,11 +182,13 @@ The C64 kernel uses the VIC-II raster timing interrupt as a 50Hz interrupt sourc
 This section describes the devices supported by GeckOS.
 
 === VIDEO
-The video device provides three virtual consoles.
+The video device provides two virtual consoles.
 
 ==== VIDEO OUTPUT
 Video output is taken from the video buffers at $exxx (see memory map above), with a 40 column, 25 rows display,
 using the C64's built-in VIC-II chip.
+Since GeckOS 2.2, the console has colour support, i.e. the character foreground colour can be set
+using terminal control codes, see 'include/tcdefs.i65'.
 
 ==== KEYBOARD MAPPING
 The keyboard is mapped such that it can run on the real hardware, but also in the real machine.
@@ -198,8 +208,8 @@ Here is a comparison of the real machine, VICE and what GeckOS uses.
 |GeckOS|C64|VICE on PC (3.4+)
 |Ctrl | Ctrl | Left Ctrl 
 |Tab  | C=   | Tab
-|Console switch | Ctrl + C= | Left Ctrl + Tab 
-|Console mode | Shift + C= | Shift + Tab 
+|Console switch | Ctrl + C= | Shift + Tab 
+|Console mode | Shift + C= | Left Ctrl + Tab 
 |Logoff  | Shift + Ctrl + C= | Shift + Left Ctrl + Tab 
 |\| | Pound | \| 
 |====

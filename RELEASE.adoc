@@ -1,13 +1,16 @@
 
 = GECKOS RELEASE NOTES
 
-== GeckOS 2.2-b1
+== GeckOS 2.2
 
 === Applications
 * lsh got job control
 
 === Devices
 * new device for an NMI-driven ACIA-based RS232 (swiftlink)
+* the console device has been overhauled and got a better set of control character.
+	The C64 (and C128 VIC-II) now only have two consoles, but as a new feature they now include colour support.
+	
 
 === Kernel
 * *GETINFO* now returns thread info, needs iterative calls (renamed to *GETINFO2*)
@@ -20,6 +23,9 @@
 
 ==== C128
 * There is a new port for the Commodore 128!
+	You can run it both from the VIC-II or the VDC screen of the Commodore BASIC.
+	This port uses the fast serial IEC bus when available (with a 1571/1581 disk drive),
+	and 2 MHz speed when started with the VDC display.
 
 === Build
 * Cleanup of build process, using a common dist folder for generic applications / disk images

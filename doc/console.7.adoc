@@ -1,0 +1,105 @@
+= GeckOS/A65 Consoles
+Version 2.2 (c) 1989-2024 Andr&eacute; Fachat 
+
+== Introduction
+
+GeckOS provides multiple virtual consoles on all architectures that support it (i.e. usually have a screen output device).
+
+The console provides two screen modes, and a number of terminal control codes that are explained below.
+
+== Console modes
+
+The first mode is *direct mode* - all key presses are directly send to the program, and only program output is printed on the screen.
+
+The second is *full screen mode*. The cursor can be moved freely on the screen, and keyboard control codes are directly executed in the console. Only when pressing the enter key the content of the line is sent to the stream.
+
+The modes can be switched with a specific input key combination.
+
+== Keyboard codes 
+
+These are common functions for the keyboard input of the console.
+
+=== Switch key
+
+The console defines a so-called *switch key* that is used for various console functions, together with *shift*, *ctrl*, or *shift+ctrl*:
+
+* *Shift* + switchkey: switch between the console
+* *Ctrl* + switchkey: switch console modes
+* *Shift* + *Ctrl* + switchkey: logoff (close the device streams from the device side)
+
+=== Keyboard control code input
+
+Normal key characters can be entered without modifier as lower case ASCII. With *Shift* the keys result in upper case ASCII. With *Ctrl* the keys are masked to the lower 5 bits, i.e. *Ctrl* +A results in code *1* to be sent to the stream.
+
+The keyboard allows to enter a number of control codes. In direct mode, these are directly sent to the stream, and the connected program can / needs to handle them itself. In full screen mode, these are printed and executed on the console and not sent to the screen:
+
+* *Home* - position the cursor in the top left corner of the window
+* *Shift* + *Home* - clear the screen
+* *Backspace* - delete character left of cursor
+* *Shift* + *Backspace* = *Insert* - insert a character
+* *Ctrl* + *Backspace* - delete a line
+* *Shift* + *Ctrl* + *Backspace* - insert a line
+
+* *Ctrl*-Down - defined the upper left window corner as the current cursor position
+* *Ctrl*-Right - defined the lower right window corner as the current cursor position
+* *Ctrl*-Home - clear the window definition
+
+Note that some ports (mainly the PET32k with graphics keyboard) do not provide the capability to
+use *Shift* and *Ctrl* together.
+
+== Output control codes
+
+The following codes are defined in *include/tcdefs.i65*:
+
+----
+/*        Terminal Commands        */
+
+TC_BEL          =7              ; ring the bell tone
+TC_BS           =8              ; backspace
+TC_HT           =9              ; horizontal tab (4 chars)
+TC_LF           =10             ; line feed
+TC_VT           =11             ; vertical tab
+TC_FF           =12             ; form feed (clear scr)
+TC_CR           =13             ; carriage return
+TC_ESC          =27             ; escape
+
+TC_CLFT         =$80            ; cursor left
+TC_CRGT         =$81            ; cursor right
+TC_CUP          =$82            ; cursor up
+TC_CDWN         =$83            ; cursor down
+TC_HOME         =$84            ; cursor home (top left of window)
+TC_CLR          =$85            ; clear window (FF)
+TC_DEL          =$86            ; delete char under cursor
+TC_INS          =$87            ; insert space under cursor
+TC_WLO          =$88            ; define cursor pos as top left win corner
+TC_WRU          =$89            ; define cursor pos as bottom right win corner
+TC_WCLS         =$8a            ; clear window definition
+TC_EOL          =$8b            ; move behind last non-space in line
+TC_CLL          =$8c            ; clear from cursor to end of line
+TC_DELL         =$8d            ; delete line where cursor is
+TC_INSL         =$8e            ; insert empty line under cursor
+
+TC_ECHO         =$8f    	; device shall echo: terminal = full screen 
+TC_NOECHO       =$90    	; appl. echos: full appl. control 
+
+TC_CPOS         =$91            ; set cursor pos - next chars are row and col
+
+TC_ATTR         =$92            ; next byte is attribute for display
+
+TC_FGCOL        =$93            ; next byte is foreground colour
+
+TC_HELP         =$9c            ; C128 HELP key
+TC_ALT          =$9d            ; C128 ALT key
+TC_NOSCRL       =$9e            ; C128 NO SCROLL key
+
+----
+
+=== Window definition example
+
+The consoles have a single layer of sub-window definition handling.
+I.e. once a window is defined, all operations like scrolling are restricted to the console window.
+
+
+
+
+Last modified 20 may 2024 by A. Fachat

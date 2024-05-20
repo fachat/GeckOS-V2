@@ -19,8 +19,8 @@ Version 2 is an extensive rewrite and has a lot of new features:
 ** Download and unpack the GeckOS source distribution from http://www.6502.org/users/andre/osa/index.html[6502.org].
 ** Clone the https://github.com/fachat/GeckOS-V2[Github repository]
 . Download and install the xa65 cross-assembler. On Linux, xa is usually included in the distribution. Alternatively download from https://www.floodgap.com/retrotech/xa/[xa65 site]. 
-. Download and install the VICE emulator. Usually VICE is included in Linux distributions, but ROMs may have to be provided separately. If you want, download, build and install it from the https://sourceforge.net/projects/vice-emu/[VICE homepage].
-. In the unpacked GeckOS directory, change to either link:../arch/cbm8x96/boot[arch/cbm8x96/boot] or link:../arch/c64/boot[arch/c64/boot] and type "make emurun" to build the system, and run it in the VICE emulator.
+. For the Commodore ports, download and install the VICE emulator. Usually VICE is included in Linux distributions, but ROMs may have to be provided separately. If you want, download, build and install it from the https://sourceforge.net/projects/vice-emu/[VICE homepage].
+. In the unpacked GeckOS directory, type "make runc64" to build the system, and run it in the VICE x64 emulator. For other ports use 'make runcbm8x96' for the PET 8296 port, 'make runpet32k' for the PET 32k demo, 'make runc128' for the 1 MHz / 40 col C128 version, or 'make runc128f' for the 2 MHz / 80 col / 1571 C128 version.
 
 == Description
 GeckOS/A65 is a full-featured Multitasking/Multithreading operating system
@@ -118,9 +118,10 @@ For porting GeckOS to other architectures, please look at these sections:
 For current ports, please look at
 
 * link:c64.p.adoc[c64]
-* pet32k
-* link:cbm8x96.html[cbm8x96]
-* CS/A65 (my self-built computer with MMU)
+* link:pet32k.p.adoc[pet32k]
+* link:cbm8x96.p.adoc[cbm8x96]
+* link:c128.p.adoc[c128]
+* link:csa65.p.adoc[CS/A65] (my self-built computer with MMU)
 
 == Development
 For the development of OS/A65 programs there are two possibilities:
@@ -156,8 +157,10 @@ link:build.7.adoc[Build].
 * Using the shell is described in link:../apps/lsh/lsh.1.adoc[it's man page].
 * Cenbe's https://www.lyonlabs.org/commodore/GeckOS/geckos-analysis.html[commentary on GeckOS]
 
-=== Older documentation
+=== Older/Release documentation
 
+* Issue list for link:https://github.com/fachat/GeckOS-V2/milestone/2?closed=1[GeckOS 2.2]
+* Issue list for link:https://github.com/fachat/GeckOS-V2/milestone/1?closed=1[GeckOS 2.1]
 * What's link:historic/LOG-2.0[new in 2.0.9 since 2.0.0]
 * The link:historic/LOG-pre-2.0[Changelog] for version 1.3.* and for the development of 2.0.0.
 

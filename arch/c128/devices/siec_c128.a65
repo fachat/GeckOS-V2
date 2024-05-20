@@ -225,7 +225,6 @@ atnin     jsr datalo
 */
 
 nodev     lda #$80
-;inc $d020
 error   pha
 	lda burst_flg
 	and #$7f
@@ -319,7 +318,6 @@ slowdrv
 
 	bit burst_flg
 	bpl txslow
-
 	lda byte
 	jsr fastout
 	jmp endtx

@@ -158,13 +158,13 @@ Here is a comparison of the real machine, VICE (3.4+) and what GeckOS uses.
 |GeckOS         | PET (Graphics kbd) | VICE (-model 4032) | PET (business kbd) | VICE (-model 8032)
 |Ctrl           | Left Shift         | Left Shift 	  | Repeat	       | Right Ctrl
 |Tab            | Rvs/Off            | Tab                | Tab                | Tab
-|Console switch | Left Shift + Rvs/Off | Left Shift + Tab | Repeat + Tab       | Right Ctrl + Tab
-|Console mode   | Right Shift + Rvs/Off | Right Shift + Tab | Shift + Tab      | Shift + Tab
-|Logoff         | Left Shift + Right Shift + Rvs/Off | n/a | Shift + Repeat + Tab | Shift + Right Ctrl + Tab
-|\|             | Left Shift + y     | Left Shift + y     | Repeat + y         | Right Ctrl + y
+|Console switch | (single) Shift + Rvs/Off | (single) Right Shift + Tab | Shift + Tab       | Shift + Tab
+|Console mode   | (both) Shift + Rvs/Off | (both) Shift + Tab | Repeat + Tab      | Right Ctrl + Tab
+|Logoff         | n/a | n/a | Shift + Repeat + Tab | Shift + Right Ctrl + Tab
+|\|             | (both) Shift + y     | (both) Shift + y     | Repeat + y         | Right Ctrl + y
 |====
 
-NOTE: a VICE bug prevents the use of Left Shift for Control and both Shift keys for Shift-Control.
+NOTE: due to the missing extra control keys (or alternatives for them), the PET graphics keyboard uses both shift key as *Ctrl* and you cannot use *Ctrl* and *Shift* in combination.
 
 == SEE ALSO
 link:kernel/DEVCMD.2.adoc[DEVCMD(2)], 

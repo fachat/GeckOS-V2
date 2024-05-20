@@ -21,6 +21,12 @@
 
 ****************************************************************************/
 
+#ifdef PET_KEYB_GRAPHICS
+#define SWITCHKEY       79              /* graphics keyboard REV/OFF key */
+;#define SWITCHKEY       70              /* graphics keyboard @ key */
+#else
+#define SWITCHKEY       39              /* business keyboard Tab key */
+#endif
 
 /**************************************************************************
  * Bell handling
@@ -132,18 +138,19 @@ ix1
           ldy #0
 #ifdef PET_KEYB_GRAPHICS
 	  tax
-          and #%00100000  ; right shift only
-          bne noshift
+          and #%00100001  ; right + left shift
+          cmp #%00100001
+          beq noshift
 #else
           and #%01000001
           cmp #%01000001
           beq noshift
 #endif
           iny
-noshift    ; no CTRL on graphics keyboard
+noshift   
 #ifdef PET_KEYB_GRAPHICS
-	  txa
-	  and #%00000001  ; left shift
+	; use both shifts together as Ctrl
+          cmp #0	; both bits are zero = both Shift
 #else
           inc PIO	; 7 for business
 x0        lda PIO+2
@@ -155,14 +162,14 @@ x0        lda PIO+2
           iny
           iny
 noctrl    
-#ifdef VICE		/* VICE bug that automatically sets both shift keys when only left is used */
+;#ifdef VICE		/* VICE bug that automatically sets both shift keys when only left is used */
 #ifdef PET_KEYB_GRAPHICS
 	  cpy #3
 	  bne novice
 	  dey
 novice
 #endif
-#endif
+;#endif
 	  sty shiftfl
           tya
           asl
@@ -273,13 +280,13 @@ stab      .asc TC_CLFT,TC_CLR,"|(&%#!",TC_INS,TC_CUP,"^@)\\'$":.byt $22
           .asc "31",TC_LF,";MBCZ+2^@?,NVX"
           .asc "-0^@>^@}@^@=.^@",TC_ESC,"< {", TC_HT
 
-ctab      .asc TC_WRU,TC_WCLS,"~(&%#!",TC_DEL,TC_WLO,"^@)\\'$",$22
+ctab      .asc TC_WRU,TC_WCLS,"~(&%#!",TC_DELL,TC_WLO,"^@)\\'$",$22
           .asc "97^^^o^u^t^e^q/8^@^p^i|^r^w"
           .asc "64^@^l^j^g^d^a*5^@:^k^h^f^s"
           .asc "31",TC_EOL,";^m^b^c^z+2^@?,^n^v^x"
           .asc "-0^@>^@]@^@=.^@",TC_CLL,"< [", TC_HT
 
-sctab     .asc "^@^@|(&%#!^H^@^@)\\'$":.byt $22
+sctab     .asc "^@^@|(&%#!", TC_INSL, "^@^@)\\'$":.byt $22
           .asc "97^^O^U^T^E^Q/8^@^P^I^Y^R^W"
           .asc "64^@^L^J^G^D^A*5^@:^K^H^F^S"
           .asc "31^m;^M^B^C^Z+2^@?,^N^V^X"

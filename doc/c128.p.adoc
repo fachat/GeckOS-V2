@@ -11,6 +11,11 @@ The Commodore 128 (C128) has two banks of 64k memory.
 The C128 port is based in parts on the C64 port (mostly devices), and the CS/A port due to the ability to 
 handle multiple environments.
 
+== Quickstart
+
+In the downloaded GeckOS directory, run *make runc128* to automatically build the *geckos128.d64* disk image in the *arch/c128/boot* directory, and autostart it in the VICE *x128* emulator, in 40 column mode.
+Alternatively, use *make runc128f* to build and run it in 2 MHz, 80 column mode with 1571 disk drive (enables fast serial IEC).
+
 == Memory Map
 
 The C128 uses shared memory on the top of memory, containing the kernel code, the kernel variables, and

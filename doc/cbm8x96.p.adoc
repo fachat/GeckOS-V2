@@ -2,15 +2,19 @@
 :doctype: manpage
 
 == NAME
-OS/A65 CBM 8x96 Notes
+GeckOS/A65 CBM 8x96 Notes
 
 == DESCRIPTION
 The Commodore PET 8096 and 8296 (also known as CBM 8096 and CBM 9296) computers
 have at least 96 kByte of RAM and can remap the ROM area with RAM. This 
-makes them a nice base for OS/A65. Although they don't have many I/O devices
+makes them a nice base for GeckOS/A65. Although they don't have many I/O devices
 at least they provide an 80 columns screen.
 
-The CBM8296 port is based on the PET 32k port regarding the types of devices and interrupt handling. But the memory management is considerably different, as shown in the next section.
+The CBM8296 port is based on the PET 32k port regarding the types of devices and interrupt handling. But the memory management is considerably different, as shown in a later section.
+
+== Quickstart
+
+In the downloaded GeckOS directory, run *make runcbm8x96* to automatically build the *geckos8x96.d64* disk image in the *arch/cbm8x96/boot* directory, and autostart it in the VICE *xpet* emulator.
 
 == Memory Map
 

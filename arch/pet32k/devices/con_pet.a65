@@ -31,12 +31,6 @@
 
 #define	MAX_SCREEN	2		/* number of supported virtual consoles */
 
-#ifdef PET_KEYB_GRAPHICS
-#define	SWITCHKEY	79		/* graphics keyboard REV/OFF key */
-#else
-#define	SWITCHKEY	39		/* business keyboard Tab key */
-#endif
-
 #define	SET_MMU		
 
 #define	BELLIRQ		jsr bellirq
