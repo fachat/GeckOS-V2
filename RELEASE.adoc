@@ -10,12 +10,13 @@
 * new device for an NMI-driven ACIA-based RS232 (swiftlink)
 * the console device has been overhauled and got a better set of control character.
 	The C64 (and C128 VIC-II) now only have two consoles, but as a new feature they now include colour support.
+* the C128 gets a video output device for the 80 column VDC screen.
 	
 
 === Kernel
 * *GETINFO* now returns thread info, needs iterative calls (renamed to *GETINFO2*)
 * *PSEM* blocks on C=1 like any other call with option to block (renamed to *PSEM2*)
-* *CHECKCHLD* also returns info for suspended children (renamed to *CHECKCHLD*)
+* *CHECKCHLD* also returns info for suspended children (renamed to *CHECKCHLD2*)
 * New *JOBCMD* call to facilitate job control functions
 * Separate out timer interrupt from other interrupt sources in device's interrupt chains.
 
@@ -26,6 +27,11 @@
 	You can run it both from the VIC-II or the VDC screen of the Commodore BASIC.
 	This port uses the fast serial IEC bus when available (with a 1571/1581 disk drive),
 	and 2 MHz speed when started with the VDC display.
+
+==== PET32k
+* Update keyboard mapping for the PET graphics keyboard (as used in the 32k PET port). 
+	Both shift keys can now be used as shift key, and both shift keys together are
+	the control key. It is not possible to use Shift + Ctrl at the same time for now.
 
 === Build
 * Cleanup of build process, using a common dist folder for generic applications / disk images

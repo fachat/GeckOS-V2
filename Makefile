@@ -1,5 +1,5 @@
 
-version="2.1.1"
+version="2.2"
 
 all:
 	(cd apps; ${MAKE};)
@@ -19,6 +19,9 @@ clean:
 dclean: clean
 	git checkout */*/*/*.d64
 	git checkout */*/*/*.d80
+
+disks: c64 c128 pet32k cbm8x96 csa65 
+	make clean
 
 #####################################################
 
