@@ -190,57 +190,32 @@ devirq
 	lda UART+UART_IIR
 	lsr
 	bcc intr
-irqend  lda #E_NOIRQ		; no irq source found
-	;rts			; not this one
+
+	lda #E_NOIRQ		; no irq source found
 	jmp irqe
 
 	;-----------------------------------------------
 
 intr
-	and #%00000011		; interrupt mask - makes four possible IRQs
-	tay
-	bne int_tx
-	
-	lda UART+UART_MSR
-	jmp checkint
-
-int_tx
-	dey
-	bne int_rx
-tx_loop
-	jsr tx2
-	jmp checkint
-
-int_rx
-	dey
-	bne int_status
-rx_loop
-	jsr rx2			; get one char
-	lda UART+UART_LSR
-	lsr
-	bcs rx_loop
-;	and #$20		; THRE ($40/2)
-;	bne tx_loop
-	jmp checkint
-
-int_status
-	lda UART+UART_LSR
-
-checkint
-	lda UART+UART_IIR
-	lsr
-	bcc intr		; irq still pending
-
-;	lda UART+UART_LSR
-;	and #$40
-;	beq nbyt
-;	jsr tx2
-;nbyt
-	jsr nobyt
+	; modem
+	lda UART + UART_MSR	; clear modem int
+	; line status
+	lda UART + UART_LSR	; line status (TODO eval)
+	; rx
+rxl	lda UART + UART_LSR
+	and #1
+	beq tx
+	jsr rx2
+	jmp rxl
+	; tx
+tx	; is done in irq end handling	
 
 irqok   lda #E_OK		; irq source removed
 irqe	pha
 
+	; check if we have data to send,
+	; even if previous THR empty ints have been
+	; cleared already
 	lda UART+UART_LSR
 	and #$40
 	beq nbyt
@@ -293,7 +268,6 @@ tstwater
         beq wh
         cmp #E_SFULL
         bne twl
-;inc $d020
 wh      ldx #0  
 	jmp rtshi
 twl     cmp #E_SLWM
