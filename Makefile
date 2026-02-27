@@ -31,6 +31,7 @@ XCSA=~/8bit/xcbm/bin/xcsa
 
 cbm8x96: clean
 	(cd arch/cbm8x96; make; cd boot; make)
+	ln -sf arch/cbm8x96/boot/geckos8x96.d64
 
 runcbm8x96: cbm8x96
 	xpet +sound -model 8296 -autostart arch/cbm8x96/boot/geckos8x96.d64
@@ -39,6 +40,7 @@ runcbm8x96: cbm8x96
 
 c64: clean
 	(cd arch/c64; make; cd boot; make)
+	ln -sf arch/c64/boot/geckos64.d64
 
 runc64: c64
 	x64 +sound -autostart arch/c64/boot/geckos64.d64
@@ -50,6 +52,7 @@ runc64ip: c64
 
 c128: clean
 	(cd arch/c128/boot; make)
+	ln -sf arch/c128/boot/geckos128.d64
 
 runc128: c128
 	x128 -40col -drive8type 1541 -autostart arch/c128/boot/geckos128.d64
@@ -67,6 +70,7 @@ runc128ip: c128
 
 pet32k: clean
 	(cd arch/pet32k; make; cd boot; make)
+	ln -sf arch/pet32k/boot/geckospet.d64
 
 runpet32k: pet32k
 	xpet +sound -model 4032 -autostart arch/pet32k/boot/geckospet.d64
@@ -75,6 +79,7 @@ runpet32k: pet32k
 
 csa65: clean
 	(cd arch/csa65; make; cd boot; make)
+	ln -sf arch/csa65/boot/geckoscsa.d80
 
 runcsa65: csa65
 	(cd arch/csa65/boot; $(XCSA))
