@@ -1,0 +1,1 @@
+../../c64/boot/howto.boot
